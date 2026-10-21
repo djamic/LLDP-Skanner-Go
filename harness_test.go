@@ -122,6 +122,7 @@ func installSeams(dir string) {
 	influxReady = influxRec.ready
 	influxWritePoint = influxRec.write
 	esxiEnqueue = esxiJobs.add
+	appendSwitchIP = switchIPAdds.add
 	esxiProbe = func(*http.Client, string) bool {
 		guard.esxiProbes.Add(1)
 		return false
@@ -221,6 +222,7 @@ func resetState(t *testing.T) {
 	SetLastReport(0, map[string][]string{}, 0)
 	SetGlobalGraph(nil)
 	esxiJobs.reset()
+	switchIPAdds.taken()
 	influxRec.stop()
 	fakeSNMP.reset()
 
@@ -669,6 +671,34 @@ func (r *esxiJobRecorder) taken() []string {
 	r.mu.Unlock()
 	slices.Sort(jobs)
 	return jobs
+}
+
+// ─── swich_ips recorder ───────────────────────────────────────────────────────
+
+// switchIPsRecorder records the IPs LLDP discovery adds to swich_ips, in
+// place of the live file.
+type switchIPsRecorder struct {
+	mu  sync.Mutex
+	ips []string
+}
+
+var switchIPAdds = &switchIPsRecorder{}
+
+func (r *switchIPsRecorder) add(ip string) bool {
+	r.mu.Lock()
+	r.ips = append(r.ips, ip)
+	r.mu.Unlock()
+	return true
+}
+
+// taken returns the added IPs, sorted, and clears the recorder.
+func (r *switchIPsRecorder) taken() []string {
+	r.mu.Lock()
+	ips := r.ips
+	r.ips = nil
+	r.mu.Unlock()
+	slices.Sort(ips)
+	return ips
 }
 
 // ─── Fake SNMP agents ─────────────────────────────────────────────────────────

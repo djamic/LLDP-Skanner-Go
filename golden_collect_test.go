@@ -480,6 +480,9 @@ func TestNoSideEffectSeamsLeak(t *testing.T) {
 	if globalCaptureManager == nil || globalCaptureManager.paramDir != guardCapturesDir || ouiFile != "oui.txt" {
 		t.Errorf("file seams were changed by a test: capture manager %+v, oui %q", globalCaptureManager, ouiFile)
 	}
+	if appendSwitchIP("192.0.2.9"); !slices.Equal(switchIPAdds.taken(), []string{"192.0.2.9"}) {
+		t.Error("appendSwitchIP is not the recorder: swich_ips could be written")
+	}
 	startMacIPCollector()
 	startLiveAnalysis(NewDJGraph())
 	if macIPCollectorStarts.Load() != 1 || liveAnalyses.Load() != 1 {

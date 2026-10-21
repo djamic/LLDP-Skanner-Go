@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"os/exec"
 	"slices"
@@ -46,6 +47,9 @@ type LLDPNeighbor struct {
 	RemSysName          string
 	RemSysDesc          string
 	RemMgmtIP           string // Management IP address from lldpRemManAddrTable
+	// RemSysCapEnabled is the first octet of lldpRemSysCapEnabled (see
+	// lldpCapabilities); 0 when unknown or none
+	RemSysCapEnabled uint8 `json:"RemSysCapEnabled,omitempty"`
 	// Management Address fields (raw)
 	RemManAddrIfSubtype int
 	RemManAddrIfId      int
@@ -675,6 +679,10 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 			neighbor.RemSysName = strings.Trim(val, "\"")
 		case 10: // SysDesc
 			neighbor.RemSysDesc = strings.Trim(val, "\"")
+		case 12: // SysCapEnabled (BITS), read with its value type
+			if _, typ, raw, ok := collectSNMPValue(line); ok {
+				neighbor.RemSysCapEnabled = lldpCapabilities(typ, raw)
+			}
 		}
 	}
 
@@ -696,6 +704,54 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 	}
 
 	return result, nil
+}
+
+// LLDP system capabilities (LldpSystemCapabilitiesMap, a BITS value whose
+// bit 0 is the most significant bit of the first octet): other 0,
+// repeater 1, bridge 2, wlanAccessPoint 3, router 4, telephone 5,
+// docsisCableDevice 6, stationOnly 7.
+const (
+	lldpCapBridge = 0x80 >> 2
+	lldpCapWLANAP = 0x80 >> 3
+	lldpCapRouter = 0x80 >> 4
+	lldpCapPhone  = 0x80 >> 5
+)
+
+// lldpCapabilities reads an lldpRemSysCapEnabled value as net-snmp prints
+// it: "Hex-STRING: 28 00", "BITS: 28 00 bridge(2) router(4)" when the
+// LLDP-MIB is loaded, or a quoted STRING when the octets are printable
+// ("(" is 0x28). It returns the first octet, or 0 when the value cannot be
+// read.
+func lldpCapabilities(typ, val string) uint8 {
+	switch typ {
+	case "Hex-STRING", "BITS":
+		fields := strings.Fields(val)
+		if len(fields) == 0 {
+			return 0
+		}
+		octet, err := hex.DecodeString(fields[0])
+		if err != nil || len(octet) != 1 {
+			return 0
+		}
+		return octet[0]
+	case "STRING":
+		if inner, quoted := macUnquote(val); quoted && inner != "" {
+			return inner[0]
+		}
+	}
+	return 0
+}
+
+// lldpDiscoverable reports whether an LLDP neighbor with these enabled
+// capabilities may be polled as a switch and added to swich_ips: a router,
+// or a bridge that is no wireless access point and no telephone (access
+// points and IP phones enable bridge as well). Unknown capabilities (0) are
+// never added automatically.
+func lldpDiscoverable(caps uint8) bool {
+	if caps&lldpCapRouter != 0 {
+		return true
+	}
+	return caps&lldpCapBridge != 0 && caps&(lldpCapWLANAP|lldpCapPhone) == 0
 }
 
 // enrichWithManagementIPs collects Management IP addresses from lldpRemManAddrTable

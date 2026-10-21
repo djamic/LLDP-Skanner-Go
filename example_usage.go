@@ -2358,10 +2358,18 @@ func runRescueScan(snmpObject *SNMPObject) {
 	}
 }
 
-// discoverFromLLDP checks all collected devices' LLDP neighbors for
-// management IPs that are not yet in collectedData. Discovered IPs are
-// added to swich_ips and immediately polled via CollectData.
-// Called after each periodic rescan to enable "chain reaction" discovery.
+// appendSwitchIP adds a discovered switch to swich_ips (appendToSwitchIPs).
+// Tests replace it so the live file is never written.
+var appendSwitchIP = appendToSwitchIPs
+
+// discoverFromLLDP polls the management IPs that the LLDP neighbors of the
+// polled devices advertise and adds each one that answers to swich_ips.
+// Only neighbors whose enabled capabilities say router, or bridge without
+// wlanAccessPoint and telephone (lldpDiscoverable), are polled: access
+// points and IP phones advertise management IPs as well (F62 made them
+// visible) but are no switches, and a neighbor with unknown capabilities is
+// not added automatically. Called after each periodic rescan to enable
+// "chain reaction" discovery.
 func discoverFromLLDP(snmpObject *SNMPObject) {
 	collectedDataMutex.RLock()
 	seen := make(map[string]bool, len(collectedData))
@@ -2370,9 +2378,9 @@ func discoverFromLLDP(snmpObject *SNMPObject) {
 	}
 
 	var newIPs []string
-	for _, dev := range collectedData {
-		for _, n := range dev.Neighbors {
-			if n.RemMgmtIP != "" && !seen[n.RemMgmtIP] {
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		for _, n := range collectedData[ip].Neighbors {
+			if n.RemMgmtIP != "" && !seen[n.RemMgmtIP] && lldpDiscoverable(n.RemSysCapEnabled) {
 				newIPs = append(newIPs, n.RemMgmtIP)
 				seen[n.RemMgmtIP] = true // avoid duplicates in this batch
 			}
@@ -2384,13 +2392,10 @@ func discoverFromLLDP(snmpObject *SNMPObject) {
 		return
 	}
 
-	fmt.Printf("🔗 [LLDP-Discovery] Found %d new management IPs from LLDP neighbors\n", len(newIPs))
+	fmt.Printf("🔗 [LLDP-Discovery] Found %d new switch management IPs from LLDP neighbors\n", len(newIPs))
 
 	var wg sync.WaitGroup
 	for _, ip := range newIPs {
-		// Save to swich_ips for future rescans
-		appendToSwitchIPs(ip)
-
 		// Poll immediately
 		wg.Add(1)
 		go func(targetIP string) {
@@ -2401,8 +2406,21 @@ func discoverFromLLDP(snmpObject *SNMPObject) {
 	}
 	wg.Wait()
 
-	if len(newIPs) > 0 {
-		fmt.Printf("🎉 [LLDP-Discovery] Added %d new switches! Rebuilding graph...\n", len(newIPs))
+	// Save the switches that answered to swich_ips for future rescans
+	added := 0
+	for _, ip := range newIPs {
+		collectedDataMutex.RLock()
+		d, ok := collectedData[ip]
+		answered := ok && !d.Unreachable
+		collectedDataMutex.RUnlock()
+		if answered {
+			appendSwitchIP(ip)
+			added++
+		}
+	}
+
+	if added > 0 {
+		fmt.Printf("🎉 [LLDP-Discovery] Added %d new switches! Rebuilding graph...\n", added)
 		rebuildGraph()
 	}
 }
