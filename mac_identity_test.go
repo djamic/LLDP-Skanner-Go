@@ -326,3 +326,49 @@ func TestBMCOUIMakers(t *testing.T) {
 		t.Errorf("%d BMC OUIs, want 33", n)
 	}
 }
+
+// TestVirtualNICOUIs: every virtual-NIC OUI is in every VM list: the
+// virtual-NIC set, the vendor table (category vm) and the VM OS text (Q8).
+func TestVirtualNICOUIs(t *testing.T) {
+	noData := &DeviceData{}
+	for _, c := range []struct{ mac, vendor, os string }{
+		{"00:50:56:00:00:01", "VMware", "💻 VMware VM"},
+		{"00:0c:29:00:00:01", "VMware", "💻 VMware VM"},
+		{"00:05:69:00:00:01", "VMware", "💻 VMware VM"},
+		{"00:1c:14:00:00:01", "VMware", "💻 VMware VM"},
+		{"bc:24:11:00:00:01", "Proxmox", "💻 KVM/Proxmox VM"},
+		{"52:54:00:00:00:01", "QEMU/KVM", "💻 KVM/Proxmox VM"},
+		{"00:15:5d:00:00:01", "Hyper-V", "🪟 Hyper-V VM"},
+		{"00:16:3e:00:00:01", "Xen", "💻 Xen VM"},
+		{"08:00:27:00:00:01", "VirtualBox", "💻 VirtualBox VM"},
+	} {
+		if !isHypervisorMAC(c.mac) {
+			t.Errorf("isHypervisorMAC(%q) = false", c.mac)
+		}
+		if got := getMACVendor(c.mac); got != c.vendor {
+			t.Errorf("getMACVendor(%q) = %q, want %q", c.mac, got, c.vendor)
+		}
+		if got := categorizeVendor(getMACVendor(c.mac)); got != "vm" {
+			t.Errorf("category of %q = %q, want vm", c.mac, got)
+		}
+		if got := detectOSFromMAC(c.mac, map[string]string{}, noData); got != c.os {
+			t.Errorf("detectOSFromMAC(%q) = %q, want %q", c.mac, got, c.os)
+		}
+	}
+	if got := detectOSFromMAC("aa:bb:cc:00:00:01", map[string]string{}, noData); got != "❓ Unknown VM" {
+		t.Errorf("detectOSFromMAC(non-VM OUI) = %q", got)
+	}
+}
+
+// TestDetectOSFromMACOrder: the TTL ping wins over the OUI; LLDP names play
+// no part, since MACs known from LLDP never reach the VM branch (F37).
+func TestDetectOSFromMACOrder(t *testing.T) {
+	neighbors := &DeviceData{Neighbors: []LLDPNeighbor{{RemChassisId: "00:50:56:00:00:21", RemSysName: "ubuntu-web01"}}}
+	if got := detectOSFromMAC("00:50:56:00:00:21", map[string]string{}, neighbors); got != "💻 VMware VM" {
+		t.Errorf("with an LLDP name: %q, want the OUI text", got)
+	}
+	// fakePing: x.x.x.2 answers with TTL 128.
+	if got := detectOSFromMAC("00:50:56:00:00:22", map[string]string{"00:50:56:00:00:22": "10.0.0.2"}, neighbors); got != "🪟 Windows" {
+		t.Errorf("with a TTL 128 reply: %q, want Windows", got)
+	}
+}

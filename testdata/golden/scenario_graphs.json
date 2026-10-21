@@ -223,8 +223,8 @@
   "hyp_proxmox_bc_24_11": {
     "nodes": {
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
-      "bc:24:11:00:05:01": "vm | [VM] 💻 VMware VM ",
-      "bc:24:11:00:05:02": "vm | [VM] 💻 VMware VM "
+      "bc:24:11:00:05:01": "vm | [VM] 💻 VMware VM Proxmox",
+      "bc:24:11:00:05:02": "vm | [VM] 💻 VMware VM Proxmox"
     },
     "edges": [
       "4c:ae:a3:00:01:01 -> bc:24:11:00:05:01 : \"GE1/0/5 [T]\"",
@@ -295,8 +295,8 @@
   },
   "hyp_vmware_00_05_69": {
     "nodes": {
-      "00:05:69:00:06:01": "vm | [VM] 💻 VMware VM ",
-      "00:05:69:00:06:02": "vm | [VM] 💻 VMware VM ",
+      "00:05:69:00:06:01": "vm | [VM] 💻 VMware VM VMware",
+      "00:05:69:00:06:02": "vm | [VM] 💻 VMware VM VMware",
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11"
     },
     "edges": [

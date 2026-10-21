@@ -1489,7 +1489,7 @@ func runMonitor24h() {
 // Hypervisor MAC prefixes (VMware, Proxmox/KVM, Hyper-V, Xen) — these are VIRTUAL NIC OUIs
 var hypervisorMACPrefixes = []string{
 	// VMware
-	"00:50:56", "00:0c:29", "00:05:69",
+	"00:50:56", "00:0c:29", "00:05:69", "00:1c:14",
 	// Proxmox / KVM / QEMU
 	"bc:24:11", "52:54:00",
 	// Microsoft Hyper-V
@@ -1570,33 +1570,23 @@ func isServerNIC(mac string) (bool, string) {
 	return false, ""
 }
 
-// detectOSFromMAC tries to detect the OS of a VM based on LLDP name, TTL ping, and MAC vendor
-func detectOSFromMAC(mac string, macToIP map[string]string, data *DeviceData) string {
+// detectOSFromMAC guesses the OS of a VM: by a TTL ping when its IP is known,
+// else by its virtual-NIC OUI. The *DeviceData argument is not used: the
+// LLDP-name step it fed could never match, because MACs known from LLDP never
+// reach the VM branch (F37).
+func detectOSFromMAC(mac string, macToIP map[string]string, _ *DeviceData) string {
 	macNorm := normalizeMAC(mac)
-	
-	// 1. Check LLDP neighbor names for OS hints (fastest, no network call)
-	for _, neighbor := range data.Neighbors {
-		neighborMAC := normalizeMAC(neighbor.RemChassisId)
-		if neighborMAC == macNorm || strings.Contains(neighborMAC, macNorm) {
-			nameLower := strings.ToLower(neighbor.RemSysName)
-			if strings.HasPrefix(nameLower, "desktop-") || strings.HasPrefix(nameLower, "win-") || strings.Contains(nameLower, "windows") {
-				return "🪟 Windows"
-			}
-			if strings.Contains(nameLower, "ubuntu") || strings.Contains(nameLower, "linux") || strings.Contains(nameLower, "debian") || strings.Contains(nameLower, "centos") || strings.Contains(nameLower, "rhel") {
-				return "🐧 Linux"
-			}
-		}
-	}
-	
-	// 2. TTL fingerprinting via quick ping (1 attempt, 1 second timeout)
+
+	// 1. TTL fingerprinting via quick ping (1 attempt, 1 second timeout)
 	if ip, ok := macToIP[macNorm]; ok && ip != "" {
 		if osLabel := detectOSByTTL(ip); osLabel != "" {
 			return osLabel
 		}
 	}
-	
-	// 3. Fallback: guess by MAC prefix
-	if strings.HasPrefix(macNorm, "00:50:56") || strings.HasPrefix(macNorm, "00:0c:29") {
+
+	// 2. Fallback: guess by MAC prefix
+	if strings.HasPrefix(macNorm, "00:50:56") || strings.HasPrefix(macNorm, "00:0c:29") ||
+		strings.HasPrefix(macNorm, "00:05:69") || strings.HasPrefix(macNorm, "00:1c:14") {
 		return "💻 VMware VM"
 	}
 	if strings.HasPrefix(macNorm, "52:54:00") || strings.HasPrefix(macNorm, "bc:24:11") {
@@ -1611,7 +1601,7 @@ func detectOSFromMAC(mac string, macToIP map[string]string, data *DeviceData) st
 	if strings.HasPrefix(macNorm, "08:00:27") {
 		return "💻 VirtualBox VM"
 	}
-	
+
 	return "❓ Unknown VM"
 }
 

@@ -161,6 +161,9 @@ var (
 		// ===== Virtual Machines =====
 		"00:0c:29": "VMware",
 		"00:50:56": "VMware",
+		"00:05:69": "VMware",
+		"00:1c:14": "VMware",
+		"bc:24:11": "Proxmox",
 		"00:15:5d": "Hyper-V",
 		"08:00:27": "VirtualBox",
 		"52:54:00": "QEMU/KVM",
@@ -286,7 +289,7 @@ var (
 		"Hikvision": "camera", "Dahua": "camera",
 		"Apple": "phone", "Samsung": "phone", "Xiaomi": "phone", "OPPO": "phone", "vivo": "phone",
 		"Epson": "printer", "Canon": "printer", "Brother": "printer", "ESP (Espressif)": "iot",
-		"VMware": "vm", "Hyper-V": "vm", "VirtualBox": "vm", "QEMU/KVM": "vm", "Xen": "vm",
+		"VMware": "vm", "Hyper-V": "vm", "VirtualBox": "vm", "QEMU/KVM": "vm", "Xen": "vm", "Proxmox": "vm",
 		"Huawei": "endpoint", "ZTE": "endpoint", "Gigabyte": "endpoint", "BizLink": "endpoint",
 		"Intel": "endpoint", "Lengda": "endpoint", "EliteGroup": "endpoint", "Wistron": "endpoint",
 		"Realtek": "endpoint", "Compal": "endpoint", "Shiyuan": "endpoint", "Quanta": "endpoint",
