@@ -392,6 +392,55 @@ func TestCollectESXiCheck(t *testing.T) {
 	}
 }
 
+// TestCollectESXiWarmup checks the paced check of cached MACs (F67): each
+// sweep queues a bounded batch of cached MACs that are in a switch FDB and
+// have no verdict yet, so hosts whose ARP entry no answering router has keep
+// being confirmed, without the startup burst. A cached IP claimed by two
+// MACs is not probed (the verdict could go to the wrong MAC, F64).
+func TestCollectESXiWarmup(t *testing.T) {
+	resetState(t)
+	collectResetCache(t)
+	const a, b, c, d, e, f, g = "00:50:56:07:09:01", "00:50:56:07:09:02", "00:50:56:07:09:03",
+		"00:50:56:07:09:04", "da:a1:19:07:09:05", "00:50:56:07:09:06", "00:50:56:07:09:07"
+	collectedDataMutex.Lock()
+	collectedData = map[string]*DeviceData{"10.9.9.1": {IP: "10.9.9.1",
+		MACTable: macEntries(3, a, b, c, d, e, "00:50:56:07:09:07")}}
+	collectedDataMutex.Unlock()
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP = map[string]string{
+		a: "10.7.9.1", // in the FDB, unique IP: probed
+		b: "10.7.9.2", // b and c claim the same IP: neither is probed
+		c: "10.7.9.2",
+		d: "10.7.9.4", // already checked at this IP
+		e: "10.7.9.5", // locally administered
+		f: "10.7.9.6", // not in any FDB
+		g: "10.7.9.7", // in the FDB, unique IP: probed
+	}
+	globalMACtoIPMutex.Unlock()
+	collectESXiMu.Lock()
+	collectESXiChecked[d] = "10.7.9.4"
+	collectESXiMu.Unlock()
+
+	saved := collectESXiWarmupBatch
+	collectESXiWarmupBatch = 1
+	t.Cleanup(func() { collectESXiWarmupBatch = saved })
+	if n := collectWarmupESXi(); n != 1 || !slices.Equal(esxiJobs.taken(), []string{a + " 10.7.9.1"}) {
+		t.Fatalf("first batch queued %d", n)
+	}
+	// a got its verdict; the next sweep takes the next MAC.
+	collectCheckESXi(esxiJob{mac: a, ip: "10.7.9.1"}, func(string) bool { return true }, func(string) bool { return false }, time.Now())
+	if n := collectWarmupESXi(); n != 1 || !slices.Equal(esxiJobs.taken(), []string{g + " 10.7.9.7"}) {
+		t.Fatalf("second batch queued %d", n)
+	}
+	collectCheckESXi(esxiJob{mac: g, ip: "10.7.9.7"}, func(string) bool { return true }, func(string) bool { return true }, time.Now())
+	if n := collectWarmupESXi(); n != 0 || len(esxiJobs.taken()) != 0 {
+		t.Errorf("nothing left to warm up, but %d queued", n)
+	}
+	if v, _ := ConfirmedESXiMACs.Load(g); v != "10.7.9.7" {
+		t.Errorf("warmed-up ESXi host not confirmed: %v", v)
+	}
+}
+
 // TestCollectESXiRetryDelay pins the retry schedule.
 func TestCollectESXiRetryDelay(t *testing.T) {
 	for tries, want := range map[int]time.Duration{

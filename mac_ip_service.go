@@ -138,20 +138,74 @@ func collectESXiCandidate(mac string) bool {
 // IP (collectRetryESXi queues those). A changed IP is checked again (Q18).
 func queueESXiValidation(mac, ip string) {
 	mac = collectCanonicalMAC(mac)
+	if collectESXiWanted(mac, ip) {
+		esxiEnqueue(esxiJob{mac: mac, ip: ip})
+	}
+}
+
+// collectESXiWanted reports whether the canonical mac at ip needs an ESXi
+// check (see queueESXiValidation).
+func collectESXiWanted(mac, ip string) bool {
 	if ip == "" || !collectESXiCandidate(mac) {
-		return
+		return false
 	}
 	// true: confirmed by code that did not record the IP
 	if confirmed, ok := ConfirmedESXiMACs.Load(mac); ok && (confirmed == ip || confirmed == true) {
-		return
+		return false
 	}
 	collectESXiMu.Lock()
+	defer collectESXiMu.Unlock()
 	retry, waiting := collectESXiRetry[mac]
-	skip := collectESXiChecked[mac] == ip || waiting && retry.ip == ip
-	collectESXiMu.Unlock()
-	if !skip {
-		esxiEnqueue(esxiJob{mac: mac, ip: ip})
+	return collectESXiChecked[mac] != ip && !(waiting && retry.ip == ip)
+}
+
+// collectESXiWarmupBatch is how many cached MACs one ARP sweep queues for
+// the ESXi check besides the MACs it observed (F67: loading the cache no
+// longer queues all of it at once).
+var collectESXiWarmupBatch = 500
+
+// collectWarmupESXi queues the ESXi check for cached MACs that no sweep
+// observed, at most collectESXiWarmupBatch per call (in MAC order): MACs in
+// a switch FDB (on the network now) that have no verdict for their cached IP
+// and whose IP no other cached MAC claims (with two claimants the verdict
+// could go to the wrong MAC, F64). Hosts whose ARP entry is only on routers
+// that do not answer SNMP keep being confirmed this way. Returns the jobs
+// queued.
+func collectWarmupESXi() int {
+	collectedDataMutex.RLock()
+	active := make(map[string]bool)
+	for _, d := range collectedData {
+		for _, e := range d.MACTable {
+			active[collectCanonicalMAC(e.MACAddress)] = true
+		}
 	}
+	collectedDataMutex.RUnlock()
+
+	globalMACtoIPMutex.RLock()
+	claims := make(map[string]int, len(globalMACtoIP))
+	for _, ip := range globalMACtoIP {
+		claims[ip]++
+	}
+	var jobs []esxiJob
+	for mac, ip := range globalMACtoIP {
+		if active[mac] && claims[ip] == 1 {
+			jobs = append(jobs, esxiJob{mac: mac, ip: ip})
+		}
+	}
+	globalMACtoIPMutex.RUnlock()
+
+	slices.SortFunc(jobs, func(a, b esxiJob) int { return strings.Compare(a.mac, b.mac) })
+	queued := 0
+	for _, job := range jobs {
+		if queued >= collectESXiWarmupBatch {
+			break
+		}
+		if collectESXiWanted(job.mac, job.ip) {
+			esxiEnqueue(job)
+			queued++
+		}
+	}
+	return queued
 }
 
 // enqueueESXiJob sends a job to the validation workers without blocking. A
@@ -521,8 +575,10 @@ func collectARPFromAllSwitches() {
 		// Note: IP enrichment happens automatically during rebuildGraph()
 	}
 
-	// Retry the ESXi checks whose host did not answer (F65)
+	// Retry the ESXi checks whose host did not answer (F65), and check the
+	// next batch of cached MACs that no sweep observes (F67)
 	collectRetryESXi(now)
+	collectWarmupESXi()
 }
 
 // collectGatewaySVIIPs returns all IP addresses configured on the gateway device.
