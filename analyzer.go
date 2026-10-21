@@ -50,10 +50,10 @@ func (na *NetworkAnalyzer) idx() *analyzerIndex {
 }
 
 // analyzerSwitchIDs lists the node ids the graph can give the polled switch
-// d: normalizeID of its chassis id (as buildGraphFromSnapshot does), then
-// its IP.
+// d: its node id (graphDeviceNodeID, as buildGraphFromSnapshot names it),
+// then its IP.
 func analyzerSwitchIDs(d *DeviceData) []string {
-	if id := normalizeID(d.ChassisID, 0); id != "" && id != d.IP {
+	if id := graphDeviceNodeID(d); id != d.IP {
 		return []string{id, d.IP}
 	}
 	return []string{d.IP}
@@ -786,18 +786,20 @@ func (na *NetworkAnalyzer) analyzeLoopback() []OptimizationSuggestion {
 
 	for _, device := range na.Data.DevicesData {
 		deviceIP := device.IP
-		chassisMAC := normalizeMAC(device.ChassisID)
+		// The switch's own MAC as the graph keys it (graphChassisKey: a
+		// canonical MAC, so a Cisco-dotted id matches its neighbors' view).
 		// A switch without a usable chassis id cannot recognise itself: an
-		// empty (or null) id equals every other empty id, for example a
-		// neighbor whose RemChassisId was not read (F17).
-		if isInvalidID(chassisMAC) {
+		// empty (or null, or exception-text) id equals every other empty id,
+		// for example a neighbor whose RemChassisId was not read (F17).
+		chassisMAC := graphChassisKey(device.ChassisID)
+		if chassisMAC == "" || isInvalidID(chassisMAC) {
 			continue
 		}
 
 		// Method 1: LLDP Self-Neighbor Detection
 		// If a switch sees its own ChassisID as an LLDP neighbor = cable looped back
 		for _, neighbor := range device.Neighbors {
-			remoteMAC := normalizeMAC(neighbor.RemChassisId)
+			remoteMAC := graphChassisKey(lldpChassisID(neighbor))
 			if remoteMAC == chassisMAC {
 				issueID := fmt.Sprintf("loop_lldp_%s_%d", strings.ReplaceAll(deviceIP, ".", "_"), neighbor.LocalPortNum)
 
@@ -827,7 +829,7 @@ func (na *NetworkAnalyzer) analyzeLoopback() []OptimizationSuggestion {
 		// Method 2: MAC Self-Reference Detection
 		// If a switch's own chassis MAC appears in MAC table on a non-trunk port
 		for _, macEntry := range device.MACTable {
-			entryMAC := normalizeMAC(macEntry.MACAddress)
+			entryMAC := canonicalMAC(macEntry.MACAddress)
 			if entryMAC == chassisMAC {
 				// Check if this port is a trunk (trunks legitimately see own MAC)
 				isTrunk := false
@@ -882,7 +884,7 @@ func (na *NetworkAnalyzer) analyzeSTP() []OptimizationSuggestion {
 	// so the chassis MAC (the bridge MAC of most switches) is what matches.
 	managed := make(map[string]bool)
 	for _, device := range ix.devices {
-		managed[normalizeMAC(device.ChassisID)] = true
+		managed[graphChassisKey(device.ChassisID)] = true
 		for _, iface := range device.Interfaces {
 			managed[normalizeMAC(iface.IfPhysAddress)] = true
 		}

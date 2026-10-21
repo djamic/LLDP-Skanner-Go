@@ -977,11 +977,10 @@ func reportParseHubID(id string) (switchID string, port int, ok bool) {
 	return rest[:i], port, true
 }
 
-// reportDeviceNode returns the graph node a polled device is drawn as: the
-// node of its chassis id, else the node named by its IP (a switch without a
-// usable chassis id), else "".
+// reportDeviceNode returns the graph node a polled device is drawn as: its
+// node id (graphDeviceNodeID), else the node named by its IP, else "".
 func reportDeviceNode(g *DJGraph, d *DeviceData) string {
-	if id := normalizeID(d.ChassisID, 0); id != "" && g.Nodes[id] {
+	if id := graphDeviceNodeID(d); g.Nodes[id] {
 		return id
 	}
 	if g.Nodes[d.IP] {

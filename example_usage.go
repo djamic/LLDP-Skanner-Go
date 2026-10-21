@@ -2106,11 +2106,7 @@ func refreshGraphEdgeLabels() {
 	collectedDataMutex.RLock()
 	for _, ip := range sortedDeviceIPs(collectedData) {
 		dev := collectedData[ip]
-		id := normalizeID(dev.ChassisID, 0)
-		if id == "" {
-			id = dev.IP
-		}
-		nodeToIP[id] = dev.IP
+		nodeToIP[graphDeviceNodeID(dev)] = dev.IP
 	}
 	collectedDataMutex.RUnlock()
 

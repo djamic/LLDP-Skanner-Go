@@ -381,11 +381,7 @@ func collectSuggestionHosts(devices []*DeviceData, suggestions []OptimizationSug
 		}
 	}
 	for _, d := range devices {
-		nodeID := normalizeID(d.ChassisID, 0)
-		if nodeID == "" {
-			nodeID = d.IP
-		}
-		addKey(nodeID, d.IP)
+		addKey(graphDeviceNodeID(d), d.IP)
 		addKey(canonicalMAC(d.ChassisID), d.IP)
 	}
 
