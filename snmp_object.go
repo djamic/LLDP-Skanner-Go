@@ -92,6 +92,57 @@ type DeviceData struct {
 	// MACEntry.PortNumber is a dot1dBasePort; this maps it to the ifIndex
 	// (dot1dBasePortIfIndex). Nil when the switch did not report it.
 	BridgePortIfIndex map[int]int `json:"bridgePortIfIndex,omitempty"`
+
+	// Walks that failed in the poll that produced this data (not saved).
+	failedWalks []string
+}
+
+// Parts of one CollectData poll, as recorded in DeviceData.failedWalks.
+const (
+	collectWalkInterfaces  = "interfaces"
+	collectWalkLLDP        = "lldp"
+	collectWalkFDB         = "fdb"
+	collectWalkBridgePorts = "bridge ports"
+	collectWalkARP         = "arp"
+	collectWalkVLAN        = "vlan"
+	collectWalkSTP         = "stp"
+)
+
+// collectWalkFailed reports whether the walk of part failed in the poll
+// that produced d.
+func (d *DeviceData) collectWalkFailed(part string) bool {
+	return slices.Contains(d.failedWalks, part)
+}
+
+// collectKeepPrevious fills the tables of data whose walk failed (a partial
+// success) from prev, the stored data of the same switch, so one timed-out
+// walk does not empty a table until the next poll (F57: every MAC of the
+// switch would LEAVE, then JOIN again five minutes later). A walk that
+// answered with no rows is not a failure. The chassis id is not tracked or
+// carried over (its read decides the switch identity).
+func collectKeepPrevious(data, prev *DeviceData) {
+	if prev == nil || prev == data {
+		return
+	}
+	for _, part := range data.failedWalks {
+		switch part {
+		case collectWalkInterfaces:
+			data.Interfaces = prev.Interfaces
+		case collectWalkLLDP:
+			data.Neighbors = prev.Neighbors
+		case collectWalkFDB:
+			data.MACTable = prev.MACTable
+			data.BridgePortIfIndex = prev.BridgePortIfIndex
+		case collectWalkBridgePorts:
+			data.BridgePortIfIndex = prev.BridgePortIfIndex
+		case collectWalkARP:
+			data.ARPTable = prev.ARPTable
+		case collectWalkVLAN:
+			data.PortVLANs = prev.PortVLANs
+		case collectWalkSTP:
+			data.STPInfo = prev.STPInfo
+		}
+	}
 }
 
 // collectBasePortIfIndexOID is dot1dBasePortIfIndex.<bridge port> = ifIndex.
@@ -202,6 +253,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("interfaces err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkInterfaces)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -218,6 +270,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("lldp err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkLLDP)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -234,14 +287,18 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("mac table err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkFDB)
 			mu.Unlock()
 		} else {
 			// The FDB reports bridge ports; their ifIndex names the port (F60).
 			// Optional: without it the bridge port is used as the ifIndex.
-			bridgePorts, _ := s.collectBridgePortIfIndex(ip)
+			bridgePorts, bpErr := s.collectBridgePortIfIndex(ip)
 			mu.Lock()
 			data.MACTable = macTable
 			data.BridgePortIfIndex = bridgePorts
+			if bpErr != nil {
+				data.failedWalks = append(data.failedWalks, collectWalkBridgePorts)
+			}
 			mu.Unlock()
 		}
 	}()
@@ -254,6 +311,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("arp table err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkARP)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -270,6 +328,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("vlan err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkVLAN)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -286,6 +345,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("stp err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkSTP)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -315,7 +375,8 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		}
 	}
 
-	// Partial or full success — deliver data
+	// Partial or full success — deliver data. The callback keeps the tables
+	// of failed walks from the previous poll (collectKeepPrevious).
 	data.Timestamp = time.Now()
 	if s.OnSuccess != nil {
 		s.OnSuccess(data)

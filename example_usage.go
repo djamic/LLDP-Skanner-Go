@@ -181,23 +181,28 @@ func main() {
 			updateTrafficCounters(ip, data.Interfaces)
 		}
 		collectedDataMutex.Unlock()
-
-		// Rebuild graph
-		rebuildGraph()
-		fmt.Printf("✅ Loaded %d hosts from saved data\n", len(savedData.Hosts))
 	}
 
 	// MAC-IP Service: load cache and start background ARP collection
-	// (covers gateway + all discovered switches)
+	// (covers gateway + all discovered switches). The cache is loaded before
+	// the first graph is built, so that graph already has the IP and DNS
+	// lines (F51: they used to appear only after the first rescan).
 	startMacIPService()
 
 	// Collect ARP table from gateway first (legacy - also done by MacIPService)
 	fmt.Printf("🔍 Collecting ARP table from gateway %s...\n", gatewayIP)
 	collectGatewayARP()
 
-	// Start web server immediately in background
+	// Start web server immediately in background (it serves the empty graph
+	// until the first build below is published)
 	go StartWebServer("8088")
 	fmt.Println("🌐 Web server started on http://localhost:8088")
+
+	if hasSavedHosts {
+		// Rebuild graph
+		rebuildGraph()
+		fmt.Printf("✅ Loaded %d hosts from saved data\n", len(savedData.Hosts))
+	}
 
 	// ============================================================
 	// Mode dispatch: benchmark and monitor24h exit early
@@ -208,32 +213,14 @@ func main() {
 	}
 	if *modeFlag == "monitor24h" && hasSavedHosts {
 		// Start traffic monitoring in background
-		snmpObj := NewSNMPObject(
-			func(data *DeviceData) {
-				// Phase 8: Mark as reachable
-				data.Unreachable = false
-				data.LastSeen = time.Now()
-				collectedDataMutex.Lock()
-				collectedData[data.IP] = data
-				collectedDataMutex.Unlock()
-				updateTrafficCounters(data.IP, data.Interfaces)
-			},
-			func(ip string, err error) {
-				// Phase 8: Mark as unreachable but PRESERVE old data
-				collectedDataMutex.Lock()
-				if existing, ok := collectedData[ip]; ok {
-					existing.Unreachable = true
-					// LastSeen stays unchanged — keeps last successful poll time
-				}
-				collectedDataMutex.Unlock()
-				fmt.Printf("🔴 [Monitor] Switch unreachable: %s (%v)\n", ip, err)
-			},
-		)
+		snmpObj := collectRescanObject()
 		startTrafficPolling(snmpObj)
 		startPeriodicLabelRefresh()
 		startPeriodicRescan(snmpObj)
 		startRescueScanner(snmpObj) // Phase 15: Dead Node Recovery
-		go startPeriodicAnalysis()
+		// No startPeriodicAnalysis here: runMonitor24h runs the same analysis
+		// and snapshot diff every minute, and two loops wrote every event and
+		// network summary twice (F52).
 		runMonitor24h()
 		os.Exit(0)
 	}
@@ -244,8 +231,9 @@ func main() {
 		fmt.Println("📊 Loaded saved hosts. Use 'Rescan' in menu to refresh.")
 		fmt.Println("🔄 Starting traffic monitoring...")
 
-		// Create SNMP Object for traffic polling
-		snmpObject := NewSNMPObject(nil, nil)
+		// Create SNMP Object for traffic polling and rescans (its callbacks
+		// store every rescan, F53)
+		snmpObject := collectRescanObject()
 		startTrafficPolling(snmpObject)
 		startPeriodicLabelRefresh()
 		startPeriodicRescan(snmpObject)
@@ -292,17 +280,10 @@ func main() {
 			func(data *DeviceData) {
 				atomic.AddInt32(&dataCollected, 1)
 
-				// Phase 8: Mark as reachable
-				data.Unreachable = false
-				data.LastSeen = time.Now()
-
-				// Store data for later processing
-				collectedDataMutex.Lock()
-				collectedData[data.IP] = data
-				collectedDataMutex.Unlock()
-
-				// Update traffic counters (set baseline for first poll)
-				updateTrafficCounters(data.IP, data.Interfaces)
+				// Store data for later processing: marks it reachable, keeps
+				// the tables of failed walks (F57) and sets the traffic
+				// baseline for the first poll
+				collectStoreDevice(data)
 
 				fmt.Printf("[📊] %s (%s) - %d interfaces, %d neighbors, ChassisID: %s\n",
 					data.IP, data.SysName, len(data.Interfaces), len(data.Neighbors), data.ChassisID)
@@ -337,11 +318,7 @@ func main() {
 				fmt.Printf("[❌] Data collection failed for %s: %v\n", ip, err)
 				atomic.AddInt32(&dataCollected, 1)
 				// Phase 8: Mark as unreachable but PRESERVE old data
-				collectedDataMutex.Lock()
-				if existing, ok := collectedData[ip]; ok {
-					existing.Unreachable = true
-				}
-				collectedDataMutex.Unlock()
+				collectMarkUnreachable(ip)
 			},
 		)
 
@@ -462,8 +439,11 @@ func main() {
 				startPeriodicLabelRefresh()
 				startPeriodicRescan(snmpObject)
 
-				// Start periodic analysis loop for alerts
-				go startPeriodicAnalysis()
+				// Start periodic analysis loop for alerts (monitor24h runs its
+				// own per-minute analysis below, F52)
+				if *modeFlag != "monitor24h" {
+					go startPeriodicAnalysis()
+				}
 
 				if *modeFlag == "experiment" {
 					fmt.Println("\n✅ EXPERIMENT MODE COMPLETED.")
@@ -540,6 +520,50 @@ func main() {
 			}
 		}
 	} // End of else block
+}
+
+// collectRescanObject is the SNMP object for traffic polling and rescans
+// when saved data was loaded (normal and monitor24h mode). Its callbacks
+// store what every rescan collects (F53: normal mode had nil callbacks and
+// threw each rescan away).
+func collectRescanObject() *SNMPObject {
+	return NewSNMPObject(collectStoreDevice, collectDeviceUnreachable)
+}
+
+// collectStoreDevice is the OnSuccess callback of the scan and rescan SNMP
+// objects: it marks the switch reachable, keeps the previous tables for the
+// walks that failed this time (F57) and replaces the stored data. Traffic
+// counters are only updated from interfaces walked just now.
+func collectStoreDevice(data *DeviceData) {
+	data.Unreachable = false
+	data.LastSeen = time.Now()
+	collectedDataMutex.Lock()
+	collectKeepPrevious(data, collectedData[data.IP])
+	collectedData[data.IP] = data
+	collectedDataMutex.Unlock()
+	if !data.collectWalkFailed(collectWalkInterfaces) {
+		updateTrafficCounters(data.IP, data.Interfaces)
+	}
+}
+
+// collectDeviceUnreachable is the OnFailure callback of collectRescanObject.
+func collectDeviceUnreachable(ip string, err error) {
+	collectMarkUnreachable(ip)
+	fmt.Printf("🔴 [Monitor] Switch unreachable: %s (%v)\n", ip, err)
+}
+
+// collectMarkUnreachable marks a stored switch unreachable after every walk
+// failed, keeping its last data (LastSeen stays the last successful poll).
+// The struct is replaced, not changed: snapshots and the analyzer read the
+// stored pointers without the lock.
+func collectMarkUnreachable(ip string) {
+	collectedDataMutex.Lock()
+	defer collectedDataMutex.Unlock()
+	if existing, ok := collectedData[ip]; ok {
+		marked := *existing
+		marked.Unreachable = true
+		collectedData[ip] = &marked
+	}
 }
 
 // Helper to format raw string as Hex with colons
