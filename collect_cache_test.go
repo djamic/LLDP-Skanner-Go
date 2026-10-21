@@ -304,9 +304,9 @@ func TestCollectNoStartupProbeStorm(t *testing.T) {
 }
 
 // TestCollectESXiQueueFilter checks which MACs reach the ESXi queue: no
-// special or zero-OUI MACs (Q11), no locally administered ones (random
-// phone MACs, KVM guests), no MAC without an IP, and no MAC confirmed at
-// the same IP.
+// special or zero-OUI MACs (Q11), no random ones (locally administered
+// phone MACs; a 52:54:00 KVM NIC is a VM, never random, so it is probed,
+// Q4, MI-7), no MAC without an IP, and no MAC confirmed at the same IP.
 func TestCollectESXiQueueFilter(t *testing.T) {
 	resetState(t)
 	collectResetCache(t)
@@ -319,7 +319,7 @@ func TestCollectESXiQueueFilter(t *testing.T) {
 		"ff:ff:ff:ff:ff:ff": "10.7.4.4",  // broadcast
 		"00:00:00:07:04:05": "10.7.4.5",  // zero OUI
 		"da:a1:19:07:04:06": "10.7.4.6",  // locally administered (random)
-		"52:54:00:07:04:07": "10.7.4.7",  // KVM guest (locally administered)
+		"52:54:00:07:04:07": "10.7.4.7",  // KVM NIC: locally administered, but a VM, never random (Q4): queued (MI-7)
 		"00:50:56:07:04:08": "",          // no IP
 		"00:50:56:07:04:09": "10.7.4.9",  // confirmed at this IP
 		"00:50:56:07:04:0a": "10.7.4.10", // confirmed without a recorded IP
@@ -328,9 +328,28 @@ func TestCollectESXiQueueFilter(t *testing.T) {
 		queueESXiValidation(mac, ip)
 	}
 	queueESXiValidation("00:50:56:07:04:09", "10.7.4.99") // confirmed MAC with a new IP: queued
-	want := []string{"00:50:56:07:04:01 10.7.4.1", "00:50:56:07:04:09 10.7.4.99", "b4:7a:f1:07:04:02 10.7.4.2"}
+	want := []string{"00:50:56:07:04:01 10.7.4.1", "00:50:56:07:04:09 10.7.4.99", "52:54:00:07:04:07 10.7.4.7", "b4:7a:f1:07:04:02 10.7.4.2"}
 	if got := esxiJobs.taken(); !slices.Equal(got, want) {
 		t.Errorf("queued %v, want %v", got, want)
+	}
+
+	// The queue filter is the Q11 filter plus "not random" (isRandomMAC): a
+	// virtual-NIC OUI is never dropped as random (Q4).
+	for mac, want := range map[string]bool{
+		"00:50:56:aa:bb:cc": true,  // VMware
+		"bc:24:11:00:00:01": true,  // Proxmox
+		"52:54:00:12:34:56": true,  // QEMU/KVM default NIC, U/L bit set
+		"b4:7a:f1:07:04:02": true,  // HPE server NIC
+		"da:a1:19:07:04:06": false, // random phone MAC
+		"02:42:ac:11:00:02": false, // locally administered, no virtual-NIC OUI
+		"01:00:5e:00:00:16": false, // multicast
+		"00:00:00:30:00:00": false, // zero OUI
+		"ff:ff:ff:ff:ff:ff": false, // broadcast
+		"desktop-v380chd":   false, // no MAC
+	} {
+		if got := collectESXiCandidate(mac); got != want {
+			t.Errorf("collectESXiCandidate(%s) = %v, want %v", mac, got, want)
+		}
 	}
 }
 

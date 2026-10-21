@@ -134,13 +134,14 @@ type collectESXiRetryJob struct {
 }
 
 // collectESXiCandidate reports whether mac can be an ESXi host NIC worth a
-// probe: a usable MAC (Q11) that is globally administered. Locally
-// administered MACs (randomized phone and laptop MACs, 24,978 of the 37,110
-// cache entries, and 52:54:00 KVM guests) are never the management NIC of
-// an ESXi host, so they are not probed (F67).
+// probe: a usable MAC (Q11) that is not random (isRandomMAC). Randomized
+// phone and laptop MACs (locally administered, 24,978 of the 37,110 cache
+// entries) are never the management NIC of an ESXi host, so they are not
+// probed (F67). A virtual-NIC OUI is a VM and never random (Q4), so a
+// 52:54:00 QEMU/KVM NIC, whose U/L bit is set, is probed like the other VM
+// NICs: a nested ESXi host on KVM has one (MI-7).
 func collectESXiCandidate(mac string) bool {
-	m, ok := parseMAC(mac)
-	return ok && !m.IsSpecial() && !m.IsLocal()
+	return usableMAC(mac) != "" && !isRandomMAC(mac)
 }
 
 // queueESXiValidation asks the workers whether ip, the MAC's current IP, is
