@@ -418,9 +418,10 @@ def mermaid_to_graphviz(mermaid_code):
     # Group name mapping for legend labels
     group_label_map = {
         '#4A90E2': 'Switch', '#E24A4A': 'Router', '#FF9800': 'Hub',
-        '#8BC34A': 'Endpoint', '#00BCD4': 'Wi-Fi / Random',
+        '#8BC34A': 'Endpoint', '#00BCD4': 'Wi-Fi AP / Random MAC',
         '#9C27B0': 'VM', '#26C6DA': 'Hypervisor', '#FF6F00': 'BMC/iLO',
         '#E91E63': 'Camera', '#3F51B5': 'Phone', '#607D8B': 'IoT',
+        '#795548': 'Printer', '#FF5722': 'Server', '#9E9E9E': 'Unknown',
     }
     # Collect unique colors used in this diagram
     used_colors = {}

@@ -569,3 +569,32 @@ func TestReportAuditDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// TestDocxLegendNamesReportColours (H13): the DOCX converter the audit
+// download runs (instrumens/md2docx_gost_linux.py) names every fill colour
+// the report's diagrams use in its legend (group_label_map), so no group
+// shows up as a bare hex code; its twin md2docx_gost_cyrillic_linux.py has
+// the same map.
+func TestDocxLegendNamesReportColours(t *testing.T) {
+	entry := regexp.MustCompile(`'(#[0-9A-Fa-f]{6})':\s*'([^']+)'`)
+	for _, script := range []string{"md2docx_gost_linux.py", "md2docx_gost_cyrillic_linux.py"} {
+		src, err := os.ReadFile(filepath.Join("instrumens", script))
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := strings.Index(string(src), "group_label_map = {")
+		end := strings.Index(string(src)[start:], "}")
+		if start < 0 || end < 0 {
+			t.Fatalf("%s: no group_label_map", script)
+		}
+		labels := map[string]string{}
+		for _, m := range entry.FindAllStringSubmatch(string(src)[start:start+end], -1) {
+			labels[strings.ToUpper(m[1])] = m[2]
+		}
+		for group, colors := range reportGroupColors {
+			if labels[strings.ToUpper(colors[0])] == "" {
+				t.Errorf("%s: group_label_map has no label for %s (%s)", script, colors[0], group)
+			}
+		}
+	}
+}

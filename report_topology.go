@@ -698,25 +698,6 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 		}
 	}
 
-	// Group color mapping (matches UI filters)
-	groupColors := map[string][2]string{
-		"switch":       {"#4A90E2", "#2A6FC2"},
-		"router":       {"#E24A4A", "#C23030"},
-		"hub":          {"#FF9800", "#E68A00"},
-		"endpoint":     {"#8BC34A", "#6B9F30"},
-		"access_point": {"#00BCD4", "#0097A7"},
-		"vm":           {"#9C27B0", "#7B1FA2"},
-		"hypervisor":   {"#26C6DA", "#0097A7"},
-		"bmc":          {"#FF6F00", "#E65100"},
-		"camera":       {"#E91E63", "#C2185B"},
-		"phone":        {"#3F51B5", "#303F9F"},
-		"iot":          {"#607D8B", "#455A64"},
-		"wifi_random":  {"#00BCD4", "#0097A7"},
-		"printer":      {"#795548", "#5D4037"},
-		"server":       {"#FF5722", "#E64A19"},
-		"unknown":      {"#9E9E9E", "#757575"},
-	}
-
 	var sb strings.Builder
 	sb.WriteString("graph TD\n")
 
@@ -745,12 +726,34 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 
 	// Style each node with its group color
 	for _, nd := range nodes {
-		if colors, ok := groupColors[nd.Group]; ok {
+		if colors, ok := reportGroupColors[nd.Group]; ok {
 			sb.WriteString(fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", nd.SafeID, colors[0], colors[1]))
 		}
 	}
 
 	return sb.String()
+}
+
+// reportGroupColors are the fill and stroke colours of each node group in
+// the report's Mermaid diagrams; they match the UI (static/app.js
+// groupColors), and the DOCX converter (instrumens/md2docx_gost_linux.py
+// group_label_map) names each fill colour in its legend.
+var reportGroupColors = map[string][2]string{
+	"switch":       {"#4A90E2", "#2A6FC2"},
+	"router":       {"#E24A4A", "#C23030"},
+	"hub":          {"#FF9800", "#E68A00"},
+	"endpoint":     {"#8BC34A", "#6B9F30"},
+	"access_point": {"#00BCD4", "#0097A7"},
+	"vm":           {"#9C27B0", "#7B1FA2"},
+	"hypervisor":   {"#26C6DA", "#0097A7"},
+	"bmc":          {"#FF6F00", "#E65100"},
+	"camera":       {"#E91E63", "#C2185B"},
+	"phone":        {"#3F51B5", "#303F9F"},
+	"iot":          {"#607D8B", "#455A64"},
+	"wifi_random":  {"#00BCD4", "#0097A7"},
+	"printer":      {"#795548", "#5D4037"},
+	"server":       {"#FF5722", "#E64A19"},
+	"unknown":      {"#9E9E9E", "#757575"},
 }
 
 // GenerateTopologyLegend returns a markdown legend table for the topology colors
