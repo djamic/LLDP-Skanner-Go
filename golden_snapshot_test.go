@@ -97,10 +97,18 @@ func derivePrevious(t *testing.T, devices map[string]*DeviceData, cache map[stri
 	prev[from].MACTable = slices.DeleteFunc(prev[from].MACTable, func(m MACEntry) bool { return normalizeMAC(m.MACAddress) == moved })
 	prev[to].MACTable = append(prev[to].MACTable, MACEntry{MACAddress: moved, PortNumber: 1, Status: "learned"})
 
-	// LEAVE: a random MAC, a VMware MAC and a MAC with a cached IP.
+	// LEAVE: a random MAC, a VMware MAC and a MAC with a cached IP that is
+	// in no switch's MAC table now (a MAC learned by several switches is not
+	// in single, but it is still present, so it would not leave).
+	inFDB := map[string]bool{}
+	for _, d := range devices {
+		for _, m := range d.MACTable {
+			inFDB[normalizeMAC(m.MACAddress)] = true
+		}
+	}
 	cachedOnly := ""
 	for _, mac := range slices.Sorted(maps.Keys(cache)) {
-		if _, inFDB := single[mac]; !inFDB && !isRandomMAC(mac) && !isSpecialMAC(mac) {
+		if !inFDB[mac] && !isRandomMAC(mac) && !isSpecialMAC(mac) {
 			cachedOnly = mac
 			break
 		}
