@@ -1058,6 +1058,19 @@
         let trafficChart = null;
         let historyData = [];
 
+        // uiEscapeHTML makes a value safe inside innerHTML, as text or in a quoted
+        // attribute. Port names and event texts come from the devices.
+        const uiHTMLEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        function uiEscapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => uiHTMLEntities[ch]);
+        }
+
+        // uiIsIPv4 accepts a dotted quad with octets 0-255.
+        function uiIsIPv4(s) {
+            const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
+            return !!m && m.slice(1).every(octet => Number(octet) <= 255);
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', async () => {
             await loadDevices();
@@ -1067,11 +1080,22 @@
             const urlParams = new URLSearchParams(window.location.search);
             const deviceId = urlParams.get('id');
             if (deviceId) {
-                document.getElementById('deviceSelect').value = deviceId;
+                const select = document.getElementById('deviceSelect');
+                const known = [...select.options].some(o => o.value === deviceId);
+                // The map's History action may send the IP of a device that is
+                // not a polled host: give it an option, otherwise the select
+                // stays empty and loadHistory() stops at 'Please select a device'.
+                if (!known && uiIsIPv4(deviceId)) {
+                    const opt = document.createElement('option');
+                    opt.value = deviceId;
+                    opt.textContent = `${deviceId} (not a polled device)`;
+                    select.appendChild(opt);
+                }
+                select.value = deviceId;
                 loadHistory();
 
-                // Auto-open connect modal if connect=true
-                if (urlParams.get('connect') === 'true') {
+                // Auto-open connect modal if connect=true (polled hosts only)
+                if (known && urlParams.get('connect') === 'true') {
                     setTimeout(() => {
                         openConnectModal();
                     }, 500);
@@ -1176,7 +1200,7 @@
             showLoading(true);
 
             try {
-                const res = await fetch(`/api/history?id=${deviceIP}&hours=${hours}`);
+                const res = await fetch(`/api/history?id=${encodeURIComponent(deviceIP)}&hours=${hours}`);
                 const data = await res.json();
 
                 if (data.error) {
@@ -1327,9 +1351,9 @@
                 const lineColor = ds.borderColor;
                 const statusDot = _statusDots[status] || '';
                 const opacity = hidden ? '0.3' : '1';
-                return `<span class="cleg-item" style="opacity:${opacity}" onclick="toggleDataset(${i})" title="${ds.label} (${status})">
+                return `<span class="cleg-item" style="opacity:${opacity}" onclick="toggleDataset(${i})" title="${uiEscapeHTML(ds.label)} (${uiEscapeHTML(status)})">
                     <span class="cleg-box" style="background:${lineColor}"></span>
-                    ${statusDot} ${ds.label}</span>`;
+                    ${statusDot} ${uiEscapeHTML(ds.label)}</span>`;
             }).join('');
         }
         function toggleDataset(index) {
@@ -1420,10 +1444,10 @@
 
             tbody.innerHTML = changes.slice(-50).reverse().map(c => `
                 <tr>
-                    <td>${formatTime(c.time)}</td>
-                    <td>${c.port}</td>
-                    <td>${c.type}</td>
-                    <td><span class="status-down">${c.old}</span> → <span class="status-up">${c.new}</span></td>
+                    <td>${uiEscapeHTML(formatTime(c.time))}</td>
+                    <td>${uiEscapeHTML(c.port)}</td>
+                    <td>${uiEscapeHTML(c.type)}</td>
+                    <td><span class="status-down">${uiEscapeHTML(c.old)}</span> → <span class="status-up">${uiEscapeHTML(c.new)}</span></td>
                 </tr>
             `).join('');
         }
@@ -1476,7 +1500,7 @@
 
         async function loadDeviceDetail(deviceIP) {
             try {
-                const res = await fetch(`/api/device-detail?id=${deviceIP}`);
+                const res = await fetch(`/api/device-detail?id=${encodeURIComponent(deviceIP)}`);
                 const data = await res.json();
                 if (data.error) {
                     console.warn('Device detail error:', data.error);
@@ -1634,8 +1658,8 @@
             }
 
             el.innerHTML = `
-                <span class="port-num">${numLabel}</span>
-                ${tagText ? `<span class="port-tag" style="color:#000">${tagText}</span>` : ''}
+                <span class="port-num">${uiEscapeHTML(numLabel)}</span>
+                ${tagText ? `<span class="port-tag" style="color:#000">${uiEscapeHTML(tagText)}</span>` : ''}
             `;
 
             // Tooltip
@@ -1805,7 +1829,7 @@
 
         async function scanDevicePorts(ip) {
             try {
-                const res = await fetch(`/api/check-ports?id=${ip}`);
+                const res = await fetch(`/api/check-ports?id=${encodeURIComponent(ip)}`);
                 const data = await res.json();
 
                 const container = document.getElementById('portScanResults');
@@ -1823,7 +1847,7 @@
                 protocols.forEach(p => {
                     const item = document.createElement('div');
                     item.className = `port-scan-item ${p.open ? 'open' : 'closed'}`;
-                    item.innerHTML = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
+                    item.textContent = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
                     item.onclick = () => {
                         document.getElementById('connProto').value = p.key;
                         document.getElementById('connPort').value = p.port;
@@ -2156,7 +2180,7 @@
 
             try {
                 const typeParam = types.length > 0 ? `&type=${types.join(',')}` : '';
-                const resp = await fetch(`/api/port-events?ip=${ip}&hours=${hours}${typeParam}`);
+                const resp = await fetch(`/api/port-events?ip=${encodeURIComponent(ip)}&hours=${hours}${typeParam}`);
                 const data = await resp.json();
 
                 if (!data.events || data.events.length === 0) {
@@ -2176,11 +2200,11 @@
                         else duration = `${Math.floor(evt.duration_s/3600)}h ${Math.floor((evt.duration_s%3600)/60)}m`;
                     }
                     return `<tr>
-                        <td style="white-space:nowrap">${time}</td>
-                        <td class="evt-${evt.type}">${icon} ${evt.type}</td>
-                        <td>${port}</td>
-                        <td>${duration}</td>
-                        <td>${evt.message || '—'}</td>
+                        <td style="white-space:nowrap">${uiEscapeHTML(time)}</td>
+                        <td class="evt-${uiEscapeHTML(evt.type)}">${icon} ${uiEscapeHTML(evt.type)}</td>
+                        <td>${uiEscapeHTML(port)}</td>
+                        <td>${uiEscapeHTML(duration)}</td>
+                        <td>${uiEscapeHTML(evt.message || '—')}</td>
                     </tr>`;
                 }).join('');
 
@@ -2188,13 +2212,13 @@
                 loadEventStats(ip, hours);
 
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#f44336">Error: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#f44336">Error: ${uiEscapeHTML(err.message)}</td></tr>`;
             }
         }
 
         async function loadEventStats(ip, hours) {
             try {
-                const resp = await fetch(`/api/port-events/stats?ip=${ip}&hours=${hours}`);
+                const resp = await fetch(`/api/port-events/stats?ip=${encodeURIComponent(ip)}&hours=${hours}`);
                 const stats = await resp.json();
                 updateEventStats(stats);
             } catch (e) {

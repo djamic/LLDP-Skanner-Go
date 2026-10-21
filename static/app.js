@@ -13,10 +13,13 @@ let filterState = {
     mode: 'ALL', // 'ALL' or 'CONNECTED'
     selectedNodeId: null,
     allowedGroups: new Set(), // populated from checkboxes
+    checkboxGroups: new Set(), // groups that have a checkbox at all
     contextShowEndpoints: true
 };
 
-// Color scheme for different device groups
+// Color scheme for the device groups the backend emits (dj_graph.go
+// determineDeviceGroup); index.html has one filter checkbox with the same dot
+// colour per group.
 const groupColors = {
     'switch': '#4A90E2',
     'router': '#E24A4A',
@@ -28,12 +31,20 @@ const groupColors = {
     'bmc':        '#FF6F00',  // amber — server management
     'server': '#FF5722',
     'camera': '#E91E63',
-    'access_point': '#FF9800',
+    'access_point': '#00BCD4',  // legend and report colour; not hub orange
     'printer': '#795548',
     'phone': '#3F51B5',
     'iot': '#607D8B',
     'unknown': '#9E9E9E'
 };
+
+// uiEscapeHTML makes a value safe inside innerHTML, as text or in a quoted
+// attribute. Labels carry text that remote devices control (LLDP names, SNMP
+// port names), so every server-provided string goes through it.
+const uiHTMLEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function uiEscapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => uiHTMLEntities[ch]);
+}
 
 // Fetch and render network data
 async function loadNetworkData() {
@@ -57,6 +68,51 @@ async function loadNetworkData() {
     }
 }
 
+// Fields d3 keeps on a node object (layout and drag); the rest is /api/graph data.
+const uiSimFields = new Set(['x', 'y', 'vx', 'vy', 'fx', 'fy', 'index']);
+
+// uiNodeText is the text drawn under a node.
+// E.4: hostname priority — hostname > sysName > label > id
+function uiNodeText(d) {
+    return d.hostname || d.sysName || d.label || d.id;
+}
+
+// uiIsIPv4 accepts a dotted quad with octets 0-255.
+function uiIsIPv4(s) {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
+    return !!m && m.slice(1).every(octet => Number(octet) <= 255);
+}
+
+// uiNodeIPs lists the node's own addresses: the id when it is an IP, then
+// every label line that is exactly an IPv4 address, in label order (the
+// SNMP/ARP IP comes first; enrichGraphWithIPs appends the cache IP after it).
+// A "VMs: a, b" line (a hypervisor's guests) or SysDesc text is not the
+// node's address. Connect, History and the info panel all use ips[0].
+function uiNodeIPs(node) {
+    const ips = node.ip ? [node.ip] : [];
+    (node.sysName || node.label || '').split('\n').forEach(line => {
+        const s = line.trim();
+        if (uiIsIPv4(s) && !ips.includes(s)) ips.push(s);
+    });
+    return ips;
+}
+
+// uiRenderNodeLabel (re)builds the tspans of one node label when its text
+// changed, so later IP/DNS/ESXi enrichment shows up on the canvas.
+function uiRenderNodeLabel(el, d) {
+    const displayText = uiNodeText(d);
+    if (el.__uiText === displayText) return;
+    el.__uiText = displayText;
+    const textEl = d3.select(el);
+    textEl.selectAll('tspan').remove();
+    displayText.split('\n').forEach((line, i) => {
+        textEl.append('tspan')
+            .attr('x', 0)
+            .attr('dy', i === 0 ? '1.5em' : '1.1em')
+            .text(line);
+    });
+}
+
 // Incremental topology update (based on reference implementation)
 function updateTopology(newData) {
     const filteredData = getFilteredData(newData);
@@ -76,11 +132,17 @@ function updateTopology(newData) {
         } else {
             // Update existing node data (but preserve x, y)
             const existing = currentNodes.get(node.id);
-            // Detect property changes that require re-render
+            // Detect property changes that require re-render (canvas text included)
             if (existing.unreachable !== node.unreachable ||
                 existing.group !== node.group ||
+                uiNodeText(existing) !== uiNodeText(node) ||
                 JSON.stringify(existing.anomalies) !== JSON.stringify(node.anomalies)) {
                 changed = true;
+            }
+            // Fields the server now omits (omitempty: hostname, anomalies, ...)
+            // must not stay behind; only the simulation's own fields are kept.
+            for (const key of Object.keys(existing)) {
+                if (!(key in node) && !uiSimFields.has(key)) delete existing[key];
             }
             Object.assign(existing, node, { x: existing.x, y: existing.y });
         }
@@ -134,38 +196,48 @@ function updateTopology(newData) {
 function updateFilterState() {
     // Read all checkbox filters
     const allowed = new Set();
+    const withCheckbox = new Set();
     document.querySelectorAll('.filter-cb input[data-group]').forEach(cb => {
+        withCheckbox.add(cb.dataset.group);
         if (cb.checked) allowed.add(cb.dataset.group);
     });
     filterState.allowedGroups = allowed;
+    filterState.checkboxGroups = withCheckbox;
 
     // Context menu checkbox
     filterState.contextShowEndpoints = document.getElementById('contextShowEndpoints')?.checked ?? true;
 }
 
+// uiGroupShown: a node is hidden only by an unchecked checkbox of its group;
+// a group without a checkbox is always drawn instead of vanishing silently.
+function uiGroupShown(n) {
+    const group = n.group || 'endpoint';
+    return filterState.allowedGroups.has(group) || !filterState.checkboxGroups.has(group);
+}
+
 function getFilteredData(data) {
     updateFilterState();
-    const allowed = filterState.allowedGroups;
     let filteredNodes = data.nodes;
 
-    if (filterState.mode === 'CONNECTED' && filterState.selectedNodeId) {
+    const selected = filterState.selectedNodeId;
+    if (filterState.mode === 'CONNECTED' && selected && data.nodes.some(n => n.id === selected)) {
+        // Only the selected node and its direct neighbours; 'Show Endpoints'
+        // off also drops endpoint and random-MAC neighbours.
         const connectedToSelected = new Set();
         data.links.forEach(l => {
             const s = l.source.id || l.source;
             const t = l.target.id || l.target;
-            if (s === filterState.selectedNodeId) connectedToSelected.add(t);
-            if (t === filterState.selectedNodeId) connectedToSelected.add(s);
+            if (s === selected) connectedToSelected.add(t);
+            if (t === selected) connectedToSelected.add(s);
         });
 
         filteredNodes = filteredNodes.filter(n => {
-            if (!allowed.has(n.group || 'endpoint')) return false;
-            if (connectedToSelected.has(n.id)) {
-                if (!filterState.contextShowEndpoints && (n.group === 'endpoint' || n.group === 'wifi_random')) return false;
-            }
-            return true;
+            if (n.id === selected) return true;
+            if (!connectedToSelected.has(n.id) || !uiGroupShown(n)) return false;
+            return filterState.contextShowEndpoints || (n.group !== 'endpoint' && n.group !== 'wifi_random');
         });
     } else {
-        filteredNodes = filteredNodes.filter(n => allowed.has(n.group || 'endpoint'));
+        filteredNodes = filteredNodes.filter(uiGroupShown);
     }
 
     const nodeIds = new Set(filteredNodes.map(n => n.id));
@@ -278,10 +350,11 @@ function renderGraph() {
         .attr('class', 'link-label source-label')
         .attr('font-size', '11px')
         .attr('fill', '#2196F3')
-        .attr('font-weight', 'bold')
-        .text(d => d.sourceLabel || '');
+        .attr('font-weight', 'bold');
 
-    const sourceLabelUpdate = sourceLabelEnter.merge(sourceLinkLabel);
+    // Text on enter and update: the backend rewrites traffic labels every 30 s
+    const sourceLabelUpdate = sourceLabelEnter.merge(sourceLinkLabel)
+        .text(d => d.sourceLabel || '');
 
     // UPDATE TARGET LABELS
     const targetLinkLabel = g.selectAll('text.target-label')
@@ -294,10 +367,10 @@ function renderGraph() {
         .attr('class', 'link-label target-label')
         .attr('font-size', '11px')
         .attr('fill', '#F44336')
-        .attr('font-weight', 'bold')
-        .text(d => d.targetLabel || '');
+        .attr('font-weight', 'bold');
 
-    const targetLabelUpdate = targetLabelEnter.merge(targetLinkLabel);
+    const targetLabelUpdate = targetLabelEnter.merge(targetLinkLabel)
+        .text(d => d.targetLabel || '');
 
     // UPDATE NODES
     const node = g.selectAll('circle.node')
@@ -341,21 +414,9 @@ function renderGraph() {
         .attr('font-weight', 'bold')
         .attr('fill', '#333');
 
-    // Handle multi-line labels
-    nodeLabelEnter.each(function (d) {
-        // E.4: hostname priority — hostname > sysName > label > id
-        const displayText = d.hostname || d.sysName || d.label || d.id;
-        const lines = displayText.split('\n');
-        const textEl = d3.select(this);
-        lines.forEach((line, i) => {
-            textEl.append("tspan")
-                .attr("x", 0)
-                .attr("dy", i === 0 ? "1.5em" : "1.1em")
-                .text(line);
-        });
-    });
-
-    const nodeLabelUpdate = nodeLabelEnter.merge(nodeLabel);
+    // Multi-line labels on enter and update (rebuilt only when the text changed)
+    const nodeLabelUpdate = nodeLabelEnter.merge(nodeLabel)
+        .each(function (d) { uiRenderNodeLabel(this, d); });
 
     // E.2 + Phase 8: Apply anomaly/unreachable glow classes
     nodeUpdate
@@ -501,8 +562,8 @@ function updateFilterCounts(data) {
         const g = n.group || 'unknown';
         counts[g] = (counts[g] || 0) + 1;
     });
-    const groups = ['switch','router','hub','endpoint','access_point','vm','hypervisor','bmc','camera','phone','iot','wifi_random'];
-    groups.forEach(g => {
+    // every group the backend emits, printer/server/unknown included
+    Object.keys(groupColors).forEach(g => {
         const el = document.getElementById('fc-' + g);
         if (el) el.textContent = counts[g] || 0;
     });
@@ -640,8 +701,8 @@ function loadEvents() {
                 return `<div class="event-item ${typeClass}">
                     <span class="event-icon">${icon}</span>
                     <div class="event-content">
-                        <div class="event-msg">${evt.message}</div>
-                        <div class="event-time">${evt.time}</div>
+                        <div class="event-msg">${uiEscapeHTML(evt.message)}</div>
+                        <div class="event-time">${uiEscapeHTML(evt.time)}</div>
                     </div>
                 </div>`;
             }).join('');
@@ -716,23 +777,13 @@ function viewHistory() {
         return;
     }
 
-    // Find the node to get its IP
+    // Find the node to get its own IP (never a VM IP from a 'VMs:' line)
     const node = rawData.nodes.find(n => n.id === selectedNodeId);
     if (node) {
-        let ip = node.ip;
-
-        // If no IP field, try to extract from sysName or label
-        if (!ip) {
-            const text = node.sysName || node.label || '';
-            // Match IP pattern
-            const ipMatch = text.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
-            if (ipMatch) {
-                ip = ipMatch[1];
-            }
-        }
+        const ip = uiNodeIPs(node)[0];
 
         if (ip) {
-            window.location.href = `/history.html?id=${ip}`;
+            window.location.href = `/history.html?id=${encodeURIComponent(ip)}`;
         } else {
             alert('No IP address available for this device');
         }
@@ -751,12 +802,7 @@ function connectToDevice() {
 
     const node = rawData.nodes.find(n => n.id === selectedNodeId);
     if (node) {
-        let ip = node.ip;
-        if (!ip) {
-            const text = node.sysName || node.label || '';
-            const ipMatch = text.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
-            if (ipMatch) ip = ipMatch[1];
-        }
+        const ip = uiNodeIPs(node)[0];
 
         if (ip) {
             connectedDeviceIP = ip;
@@ -795,7 +841,7 @@ async function scanDevicePorts(ip) {
         protocols.forEach(p => {
             const item = document.createElement('div');
             item.className = `port-scan-item ${p.open ? 'open' : 'closed'}`;
-            item.innerHTML = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
+            item.textContent = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
             item.onclick = () => {
                 document.getElementById('connProto').value = p.key;
                 document.getElementById('connPort').value = p.port;
@@ -951,101 +997,159 @@ if (typeof ResizeObserver !== 'undefined') {
         if (fitAddon && term) try { fitAddon.fit(); } catch(e) {}
     }).observe(document.getElementById('terminalBox') || document.body);
 }
+
+// Tag lines whose text after the tag is the vendor (label contract).
+const uiVendorTags = ['[ENDPOINT]', '[LLDP-EP]', '[WiFi]'];
+// "[VM] <os>[ <vendor>]": the OS label is an emoji plus one word or "<word> VM"
+// ('🐧 Linux', '💻 VMware VM'); "[VM] <vendor>" has no OS label.
+const uiVMOSPattern = /^([^\x00-\x7F]\S*\s+(?:\S+\s+VM(?=\s|$)|\S+))\s*(.*)$/u;
+
+// uiParseNodeInfo reads the backend label lines for the info panel: vendor,
+// detail (BMC type, VM OS, hypervisor/hub text), the DNS name and the first
+// name line. It reads sysName, the full label: label drops the tag lines when
+// a DNS name exists. IP lines (uiNodeIPs) and "VMs:" lines are not names.
+function uiParseNodeInfo(node) {
+    const out = { vendor: '', detail: '', name: '', hostname: node.hostname || '' };
+    let typeText = '';    // [HYPERVISOR] text, e.g. 'VMware ESXi' or 'HPE ProLiant Server'
+    let brand = '';       // vendor named by a BMC type, e.g. 'Fujitsu' in 'Fujitsu iRMC'
+    let ownTag = false;   // a device tag line ([ENDPOINT], [VM], [BMC], ...) was seen
+    (node.sysName || node.label || '').split('\n').forEach(raw => {
+        const line = raw.trim();
+        const tag = uiVendorTags.find(t => line.startsWith(t));
+        if (tag) {
+            ownTag = true;
+            if (!out.vendor) out.vendor = line.slice(tag.length).trim();
+        } else if (line.startsWith('[VM]')) {
+            ownTag = true;
+            const rest = line.slice('[VM]'.length).trim();
+            const m = rest.match(uiVMOSPattern);
+            if (!out.detail && m) out.detail = m[1];
+            if (!out.vendor) out.vendor = m ? m[2] : rest;
+        } else if (line.startsWith('[BMC]')) {
+            ownTag = true;
+            // "[BMC] <type>[ <vendor>]"; the type is 'BMC', 'IPMI' or '<brand> <product>'
+            const words = line.slice('[BMC]'.length).trim().split(/\s+/).filter(Boolean);
+            const typeLen = (words[0] === 'BMC' || words[0] === 'IPMI') ? 1 : Math.min(2, words.length);
+            if (!out.detail) out.detail = words.slice(0, typeLen).join(' ');
+            if (!out.vendor) out.vendor = words.slice(typeLen).join(' ');
+            if (typeLen === 2 && !brand) brand = words[0];
+        } else if (line.startsWith('[HYPERVISOR]') || line.startsWith('[HUB]')) {
+            const text = line.slice(line.indexOf(']') + 1).trim();
+            if (!out.detail) out.detail = text;
+            if (line.startsWith('[HYPERVISOR]') && !typeText) typeText = text;
+        } else if (line.startsWith('[DNS]')) {
+            if (!out.hostname) out.hostname = line.slice('[DNS]'.length).trim();
+        } else if (line && !line.startsWith('[') && !uiIsIPv4(line) && !line.startsWith('VMs:')) {
+            if (!out.name) out.name = line;
+        }
+    });
+    // No vendor text: fall back to what a type names — the brand of a BMC
+    // type, the server vendor of '[HYPERVISOR] HPE ProLiant Server', or the
+    // platform of a synthetic hypervisor node that has no tag line of its own
+    // ('VMware ESXi'); a physical ESXi host keeps its unknown hardware vendor.
+    if (!out.vendor) {
+        if (brand) out.vendor = brand;
+        else if (/\sServer$/.test(typeText)) out.vendor = typeText.replace(/\s+Server$/, '');
+        else if (!ownTag) out.vendor = typeText;
+    }
+    return out;
+}
+
+// uiLinkPorts gives the clicked node's own port and the peer's port on one
+// link. GetGraphData splits "<srcPort>|<dstPort>" into sourceLabel and
+// targetLabel; 'Hub' (switch->hub links) is a placeholder, not a port.
+function uiLinkPorts(link, nodeId) {
+    const port = s => (s || '').split('[MAC-REF]')[0].trim();
+    const src = port(link.sourceLabel);
+    const dst = link.targetLabel === 'Hub' ? '' : port(link.targetLabel);
+    return (link.source.id || link.source) === nodeId ? { own: src, peer: dst } : { own: dst, peer: src };
+}
+
+// uiPortKey drops the speed and traffic suffix so that links on one port
+// group together: 'TGE1/0/52 [T] 10G ↓13M ↑29M' -> 'TGE1/0/52 [T]'.
+function uiPortKey(label) {
+    return label.replace(/\s+(?:\d+[MGmg]\b|[↓↑]).*$/, '').trim();
+}
+
+// uiComparePorts sorts port names naturally: GE1/0/2 < GE1/0/10.
+function uiComparePorts(a, b) {
+    const numA = a.match(/(\d+)/g)?.map(Number) || [];
+    const numB = b.match(/(\d+)/g)?.map(Number) || [];
+    for (let i = 0; i < Math.max(numA.length, numB.length); i++) {
+        const diff = (numA[i] || 0) - (numB[i] || 0);
+        if (diff !== 0) return diff;
+    }
+    return a.localeCompare(b);
+}
+
+// uiNodeName: DNS name, else the first name line, else the node's IP, else its id.
+function uiNodeName(node) {
+    const info = uiParseNodeInfo(node);
+    return info.hostname || info.name || uiNodeIPs(node)[0] || node.id;
+}
+
 function showInfoPanel(node) {
     const panel = document.getElementById('infoPanel');
     if (!panel) return;
 
-    // Parse node info
-    const info = node.sysName || node.label || '';
-    const lines = info.split('\n');
+    // Parse node info (vendor, detail, DNS name, name line)
+    const type = node.group || 'unknown';
+    const info = uiParseNodeInfo(node);
+    const sysName = info.hostname || info.name;
+    // Same address as Connect and History; further IP lines are listed after it
+    const ips = uiNodeIPs(node);
 
-    // Extract data from label/info
-    let type = node.group || 'unknown';
-    let vendor = '';
-    let ip = '';
-    let sysName = '';
-
-    // Parse info lines
-    lines.forEach(line => {
-        if (line.includes('[ENDPOINT]') || line.includes('[LLDP-EP]') || line.includes('[HUB]')) {
-            // Extract vendor from type line: "[ENDPOINT] Realtek"
-            const parts = line.split(' ');
-            if (parts.length > 1) {
-                vendor = parts.slice(1).join(' ');
-            }
-        } else if (line.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-            // IP address
-            ip = line;
-        } else if (line && !line.startsWith('[')) {
-            // System name or description
-            if (!sysName) sysName = line;
-        }
-    });
-
-    // Get connected devices — grouped by port
+    // Get connected devices — grouped by this node's own port on each link
     const portMap = {}; // portKey → [{id, name, group}]
     if (rawData && rawData.links) {
         rawData.links.forEach(link => {
             const srcId = link.source.id || link.source;
             const tgtId = link.target.id || link.target;
-            let peerId = null, portLabel = null;
+            if (srcId !== node.id && tgtId !== node.id) return;
+            const peerId = srcId === node.id ? tgtId : srcId;
 
-            if (srcId === node.id) {
-                peerId = tgtId;
-                // sourceLabel: "GE1/0/5 [T]|GE1/0/2" — take first part
-                portLabel = (link.sourceLabel || '').split('|')[0].split('[MAC-REF]')[0].trim() || '—';
-            } else if (tgtId === node.id) {
-                peerId = srcId;
-                // Use targetLabel if available, else sourceLabel second part
-                const sl = (link.sourceLabel || '');
-                portLabel = sl.includes('|') ? sl.split('|')[1].trim() : sl.split('[MAC-REF]')[0].trim() || '—';
-            }
-            if (!peerId) return;
+            // On the target side the own port is targetLabel, not the peer's
+            // sourceLabel. A node without a port of its own on the link
+            // (endpoint, hub) is grouped under the peer's port, marked as such.
+            const ports = uiLinkPorts(link, node.id);
+            const own = uiPortKey(ports.own), peer = uiPortKey(ports.peer);
+            const portKey = own || (peer ? `${peer} (peer)` : '—');
 
             const peerNode = rawData.nodes.find(n => n.id === peerId);
             const peerLabel = peerNode ? (peerNode.label?.split('\n')[0] || peerId.substring(0, 22)) : peerId.substring(0, 22);
             const peerGroup = peerNode?.group || 'endpoint';
 
-            // Clean port label: remove speed suffix for grouping key
-            const portKey = portLabel.replace(/\s+\d+[MGmg]\b.*$/, '').trim() || '—';
-
             if (!portMap[portKey]) portMap[portKey] = [];
-            portMap[portKey].push({ id: peerId, name: peerLabel, group: peerGroup, port: portLabel });
+            portMap[portKey].push({ id: peerId, name: peerLabel, group: peerGroup });
         });
     }
 
     // Sort ports naturally: GE1/0/1 < GE1/0/2 etc.
-    const sortedPorts = Object.keys(portMap).sort((a, b) => {
-        const numA = a.match(/(\d+)/g)?.map(Number) || [];
-        const numB = b.match(/(\d+)/g)?.map(Number) || [];
-        for (let i = 0; i < Math.max(numA.length, numB.length); i++) {
-            const diff = (numA[i] || 0) - (numB[i] || 0);
-            if (diff !== 0) return diff;
-        }
-        return a.localeCompare(b);
-    });
+    const sortedPorts = Object.keys(portMap).sort(uiComparePorts);
 
     const totalConnections = Object.values(portMap).reduce((s, arr) => s + arr.length, 0);
 
-    // Format type for display
+    // Format type for display ('Wi-Fi AP' is access_point everywhere; the
+    // randomised-MAC group is 'Random MAC', as in the filter bar and the report)
     const typeNames = {
         'switch': '🔀 Switch', 'router': '🌐 Router', 'hub': '🔌 Hub',
-        'endpoint': '💻 Endpoint', 'wifi_random': '📶 Wi-Fi',
+        'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC',
         'vm': '🖥️ VM', 'hypervisor': '🏗️ Hypervisor', 'bmc': '🔧 BMC',
         'server': '🖲️ Server', 'camera': '📹 Camera',
-        'access_point': '📡 AP', 'printer': '🖨️ Printer',
+        'access_point': '📡 Wi-Fi AP', 'printer': '🖨️ Printer',
         'phone': '📱 Phone', 'iot': '🔌 IoT', 'unknown': '❓ Unknown'
     };
     const groupIcons = { 'switch':'🔀','router':'🌐','hub':'🔌','endpoint':'💻',
-        'wifi_random':'📶','vm':'🖥️','hypervisor':'🏗️','bmc':'🔧',
-        'access_point':'📡','camera':'📹','phone':'📱','iot':'🔌' };
+        'wifi_random':'🎲','vm':'🖥️','hypervisor':'🏗️','bmc':'🔧','server':'🖲️',
+        'access_point':'📡','camera':'📹','printer':'🖨️','phone':'📱','iot':'🔌','unknown':'❓' };
 
     // Update panel content
     document.getElementById('infoPanelTitle').textContent = sysName || node.id;
-    document.getElementById('infoType').textContent = typeNames[type] || type;
+    document.getElementById('infoType').textContent = (typeNames[type] || type) + (info.detail ? ` · ${info.detail}` : '');
     document.getElementById('infoMAC').textContent = node.id;
-    document.getElementById('infoVendor').textContent = vendor || 'Unknown';
-    document.getElementById('infoIP').textContent = ip || 'Not available';
+    document.getElementById('infoVendor').textContent = info.vendor || 'Unknown';
+    document.getElementById('infoIP').textContent = ips.length === 0 ? 'Not available'
+        : ips[0] + (ips.length > 1 ? ` (also ${ips.slice(1).join(', ')})` : '');
     document.getElementById('infoSysName').textContent = sysName || node.id;
     document.getElementById('infoConnections').textContent = totalConnections;
 
@@ -1058,7 +1162,7 @@ function showInfoPanel(node) {
                 const diff = Math.round((Date.now() - new Date(node.lastSeen).getTime()) / 60000);
                 lastSeenText = diff < 60 ? `${diff} min ago` : `${Math.round(diff/60)}h ago`;
             }
-            statusEl.innerHTML = `<span style="color:#ff4444;font-weight:bold">🔴 UNREACHABLE</span> <span style="color:#888;font-size:11px">Last seen: ${lastSeenText}</span>`;
+            statusEl.innerHTML = `<span style="color:#ff4444;font-weight:bold">🔴 UNREACHABLE</span> <span style="color:#888;font-size:11px">Last seen: ${uiEscapeHTML(lastSeenText)}</span>`;
             statusEl.style.display = 'block';
         } else {
             statusEl.innerHTML = '<span style="color:#4CAF50;font-weight:bold">🟢 Online</span>';
@@ -1076,12 +1180,11 @@ function showInfoPanel(node) {
             const peersHTML = peers.map(peer => {
                 const icon = groupIcons[peer.group] || '❓';
                 const shortName = peer.name.length > 28 ? peer.name.substring(0, 26) + '…' : peer.name;
-                return `<div class="info-list-item info-peer-item" 
-                    onclick="highlightNodeFromPanel('${peer.id.replace(/'/g,"\\'")}'); event.stopPropagation();"
-                    title="${peer.id}\nClick to highlight"
+                return `<div class="info-list-item info-peer-item" data-node-id="${uiEscapeHTML(peer.id)}"
+                    title="${uiEscapeHTML(peer.id)}\nClick to highlight"
                     style="cursor:pointer; padding-left:20px; font-size:12px; background:rgba(255,255,255,0.03); margin:2px 0; border-radius:4px; border-left:2px solid rgba(74,144,226,0.3);">
-                    <span>${icon} ${shortName}</span>
-                    <span style="color:#6c8ab0;font-size:10px">${peer.group}</span>
+                    <span>${icon} ${uiEscapeHTML(shortName)}</span>
+                    <span style="color:#6c8ab0;font-size:10px">${uiEscapeHTML(peer.group)}</span>
                 </div>`;
             }).join('');
             return `
@@ -1089,7 +1192,7 @@ function showInfoPanel(node) {
                     <div style="font-size:11px; font-weight:600; color:#4A90E2; padding:3px 0 2px; 
                         border-bottom:1px solid rgba(74,144,226,0.2); display:flex; 
                         justify-content:space-between; align-items:center;">
-                        <span>🔌 ${portKey}</span>
+                        <span>🔌 ${uiEscapeHTML(portKey)}</span>
                         <span style="color:#6c8ab0">${peers.length} device${peers.length>1?'s':''}</span>
                     </div>
                     ${peersHTML}
@@ -1141,6 +1244,21 @@ function handleBackdropClick(event) {
         closeInfoPanel();
     }
 }
+
+// Rows built with innerHTML carry the node id in an escaped data-node-id
+// attribute instead of an inline onclick; one listener per list hands the id
+// to the action.
+function uiOnNodeClick(listId, action, stopPropagation) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    list.addEventListener('click', event => {
+        const row = event.target.closest?.('[data-node-id]');
+        if (!row) return;
+        if (stopPropagation) event.stopPropagation();
+        action(row.getAttribute('data-node-id'));
+    });
+}
+uiOnNodeClick('infoNeighbors', id => highlightNodeFromPanel(id), true);
 
 // ==================== Settings Management ====================
 
@@ -1533,8 +1651,8 @@ function loadExperimentResults() {
             }
             listDiv.innerHTML = data.files.map(f => `
             <div style="padding: 6px 10px; border-bottom: 1px solid #1a2a3a; display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #e0e0e0; font-size: 13px;">📄 ${f.name}</span>
-                <span style="color: #666; font-size: 11px;">${(f.size / 1024).toFixed(1)} KB · ${f.modified}</span>
+                <span style="color: #e0e0e0; font-size: 13px;">📄 ${uiEscapeHTML(f.name)}</span>
+                <span style="color: #666; font-size: 11px;">${uiEscapeHTML((f.size / 1024).toFixed(1))} KB · ${uiEscapeHTML(f.modified)}</span>
             </div>
         `).join('');
         })
@@ -1547,77 +1665,65 @@ function loadExperimentResults() {
 // Shadow IT Detection (Unmanaged Switches)
 // ============================================================
 
+// uiIsConfirmedESXi: an HTTP-confirmed ESXi host. enrichGraphWithIPs puts the
+// '[HYPERVISOR] VMware ESXi' line into its full label (sysName; label loses it
+// when a DNS name exists), and the graph may group it as hypervisor.
+function uiIsConfirmedESXi(node) {
+    return node.group === 'hypervisor' || (node.sysName || '').includes('[HYPERVISOR] VMware ESXi');
+}
+
+// uiShadowITEntries lists the Shadow-IT modal entries. Q14: one per-port rule
+// everywhere, the graph's hub filters plus the ESXi exemption — so the entries
+// are the graph's hubs, minus a hub with a confirmed ESXi host behind it. Each
+// entry carries its switch and port from the switch->hub link ('<port>|Hub'),
+// else from the id 'hub-<switch>-p<bridge port>'. Sorted by switch and port,
+// so the list does not depend on the backend's map order.
+function uiShadowITEntries(data) {
+    const byId = new Map(data.nodes.map(n => [n.id, n]));
+    const entries = [];
+    data.nodes.forEach(hub => {
+        if (hub.group !== 'hub') return;
+        let uplink = null;
+        const members = [];
+        data.links.forEach(l => {
+            const s = l.source.id || l.source, t = l.target.id || l.target;
+            if (t === hub.id && (l.targetLabel === 'Hub' || /\|Hub$/.test(l.label || ''))) uplink = l;
+            else if (s === hub.id || t === hub.id) members.push(byId.get(s === hub.id ? t : s));
+        });
+        if (members.some(m => m && uiIsConfirmedESXi(m))) return;
+
+        const idMatch = /^hub-(.+)-p(\d+)$/.exec(hub.id);
+        const switchId = uplink ? (uplink.source.id || uplink.source) : (idMatch ? idMatch[1] : '');
+        const port = uplink ? uiPortKey(uiLinkPorts(uplink, switchId).own) : (idMatch ? `bridge port ${idMatch[2]}` : '');
+        const sw = byId.get(switchId);
+        let switchName = switchId || 'Unknown';
+        if (sw) {
+            const name = uiNodeName(sw), ip = uiNodeIPs(sw)[0];
+            switchName = ip && ip !== name ? `${name} (${ip})` : name;
+        }
+        entries.push({ hub, switchName, port });
+    });
+    return entries.sort((a, b) => a.switchName.localeCompare(b.switchName) ||
+        uiComparePorts(a.port, b.port) || a.hub.id.localeCompare(b.hub.id));
+}
+
 function showShadowIT() {
     if (!rawData || !rawData.nodes || rawData.nodes.length === 0) {
         alert('❌ No network data available.');
         return;
     }
 
-    // Find shadow IT nodes: hubs, unmanaged switches — but NOT VMware/hypervisor-related
-    const shadowNodes = rawData.nodes.filter(n => {
-        const label = (n.label || '').toLowerCase();
-        const sysName = (n.sysName || '').toLowerCase();
-
-        // EXCLUDE: hypervisors, VMs, ESXi hosts, BMC — these are legitimate
-        if (n.group === 'hypervisor' || n.group === 'vm' || n.group === 'bmc') return false;
-        if (label.includes('[hypervisor]') || label.includes('vmware esxi')) return false;
-        if (label.includes('[vm]') || label.includes('vmware')) return false;
-
-        // Hub nodes — only include if NOT a VM-related hub
-        if (n.group === 'hub' || label.includes('[hub]') || label.includes('unmanaged')) {
-            // Check if this hub's connected nodes are VMs/hypervisors
-            const connectedNodes = rawData.links
-                .filter(l => (l.source.id || l.source) === n.id || (l.target.id || l.target) === n.id)
-                .map(l => {
-                    const otherId = (l.source.id || l.source) === n.id
-                        ? (l.target.id || l.target) : (l.source.id || l.source);
-                    return rawData.nodes.find(nn => nn.id === otherId);
-                })
-                .filter(Boolean);
-
-            // If any connected node is a hypervisor or VM, skip this hub
-            const hasVMConnection = connectedNodes.some(cn => {
-                const cl = (cn.label || '').toLowerCase();
-                return cn.group === 'hypervisor' || cn.group === 'vm' ||
-                    cl.includes('[hypervisor]') || cl.includes('vmware') || cl.includes('[vm]');
-            });
-            if (hasVMConnection) return false;
-
-            return true; // legitimate shadow IT hub
-        }
-
-        // Other shadow-labeled nodes
-        if (label.includes('shadow')) return true;
-
-        return false;
-    });
-
-    // Group by parent switch
-    const bySwitch = {};
-    shadowNodes.forEach(node => {
-        // Find which switch this node connects to
-        const parentLink = rawData.links.find(l => {
-            const tgtId = l.target.id || l.target;
-            const srcId = l.source.id || l.source;
-            return tgtId === node.id || srcId === node.id;
-        });
-        let switchName = 'Unknown';
-        if (parentLink) {
-            const otherId = (parentLink.source.id || parentLink.source) === node.id
-                ? (parentLink.target.id || parentLink.target)
-                : (parentLink.source.id || parentLink.source);
-            const switchNode = rawData.nodes.find(n => n.id === otherId);
-            if (switchNode) {
-                switchName = (switchNode.sysName || switchNode.label || switchNode.id).split('\n')[0];
-            }
-        }
-        if (!bySwitch[switchName]) bySwitch[switchName] = [];
-        bySwitch[switchName].push(node);
+    // Group by parent switch (entries are sorted; a Map keeps that order)
+    const entries = uiShadowITEntries(rawData);
+    const bySwitch = new Map();
+    entries.forEach(e => {
+        if (!bySwitch.has(e.switchName)) bySwitch.set(e.switchName, []);
+        bySwitch.get(e.switchName).push(e);
     });
 
     const list = document.getElementById('shadowITList');
 
-    if (shadowNodes.length === 0) {
+    if (entries.length === 0) {
         list.innerHTML = `<div style="text-align:center; padding:30px; color:#4CAF50;">
             <div style="font-size:48px; margin-bottom:12px;">✅</div>
             <strong>Shadow IT topilmadi!</strong><br>
@@ -1625,28 +1731,21 @@ function showShadowIT() {
         </div>`;
     } else {
         let html = `<div style="color:#E24A4A; margin-bottom:12px; font-weight:bold;">
-            ⚠️ ${shadowNodes.length} ta boshqarilmaydigan qurilma topildi:
+            ⚠️ ${entries.length} ta boshqarilmaydigan qurilma topildi:
         </div>`;
 
-        for (const [switchName, nodes] of Object.entries(bySwitch)) {
+        for (const [switchName, items] of bySwitch) {
             html += `<div class="shadow-switch-group">
-                <div class="shadow-switch-name">📡 ${switchName}</div>`;
+                <div class="shadow-switch-name">📡 ${uiEscapeHTML(switchName)}</div>`;
 
-            nodes.forEach(node => {
+            items.forEach(({ hub: node, port }) => {
                 const label = (node.label || node.id).replace(/\n/g, ' · ');
-                const port = (() => {
-                    const link = rawData.links.find(l =>
-                        (l.target.id || l.target) === node.id ||
-                        (l.source.id || l.source) === node.id
-                    );
-                    return link ? (link.sourcePort || link.targetPort || '') : '';
-                })();
 
-                html += `<div class="shadow-item" onclick="focusShadowNode('${node.id}')">
+                html += `<div class="shadow-item" data-node-id="${uiEscapeHTML(node.id)}">
                     <span class="shadow-icon">👻</span>
                     <div class="shadow-info">
-                        <div class="shadow-label">${label}</div>
-                        ${port ? `<div class="shadow-port">Port: ${port}</div>` : ''}
+                        <div class="shadow-label">${uiEscapeHTML(label)}</div>
+                        ${port ? `<div class="shadow-port">Port: ${uiEscapeHTML(port)}</div>` : ''}
                     </div>
                     <span class="shadow-goto">→</span>
                 </div>`;
@@ -1677,6 +1776,8 @@ function focusShadowNode(nodeId) {
             .transition().duration(500).attr('r', d => d.group === 'switch' ? 10 : 6).style('stroke', null);
     }
 }
+
+uiOnNodeClick('shadowITList', id => focusShadowNode(id));
 
 function closeShadowIT() {
     document.getElementById('shadowITModal').style.display = 'none';
@@ -1789,11 +1890,12 @@ async function exportMermaid() {
 
         const renderId = 'mermaidGraph_' + Date.now();
         const { svg } = await mermaid.render(renderId, mermaidCode);
+        // Safe as markup: mermaidCode holds only node names reduced to [A-Za-z0-9_] above.
         diagramArea.innerHTML = svg;
     } catch (err) {
         console.error('Mermaid render error:', err);
         diagramArea.innerHTML = `<div style="color: #E24A4A; padding: 20px;">
-            ⚠️ Render error: ${err.message || 'Unknown error'}
+            ⚠️ Render error: ${uiEscapeHTML(err.message || 'Unknown error')}
             <br><br>
             <small style="color: #888;">Raw code is available below.</small>
         </div>`;
@@ -1905,8 +2007,8 @@ function renderEvents(events) {
         return `<div class="event-item ${cls}">
             <span class="event-icon">${icon}</span>
             <div class="event-content">
-                <div class="event-msg">${msg}</div>
-                <div class="event-time">${time}</div>
+                <div class="event-msg">${uiEscapeHTML(msg)}</div>
+                <div class="event-time">${uiEscapeHTML(time)}</div>
             </div>
         </div>`;
     }).join('');
@@ -1932,7 +2034,7 @@ function downloadAuditReport() {
         { id: 'router', label: '🌐 Router', checked: false },
         { id: 'hub', label: '⚠️ Hub (Shadow IT)', checked: true },
         { id: 'endpoint', label: '💻 Endpoint', checked: false },
-        { id: 'access_point', label: '📶 Wi-Fi AP', checked: false },
+        { id: 'access_point', label: '📡 Wi-Fi AP', checked: false },
         { id: 'vm', label: '🖥️ VM', checked: false },
         { id: 'hypervisor', label: '☁️ Hypervisor', checked: false },
         { id: 'bmc', label: '🔧 BMC/iLO', checked: false },
