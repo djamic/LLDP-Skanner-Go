@@ -138,7 +138,7 @@ func installSeams(dir string) {
 	exportsDir = guardExportsDir
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
-	capturesDir = guardCapturesDir
+	globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
 	sortGraphData = true
 	gatewayIP = fixedGatewayIP
 	ignoredIssuesMutex.Lock()
@@ -227,12 +227,12 @@ func resetState(t *testing.T) {
 	exportsDir = guardExportsDir
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
-	capturesDir = guardCapturesDir
+	globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
 	t.Cleanup(func() {
 		exportsDir = guardExportsDir
 		graphDebugFile = guardGraphDebugFile
 		macIPCacheFile = guardMacIPCacheFile
-		capturesDir = guardCapturesDir
+		globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
 		clearConfirmedESXi()
 		influxRec.stop()
 		releaseDNSHolds()

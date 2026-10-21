@@ -43,20 +43,20 @@
     "health_after": 70,
     "health_before": 70,
     "shadow_it_added": null,
-    "shadow_it_after": 119,
-    "shadow_it_before": 141,
-    "shadow_it_removed": ["shadow_172_20_230_11_11", "shadow_172_20_230_14_17", "shadow_172_20_230_24_28", "shadow_172_20_230_25_28", "shadow_172_20_230_27_28", "shadow_172_20_230_28_1", "shadow_172_20_230_29_28", "shadow_172_20_230_32_24", "shadow_172_20_230_34_1", "shadow_172_20_230_46_7", "shadow_172_20_230_47_25", "shadow_172_20_230_51_28", "shadow_172_20_230_83_2", "shadow_172_20_240_10_28", "shadow_172_20_240_11_24", "shadow_172_20_240_13_28", "shadow_172_20_240_2_24", "shadow_172_20_240_6_28", "shadow_172_20_240_7_24", "shadow_172_20_240_8_28", "shadow_172_20_240_9_24", "shadow_172_20_254_249_19"]
+    "shadow_it_after": 32,
+    "shadow_it_before": 33,
+    "shadow_it_removed": ["shadow_172_20_230_11_11"]
   },
   "experiment": {
-    "shadow_it_filtered_after": 120,
-    "shadow_it_filtered_before": 142,
-    "shadow_it_raw_after": 146,
-    "shadow_it_raw_before": 146,
+    "shadow_it_filtered_after": 32,
+    "shadow_it_filtered_before": 33,
+    "shadow_it_raw_after": 36,
+    "shadow_it_raw_before": 36,
     "unique_macs_after": 4569,
     "unique_macs_before": 4569,
     "vm_macs_after": 110,
     "vm_macs_before": 110,
-    "vm_ports_filtered_after": 26,
-    "vm_ports_filtered_before": 4
+    "vm_ports_filtered_after": 4,
+    "vm_ports_filtered_before": 3
   }
 }

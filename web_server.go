@@ -1,13 +1,18 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"html"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,25 +45,27 @@ var (
 	// E.1/E.2 — last analysis results for UI enrichment
 	lastHealthScore int
 	lastAnomalyMap  map[string][]string // nodeID → anomaly types
-	lastTotalMACs   int
+	lastTotalMACs   int                 // unique MAC addresses in the FDB tables (total_macs)
 	lastReportMutex sync.RWMutex
+
+	// analyzerLastSuggestions are the suggestions of the last live analysis,
+	// listed by the reports' anomaly sections
+	analyzerLastSuggestions []OptimizationSuggestion
 )
 
 // graphDebugFile receives a copy of every /api/graph response (debug
 // snapshot). Tests point it at a temporary file.
 var graphDebugFile = "graphs_data.txt"
 
-// capturesDir is where the capture report handlers read saved sessions
-// (<id>_full_data.json). Tests point it at a temporary directory.
-var capturesDir = "captures"
-
 func init() {
 	rescanTrigger = make(chan bool, 1)
 	lastAnomalyMap = make(map[string][]string)
 }
 
-// SetLastReport stores analysis results for UI enrichment (called from analyzer)
-func SetLastReport(healthScore int, anomalyMap map[string][]string, totalMACs int) {
+// SetLastReport stores analysis results for UI enrichment and the reports
+// (called from analyzer): the health score, the anomaly types by graph node,
+// the number of unique MACs and the suggestions themselves.
+func SetLastReport(healthScore int, anomalyMap map[string][]string, totalMACs int, suggestions ...OptimizationSuggestion) {
 	lastReportMutex.Lock()
 	defer lastReportMutex.Unlock()
 	lastHealthScore = healthScore
@@ -66,6 +73,35 @@ func SetLastReport(healthScore int, anomalyMap map[string][]string, totalMACs in
 		lastAnomalyMap = anomalyMap
 	}
 	lastTotalMACs = totalMACs
+	analyzerLastSuggestions = slices.Clone(suggestions)
+}
+
+// analyzerReportAnomalies returns the suggestions of the last live analysis
+// ordered by type and then device (IP order), the types in order, and the
+// count per type: the anomaly sections of /api/report/summary and the audit
+// reports (F12).
+func analyzerReportAnomalies() (anomalies []OptimizationSuggestion, types []string, counts map[string]int) {
+	lastReportMutex.RLock()
+	anomalies = slices.Clone(analyzerLastSuggestions)
+	lastReportMutex.RUnlock()
+	slices.SortStableFunc(anomalies, func(a, b OptimizationSuggestion) int {
+		return cmp.Or(strings.Compare(a.Type, b.Type), compareIPs(a.Device, b.Device))
+	})
+	counts = make(map[string]int)
+	for _, a := range anomalies {
+		counts[a.Type]++
+	}
+	return anomalies, slices.Sorted(maps.Keys(counts)), counts
+}
+
+// analyzerMDCell puts report text on one line for a Markdown table cell.
+func analyzerMDCell(s string) string {
+	return strings.ReplaceAll(strings.Join(strings.Fields(strings.ReplaceAll(s, "\n", ", ")), " "), "|", "\\|")
+}
+
+// analyzerHTMLCell puts report text on one line for an HTML table cell.
+func analyzerHTMLCell(s string) string {
+	return html.EscapeString(strings.Join(strings.Fields(strings.ReplaceAll(s, "\n", ", ")), " "))
 }
 
 // SetGlobalGraph sets the global graph instance
@@ -668,30 +704,16 @@ func reportGenerateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In a real app, we would load the specific file.
-	// For now, let's assume we load it from disk using simple file read
-	// duplicating logic from analyzer or capture manager would be better
-	
-	// Create Analyzer
-	filename := fmt.Sprintf("%s/%s_full_data.json", capturesDir, sessionID)
-	// assuming capture manager initializes "captures/" dir relative to cwd
-	
-	file, err := os.Open(filename)
-	if err != nil {
-		http.Error(w, "Session file not found: "+err.Error(), http.StatusNotFound)
-		return
-	}
-	defer file.Close()
-
-	var fullData FullCaptureData
-	if err := json.NewDecoder(file).Decode(&fullData); err != nil {
-		http.Error(w, "Failed to decode session data: "+err.Error(), http.StatusInternalServerError)
+	fullData, ok := analyzerLoadCapture(w, sessionID)
+	if !ok {
 		return
 	}
 
+	// A capture report must not overwrite the live health score, anomaly map
+	// and total_macs, send Telegram alerts or write InfluxDB (F14)
 	analyzer := NewAnalyzer(fullData)
-	report := analyzer.Analyze()
-	
+	report := analyzer.BuildReport()
+
 	// Generate text report
 	textReport := report.GenerateTextReport()
 
@@ -699,6 +721,27 @@ func reportGenerateHandler(w http.ResponseWriter, r *http.Request) {
 		"report":      report,
 		"text_summary": textReport,
 	})
+}
+
+// analyzerLoadCapture loads a saved capture for the report endpoints from the
+// capture manager's directory, or writes the HTTP error.
+func analyzerLoadCapture(w http.ResponseWriter, sessionID string) (FullCaptureData, bool) {
+	if globalCaptureManager == nil {
+		http.Error(w, "Capture manager not initialized", http.StatusInternalServerError)
+		return FullCaptureData{}, false
+	}
+	fullData, err := globalCaptureManager.LoadCapture(sessionID)
+	switch {
+	case errors.Is(err, errAnalyzerCaptureID):
+		http.Error(w, "Invalid 'id' parameter", http.StatusBadRequest)
+	case errors.Is(err, errAnalyzerCaptureNotFound):
+		http.Error(w, "Session file not found", http.StatusNotFound)
+	case err != nil:
+		http.Error(w, "Failed to decode session data: "+err.Error(), http.StatusInternalServerError)
+	default:
+		return fullData, true
+	}
+	return FullCaptureData{}, false
 }
 
 // reportDownloadHandler downloads the report as a Word document (.doc)
@@ -710,22 +753,13 @@ func reportDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := fmt.Sprintf("%s/%s_full_data.json", capturesDir, sessionID)
-	file, err := os.Open(filename)
-	if err != nil {
-		http.Error(w, "Session file not found", http.StatusNotFound)
-		return
-	}
-	defer file.Close()
-
-	var fullData FullCaptureData
-	if err := json.NewDecoder(file).Decode(&fullData); err != nil {
-		http.Error(w, "Failed to decode session data", http.StatusInternalServerError)
+	fullData, ok := analyzerLoadCapture(w, sessionID)
+	if !ok {
 		return
 	}
 
 	analyzer := NewAnalyzer(fullData)
-	report := analyzer.Analyze()
+	report := analyzer.BuildReport() // no live-state side effects (F14)
 	htmlContent := report.GenerateHTMLReport()
 
 	// Set headers for Word download

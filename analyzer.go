@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -14,6 +17,105 @@ import (
 // NetworkAnalyzer handles analysis of network capture data
 type NetworkAnalyzer struct {
 	Data FullCaptureData
+
+	index *analyzerIndex // Data indexed for the checks, built on first use
+}
+
+// analyzerIndex is the analyzer input in a fixed order, with the topology
+// nodes by id.
+type analyzerIndex struct {
+	devices []*DeviceData          // DevicesData in IP order
+	byIP    map[string]*DeviceData // DevicesData by IP
+	nodes   map[string]GraphNode   // Topology nodes by id
+}
+
+// idx builds the index of na.Data on first use.
+func (na *NetworkAnalyzer) idx() *analyzerIndex {
+	if na.index != nil {
+		return na.index
+	}
+	ix := &analyzerIndex{byIP: make(map[string]*DeviceData), nodes: make(map[string]GraphNode)}
+	for i := range na.Data.DevicesData {
+		d := &na.Data.DevicesData[i]
+		ix.byIP[d.IP] = d
+	}
+	for _, ip := range sortedDeviceIPs(ix.byIP) {
+		ix.devices = append(ix.devices, ix.byIP[ip])
+	}
+	for _, n := range na.Data.Topology.Nodes {
+		ix.nodes[n.ID] = n
+	}
+	na.index = ix
+	return ix
+}
+
+// analyzerSwitchIDs lists the node ids the graph can give the polled switch
+// d: normalizeID of its chassis id (as buildGraphFromSnapshot does), then
+// its IP.
+func analyzerSwitchIDs(d *DeviceData) []string {
+	if id := normalizeID(d.ChassisID, 0); id != "" && id != d.IP {
+		return []string{id, d.IP}
+	}
+	return []string{d.IP}
+}
+
+// analyzerUniqueMACs returns the distinct MAC addresses (normalizeMAC) in the
+// FDB tables of devices. Its size is total_macs (Q15): an address learned by
+// several switches, or on several ports, counts once.
+func analyzerUniqueMACs(devices []*DeviceData) map[string]bool {
+	macs := make(map[string]bool)
+	for _, d := range devices {
+		for _, macEntry := range d.MACTable {
+			if mac := normalizeMAC(macEntry.MACAddress); mac != "" {
+				macs[mac] = true
+			}
+		}
+	}
+	return macs
+}
+
+// switchNode returns the topology node of the polled switch with this IP, or
+// the IP itself when the topology has no node for it.
+func (ix *analyzerIndex) switchNode(ip string) string {
+	if d, ok := ix.byIP[ip]; ok {
+		for _, id := range analyzerSwitchIDs(d) {
+			if _, ok := ix.nodes[id]; ok {
+				return id
+			}
+		}
+	}
+	return ip
+}
+
+// hubNode returns the hub node the graph draws for a port of switch d
+// ("hub-<switch node>-p<port>"), or the switch node when there is none.
+func (ix *analyzerIndex) hubNode(d *DeviceData, port int) string {
+	for _, id := range analyzerSwitchIDs(d) {
+		hub := fmt.Sprintf("hub-%s-p%d", id, port)
+		if _, ok := ix.nodes[hub]; ok {
+			return hub
+		}
+	}
+	return ix.switchNode(d.IP)
+}
+
+// anomalyMap groups the suggestion types by the graph node /api/graph shows
+// them on (F11): the hub node of a Shadow-IT port, the far node of a path
+// suggestion, the switch node when Device is a polled switch's IP, and
+// otherwise Device itself (the STP root bridge MAC).
+func (na *NetworkAnalyzer) anomalyMap(suggestions []OptimizationSuggestion) map[string][]string {
+	ix := na.idx()
+	anomalies := make(map[string][]string)
+	for _, sugg := range suggestions {
+		key := sugg.nodeID
+		if key == "" && sugg.Device != "" {
+			key = ix.switchNode(sugg.Device)
+		}
+		if key != "" {
+			anomalies[key] = append(anomalies[key], sugg.Type)
+		}
+	}
+	return anomalies
 }
 
 // NewAnalyzer creates a new analyzer instance
@@ -31,6 +133,8 @@ type OptimizationSuggestion struct {
 	Device      string `json:"device"`
 	Description string `json:"description"`
 	Value       string `json:"value"` // e.g., "5 hops", "95% util"
+
+	nodeID string // graph node the anomaly is shown on, when Device does not name it
 }
 
 // Report represents the final analysis report
@@ -43,8 +147,31 @@ type Report struct {
 	HealthScore int                      `json:"health_score"`
 }
 
-// Analyze performs all analysis checks
+// Analyze runs every check (BuildReport) and publishes the result as the
+// live network state: Telegram alerts, the InfluxDB anomaly summary, and the
+// health score, anomalies and MAC count behind /api/graph and the reports.
+// Capture reports call BuildReport instead, so they never touch that state.
 func (na *NetworkAnalyzer) Analyze() Report {
+	report := na.BuildReport()
+
+	// Trigger Telegram notification if there are critical issues or health score is low
+	na.notifyTelegramIfCritical(&report)
+
+	// B.4: Write anomaly summary to InfluxDB
+	WriteAnomalySummary(&report)
+
+	// E.1/E.2: Store health score + anomaly map (by graph node) for UI
+	// enrichment via /api/graph, and the suggestions for the reports
+	anomalyMap := na.anomalyMap(report.Suggestions)
+	totalMACs := len(analyzerUniqueMACs(na.idx().devices))
+	SetLastReport(report.HealthScore, anomalyMap, totalMACs, report.Suggestions...)
+
+	return report
+}
+
+// BuildReport performs all analysis checks and computes the health score.
+// It has no side effects.
+func (na *NetworkAnalyzer) BuildReport() Report {
 	report := Report{
 		SessionID:   na.Data.Session.ID,
 		GeneratedAt: time.Now(),
@@ -88,31 +215,6 @@ func (na *NetworkAnalyzer) Analyze() Report {
 
 	// Calculate Health Score
 	report.HealthScore = na.CalculateHealthScore(&report)
-
-	// Trigger Telegram notification if there are critical issues or health score is low
-	na.notifyTelegramIfCritical(&report)
-
-	// B.4: Write anomaly summary to InfluxDB
-	WriteAnomalySummary(&report)
-
-	// E.1/E.2: Store health score + anomaly map for UI enrichment via /api/graph
-	anomalyMap := make(map[string][]string)
-	for _, sugg := range report.Suggestions {
-		if sugg.Device != "" {
-			// Extract IP from Device field (may be "IP (SysName)" format)
-			deviceKey := sugg.Device
-			// Try to extract pure IP if format is "IP (SysName)"
-			if idx := strings.Index(deviceKey, " ("); idx > 0 {
-				deviceKey = deviceKey[:idx]
-			}
-			anomalyMap[deviceKey] = append(anomalyMap[deviceKey], sugg.Type)
-		}
-	}
-	totalMACs := 0
-	for _, dev := range na.Data.DevicesData {
-		totalMACs += len(dev.MACTable)
-	}
-	SetLastReport(report.HealthScore, anomalyMap, totalMACs)
 
 	return report
 }
@@ -255,55 +357,92 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 	}
 }
 
-// analyzePaths checks for long paths (hops > 3)
+// analyzePaths checks for long paths: switches and routers more than 3 hops
+// from the core (F19). Endpoints, hubs and VMs hang below their switch and
+// are not reported.
 func (na *NetworkAnalyzer) analyzePaths() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
 
-	// Reconstruct graph from topology data to run BFS
-	graph := NewDJGraph()
-	for _, node := range na.Data.Topology.Nodes {
-		graph.AddNode(node.ID)
-		graph.AddNodeInfo(node.ID, node.SysName)
-	}
-	for _, link := range na.Data.Topology.Links {
-		graph.AddEdge(link.Source, link.Target, link.Label)
-	}
-
 	// Calculate depths from Core Gateway
 	// Uses gatewayIP from 'gateway_ip' config file
-	coreID := gatewayIP
-	// If core not in nodes, try to find a "router" type node as fallback
-	if !graph.Nodes[coreID] {
-		for _, node := range na.Data.Topology.Nodes {
-			if node.NodeType == "router" {
-				coreID = node.ID
-				break
-			}
-		}
+	coreID := na.coreNode()
+	if coreID == "" {
+		return suggestions
 	}
+	ix := na.idx()
+	depths := analyzerHopDepths(na.Data.Topology.Links, coreID)
 
-	longPaths := graph.GetLongPaths(coreID, 3) // Threshold = 3 hops
-
-	for _, nodeID := range longPaths {
-		// Get node details
-		var nodeInfo GraphNode
-		for _, n := range na.Data.Topology.Nodes {
-			if n.ID == nodeID {
-				nodeInfo = n
-				break
-			}
+	for _, nodeID := range slices.Sorted(maps.Keys(depths)) {
+		nodeInfo := ix.nodes[nodeID]
+		if depths[nodeID] <= 3 || (nodeInfo.NodeType != "switch" && nodeInfo.NodeType != "router") {
+			continue // Threshold = 3 hops
 		}
-
 		suggestions = append(suggestions, OptimizationSuggestion{
 			Type:        "path",
 			Severity:    "medium",
 			Device:      getDataLabel(nodeInfo),
 			Description: fmt.Sprintf("Device is too far from Core (%s). Consider moving it to Distribution layer.", coreID),
 			Value:       "4+ hops",
+			nodeID:      nodeID,
 		})
 	}
 
 	return suggestions
+}
+
+// coreNode returns the topology node of the core gateway (gatewayIP): the
+// node with that id, the node of the polled switch with that IP, or a node
+// whose label has the gateway IP on a line of its own (for example an LLDP
+// endpoint with that management IP). Otherwise it returns the first router
+// node, or "" when the topology has neither.
+func (na *NetworkAnalyzer) coreNode() string {
+	ix := na.idx()
+	ids := slices.Sorted(maps.Keys(ix.nodes))
+	if gatewayIP != "" {
+		if _, ok := ix.nodes[gatewayIP]; ok {
+			return gatewayIP
+		}
+		if id := ix.switchNode(gatewayIP); id != gatewayIP {
+			return id
+		}
+		for _, id := range ids {
+			for _, line := range strings.Split(ix.nodes[id].SysName, "\n") {
+				if strings.TrimSpace(line) == gatewayIP {
+					return id
+				}
+			}
+		}
+	}
+	for _, id := range ids {
+		if ix.nodes[id].NodeType == "router" {
+			return id
+		}
+	}
+	return ""
+}
+
+// analyzerHopDepths returns the hop count from root of every node the links
+// reach. Links are followed in both directions: the graph keeps one edge per
+// link, pointing away from whichever switch was polled first.
+func analyzerHopDepths(links []GraphLink, root string) map[string]int {
+	neighbors := make(map[string][]string)
+	for _, link := range links {
+		neighbors[link.Source] = append(neighbors[link.Source], link.Target)
+		neighbors[link.Target] = append(neighbors[link.Target], link.Source)
+	}
+	depths := map[string]int{root: 0}
+	queue := []string{root}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, next := range neighbors[current] {
+			if _, seen := depths[next]; !seen {
+				depths[next] = depths[current] + 1
+				queue = append(queue, next)
+			}
+		}
+	}
+	return depths
 }
 
 // analyzeCongestion checks for interface saturation and discards
@@ -342,8 +481,9 @@ func (na *NetworkAnalyzer) analyzeCongestion() []OptimizationSuggestion {
 		}
 	}
 
-	// Generate suggestions
-	for key, util := range interfaceUtil {
+	// Generate suggestions (in device|interface order)
+	for _, key := range slices.Sorted(maps.Keys(interfaceUtil)) {
+		util := interfaceUtil[key]
 		parts := strings.Split(key, "|")
 		utilMbps := util / 1000000
 
@@ -356,7 +496,8 @@ func (na *NetworkAnalyzer) analyzeCongestion() []OptimizationSuggestion {
 		})
 	}
 
-	for key, discards := range interfaceDiscards {
+	for _, key := range slices.Sorted(maps.Keys(interfaceDiscards)) {
+		discards := interfaceDiscards[key]
 		parts := strings.Split(key, "|")
 		suggestions = append(suggestions, OptimizationSuggestion{
 			Type:        "congestion",
@@ -367,7 +508,8 @@ func (na *NetworkAnalyzer) analyzeCongestion() []OptimizationSuggestion {
 		})
 	}
 
-	for key, errs := range interfaceErrors {
+	for _, key := range slices.Sorted(maps.Keys(interfaceErrors)) {
+		errs := interfaceErrors[key]
 		parts := strings.Split(key, "|")
 		suggestions = append(suggestions, OptimizationSuggestion{
 			Type:        "physical",
@@ -397,7 +539,8 @@ func (na *NetworkAnalyzer) analyzeStability() []OptimizationSuggestion {
 		}
 	}
 
-	for key, count := range flapping {
+	for _, key := range slices.Sorted(maps.Keys(flapping)) {
+		count := flapping[key]
 		parts := strings.Split(key, "|")
 		suggestions = append(suggestions, OptimizationSuggestion{
 			Type:        "stability",
@@ -569,90 +712,155 @@ type ShadowITDevice struct {
 	MACAddresses []string `json:"mac_addresses"`
 }
 
-// analyzeShadowIT detects unmanaged switches via Port-MAC Ratio algorithm
+// analyzeShadowIT reports every port that the graph draws as an unmanaged
+// hub (analyzerHubCandidates) as one shadow_<ip>_<port> issue, in device and
+// port order.
 func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
+	ix := na.idx()
+	switchMACs := buildSwitchChassisMACs(ix.byIP)
 
-	// Map: DeviceIP -> PortNumber -> MAC addresses
-	portMACs := make(map[string]map[int][]string)
+	for _, device := range ix.devices {
+		for _, p := range analyzerHubCandidates(device, switchMACs) {
+			if p.Kind != analyzerPortHub {
+				continue
+			}
+			issueID := fmt.Sprintf("shadow_%s_%d", strings.ReplaceAll(device.IP, ".", "_"), p.Port)
 
-	for _, device := range na.Data.DevicesData {
-		if portMACs[device.IP] == nil {
-			portMACs[device.IP] = make(map[int][]string)
-		}
-
-		// Build port to MAC mapping from MAC table
-		for _, macEntry := range device.MACTable {
-			portMACs[device.IP][macEntry.PortNumber] = append(
-				portMACs[device.IP][macEntry.PortNumber],
-				macEntry.MACAddress,
-			)
-		}
-	}
-
-	// Check each port: if MAC count > 1 and not a trunk port -> Shadow IT suspected
-	for deviceIP, ports := range portMACs {
-		for portNum, macs := range ports {
-			// C.2: Filter out random MACs (Wi-Fi devices with randomized addresses)
-			var realMACs []string
-			for _, mac := range macs {
-				if !isRandomMAC(mac) {
-					realMACs = append(realMACs, mac)
-				}
+			// Skip if this issue is ignored
+			if IsIssueIgnored(issueID) {
+				continue
 			}
 
-			if len(realMACs) > 1 {
-				// Check if this is a trunk port (skip if trunk)
-				isTrunk := false
-				for _, device := range na.Data.DevicesData {
-					if device.IP == deviceIP {
-						for _, pv := range device.PortVLANs {
-							if pv.PortIndex == portNum && pv.IsTrunk {
-								isTrunk = true
-								break
-							}
-						}
-					}
-				}
-
-				if !isTrunk {
-					issueID := fmt.Sprintf("shadow_%s_%d", strings.ReplaceAll(deviceIP, ".", "_"), portNum)
-					
-					// Skip if this issue is ignored
-					if IsIssueIgnored(issueID) {
-						continue
-					}
-
-					// Skip if this is a hypervisor port (VMware, Proxmox, KVM, etc.)
-					if isHypervisorPort(macs) {
-						continue
-					}
-					// Also skip if any MAC is a confirmed ESXi host (HTTP-verified)
-					isConfirmedESXi := false
-					for _, mac := range macs {
-						if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(mac)); ok {
-							isConfirmedESXi = true
-							break
-						}
-					}
-					if isConfirmedESXi {
-						continue
-					}
-
-					suggestions = append(suggestions, OptimizationSuggestion{
-						IssueID:     issueID,
-						Type:        "shadow_it",
-						Severity:    "high",
-						Device:      deviceIP,
-						Description: fmt.Sprintf("Port %d has %d MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.", portNum, len(macs)),
-						Value:       fmt.Sprintf("%d MACs on single port", len(macs)),
-					})
-				}
-			}
+			suggestions = append(suggestions, OptimizationSuggestion{
+				IssueID:     issueID,
+				Type:        "shadow_it",
+				Severity:    "high",
+				Device:      device.IP,
+				Description: fmt.Sprintf("Port %d has %d MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.", p.Port, len(p.MACs)),
+				Value:       fmt.Sprintf("%d MACs on single port", len(p.MACs)),
+				nodeID:      ix.hubNode(device, p.Port),
+			})
 		}
 	}
 
 	return suggestions
+}
+
+// analyzerPortKind is the verdict of the per-port rule on a hub candidate.
+type analyzerPortKind int
+
+const (
+	analyzerPortHub  analyzerPortKind = iota // unmanaged switch or hub: Shadow IT
+	analyzerPortVM                           // more than half of the MACs are virtual NICs
+	analyzerPortESXi                         // one of the MACs is an HTTP-confirmed ESXi host
+)
+
+// analyzerPort is one hub candidate port of a switch and the MACs the rule
+// counts there.
+type analyzerPort struct {
+	Port int
+	MACs []string
+	Kind analyzerPortKind
+}
+
+// analyzerHubCandidates is the one per-port rule (Q14) behind the graph's
+// hub nodes, the Shadow-IT alerts and the experiment metrics. It follows
+// buildGraphEdges and returns the hub candidate ports of d in port order:
+//   - a port's MACs leave out NULL0/InLoopBack ports, the chassis ids of d's
+//     LLDP neighbors, d's own chassis MAC, the chassis MACs of the other
+//     polled switches (switchChassisMACs) and invalid MACs;
+//   - a candidate keeps at least 2 MACs, has no LLDP neighbor, is no trunk
+//     and has at most 20 MACs (more is an implicit uplink);
+//   - a candidate is a VM port when most of its MACs are virtual NICs
+//     (isHypervisorPort), an ESXi port when one of them is a confirmed ESXi
+//     host, and a hub otherwise.
+//
+// One list decides, is checked for VMs and ESXi hosts, and is counted.
+func analyzerHubCandidates(d *DeviceData, switchChassisMACs map[string]string) []analyzerPort {
+	knownMACs := make(map[string]bool) // LLDP neighbor chassis ids
+	lldpPorts := make(map[int]bool)
+	for _, neighbor := range d.Neighbors {
+		knownMACs[normalizeMAC(neighbor.RemChassisId)] = true
+		lldpPorts[neighbor.LocalPortNum] = true
+	}
+	ownMAC := normalizeMAC(d.ChassisID)
+	nullPorts := make(map[int]bool) // NULL0/InLoopBack ports, looked up once per port
+	isNullPort := func(port int) bool {
+		null, seen := nullPorts[port]
+		if !seen {
+			null = isNullInterface(getLocalPortName(d, port))
+			nullPorts[port] = null
+		}
+		return null
+	}
+
+	portMACs := make(map[int][]string)
+	for _, macEntry := range d.MACTable {
+		mac := normalizeMAC(macEntry.MACAddress)
+		if isNullPort(macEntry.PortNumber) || knownMACs[mac] || mac == ownMAC {
+			continue
+		}
+		if _, isSwitch := switchChassisMACs[mac]; isSwitch || isInvalidID(macEntry.MACAddress) {
+			continue
+		}
+		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], macEntry.MACAddress)
+	}
+
+	trunks := make(map[int]bool)
+	for _, pv := range d.PortVLANs {
+		if pv.IsTrunk {
+			trunks[pv.PortIndex] = true
+		}
+	}
+
+	var ports []analyzerPort
+	for _, port := range slices.Sorted(maps.Keys(portMACs)) {
+		macs := portMACs[port]
+		if len(macs) < 2 || len(macs) > 20 || lldpPorts[port] || trunks[port] {
+			continue
+		}
+		kind := analyzerPortHub
+		if isHypervisorPort(macs) {
+			kind = analyzerPortVM
+		} else if slices.ContainsFunc(macs, func(mac string) bool {
+			_, ok := ConfirmedESXiMACs.Load(normalizeMAC(mac))
+			return ok
+		}) {
+			kind = analyzerPortESXi
+		}
+		ports = append(ports, analyzerPort{Port: port, MACs: macs, Kind: kind})
+	}
+	return ports
+}
+
+// analyzerShadowStats are the experiment report's Shadow-IT numbers, counted
+// with the same per-port rule as the graph and the alerts.
+type analyzerShadowStats struct {
+	Candidates int // hub candidate ports (shadow_it_raw)
+	Hubs       int // candidates drawn as hubs (shadow_it_filtered)
+	VMPorts    int // candidates exempt as VM or ESXi ports (vm_ports_filtered)
+}
+
+// analyzerShadowCounts applies analyzerHubCandidates to every device.
+func analyzerShadowCounts(devices []*DeviceData) analyzerShadowStats {
+	byIP := make(map[string]*DeviceData, len(devices))
+	for _, d := range devices {
+		byIP[d.IP] = d
+	}
+	switchMACs := buildSwitchChassisMACs(byIP)
+	var stats analyzerShadowStats
+	for _, ip := range sortedDeviceIPs(byIP) {
+		for _, p := range analyzerHubCandidates(byIP[ip], switchMACs) {
+			stats.Candidates++
+			if p.Kind == analyzerPortHub {
+				stats.Hubs++
+			} else {
+				stats.VMPorts++
+			}
+		}
+	}
+	return stats
 }
 
 // analyzeLoopback detects network loops (ports looped back to the same switch)
@@ -662,6 +870,12 @@ func (na *NetworkAnalyzer) analyzeLoopback() []OptimizationSuggestion {
 	for _, device := range na.Data.DevicesData {
 		deviceIP := device.IP
 		chassisMAC := normalizeMAC(device.ChassisID)
+		// A switch without a usable chassis id cannot recognise itself: an
+		// empty (or null) id equals every other empty id, for example a
+		// neighbor whose RemChassisId was not read (F17).
+		if isInvalidID(chassisMAC) {
+			continue
+		}
 
 		// Method 1: LLDP Self-Neighbor Detection
 		// If a switch sees its own ChassisID as an LLDP neighbor = cable looped back
@@ -730,45 +944,47 @@ func (na *NetworkAnalyzer) analyzeLoopback() []OptimizationSuggestion {
 	return suggestions
 }
 
-// analyzeSTP checks Spanning Tree Protocol configuration
+// analyzeSTP checks Spanning Tree Protocol configuration: it reports the root
+// bridges that are not one of the polled (managed) switches. A root is on a
+// managed switch when its bridge MAC is the chassis MAC, or an interface MAC,
+// of a polled device. The suggestion names the root seen by the most
+// devices (then the lowest MAC), so it is the same on every run (F18).
 func (na *NetworkAnalyzer) analyzeSTP() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
+	ix := na.idx()
 
 	// Find the root bridge from all devices
-	rootBridgeIDs := make(map[string][]string) // RootBridgeID -> list of devices seeing this root
-
-	for _, device := range na.Data.DevicesData {
+	seenBy := make(map[string]int) // root bridge MAC -> number of devices seeing this root
+	for _, device := range ix.devices {
 		if device.STPInfo.Enabled && device.STPInfo.RootBridgeID != "" {
-			rootBridgeIDs[device.STPInfo.RootBridgeID] = append(
-				rootBridgeIDs[device.STPInfo.RootBridgeID],
-				device.IP,
-			)
+			seenBy[normalizeMAC(device.STPInfo.RootBridgeID)]++
 		}
 	}
 
+	// MACs of the managed switches. IfPhysAddress is not collected today,
+	// so the chassis MAC (the bridge MAC of most switches) is what matches.
+	managed := make(map[string]bool)
+	for _, device := range ix.devices {
+		managed[normalizeMAC(device.ChassisID)] = true
+		for _, iface := range device.Interfaces {
+			managed[normalizeMAC(iface.IfPhysAddress)] = true
+		}
+	}
+	delete(managed, "")
+
 	// Check if root bridge is in the core
 	// PVST+ tarmoqlarda har VLAN uchun alohida root bridge bo'ladi — bu normal.
-	// Faqat birinchi topilgan non-core root uchun 1 ta suggestion beramiz.
-	if len(rootBridgeIDs) > 0 {
+	// Faqat 1 ta suggestion beramiz.
+	if len(seenBy) > 0 {
 		nonCoreRoots := []string{}
-		for rootMAC, devices := range rootBridgeIDs {
-			isCore := false
-			for _, device := range na.Data.DevicesData {
-				for _, iface := range device.Interfaces {
-					if strings.EqualFold(iface.IfPhysAddress, rootMAC) {
-						for _, node := range na.Data.Topology.Nodes {
-							if node.ID == device.IP && (node.NodeType == "router" || node.NodeType == "switch") {
-								isCore = true
-								break
-							}
-						}
-					}
-				}
-			}
-			if !isCore && len(devices) > 0 {
+		for rootMAC := range seenBy {
+			if !managed[rootMAC] {
 				nonCoreRoots = append(nonCoreRoots, rootMAC)
 			}
 		}
+		slices.SortFunc(nonCoreRoots, func(a, b string) int {
+			return cmp.Or(cmp.Compare(seenBy[b], seenBy[a]), strings.Compare(a, b))
+		})
 
 		// Generate only 1 summary suggestion for all non-core roots
 		if len(nonCoreRoots) > 0 {

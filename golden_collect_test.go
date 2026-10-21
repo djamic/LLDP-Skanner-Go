@@ -42,7 +42,7 @@ func analyzerCase(t *testing.T, data FullCaptureData, esxi []string, ignored []s
 		"summary":      report.Summary,
 		"suggestions":  suggestions,
 		"bot_messages": bot.taken(),
-		"last_report":  lastReportRecord(""),
+		"last_report":  lastReportRecord(),
 	}
 }
 
@@ -477,8 +477,8 @@ func TestNoSideEffectSeamsLeak(t *testing.T) {
 	if !eventClock().Equal(fixedTime) || !macIPClock().Equal(fixedTime) {
 		t.Error("eventClock or macIPClock is not the test clock")
 	}
-	if capturesDir != guardCapturesDir || ouiFile != "oui.txt" {
-		t.Errorf("file seams were changed by a test: captures %q, oui %q", capturesDir, ouiFile)
+	if globalCaptureManager == nil || globalCaptureManager.paramDir != guardCapturesDir || ouiFile != "oui.txt" {
+		t.Errorf("file seams were changed by a test: capture manager %+v, oui %q", globalCaptureManager, ouiFile)
 	}
 	startMacIPCollector()
 	startLiveAnalysis(NewDJGraph())

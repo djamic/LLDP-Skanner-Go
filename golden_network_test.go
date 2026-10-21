@@ -201,7 +201,7 @@ func esxiWorker() map[string]any {
 // after each call.
 func captureReports(t *testing.T) map[string]any {
 	resetBot()
-	capturesDir = t.TempDir()
+	globalCaptureManager = &CaptureManager{paramDir: t.TempDir()}
 	session := FullCaptureData{
 		Session: CaptureSession{ID: "cap1", Name: "lunch", StartTime: fixedTime, EndTime: fixedTime.Add(time.Hour), Status: "completed"},
 		Topology: GraphData{Nodes: []GraphNode{
@@ -213,7 +213,7 @@ func captureReports(t *testing.T) map[string]any {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(capturesDir, "cap1_full_data.json"), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(globalCaptureManager.paramDir, "cap1_full_data.json"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	live := func() { SetLastReport(70, map[string][]string{"172.20.230.4": {"shadow_it"}}, 107756) }
@@ -222,7 +222,7 @@ func captureReports(t *testing.T) map[string]any {
 		live()
 		rr := httptest.NewRecorder()
 		handler(rr, httptest.NewRequest(method, target, nil))
-		r := map[string]any{"status": rr.Code, "content_type": rr.Header().Get("Content-Type"), "live_after": lastReportRecord("")}
+		r := map[string]any{"status": rr.Code, "content_type": rr.Header().Get("Content-Type"), "live_after": lastReportRecord()}
 		var body struct {
 			Report *Report `json:"report"`
 		}
@@ -234,7 +234,7 @@ func captureReports(t *testing.T) map[string]any {
 	}
 	live()
 	return map[string]any{
-		"live_before":     lastReportRecord(""),
+		"live_before":     lastReportRecord(),
 		"generate":        call(reportGenerateHandler, http.MethodPost, "/api/report/generate?id=cap1"),
 		"download":        call(reportDownloadHandler, http.MethodGet, "/api/report/download?id=cap1"),
 		"missing_session": call(reportGenerateHandler, http.MethodPost, "/api/report/generate?id=nope"),
