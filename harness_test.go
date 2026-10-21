@@ -117,7 +117,6 @@ func installSeams(dir string) {
 	runPing = fakePing
 	lookupAddr = fakeReverseDNS
 	postBotNotify = bot.post
-	botFloodDelay = 0
 	botDispatch = func(send func()) { send() }
 	influxReady = influxRec.ready
 	influxWritePoint = influxRec.write
@@ -525,11 +524,27 @@ type botMessage struct {
 type botRecorder struct {
 	mu   sync.Mutex
 	msgs []botMessage
+	// answers makes the bot reject messages: the HTTP status it answers to
+	// a message about an issue id ("" for the summary), or a post error for
+	// a status of 0. Messages not listed get 200 OK.
+	answers map[string]int
 }
 
 var bot = &botRecorder{}
 
-// post records the payload and answers 200 OK, like the bot.
+// answer makes the bot answer status to the messages about issueID ("" for
+// the summary) until resetBot; 0 makes their posts fail with an error.
+func (r *botRecorder) answer(issueID string, status int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.answers == nil {
+		r.answers = map[string]int{}
+	}
+	r.answers[issueID] = status
+}
+
+// post records the payload and answers 200 OK, like the bot, or what answer
+// set for the message.
 func (r *botRecorder) post(body []byte) (*http.Response, error) {
 	var payload struct {
 		Message string                `json:"message"`
@@ -550,8 +565,15 @@ func (r *botRecorder) post(body []byte) (*http.Response, error) {
 	}
 	r.mu.Lock()
 	r.msgs = append(r.msgs, msg)
+	status, set := r.answers[msg.IssueID]
 	r.mu.Unlock()
-	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+	if !set {
+		status = http.StatusOK
+	}
+	if status == 0 {
+		return nil, errors.New("harness: the bot is not answering")
+	}
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader("{}"))}, nil
 }
 
 // taken returns the recorded messages sorted by issue id (summary first) and
@@ -572,6 +594,7 @@ func (r *botRecorder) taken() []botMessage {
 func resetBot() {
 	bot.mu.Lock()
 	bot.msgs = nil
+	bot.answers = nil
 	bot.mu.Unlock()
 	notifiedMu.Lock()
 	notifiedIssues = make(map[string]time.Time)

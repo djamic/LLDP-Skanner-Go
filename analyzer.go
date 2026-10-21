@@ -231,17 +231,70 @@ var (
 )
 
 // Analyserbot relay. Tests replace postBotNotify to record the messages
-// instead of posting them, set botFloodDelay to 0 and make botDispatch run
-// each send synchronously.
+// instead of posting them, and make botDispatch run each send
+// synchronously.
 var (
 	postBotNotify = postToBot
-	botFloodDelay = 500 * time.Millisecond
-	botDispatch   = func(send func()) { go send() }
+	botDispatch   = botOutbox.enqueue
 )
+
+// botOutbox posts the analyserbot messages of every analysis one at a time,
+// botPostGap apart (AC-4). Telegram allows about one message per second to
+// one chat, and the alerts of one analysis (1 summary and 33 Shadow-IT
+// alerts on the fixture) used to reach the admin chat within 4 ms, each
+// goroutine having slept the same 500 ms.
+var botOutbox = &botPacer{gap: botPostGap}
+
+// botPostGap is the pause after each analyserbot post: a little over
+// Telegram's one message per second per chat.
+const botPostGap = 1100 * time.Millisecond
+
+// botPacer runs queued sends on one goroutine, in the order they were
+// queued, with gap after each one. The goroutine runs while there is
+// something to send.
+type botPacer struct {
+	gap     time.Duration
+	mu      sync.Mutex
+	queue   []func()
+	running bool
+}
+
+// enqueue queues one send and starts the sender when it is idle.
+func (p *botPacer) enqueue(send func()) {
+	p.mu.Lock()
+	p.queue = append(p.queue, send)
+	start := !p.running
+	p.running = true
+	p.mu.Unlock()
+	if start {
+		go p.run()
+	}
+}
+
+func (p *botPacer) run() {
+	for {
+		p.mu.Lock()
+		if len(p.queue) == 0 {
+			p.running = false
+			p.mu.Unlock()
+			return
+		}
+		send := p.queue[0]
+		p.queue = p.queue[1:]
+		p.mu.Unlock()
+		send()
+		time.Sleep(p.gap)
+	}
+}
+
+// botClient posts to the analyserbot. Posts are sent one after another, so
+// the timeout keeps a bot that does not answer from holding up every alert
+// queued behind its post (the post fails and is sent again later).
+var botClient = &http.Client{Timeout: 15 * time.Second}
 
 // postToBot posts one JSON payload to the analyserbot /notify endpoint.
 func postToBot(body []byte) (*http.Response, error) {
-	return http.Post("http://127.0.0.1:5005/notify", "application/json", bytes.NewBuffer(body))
+	return botClient.Post("http://127.0.0.1:5005/notify", "application/json", bytes.NewBuffer(body))
 }
 
 // ResetIssueCooldown removes cooldown for an issue (called when "Fixed" button is pressed)
@@ -252,55 +305,88 @@ func ResetIssueCooldown(issueID string) {
 	fmt.Printf("[Cooldown] Issue %s cooldown reset - will notify on next check\n", issueID)
 }
 
-// canNotifyIssue checks if enough time has passed to send another notification
-func canNotifyIssue(issueID string) bool {
+// reserveIssueNotify reports whether an alert for issueID may be queued now
+// (none was sent or queued within notifyCooldown) and marks it queued, so
+// a concurrent analysis does not queue it again. release gives the issue
+// its cooldown back when the post fails, so the next analysis retries the
+// alert instead of waiting an hour (AC-4).
+func reserveIssueNotify(issueID string) (release func(), ok bool) {
 	notifiedMu.Lock()
 	defer notifiedMu.Unlock()
-	
-	lastTime, exists := notifiedIssues[issueID]
-	if !exists || time.Since(lastTime) >= notifyCooldown {
-		notifiedIssues[issueID] = time.Now()
-		return true
+	if last, exists := notifiedIssues[issueID]; exists && time.Since(last) < notifyCooldown {
+		return nil, false
 	}
-	return false
+	reserved := time.Now()
+	notifiedIssues[issueID] = reserved
+	return func() {
+		notifiedMu.Lock()
+		defer notifiedMu.Unlock()
+		if notifiedIssues[issueID].Equal(reserved) { // not reset or queued again since
+			delete(notifiedIssues, issueID)
+		}
+	}, true
 }
 
-// canSendSummary reports whether the hourly health summary may go out now
+// reserveSummary reports whether the hourly health summary may go out now
 // and marks it sent. Analyze runs concurrently (a live analysis per stored
 // switch during the first scan, the periodic loop), so the check and the
-// mark happen under notifiedMu.
-func canSendSummary() bool {
+// mark happen under notifiedMu. release undoes the mark when the post
+// fails.
+func reserveSummary() (release func(), ok bool) {
 	notifiedMu.Lock()
 	defer notifiedMu.Unlock()
 	if time.Since(lastSummarySent) < notifyCooldown {
+		return nil, false
+	}
+	prev, reserved := lastSummarySent, time.Now()
+	lastSummarySent = reserved
+	return func() {
+		notifiedMu.Lock()
+		defer notifiedMu.Unlock()
+		if lastSummarySent.Equal(reserved) {
+			lastSummarySent = prev
+		}
+	}, true
+}
+
+// botPostAccepted posts one payload and reports whether the bot accepted it
+// (200: the message reached Telegram); what is logged names the message.
+func botPostAccepted(payload []byte, what string) bool {
+	resp, err := postBotNotify(payload)
+	if err != nil {
+		fmt.Printf("[Telegram Bot] %s xabar yuborishda xatolik: %v\n", what, err)
 		return false
 	}
-	lastSummarySent = time.Now()
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("[Telegram Bot] ❌ Xabar qabul qilinmadi (%s): %d\n", what, resp.StatusCode)
+		return false
+	}
 	return true
 }
 
-// notifyTelegramIfCritical sends separate messages per Shadow IT issue to the python bot
+// notifyTelegramIfCritical sends separate messages per Shadow IT issue to the
+// python bot. The messages are queued on botDispatch (paced, in order: the
+// summary first); an issue whose post fails is sent again by the next
+// analysis.
 func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 	if report.HealthScore >= 90 && len(report.Suggestions) == 0 {
 		return // Network is healthy
 	}
 
 	// Send a brief health summary (max once per hour)
-	if canSendSummary() {
+	if release, ok := reserveSummary(); ok {
 		botDispatch(func() {
 			tDetect := time.Now()
 			summaryText := fmt.Sprintf("📊 <b>Tarmoq holati:</b> %d/100 (%s)\n🔎 Jami topilgan muammolar: %d ta",
 				report.HealthScore, GetHealthLabel(report.HealthScore), len(report.Suggestions))
 			payload := map[string]interface{}{"message": summaryText}
 			jsonPayload, _ := json.Marshal(payload)
-			resp, err := postBotNotify(jsonPayload)
-			tNotify := time.Now()
-			if err != nil {
-				fmt.Printf("[Telegram Bot] Umumiy xabar yuborishda xatolik: %v\n", err)
+			if !botPostAccepted(jsonPayload, "Umumiy") {
+				release()
 				return
 			}
-			resp.Body.Close()
-			AddTelegramTiming("summary", "summary", tDetect, tNotify)
+			AddTelegramTiming("summary", "summary", tDetect, time.Now())
 		})
 	}
 
@@ -308,15 +394,14 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 	for _, sugg := range report.Suggestions {
 		if (sugg.Type == "shadow_it" || sugg.Type == "loopback") && sugg.IssueID != "" {
 			// Check cooldown - skip if already notified within the last hour
-			if !canNotifyIssue(sugg.IssueID) {
+			release, ok := reserveIssueNotify(sugg.IssueID)
+			if !ok {
 				fmt.Printf("[Telegram Bot] ⏳ Issue %s - 1 soat ichida allaqachon yuborilgan, o'tkazildi\n", sugg.IssueID)
 				continue
 			}
 
 			s := sugg
 			botDispatch(func() {
-				// Wait a bit to avoid flooding
-				time.Sleep(botFloodDelay)
 				tDetect := time.Now()
 
 				var msgText string
@@ -355,19 +440,12 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 				}
 
 				jsonPayload, _ := json.Marshal(payload)
-				resp, err := postBotNotify(jsonPayload)
-				tNotify := time.Now()
-				if err != nil {
-					fmt.Printf("[Telegram Bot] %s xabar yuborishda xatolik (%s): %v\n", s.Type, s.IssueID, err)
+				if !botPostAccepted(jsonPayload, s.Type+" "+s.IssueID) {
+					release() // the next analysis sends it again
 					return
 				}
-				defer resp.Body.Close()
-				if resp.StatusCode == 200 {
-					fmt.Printf("[Telegram Bot] ✅ %s xabar yuborildi: %s\n", s.Type, s.IssueID)
-				} else {
-					fmt.Printf("[Telegram Bot] ❌ Xabar qabul qilinmadi (%s): %d\n", s.IssueID, resp.StatusCode)
-				}
-				AddTelegramTiming(s.IssueID, s.Type, tDetect, tNotify)
+				fmt.Printf("[Telegram Bot] ✅ %s xabar yuborildi: %s\n", s.Type, s.IssueID)
+				AddTelegramTiming(s.IssueID, s.Type, tDetect, time.Now())
 			})
 		}
 	}

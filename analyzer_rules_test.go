@@ -828,3 +828,130 @@ func TestExperimentReportWithoutGraph(t *testing.T) {
 		t.Errorf("graph counts without a graph: %v, %v", metrics["graph_nodes"], metrics["graph_edges"])
 	}
 }
+
+// TestBotPacerSpacesPosts (AC-4): the analyserbot posts go out one at a
+// time, in the order they were queued, with the gap between two posts,
+// also when several analyses queue at once (the alerts of one analysis
+// used to reach the chat within 4 ms). The sender stops when the queue is
+// empty and the next message starts it again.
+func TestBotPacerSpacesPosts(t *testing.T) {
+	const gap = 30 * time.Millisecond
+	p := &botPacer{gap: gap}
+	var mu sync.Mutex
+	var order []int
+	var at []time.Time
+	done := make(chan struct{}, 16)
+	send := func(i int) func() {
+		return func() {
+			mu.Lock()
+			order = append(order, i)
+			at = append(at, time.Now())
+			mu.Unlock()
+			done <- struct{}{}
+		}
+	}
+	wait := func(n int) {
+		t.Helper()
+		for range n {
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("a queued post was not sent")
+			}
+		}
+	}
+	for i := range 4 {
+		p.enqueue(send(i))
+	}
+	var wg sync.WaitGroup
+	for i := 4; i < 8; i++ { // a second analysis queueing at the same time
+		wg.Add(1)
+		go func() { defer wg.Done(); p.enqueue(send(i)) }()
+	}
+	wg.Wait()
+	wait(8)
+	mu.Lock()
+	if !slices.Equal(order[:4], []int{0, 1, 2, 3}) || len(order) != 8 {
+		t.Errorf("posts in order %v, want 0-3 first, then the 4 concurrent ones", order)
+	}
+	for i := 1; i < len(at); i++ {
+		if d := at[i].Sub(at[i-1]); d < gap {
+			t.Errorf("posts %d and %d %v apart, want at least %v", i-1, i, d, gap)
+		}
+	}
+	last := at[len(at)-1]
+	mu.Unlock()
+
+	// Idle: the sender stops, and a later message starts it again.
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		p.mu.Lock()
+		running := p.running
+		p.mu.Unlock()
+		if !running {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the sender kept running with an empty queue")
+		}
+	}
+	p.enqueue(send(8))
+	wait(1)
+	mu.Lock()
+	defer mu.Unlock()
+	if order[len(order)-1] != 8 || at[len(at)-1].Sub(last) < gap {
+		t.Errorf("the message queued after the idle sender: order %v, %v after the last post", order, at[len(at)-1].Sub(last))
+	}
+}
+
+// TestBotFailedPostIsRetried (AC-4): an alert or a summary that the bot did
+// not accept (no answer, or a status other than 200, as when Telegram
+// answers 429 and the bot 500) keeps no cooldown, so the next analysis
+// sends it again instead of an hour later; an accepted one waits out its
+// hour. Only accepted messages are timed (telegram_timing.json).
+func TestBotFailedPostIsRetried(t *testing.T) {
+	resetState(t)
+	sw := &DeviceData{IP: "10.0.9.74", SysName: "sw-74", ChassisID: "4c:ae:a3:09:00:74", Interfaces: gigabitPorts(4, nil),
+		MACTable: append(macEntries(2, "00:1b:21:09:74:01", "00:1b:21:09:74:02"), macEntries(3, "00:1b:21:09:74:11", "00:1b:21:09:74:12")...)}
+	data := FullCaptureData{DevicesData: devicesData(sw)}
+	sent := func() []string {
+		var ids []string
+		for _, m := range bot.taken() {
+			if m.IssueID == "" {
+				ids = append(ids, "summary")
+			} else {
+				ids = append(ids, m.IssueID)
+			}
+		}
+		return ids
+	}
+	timed := func() int {
+		telegramTimingsMutex.Lock()
+		defer telegramTimingsMutex.Unlock()
+		return len(telegramTimings)
+	}
+
+	bot.answer("shadow_10_0_9_74_2", http.StatusInternalServerError)
+	bot.answer("", 0) // the summary gets no answer
+	NewAnalyzer(data).Analyze()
+	all := []string{"summary", "shadow_10_0_9_74_2", "shadow_10_0_9_74_3"}
+	if got := sent(); !slices.Equal(got, all) {
+		t.Fatalf("first analysis posted %v, want %v", got, all)
+	}
+	if n := timed(); n != 1 {
+		t.Errorf("%d messages timed after the first analysis, want 1 (the accepted alert)", n)
+	}
+
+	bot.answer("shadow_10_0_9_74_2", http.StatusOK)
+	bot.answer("", http.StatusOK)
+	NewAnalyzer(data).Analyze()
+	if got, want := sent(), []string{"summary", "shadow_10_0_9_74_2"}; !slices.Equal(got, want) {
+		t.Errorf("second analysis posted %v, want the two rejected messages %v", got, want)
+	}
+	NewAnalyzer(data).Analyze()
+	if got := sent(); len(got) != 0 {
+		t.Errorf("third analysis posted %v, want nothing (all accepted within the hour)", got)
+	}
+	if n := timed(); n != 3 {
+		t.Errorf("%d messages timed, want 3", n)
+	}
+}
