@@ -1310,14 +1310,6 @@ graph TD
 | # | ID / MAC | Ma'lumot | IP | Connected to |
 |---|---|---|---|---|
 | 1 | 02:9a:9f:a9:fb:22 | [WiFi] | 172.15.67.15 | - |
-| 10 | 66:7a:54:ef:f6:33 | [WiFi] | 172.16.36.21 | - |
-| 11 | 6e:24:98:c2:d5:86 | [WiFi] |  | - |
-| 12 | 7a:aa:d8:00:32:bf | [WiFi] | 172.16.19.170 | - |
-| 13 | 9a:32:0b:da:48:97 | [WiFi] | 172.15.10.247 | - |
-| 14 | 9e:71:54:b1:e9:35 | [WiFi] | 172.16.19.161 | HPE (GE1/0/10 [V1616]) |
-| 15 | a2:69:6c:52:b7:a8 | [WiFi] | 172.15.197.241 | - |
-| 16 | aa:a3:95:63:22:35 | [WiFi] |  | - |
-| 17 | f2:32:85:d2:56:dd | [WiFi] | 172.16.11.206 | - |
 | 2 | 06:d9:e1:ee:79:e8 | [WiFi] |  | - |
 | 3 | 12:35:58:34:4d:56 | [WiFi] |  | - |
 | 4 | 36:09:c6:c1:05:3b | [WiFi] | 172.16.16.85 | - |
@@ -1326,12 +1318,28 @@ graph TD
 | 7 | 56:8b:ca:d3:33:cd | [WiFi] | 172.16.16.223 | HPE (GE1/0/47 [V1616]) |
 | 8 | 5e:3d:f1:17:68:dc | [WiFi] | 172.15.38.48 | - |
 | 9 | 5e:f5:88:d6:76:44 | [WiFi] | 172.15.56.160 | - |
+| 10 | 66:7a:54:ef:f6:33 | [WiFi] | 172.16.36.21 | - |
+| 11 | 6e:24:98:c2:d5:86 | [WiFi] |  | - |
+| 12 | 7a:aa:d8:00:32:bf | [WiFi] | 172.16.19.170 | - |
+| 13 | 9a:32:0b:da:48:97 | [WiFi] | 172.15.10.247 | - |
+| 14 | 9e:71:54:b1:e9:35 | [WiFi] | 172.16.19.161 | HPE (GE1/0/10 [V1616]) |
+| 15 | a2:69:6c:52:b7:a8 | [WiFi] | 172.15.197.241 | - |
+| 16 | aa:a3:95:63:22:35 | [WiFi] |  | - |
+| 17 | f2:32:85:d2:56:dd | [WiFi] | 172.16.11.206 | - |
 
 ### 4.13 Wi-Fi nuqtalari (Access Point) (98 ta)
 
 | # | ID / MAC | Ma'lumot | IP | Connected to |
 |---|---|---|---|---|
 | 1 | 00:4e:35:cb:3c:1a | [LLDP-EP] HP Aruba | 172.16.17.214 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 2 | 00:4e:35:cb:43:a0 | [LLDP-EP] HP Aruba | 172.15.136.35 | HPE (GE1/0/19 [V1500] 1G) |
+| 3 | 00:4e:35:cb:43:e8 | [LLDP-EP] HP Aruba | 172.16.37.128 | Jamic (Port23 [V1500]) |
+| 4 | 00:4e:35:cb:44:a2 | [LLDP-EP] HP Aruba | 172.16.17.251 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 5 | 00:4e:35:cb:46:ae | [LLDP-EP] HP Aruba | 172.15.247.203 | A_padval_SNR (Eth1/0/25 [V1500] 100M) |
+| 6 | 00:4e:35:cb:4a:d0 | [LLDP-EP] HP Aruba | 172.16.37.101 | Jamic (Port24 [V1500]) |
+| 7 | 00:4e:35:cb:4b:88 | [LLDP-EP] HP Aruba | 172.16.0.19 | HP (GE1/0/14 [V160] 1G) |
+| 8 | 00:4e:35:cb:4c:12 | [LLDP-EP] HP Aruba | 172.16.17.203 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 9 | 00:4e:35:cb:4f:9a | [ENDPOINT] HP Aruba | 172.16.0.199 | - |
 | 10 | 70:a7:41:a8:8c:9b | [LLDP-EP] Ubiquiti | 172.15.223.56 | B-318/1 (GE1/0/44 [V1500] 1G) |
 | 11 | 70:a7:41:a8:a2:ff | [LLDP-EP] Ubiquiti | 172.15.1.12 | A Mobil (TGE1/0/52 [V1500] 1G) |
 | 12 | 70:a7:41:a8:a5:f3 | [LLDP-EP] Ubiquiti | 172.15.223.55 | B-318/1 (GE1/0/44 [V1500] 1G) |
@@ -1342,7 +1350,6 @@ graph TD
 | 17 | 70:a7:41:aa:3e:cd | [LLDP-EP] Ubiquiti | 172.15.10.103 | B-318/1 (GE1/0/44 [V1500] 1G) |
 | 18 | 70:a7:41:aa:49:35 | [LLDP-EP] Ubiquiti | 172.15.10.113 | HPE (GE1/0/48 [V1500] 1G) |
 | 19 | 70:a7:41:aa:5d:59 | [ENDPOINT] Ubiquiti | 172.15.10.14 | A-332 (GE1/0/46 [V1500]) |
-| 2 | 00:4e:35:cb:43:a0 | [LLDP-EP] HP Aruba | 172.15.136.35 | HPE (GE1/0/19 [V1500] 1G) |
 | 20 | 74:ac:b9:96:47:ad | [LLDP-EP] Ubiquiti Inc | 172.15.19.72 | HPE (GE1/0/35 [V1500] 1G) |
 | 21 | 74:ac:b9:96:47:f5 | [LLDP-EP] Ubiquiti Inc | 172.15.19.73 | HPE (GE1/0/34 [V1500] 1G) |
 | 22 | 74:ac:b9:96:47:f8 | [LLDP-EP] Ubiquiti Inc | 172.16.13.253 | SNR-S2985G-24TC (Eth1/0/11 [V1612] 1G) |
@@ -1353,7 +1360,6 @@ graph TD
 | 27 | 78:45:58:73:0f:b0 | [LLDP-EP] Ubiquiti | 172.15.1.26 | HPE (GE1/0/48 [V1500] 1G) |
 | 28 | 78:45:58:73:10:2b | [LLDP-EP] Ubiquiti | 172.15.13.81 | B-318/1 (GE1/0/44 [V1500] 1G) |
 | 29 | 78:45:58:7c:85:65 | [ENDPOINT] Ubiquiti | 172.15.1.33 | - |
-| 3 | 00:4e:35:cb:43:e8 | [LLDP-EP] HP Aruba | 172.16.37.128 | Jamic (Port23 [V1500]) |
 | 30 | 78:45:58:7c:85:bc | [ENDPOINT] Ubiquiti | 172.15.1.35 | - |
 | 31 | 78:45:58:7c:85:c2 | [ENDPOINT] Ubiquiti | 172.15.12.243 | - |
 | 32 | 78:45:58:7c:85:d5 | [ENDPOINT] Ubiquiti | 172.15.1.39 | - |
@@ -1364,7 +1370,6 @@ graph TD
 | 37 | 78:45:58:7c:87:4f | [ENDPOINT] Ubiquiti | 172.15.1.46 | - |
 | 38 | 78:45:58:7c:87:8e | [ENDPOINT] Ubiquiti | 172.15.13.16 | - |
 | 39 | 78:45:58:7c:87:94 | [ENDPOINT] Ubiquiti | 172.15.13.3 | - |
-| 4 | 00:4e:35:cb:44:a2 | [LLDP-EP] HP Aruba | 172.16.17.251 | C 424/a (GE1/0/45 [V1616] 1G) |
 | 40 | 78:45:58:7c:87:a0 | [ENDPOINT] Ubiquiti | 172.15.13.20 | - |
 | 41 | 78:45:58:7c:87:c8 | [ENDPOINT] Ubiquiti | 172.15.12.245 | - |
 | 42 | 78:45:58:7c:88:2a | [ENDPOINT] Ubiquiti | 172.15.1.53 | - |
@@ -1375,7 +1380,6 @@ graph TD
 | 47 | 78:45:58:7c:88:4c | [ENDPOINT] Ubiquiti | 172.15.1.41 | - |
 | 48 | 78:45:58:7c:88:64 | [ENDPOINT] Ubiquiti | 172.15.13.9 | - |
 | 49 | 78:45:58:7c:88:a2 | [ENDPOINT] Ubiquiti | 172.15.1.51 | - |
-| 5 | 00:4e:35:cb:46:ae | [LLDP-EP] HP Aruba | 172.15.247.203 | A_padval_SNR (Eth1/0/25 [V1500] 100M) |
 | 50 | 78:45:58:7c:88:e4 | [ENDPOINT] Ubiquiti | 172.15.1.52 | - |
 | 51 | 78:45:58:7c:88:ed | [ENDPOINT] Ubiquiti | 172.15.1.37 | - |
 | 52 | 78:45:58:7c:89:47 | [ENDPOINT] Ubiquiti | 172.15.1.48 | - |
@@ -1386,7 +1390,6 @@ graph TD
 | 57 | 84:78:48:40:1c:80 | [LLDP-EP] Ubiquiti Inc | 172.15.1.15 | A Mobil (TGE1/0/52 [V1500] 1G) |
 | 58 | 84:78:48:40:1d:0d | [LLDP-EP] Ubiquiti Inc | 172.15.101.0 | HPE (GE1/0/47 [V1500] 1G) |
 | 59 | 9c:05:d6:31:4b:ad | [LLDP-EP] Ubiquiti | 172.15.1.79 | B-318/1 (GE1/0/44 [V1500] 1G) |
-| 6 | 00:4e:35:cb:4a:d0 | [LLDP-EP] HP Aruba | 172.16.37.101 | Jamic (Port24 [V1500]) |
 | 60 | 9c:05:d6:31:4f:e5 | [LLDP-EP] Ubiquiti | 172.15.1.17 | HPE (GE1/0/48 [V1500] 1G) |
 | 61 | 9c:05:d6:31:57:a5 | [LLDP-EP] Ubiquiti | 172.15.1.77 | B-318/1 (GE1/0/44 [V1500] 1G) |
 | 62 | 9c:05:d6:31:5d:4d | [LLDP-EP] Ubiquiti | 172.15.1.23 | A_padval_SNR (Eth1/0/25 [V1500] 100M) |
@@ -1397,7 +1400,6 @@ graph TD
 | 67 | 9c:05:d6:31:89:c9 | [LLDP-EP] Ubiquiti | 172.15.166.142 | C 424/a (GE1/0/47 [V1500] 1G) |
 | 68 | 9c:05:d6:31:8d:59 | [LLDP-EP] Ubiquiti | 172.15.1.70 | SNR-S2995G-24FX (Eth1/0/24 [T] 1G) |
 | 69 | 9c:05:d6:31:8d:61 | [LLDP-EP] Ubiquiti | 172.15.1.78 | HPE (GE1/0/47 [V1500] 1G) |
-| 7 | 00:4e:35:cb:4b:88 | [LLDP-EP] HP Aruba | 172.16.0.19 | HP (GE1/0/14 [V160] 1G) |
 | 70 | 9c:05:d6:31:b0:e5 | [LLDP-EP] Ubiquiti | 172.15.1.22 | A_padval_SNR (Eth1/0/25 [V1500] 100M) |
 | 71 | 9c:05:d6:31:c1:45 | [LLDP-EP] Ubiquiti | 172.15.1.20 | A_padval_SNR (Eth1/0/25 [V1500] 100M) |
 | 72 | 9c:05:d6:31:f8:e5 | [LLDP-EP] Ubiquiti | 172.15.1.56 | HPE (GE1/0/47 [V1500] 1G) |
@@ -1408,7 +1410,6 @@ graph TD
 | 77 | ac:8b:a9:70:a3:6b | [LLDP-EP] Ubiquiti | 172.15.121.115 | SNR-S2995G-24FX (Eth1/0/24 [T] 1G) |
 | 78 | ac:8b:a9:70:a9:66 | [LLDP-EP] Ubiquiti | 172.15.121.116 | SNR-S2995G-24FX (Eth1/0/24 [T] 1G) |
 | 79 | e4:38:83:16:9a:03 | [LLDP-EP] Ubiquiti | 172.15.1.11 | A RRT Kalidor (GE1/0/31 [V1500] 1G) |
-| 8 | 00:4e:35:cb:4c:12 | [LLDP-EP] HP Aruba | 172.16.17.203 | C 424/a (GE1/0/45 [V1616] 1G) |
 | 80 | e4:38:83:16:9e:7f | [LLDP-EP] Ubiquiti | 172.15.1.58 | HPE (GE1/0/2 [V1500] 1G) |
 | 81 | e4:38:83:16:aa:5f | [LLDP-EP] Ubiquiti | 172.15.1.19 | A 3 Etaj (TGE1/0/50 [V1500] 1G) |
 | 82 | e4:38:83:16:ac:87 | [LLDP-EP] Ubiquiti | 172.15.1.62 | HPE (GE1/0/2 [V1500] 1G) |
@@ -1419,7 +1420,6 @@ graph TD
 | 87 | e4:38:83:72:c2:3d | [LLDP-EP] Ubiquiti | 172.15.1.85 | HPE (GE1/0/47 [V1500] 1G) |
 | 88 | e4:38:83:79:a0:a9 | [LLDP-EP] Ubiquiti | 172.15.1.89 | HPE (GE1/0/47 [V1500] 1G) |
 | 89 | f4:e2:c6:e5:1b:cd | [LLDP-EP] Ubiquiti | 172.15.1.18 | A 3 Etaj (TGE1/0/49 [V1500] 1G) |
-| 9 | 00:4e:35:cb:4f:9a | [ENDPOINT] HP Aruba | 172.16.0.199 | - |
 | 90 | f4:e2:c6:f1:a2:4b | [LLDP-EP] Ubiquiti | 172.15.1.65 | D 1-2 (TGE1/0/51 [V1500] 1G) |
 | 91 | f4:e2:c6:f1:a2:f7 | [LLDP-EP] Ubiquiti | 172.15.1.63 | D 1-2 (TGE1/0/51 [V1500] 1G) |
 | 92 | f4:e2:c6:f1:a5:17 | [LLDP-EP] Ubiquiti | 172.15.80.6 | D 1-2 (TGE1/0/51 [V1500] 1G) |

@@ -315,8 +315,8 @@ var (
 
 // canonicalAuditMD replaces the timestamps in generateAuditMD output and sorts
 // the parts that come from map iteration over collectedData or anomaly
-// counts: the section 2 penalty rows, the section 4.1 switch rows, and the
-// switch list inside each section 5 VLAN row. Everything that comes from
+// counts: the section 2 penalty rows, the section 4.1 switch rows (only
+// 4.1, not 4.10-4.14), and the switch list inside each section 5 VLAN row. Everything that comes from
 // GetGraphData is reproducible as is, because TestMain sets sortGraphData.
 func canonicalAuditMD(md string) string {
 	md = auditDateLine.ReplaceAllString(md, "Sana: "+timePlaceholder)
@@ -340,7 +340,7 @@ func canonicalAuditMD(md string) string {
 		case strings.HasPrefix(section, "## 2.") && isRow && !strings.HasPrefix(line, "| Anomaliya turi |"):
 			run = append(run, line)
 			continue
-		case strings.HasPrefix(section, "### 4.1") && isRow && !strings.HasPrefix(line, "| IP |"):
+		case strings.HasPrefix(section, "### 4.1 ") && isRow && !strings.HasPrefix(line, "| IP |"):
 			run = append(run, line)
 			continue
 		case strings.HasPrefix(section, "## 5.") && isRow && !strings.HasPrefix(line, "| VLAN ID |"):
@@ -357,4 +357,20 @@ func canonicalAuditMD(md string) string {
 	}
 	flush()
 	return strings.Join(out, "\n")
+}
+
+// TestCanonicalAuditMDSections (H14): only the rows of section 4.1 are
+// sorted; the rows of 4.10-4.14 keep their order.
+func TestCanonicalAuditMDSections(t *testing.T) {
+	md := strings.Join([]string{
+		"### 4.1 Switchlar", "| IP | Hostname |", "|---|---|", "| 10.0.0.2 | b |", "| 10.0.0.1 | a |",
+		"### 4.12 Wi-Fi / Random MAC (2 ta)", "| # | MAC |", "|---|---|", "| 2 | da:a1:19:00:00:02 |", "| 10 | da:a1:19:00:00:01 |",
+	}, "\n")
+	want := strings.Join([]string{
+		"### 4.1 Switchlar", "| IP | Hostname |", "|---|---|", "| 10.0.0.1 | a |", "| 10.0.0.2 | b |",
+		"### 4.12 Wi-Fi / Random MAC (2 ta)", "| # | MAC |", "|---|---|", "| 2 | da:a1:19:00:00:02 |", "| 10 | da:a1:19:00:00:01 |",
+	}, "\n")
+	if got := canonicalAuditMD(md); got != want {
+		t.Errorf("canonicalAuditMD =\n%s\nwant\n%s", got, want)
+	}
 }
