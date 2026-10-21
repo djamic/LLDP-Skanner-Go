@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"slices"
 	"strings"
 	"testing"
 )
 
 // Tests for the analyzer fixes: one per-port Shadow-IT rule shared with the
-// graph (Q14, F15, F16, F49) and the loopback chassis guard (F17).
+// graph (Q14, F15, F16, F49), the loopback chassis guard (F17) and the STP
+// root check (F18).
 
 func analyzerIssueIDs(suggestions []OptimizationSuggestion, typ string) []string {
 	var out []string
@@ -239,6 +241,33 @@ func TestAnalyzerLoopbackChassisGuard(t *testing.T) {
 		got := analyzerIssueIDs(NewAnalyzer(FullCaptureData{DevicesData: devicesData(d)}).analyzeLoopback(), "loopback")
 		if !slices.Equal(got, c.want) {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestAnalyzerSTPRootBridges: a root bridge that is a polled switch (by its
+// chassis MAC or an interface MAC) is fine; the others are reported, and the
+// suggestion names the same root on every run (F18).
+func TestAnalyzerSTPRootBridges(t *testing.T) {
+	resetState(t)
+	stp := func(root string) STPData { return STPData{Enabled: true, Protocol: "stp", RootBridgeID: root} }
+	devices := []*DeviceData{
+		{IP: "10.0.9.81", SysName: "sw-81", ChassisID: "4c:ae:a3:09:00:81", STPInfo: stp("4c:ae:a3:09:00:81")},
+		{IP: "10.0.9.82", SysName: "sw-82", ChassisID: "4c:ae:a3:09:00:82", STPInfo: stp("4c:ae:a3:09:00:81")},
+		{IP: "10.0.9.83", SysName: "sw-83", ChassisID: "4c:ae:a3:09:00:83", STPInfo: stp("00:16:e0:5a:5c:e0")},
+		{IP: "10.0.9.84", SysName: "sw-84", ChassisID: "4c:ae:a3:09:00:84", STPInfo: stp("00:16:e0:5a:5c:e0")},
+		{IP: "10.0.9.85", SysName: "sw-85", ChassisID: "4c:ae:a3:09:00:85", STPInfo: stp("00:16:e0:00:00:01")},
+		{IP: "10.0.9.86", SysName: "sw-86", ChassisID: "4c:ae:a3:09:00:86", STPInfo: stp("4c:ae:a3:09:86:ff"),
+			Interfaces: []InterfaceData{{IfIndex: 1, IfDescr: "Vlan1", IfPhysAddress: "4C:AE:A3:09:86:FF"}}},
+	}
+	topology := buildGraphFromSnapshot(analyzerDeviceMap(devices)).GetGraphData()
+	rng := rand.New(rand.NewSource(1))
+	for run := 0; run < 20; run++ {
+		values := deviceValues(devices)
+		rng.Shuffle(len(values), func(i, j int) { values[i], values[j] = values[j], values[i] })
+		got := NewAnalyzer(FullCaptureData{DevicesData: values, Topology: topology}).analyzeSTP()
+		if len(got) != 1 || got[0].Device != "00:16:e0:5a:5c:e0" || got[0].Value != "2 non-core roots" {
+			t.Fatalf("run %d: got %+v, want one suggestion for root 00:16:e0:5a:5c:e0 with 2 non-core roots", run, got)
 		}
 	}
 }

@@ -27,12 +27,9 @@ type goldenSuggestion struct {
 	Description string `json:"description"`
 }
 
-// stpRootPlaceholder replaces the stp suggestion's Device: analyzeSTP picks it
-// from a map (finding F18), so it differs between runs.
-const stpRootPlaceholder = "<stp root bridge chosen by map order>"
-
-// suggestionRecords sorts the suggestions and hides the map-order stp device.
-// It returns the hidden device (empty when there is no stp suggestion).
+// suggestionRecords sorts the suggestions. It also returns the stp
+// suggestion's Device, the root bridge analyzeSTP names (empty when there is
+// no stp suggestion).
 func suggestionRecords(r Report) ([]goldenSuggestion, string) {
 	var out []goldenSuggestion
 	stpDevice := ""
@@ -40,7 +37,6 @@ func suggestionRecords(r Report) ([]goldenSuggestion, string) {
 		g := goldenSuggestion{Type: s.Type, Severity: s.Severity, Device: s.Device, IssueID: s.IssueID, Value: s.Value, Description: s.Description}
 		if s.Type == "stp" {
 			stpDevice = s.Device
-			g.Device = stpRootPlaceholder
 		}
 		out = append(out, g)
 	}
@@ -56,15 +52,12 @@ func suggestionRecords(r Report) ([]goldenSuggestion, string) {
 }
 
 // lastReportRecord reads what Analyze stored for /api/graph (SetLastReport),
-// with the map-order stp key hidden and each type list sorted.
-func lastReportRecord(stpDevice string) map[string]any {
+// with each type list sorted.
+func lastReportRecord() map[string]any {
 	lastReportMutex.RLock()
 	defer lastReportMutex.RUnlock()
 	anomalies := map[string][]string{}
 	for k, v := range lastAnomalyMap {
-		if stpDevice != "" && k == stpDevice {
-			k = stpRootPlaceholder
-		}
 		types := slices.Clone(v)
 		slices.Sort(types)
 		anomalies[k] = types
@@ -114,7 +107,7 @@ func TestGoldenAnalyzer(t *testing.T) {
 		"summary":        report.Summary,
 		"report_nodes":   len(report.Nodes),
 		"stp_roots":      roots,
-		"last_report":    lastReportRecord(stpDevice),
+		"last_report":    lastReportRecord(),
 		"suggestions":    suggestions,
 		"bot_messages":   msgs,
 		"influx_written": points,

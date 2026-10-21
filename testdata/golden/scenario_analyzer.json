@@ -208,7 +208,7 @@
     },
     "stp_device": "00:16:e0:5a:5c:e0",
     "suggestions": [
-      {"type": "stp", "severity": "medium", "device": "<stp root bridge chosen by map order>", "value": "1 non-core roots", "description": "STP: 1 ta Root Bridge core switchda emas (PVST+ normal). Core switchda priority sozlang."}
+      {"type": "stp", "severity": "medium", "device": "00:16:e0:5a:5c:e0", "value": "1 non-core roots", "description": "STP: 1 ta Root Bridge core switchda emas (PVST+ normal). Core switchda priority sozlang."}
     ],
     "summary": {
       "congestion_issues": 0,

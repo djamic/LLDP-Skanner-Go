@@ -42,7 +42,7 @@ func analyzerCase(t *testing.T, data FullCaptureData, esxi []string, ignored []s
 		"summary":      report.Summary,
 		"suggestions":  suggestions,
 		"bot_messages": bot.taken(),
-		"last_report":  lastReportRecord(""),
+		"last_report":  lastReportRecord(),
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -818,45 +819,47 @@ func (na *NetworkAnalyzer) analyzeLoopback() []OptimizationSuggestion {
 	return suggestions
 }
 
-// analyzeSTP checks Spanning Tree Protocol configuration
+// analyzeSTP checks Spanning Tree Protocol configuration: it reports the root
+// bridges that are not one of the polled (managed) switches. A root is on a
+// managed switch when its bridge MAC is the chassis MAC, or an interface MAC,
+// of a polled device. The suggestion names the root seen by the most
+// devices (then the lowest MAC), so it is the same on every run (F18).
 func (na *NetworkAnalyzer) analyzeSTP() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
+	ix := na.idx()
 
 	// Find the root bridge from all devices
-	rootBridgeIDs := make(map[string][]string) // RootBridgeID -> list of devices seeing this root
-
-	for _, device := range na.Data.DevicesData {
+	seenBy := make(map[string]int) // root bridge MAC -> number of devices seeing this root
+	for _, device := range ix.devices {
 		if device.STPInfo.Enabled && device.STPInfo.RootBridgeID != "" {
-			rootBridgeIDs[device.STPInfo.RootBridgeID] = append(
-				rootBridgeIDs[device.STPInfo.RootBridgeID],
-				device.IP,
-			)
+			seenBy[normalizeMAC(device.STPInfo.RootBridgeID)]++
 		}
 	}
 
+	// MACs of the managed switches. IfPhysAddress is not collected today,
+	// so the chassis MAC (the bridge MAC of most switches) is what matches.
+	managed := make(map[string]bool)
+	for _, device := range ix.devices {
+		managed[normalizeMAC(device.ChassisID)] = true
+		for _, iface := range device.Interfaces {
+			managed[normalizeMAC(iface.IfPhysAddress)] = true
+		}
+	}
+	delete(managed, "")
+
 	// Check if root bridge is in the core
 	// PVST+ tarmoqlarda har VLAN uchun alohida root bridge bo'ladi — bu normal.
-	// Faqat birinchi topilgan non-core root uchun 1 ta suggestion beramiz.
-	if len(rootBridgeIDs) > 0 {
+	// Faqat 1 ta suggestion beramiz.
+	if len(seenBy) > 0 {
 		nonCoreRoots := []string{}
-		for rootMAC, devices := range rootBridgeIDs {
-			isCore := false
-			for _, device := range na.Data.DevicesData {
-				for _, iface := range device.Interfaces {
-					if strings.EqualFold(iface.IfPhysAddress, rootMAC) {
-						for _, node := range na.Data.Topology.Nodes {
-							if node.ID == device.IP && (node.NodeType == "router" || node.NodeType == "switch") {
-								isCore = true
-								break
-							}
-						}
-					}
-				}
-			}
-			if !isCore && len(devices) > 0 {
+		for rootMAC := range seenBy {
+			if !managed[rootMAC] {
 				nonCoreRoots = append(nonCoreRoots, rootMAC)
 			}
 		}
+		slices.SortFunc(nonCoreRoots, func(a, b string) int {
+			return cmp.Or(cmp.Compare(seenBy[b], seenBy[a]), strings.Compare(a, b))
+		})
 
 		// Generate only 1 summary suggestion for all non-core roots
 		if len(nonCoreRoots) > 0 {
