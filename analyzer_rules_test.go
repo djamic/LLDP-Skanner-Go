@@ -278,6 +278,52 @@ func TestAnalyzerSTPRootBridges(t *testing.T) {
 	}
 }
 
+// TestAnalyzerReportsListAnomalies: /api/report/summary and the audit reports
+// list the anomalies of the last analysis (F12).
+func TestAnalyzerReportsListAnomalies(t *testing.T) {
+	_, report := reportFixture(t)
+	want := map[string]int{}
+	for _, s := range report.Suggestions {
+		want[s.Type]++
+	}
+	if len(want) == 0 {
+		t.Fatal("the fixture analysis found no anomalies")
+	}
+	rr := httptest.NewRecorder()
+	reportSummaryHandler(rr, httptest.NewRequest(http.MethodGet, "/api/report/summary", nil))
+	var summary ReportSummary
+	if err := json.Unmarshal(rr.Body.Bytes(), &summary); err != nil {
+		t.Fatal(err)
+	}
+	if !maps.Equal(summary.Anomalies, want) {
+		t.Errorf("/api/report/summary anomalies %v, want %v", summary.Anomalies, want)
+	}
+
+	md := generateAuditMD([]string{"switch", "hub"})
+	start, end := strings.Index(md, "## 6. Anomaliyalar"), strings.Index(md, "## 7.")
+	if start < 0 || end < start {
+		t.Fatalf("audit report has no section 6 before section 7")
+	}
+	rows := 0
+	for _, line := range strings.Split(md[start:end], "\n") {
+		if strings.HasPrefix(line, "| ") && !strings.HasPrefix(line, "| Turi |") {
+			rows++
+		}
+	}
+	if rows != len(report.Suggestions) {
+		t.Errorf("audit section 6 has %d anomaly rows, want %d", rows, len(report.Suggestions))
+	}
+	if strings.Contains(md, "Anomaliyalar topilmadi") {
+		t.Errorf("audit report says no anomalies were found")
+	}
+
+	rr = httptest.NewRecorder()
+	reportFullHandler(rr, httptest.NewRequest(http.MethodGet, "/api/report/full", nil))
+	if got := strings.Count(rr.Body.String(), "<tr><td>shadow_it</td><td>"); got != want["shadow_it"]+1 {
+		t.Errorf("full report has %d shadow_it rows, want %d anomaly rows and the count row", got, want["shadow_it"])
+	}
+}
+
 // TestAnalyzerTotalMACsCountsUniqueAddresses: total_macs is the number of
 // distinct MAC addresses, not the number of FDB rows (F13, Q15).
 func TestAnalyzerTotalMACsCountsUniqueAddresses(t *testing.T) {

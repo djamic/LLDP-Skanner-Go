@@ -1,13 +1,17 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,6 +46,10 @@ var (
 	lastAnomalyMap  map[string][]string // nodeID → anomaly types
 	lastTotalMACs   int                 // unique MAC addresses in the FDB tables (total_macs)
 	lastReportMutex sync.RWMutex
+
+	// analyzerLastSuggestions are the suggestions of the last live analysis,
+	// listed by the reports' anomaly sections
+	analyzerLastSuggestions []OptimizationSuggestion
 )
 
 // graphDebugFile receives a copy of every /api/graph response (debug
@@ -53,8 +61,10 @@ func init() {
 	lastAnomalyMap = make(map[string][]string)
 }
 
-// SetLastReport stores analysis results for UI enrichment (called from analyzer)
-func SetLastReport(healthScore int, anomalyMap map[string][]string, totalMACs int) {
+// SetLastReport stores analysis results for UI enrichment and the reports
+// (called from analyzer): the health score, the anomaly types by graph node,
+// the number of unique MACs and the suggestions themselves.
+func SetLastReport(healthScore int, anomalyMap map[string][]string, totalMACs int, suggestions ...OptimizationSuggestion) {
 	lastReportMutex.Lock()
 	defer lastReportMutex.Unlock()
 	lastHealthScore = healthScore
@@ -62,6 +72,35 @@ func SetLastReport(healthScore int, anomalyMap map[string][]string, totalMACs in
 		lastAnomalyMap = anomalyMap
 	}
 	lastTotalMACs = totalMACs
+	analyzerLastSuggestions = slices.Clone(suggestions)
+}
+
+// analyzerReportAnomalies returns the suggestions of the last live analysis
+// ordered by type and then device (IP order), the types in order, and the
+// count per type: the anomaly sections of /api/report/summary and the audit
+// reports (F12).
+func analyzerReportAnomalies() (anomalies []OptimizationSuggestion, types []string, counts map[string]int) {
+	lastReportMutex.RLock()
+	anomalies = slices.Clone(analyzerLastSuggestions)
+	lastReportMutex.RUnlock()
+	slices.SortStableFunc(anomalies, func(a, b OptimizationSuggestion) int {
+		return cmp.Or(strings.Compare(a.Type, b.Type), compareIPs(a.Device, b.Device))
+	})
+	counts = make(map[string]int)
+	for _, a := range anomalies {
+		counts[a.Type]++
+	}
+	return anomalies, slices.Sorted(maps.Keys(counts)), counts
+}
+
+// analyzerMDCell puts report text on one line for a Markdown table cell.
+func analyzerMDCell(s string) string {
+	return strings.ReplaceAll(strings.Join(strings.Fields(strings.ReplaceAll(s, "\n", ", ")), " "), "|", "\\|")
+}
+
+// analyzerHTMLCell puts report text on one line for an HTML table cell.
+func analyzerHTMLCell(s string) string {
+	return html.EscapeString(strings.Join(strings.Fields(strings.ReplaceAll(s, "\n", ", ")), " "))
 }
 
 // SetGlobalGraph sets the global graph instance

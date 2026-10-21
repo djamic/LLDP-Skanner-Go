@@ -200,10 +200,10 @@ func (na *NetworkAnalyzer) Analyze() Report {
 	WriteAnomalySummary(&report)
 
 	// E.1/E.2: Store health score + anomaly map (by graph node) for UI
-	// enrichment via /api/graph
+	// enrichment via /api/graph, and the suggestions for the reports
 	anomalyMap := na.anomalyMap(report.Suggestions)
 	totalMACs := len(analyzerUniqueMACs(na.idx().devices))
-	SetLastReport(report.HealthScore, anomalyMap, totalMACs)
+	SetLastReport(report.HealthScore, anomalyMap, totalMACs, report.Suggestions...)
 
 	return report
 }

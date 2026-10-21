@@ -373,6 +373,9 @@ func reportSummaryHandler(w http.ResponseWriter, r *http.Request) {
 	summary.TotalMACs = lastTotalMACs
 	lastReportMutex.RUnlock()
 
+	// Anomalies of the last analysis, per type (F12)
+	_, _, summary.Anomalies = analyzerReportAnomalies()
+
 	if graph != nil {
 		data := graph.GetGraphData()
 		summary.TotalNodes = len(data.Nodes)
@@ -381,9 +384,6 @@ func reportSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		for _, n := range data.Nodes {
 			if n.Group == "switch" || n.Group == "router" {
 				summary.TotalSwitches++
-			}
-			for _, a := range n.Anomalies {
-				summary.Anomalies[a]++
 			}
 		}
 	}
@@ -435,18 +435,12 @@ func reportFullHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	collectedDataMutex.RUnlock()
 
-	// Anomaly summary
-	anomalyCounts := make(map[string]int)
+	// Anomaly summary: the suggestions of the last analysis (F12)
+	anomalies, anomalyTypes, anomalyCounts := analyzerReportAnomalies()
 	var anomalyRows strings.Builder
-	if graph != nil {
-		data := graph.GetGraphData()
-		for _, n := range data.Nodes {
-			for _, a := range n.Anomalies {
-				anomalyCounts[a]++
-				anomalyRows.WriteString(fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td></tr>\n",
-					a, n.ID, n.Label))
-			}
-		}
+	for _, a := range anomalies {
+		anomalyRows.WriteString(fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td></tr>\n",
+			a.Type, analyzerHTMLCell(a.Device), analyzerHTMLCell(a.Description)))
 	}
 
 	// Topology PNG (Word-compatible)
@@ -468,8 +462,8 @@ func reportFullHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Anomaly penalty summary
 	var penaltyRows strings.Builder
-	for aType, count := range anomalyCounts {
-		penaltyRows.WriteString(fmt.Sprintf("<tr><td>%s</td><td>%d</td></tr>\n", aType, count))
+	for _, aType := range anomalyTypes {
+		penaltyRows.WriteString(fmt.Sprintf("<tr><td>%s</td><td>%d</td></tr>\n", aType, anomalyCounts[aType]))
 	}
 
 	// Build HTML (Word-compatible)
@@ -1051,26 +1045,20 @@ func generateAuditMD(groups []string) string {
 	}
 	collectedDataMutex.RUnlock()
 
-	// Anomalies
-	anomalyCounts := make(map[string]int)
+	// Anomalies: the suggestions of the last analysis (F12)
+	anomalies, anomalyTypes, anomalyCounts := analyzerReportAnomalies()
 	var anomalyRows strings.Builder
 	anomalyRows.WriteString("| Turi | Qurilma | Tavsif |\n")
 	anomalyRows.WriteString("|---|---|---|\n")
-	if graph != nil {
-		data := graph.GetGraphData()
-		for _, n := range data.Nodes {
-			for _, a := range n.Anomalies {
-				anomalyCounts[a]++
-				anomalyRows.WriteString(fmt.Sprintf("| %s | %s | %s |\n", a, n.ID, n.Label))
-			}
-		}
+	for _, a := range anomalies {
+		anomalyRows.WriteString(fmt.Sprintf("| %s | %s | %s |\n", a.Type, analyzerMDCell(a.Device), analyzerMDCell(a.Description)))
 	}
 
 	var penaltyRows strings.Builder
 	penaltyRows.WriteString("| Anomaliya turi | Soni |\n")
 	penaltyRows.WriteString("|---|---|\n")
-	for aType, count := range anomalyCounts {
-		penaltyRows.WriteString(fmt.Sprintf("| %s | %d |\n", aType, count))
+	for _, aType := range anomalyTypes {
+		penaltyRows.WriteString(fmt.Sprintf("| %s | %d |\n", aType, anomalyCounts[aType]))
 	}
 
 	healthLabel := "Critical"

@@ -18,6 +18,8 @@ Tizim: LLDP Network Scanner v2.0
 
 | Anomaliya turi | Soni |
 |---|---|
+| shadow_it | 33 |
+| stp | 1 |
 
 ## 3. Topologiya Sxemasi
 
@@ -1332,6 +1334,40 @@ graph TD
 
 | Turi | Qurilma | Tavsif |
 |---|---|---|
+| shadow_it | 172.20.230.1 | Port 40 has 8 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.5 | Port 1 has 8 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.5 | Port 7 has 6 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.7 | Port 37 has 5 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.9 | Port 3 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.9 | Port 47 has 3 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.11 | Port 11 has 7 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.15 | Port 17 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.22 | Port 2 has 6 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.22 | Port 48 has 5 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.23 | Port 1 has 8 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.24 | Port 18 has 4 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.32 | Port 17 has 6 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.33 | Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.33 | Port 27 has 3 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.35 | Port 39 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.48 | Port 2 has 6 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.51 | Port 3 has 3 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.76 | Port 4 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.230.76 | Port 28 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.1 | Port 48 has 6 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.4 | Port 48 has 4 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.5 | Port 48 has 6 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.6 | Port 24 has 5 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.8 | Port 24 has 9 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.10 | Port 24 has 7 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.12 | Port 48 has 7 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.13 | Port 1 has 8 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.240.13 | Port 20 has 7 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.253.11 | Port 27 has 3 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.254.10 | Port 3 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.254.202 | Port 18 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| shadow_it | 172.20.254.204 | Port 13 has 8 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch. |
+| stp | 00:16:e0:5a:5c:e0 | STP: 1 ta Root Bridge core switchda emas (PVST+ normal). Core switchda priority sozlang. |
 
 ## 7. Shadow IT Tarmoqlar (batafsil)
 
@@ -2282,4 +2318,5 @@ graph LR
 
 ## 9. Tavsiyalar
 
-- Anomaliyalar topilmadi — tarmoq sog'lom holatda
+- STP Root Bridge core switchda sozlang (priority 0 yoki 4096)
+- 33 ta boshqarilmaydigan qurilma aniqlandi — portlarni tekshiring

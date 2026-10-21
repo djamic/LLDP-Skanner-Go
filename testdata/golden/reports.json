@@ -46,7 +46,10 @@
     "total_macs": 4569,
     "total_nodes": 928,
     "total_edges": 927,
-    "anomalies": {},
+    "anomalies": {
+      "shadow_it": 33,
+      "stp": 1
+    },
     "top_devices": [
       {"ip": "172.20.230.1", "sysname": "B-318/3", "vendor": "SNR", "ports": 55, "macs": 2239},
       {"ip": "172.20.230.2", "sysname": "HPE", "vendor": "SNR", "ports": 57, "macs": 2258},
