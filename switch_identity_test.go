@@ -164,3 +164,49 @@ func TestFDBPortNames(t *testing.T) {
 		t.Errorf("Shadow-IT issues = %v, want %v", shadow, want)
 	}
 }
+
+// TestChassisIDKeptOnFlakyPoll (H9): a switch whose agent sometimes answers
+// lldpLocChassisId with exception text or not at all (172.20.230.40
+// alternates) keeps its last valid chassis id, so its node id does not flip
+// to the IP and back between polls. A new valid chassis id replaces the old
+// one, and a switch that never had a valid one stays an IP node.
+func TestChassisIDKeptOnFlakyPoll(t *testing.T) {
+	resetState(t)
+	const ip = "10.9.8.40"
+	agent := func(chassis string) map[string][]string {
+		walks := map[string][]string{oidIfDescr: {oidIfDescr + ".1 = STRING: \"Gi0/1\""}}
+		if chassis != "" {
+			walks[oidChassis] = []string{oidChassis + " = " + chassis}
+		}
+		return walks
+	}
+	obj := newRescanSNMPObject()
+	nodeID := func() string {
+		collectedDataMutex.RLock()
+		defer collectedDataMutex.RUnlock()
+		return graphDeviceNodeID(collectedData[ip])
+	}
+	for _, step := range []struct{ name, chassis, want string }{
+		{"dotted chassis", `STRING: "5894.8000.f7a3"`, "58:94:80:00:f7:a3"},
+		{"exception text", "No Such Object available on this agent at this OID", "58:94:80:00:f7:a3"},
+		{"chassis walk fails", "", "58:94:80:00:f7:a3"},
+		{"null chassis", "Hex-STRING: 00 00 00 00 00 00 ", "58:94:80:00:f7:a3"},
+		{"new valid chassis", "Hex-STRING: 4C AE A3 09 08 40 ", "4c:ae:a3:09:08:40"},
+	} {
+		fakeSNMP.set(ip, agent(step.chassis))
+		obj.CollectData(ip, "flaky")
+		if got := nodeID(); got != step.want {
+			t.Errorf("%s: node id = %q, want %q", step.name, got, step.want)
+		}
+	}
+
+	const never = "10.9.8.41"
+	fakeSNMP.set(never, agent("No Such Instance currently exists at this OID"))
+	obj.CollectData(never, "never")
+	collectedDataMutex.RLock()
+	d := collectedData[never]
+	collectedDataMutex.RUnlock()
+	if d == nil || d.ChassisID != "" || graphDeviceNodeID(d) != never {
+		t.Errorf("switch without a valid chassis id: %+v", d)
+	}
+}

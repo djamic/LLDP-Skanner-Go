@@ -503,18 +503,37 @@ func buildStartupGraph(savedHosts map[string]*DeviceData) {
 // storeCollectedDevice stores the data of a successful SNMP poll in
 // collectedData and marks the switch reachable (the OnSuccess callbacks).
 // The tables of walks that failed in this poll are kept from the previous
-// poll (F57), and the traffic counters are only updated from interfaces
-// walked just now.
+// poll (F57), so is the last valid chassis id when this poll read none
+// (keepPreviousChassisID), and the traffic counters are only updated from
+// interfaces walked just now.
 func storeCollectedDevice(data *DeviceData) {
 	// Phase 8: Mark as reachable
 	data.Unreachable = false
 	data.LastSeen = time.Now()
 	collectedDataMutex.Lock()
-	collectKeepPrevious(data, collectedData[data.IP])
+	prev := collectedData[data.IP]
+	collectKeepPrevious(data, prev)
+	keepPreviousChassisID(data, prev)
 	collectedData[data.IP] = data
 	collectedDataMutex.Unlock()
 	if !data.collectWalkFailed(collectWalkInterfaces) {
 		updateTrafficCounters(data.IP, data.Interfaces)
+	}
+}
+
+// keepPreviousChassisID keeps the switch identity stable across polls: when
+// this poll read no usable chassis id (an empty one, exception text the
+// collector rejected, a failed walk, the null MAC) and the stored data of
+// the same IP has one, the stored chassis id stays. Some agents answer
+// lldpLocChassisId only now and then (172.20.230.40), and the node id would
+// flip between the chassis MAC and the IP. A new usable chassis id always
+// replaces the old one.
+func keepPreviousChassisID(data, prev *DeviceData) {
+	if prev == nil || prev == data || graphChassisKey(data.ChassisID) != "" {
+		return
+	}
+	if graphChassisKey(prev.ChassisID) != "" {
+		data.ChassisID = prev.ChassisID
 	}
 }
 
