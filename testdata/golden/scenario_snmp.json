@@ -64,10 +64,8 @@
     "mac_table_nil": true,
     "arp_table": [
       {"IPAddress": "172.20.1.105", "MACAddress": "00:0c:29:6f:e0:bc", "Interface": 5},
-      {"IPAddress": "172.20.1.107", "MACAddress": "01:00:5e:00:00:fb", "Interface": 5},
-      {"IPAddress": "172.20.1.108", "MACAddress": "00:00:00:12:34:56", "Interface": 5},
+      {"IPAddress": "172.20.1.106", "MACAddress": "50:28:4a:33:3a:4c", "Interface": 5},
       {"IPAddress": "172.20.1.111", "MACAddress": "00:50:56:01:02:04", "Interface": 5},
-      {"IPAddress": "172.20.1.112", "MACAddress": "00:50:56:01:02:05", "Interface": 2},
       {"IPAddress": "172.20.1.113", "MACAddress": "f8:f0:82:7a:d9:69", "Interface": 5}
     ],
     "port_vlans": [
@@ -106,15 +104,12 @@
       {"MACAddress": "00:50:56:01:02:03", "PortNumber": 5, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "f8:f0:82:d1:67:5e", "PortNumber": 28, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "10:7c:61:c0:9e:aa", "PortNumber": 25, "VlanID": 0, "Status": "learned"},
-      {"MACAddress": "00:1b:21:09:3e7:01", "PortNumber": 7, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "01:00:5e:00:00:fb", "PortNumber": 2, "VlanID": 0, "Status": "learned"}
     ],
     "arp_table": [
       {"IPAddress": "172.20.1.105", "MACAddress": "00:0c:29:6f:e0:bc", "Interface": 5},
-      {"IPAddress": "172.20.1.107", "MACAddress": "01:00:5e:00:00:fb", "Interface": 5},
-      {"IPAddress": "172.20.1.108", "MACAddress": "00:00:00:12:34:56", "Interface": 5},
+      {"IPAddress": "172.20.1.106", "MACAddress": "50:28:4a:33:3a:4c", "Interface": 5},
       {"IPAddress": "172.20.1.111", "MACAddress": "00:50:56:01:02:04", "Interface": 5},
-      {"IPAddress": "172.20.1.112", "MACAddress": "00:50:56:01:02:05", "Interface": 2},
       {"IPAddress": "172.20.1.113", "MACAddress": "f8:f0:82:7a:d9:69", "Interface": 5}
     ],
     "port_vlans": [

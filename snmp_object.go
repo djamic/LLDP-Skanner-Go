@@ -645,6 +645,130 @@ func collectLLDPManAddr(oid string) (key, ip string, ok bool) {
 		fmt.Sprintf("%d.%d.%d.%d", addr[0], addr[1], addr[2], addr[3]), true
 }
 
+// OIDs of the FDB and ARP walks.
+const (
+	collectFDBPortOID = ".1.3.6.1.2.1.17.4.3.1.2" // dot1dTpFdbPort.<6 MAC octets> = bridge port
+	collectARPPhysOID = ".1.3.6.1.2.1.4.22.1.2"   // ipNetToMediaPhysAddress.<ifIndex>.<4 IP octets> = MAC
+)
+
+// collectUsableMAC applies the Q11 MAC filter: false for anything that is
+// not a 6-octet MAC, and for null, broadcast, multicast (I/G bit set) and
+// zero-OUI (00:00:00) addresses.
+func collectUsableMAC(mac string) bool {
+	b, ok := collectTextMAC(mac)
+	return ok && b[0]&1 == 0 && (b[0]|b[1]|b[2]) != 0
+}
+
+// collectCanonicalMAC returns a text MAC as "aa:bb:cc:dd:ee:ff", or "" when
+// it is not one.
+func collectCanonicalMAC(mac string) string {
+	b, ok := collectTextMAC(mac)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5])
+}
+
+// collectSNMPValue splits one snmpbulkwalk -On line into the OID, the value
+// type ("Hex-STRING", "STRING", "INTEGER"...; "" when there is none, as for
+// exception text) and the value.
+func collectSNMPValue(line string) (oid, typ, val string, ok bool) {
+	oid, raw, ok := strings.Cut(line, " = ")
+	if !ok {
+		return "", "", "", false
+	}
+	typ, val, found := strings.Cut(raw, ": ")
+	if !found {
+		typ, val = "", raw
+	}
+	return oid, typ, strings.TrimSpace(val), true
+}
+
+// collectPhysAddress decodes an ipNetToMediaPhysAddress value into canonical
+// MAC text. net-snmp prints the 6 octets as "Hex-STRING: 00 0C 29 6F E0 BC",
+// or as a quoted STRING when every byte is printable ("P(J3:L" is
+// 50:28:4a:33:3a:4c, with \" and \\ escaped), or with the PhysAddress
+// DISPLAY-HINT when MIBs are loaded ("STRING: 0:c:29:aa:bb:cd"). Text MACs
+// with dashes ("f8-f0-82-7a-d9-69") are accepted as before.
+func collectPhysAddress(typ, val string) (string, bool) {
+	var b [6]byte
+	switch typ {
+	case "Hex-STRING":
+		fields := strings.Fields(val)
+		if len(fields) != 6 {
+			return "", false
+		}
+		for i, f := range fields {
+			n, err := strconv.ParseUint(f, 16, 8)
+			if err != nil || len(f) != 2 {
+				return "", false
+			}
+			b[i] = byte(n)
+		}
+	case "STRING", "":
+		text := val
+		if raw, quoted := collectUnquote(val); quoted {
+			if len(raw) == 6 {
+				copy(b[:], raw)
+				break
+			}
+			text = raw
+		}
+		mac := collectCanonicalMAC(text)
+		return mac, mac != ""
+	default:
+		return "", false
+	}
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5]), true
+}
+
+// collectUnquote removes the quotes net-snmp puts around a printable STRING
+// and undoes its \" and \\ escapes. quoted is false when s is not quoted.
+func collectUnquote(s string) (raw string, quoted bool) {
+	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
+		return "", false
+	}
+	s = s[1 : len(s)-1]
+	var sb strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\\') {
+			i++
+		}
+		sb.WriteByte(s[i])
+	}
+	return sb.String(), true
+}
+
+// collectTextMAC parses a MAC written as text: six groups of one or two hex
+// digits separated by ':' or '-' (the unpadded net-snmp form included), or
+// six two-digit groups separated by spaces.
+func collectTextMAC(s string) ([6]byte, bool) {
+	var b [6]byte
+	s = strings.TrimSpace(s)
+	sep := ":"
+	switch {
+	case strings.Count(s, "-") == 5:
+		sep = "-"
+	case strings.Count(s, " ") == 5:
+		sep = " "
+	}
+	groups := strings.Split(s, sep)
+	if len(groups) != 6 {
+		return b, false
+	}
+	for i, g := range groups {
+		if len(g) == 0 || len(g) > 2 || sep == " " && len(g) != 2 {
+			return b, false
+		}
+		n, err := strconv.ParseUint(g, 16, 8)
+		if err != nil {
+			return b, false
+		}
+		b[i] = byte(n)
+	}
+	return b, true
+}
+
 // collectOIDIndex returns the index components after base in a numeric OID
 // (snmpbulkwalk -On), or ok=false when the OID is not below base or one of
 // the components is not a number.
@@ -699,7 +823,7 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 	// OID format: .1.3.6.1.2.1.17.4.3.1.2.M1.M2.M3.M4.M5.M6 = INTEGER: PortNum
 	// where M1-M6 are the 6 bytes of MAC address
 
-	lines, err := s.runSNMPWalk(ip, ".1.3.6.1.2.1.17.4.3.1.2")
+	lines, err := s.runSNMPWalk(ip, collectFDBPortOID)
 	if err != nil {
 		return nil, err
 	}
@@ -714,19 +838,13 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 
 		// Extract MAC address from OID
 		// OID: .1.3.6.1.2.1.17.4.3.1.2.76.174.163.142.66.17
-		parts := strings.Split(oid, ".")
-		if len(parts) < 17 {
+		// The index is exactly the six MAC octets.
+		octets, ok := collectOIDIndex(oid, collectFDBPortOID)
+		if !ok || len(octets) != 6 || slices.ContainsFunc(octets, func(b int) bool { return b > 255 }) {
 			continue
 		}
-
-		// Last 6 parts are MAC address bytes
-		macParts := parts[len(parts)-6:]
-		macBytes := make([]string, 6)
-		for i, p := range macParts {
-			b, _ := strconv.Atoi(p)
-			macBytes[i] = fmt.Sprintf("%02x", b)
-		}
-		macAddr := strings.Join(macBytes, ":")
+		macAddr := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
+			octets[0], octets[1], octets[2], octets[3], octets[4], octets[5])
 
 		// Parse port number from value
 		val = strings.TrimPrefix(val, "INTEGER: ")
@@ -756,7 +874,7 @@ func (s *SNMPObject) collectARPTable(ip string) ([]ARPEntry, error) {
 	// Walk ipNetToMediaPhysAddress (.1.3.6.1.2.1.4.22.1.2)
 	// OID format: .1.3.6.1.2.1.4.22.1.2.IfIndex.IP1.IP2.IP3.IP4 = Hex-STRING: MAC
 
-	lines, err := s.runSNMPWalk(ip, ".1.3.6.1.2.1.4.22.1.2")
+	lines, err := s.runSNMPWalk(ip, collectARPPhysOID)
 	if err != nil {
 		return nil, err
 	}
@@ -764,46 +882,35 @@ func (s *SNMPObject) collectARPTable(ip string) ([]ARPEntry, error) {
 	result := []ARPEntry{}
 
 	for _, line := range lines {
-		oid, val, err := parseSNMPLine(line)
-		if err != nil {
+		oid, typ, val, ok := collectSNMPValue(line)
+		if !ok {
 			continue
 		}
 
 		// Extract IP address from OID
 		// OID: .1.3.6.1.2.1.4.22.1.2.1.192.168.1.100
-		parts := strings.Split(oid, ".")
-		if len(parts) < 15 {
+		// The index is exactly the interface index and the 4 IP octets.
+		idx, ok := collectOIDIndex(oid, collectARPPhysOID)
+		if !ok || len(idx) != 5 || slices.ContainsFunc(idx[1:], func(b int) bool { return b > 255 }) {
+			continue
+		}
+		ifIndex := idx[0]
+		ipAddr := fmt.Sprintf("%d.%d.%d.%d", idx[1], idx[2], idx[3], idx[4])
+
+		// Parse the MAC: Hex-STRING, or STRING when all six bytes are
+		// printable or MIBs are loaded (F58). Incomplete entries fail here.
+		macAddr, ok := collectPhysAddress(typ, val)
+		if !ok {
 			continue
 		}
 
-		// Last 4 parts are IP address octets, part before that is interface index
-		ipParts := parts[len(parts)-4:]
-		ipAddr := strings.Join(ipParts, ".")
-
-		// Interface index is before IP
-		ifIndex, _ := strconv.Atoi(parts[len(parts)-5])
-
-		// Parse MAC address from value (Hex-STRING format)
-		// Value: "4C AE A3 8E 42 11" or similar
-		val = strings.TrimPrefix(val, "Hex-STRING: ")
-		val = strings.TrimPrefix(val, "STRING: ")
-		val = strings.Trim(val, "\"")
-
-		// Convert hex string to MAC format
-		macAddr := normalizeChassisID(val)
-
-		// Skip incomplete entries
-		if len(macAddr) < 17 {
-			continue
-		}
-		
 		// Skip invalid IPs
-		if ipAddr == "0.0.0.0" || strings.HasPrefix(ipAddr, "0.") {
+		if idx[1] == 0 {
 			continue
 		}
 
-		// Skip broadcast/null MACs
-		if macAddr == "00:00:00:00:00:00" || macAddr == "ff:ff:ff:ff:ff:ff" {
+		// Skip null, broadcast, multicast and zero-OUI MACs (Q11)
+		if !collectUsableMAC(macAddr) {
 			continue
 		}
 
