@@ -117,3 +117,64 @@ func TestOUIVendorRenames(t *testing.T) {
 		}
 	}
 }
+
+// TestCategorizeVendor: curated names have an explicit category; IEEE names
+// go through whole-word rules that leave multi-category vendors at
+// "endpoint" and never give "vm" (F6).
+func TestCategorizeVendor(t *testing.T) {
+	for _, c := range []struct{ vendor, want string }{
+		// curated names
+		{"SNR", "network"}, {"HPE", "network"}, {"H3C", "network"}, {"Eltex", "network"},
+		{"Fortinet", "network"}, {"Ubiquiti", "access_point"}, {"Hikvision", "camera"},
+		{"Huawei", "endpoint"}, {"ZTE", "endpoint"}, {"Wistron", "endpoint"},
+		{"Apple", "phone"}, {"Samsung", "phone"}, {"Epson", "printer"},
+		{"ESP (Espressif)", "iot"}, {"VMware", "vm"}, {"QEMU/KVM", "vm"}, {"Hyper-V", "vm"},
+		// IEEE organization names
+		{"VIVOTEK INC.", "camera"}, {"Vivotek, Inc.", "camera"},
+		{"Zhejiang Dahua Technology Co., Ltd.", "camera"}, {"Axis Communications AB", "camera"},
+		{"Ace Axis Limited", "endpoint"},
+		{"Ubiquiti Inc", "access_point"}, {"Cisco Meraki", "access_point"},
+		{"Aruba, a Hewlett Packard Enterprise Company", "access_point"},
+		{"Seiko Epson Corporation", "printer"}, {"Brother industries, LTD.", "printer"},
+		{"Brother, Brother & Sons ApS", "endpoint"},
+		{"KYOCERA Document Solutions Inc.", "printer"}, {"KYOCERA Corporation", "endpoint"},
+		{"GUANGDONG OPPO MOBILE TELECOMMUNICATIONS CORP.,LTD", "phone"}, {"OPPO Digital, Inc.", "endpoint"},
+		{"vivo Mobile Communication Co., Ltd.", "phone"}, {"HMD Global Oy", "phone"},
+		{"Espressif Inc.", "iot"}, {"Shenzhen Lianrui Electronics Co.,Ltd", "endpoint"},
+		{"Hewlett Packard Enterprise", "network"}, {"Hewlett Packard", "network"}, {"HP Inc.", "network"},
+		{"Cisco Systems, Inc", "network"}, {"Routerboard.com", "network"}, {"NAGTECH LLC", "network"},
+		{"Hangzhou H3C Technologies Co., Limited", "network"}, {"Dell Inc.", "network"},
+		{"Juniper Networks", "network"}, {"Juniper Systems", "endpoint"},
+		{"Italdata Ingegneria dell'Idea S.p.A.", "endpoint"},
+		{"HUAWEI TECHNOLOGIES CO.,LTD", "endpoint"}, {"Apple, Inc.", "endpoint"},
+		{"Samsung Electronics Co.,Ltd", "endpoint"}, {"Microsoft Corporation", "endpoint"},
+		{"Xiaomi Communications Co Ltd", "endpoint"},
+		{"VMware, Inc.", "endpoint"}, {"Xensource, Inc.", "endpoint"}, {"Crexendo", "endpoint"},
+		{"Proxmox Server Solutions GmbH", "endpoint"}, {"PCS Systemtechnik GmbH", "endpoint"},
+		{"", "endpoint"}, {"Unknown", "endpoint"},
+	} {
+		if got := categorizeVendor(c.vendor); got != c.want {
+			t.Errorf("categorizeVendor(%q) = %q, want %q", c.vendor, got, c.want)
+		}
+	}
+}
+
+// TestOUICuratedCategories: every curated vendor name has a category, and
+// "vm" belongs exactly to the virtual-NIC OUIs.
+func TestOUICuratedCategories(t *testing.T) {
+	valid := map[string]bool{"camera": true, "access_point": true, "printer": true, "phone": true,
+		"iot": true, "vm": true, "network": true, "endpoint": true}
+	virtual := map[string]bool{}
+	for _, p := range hypervisorMACPrefixes {
+		virtual[p] = true
+	}
+	for prefix, vendor := range extendedVendorDB {
+		cat, ok := ouiVendorCategory[vendor]
+		if !ok || !valid[cat] {
+			t.Errorf("%s %q: category %q", prefix, vendor, cat)
+		}
+		if (cat == "vm") != virtual[prefix] {
+			t.Errorf("%s %q: category %q, virtual NIC %v", prefix, vendor, cat, virtual[prefix])
+		}
+	}
+}

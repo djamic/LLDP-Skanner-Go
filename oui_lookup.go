@@ -274,6 +274,27 @@ var (
 		"24:0f:9b": "Hikvision",
 		"00:00:5e": "IANA (VRRP)",
 	}
+
+	// ouiVendorCategory is the device category of every vendor name in
+	// extendedVendorDB (F6). Vendors that make several kinds of devices are
+	// "endpoint"; "vm" is only for the virtual-NIC OUIs.
+	ouiVendorCategory = map[string]string{
+		"SNR": "network", "HPE": "network", "H3C": "network", "HP": "network",
+		"Dell": "network", "Cisco": "network", "MikroTik": "network", "Eltex": "network",
+		"TP-Link": "network", "D-Link": "network", "Fortinet": "network",
+		"Ubiquiti": "access_point", "HP Aruba": "access_point", "Aruba": "access_point",
+		"Hikvision": "camera", "Dahua": "camera",
+		"Apple": "phone", "Samsung": "phone", "Xiaomi": "phone", "OPPO": "phone", "vivo": "phone",
+		"Epson": "printer", "Canon": "printer", "Brother": "printer", "ESP (Espressif)": "iot",
+		"VMware": "vm", "Hyper-V": "vm", "VirtualBox": "vm", "QEMU/KVM": "vm", "Xen": "vm",
+		"Huawei": "endpoint", "ZTE": "endpoint", "Gigabyte": "endpoint", "BizLink": "endpoint",
+		"Intel": "endpoint", "Lengda": "endpoint", "EliteGroup": "endpoint", "Wistron": "endpoint",
+		"Realtek": "endpoint", "Compal": "endpoint", "Shiyuan": "endpoint", "Quanta": "endpoint",
+		"LCFC": "endpoint", "AzureWave": "endpoint", "ASUS": "endpoint", "Supermicro": "endpoint",
+		"Lianrui": "endpoint", "Biostar": "endpoint", "Tyan": "endpoint", "MSI": "endpoint",
+		"Inspire Tech": "endpoint", "Hon Hai": "endpoint", "Fugui": "endpoint", "Murata": "endpoint",
+		"Inventec": "endpoint", "IANA (VRRP)": "endpoint",
+	}
 )
 
 // ouiOpenHTTP downloads the IEEE database when oui.txt cannot be opened.
@@ -369,62 +390,60 @@ func lookupVendor(mac string) string {
 	return "Unknown"
 }
 
-// categorizeVendor maps vendor name to a device category
+// ouiCategoryWords are the rules categorizeVendor applies to vendor names
+// that are not curated (IEEE organization names); the first match wins. Each
+// rule is a whole word or phrase of a vendor that makes one kind of device.
+// Vendors that make several kinds (Huawei, Apple, Samsung, Microsoft, ...)
+// have no rule and stay "endpoint", and no rule gives "vm": that comes only
+// from a virtual-NIC OUI.
+var ouiCategoryWords = []struct {
+	category string
+	words    []string
+}{
+	{"camera", []string{"hikvision", "dahua", "uniview", "axis communications", "hanwha vision", "hanwha techwin", "vivotek"}},
+	{"access_point", []string{"ubiquiti", "aruba", "ruckus", "meraki"}},
+	{"printer", []string{"epson", "canon", "brother industries", "kyocera document", "lexmark", "xerox", "ricoh", "konica"}},
+	{"phone", []string{"oppo mobile", "vivo mobile", "oneplus", "realme", "hmd global"}},
+	{"iot", []string{"espressif", "tuya"}},
+	{"network", []string{"cisco", "juniper networks", "routerboard", "mikrotik", "d-link", "tp-link", "nagtech",
+		"h3c", "hewlett packard", "hp inc", "procurve", "dell", "fortinet", "eltex"}},
+}
+
+// categorizeVendor maps a vendor name to a device category: the curated
+// category for curated names, else the first ouiCategoryWords rule that
+// matches, else "endpoint".
 func categorizeVendor(vendor string) string {
+	if category, ok := ouiVendorCategory[vendor]; ok {
+		return category
+	}
 	v := strings.ToLower(vendor)
-
-	// Cameras
-	if strings.Contains(v, "hikvision") || strings.Contains(v, "dahua") ||
-		strings.Contains(v, "videopark") || strings.Contains(v, "uniview") ||
-		strings.Contains(v, "axis") || strings.Contains(v, "hanwha") {
-		return "camera"
+	for _, rule := range ouiCategoryWords {
+		for _, w := range rule.words {
+			if ouiHasWord(v, w) {
+				return rule.category
+			}
+		}
 	}
-
-	// Access Points
-	if strings.Contains(v, "ubiquiti") || strings.Contains(v, "aruba") ||
-		strings.Contains(v, "ruckus") || strings.Contains(v, "meraki") ||
-		strings.Contains(v, "unifi") {
-		return "access_point"
-	}
-
-	// Printers
-	if strings.Contains(v, "epson") || strings.Contains(v, "canon") ||
-		strings.Contains(v, "brother") || strings.Contains(v, "kyocera") ||
-		strings.Contains(v, "lexmark") || strings.Contains(v, "xerox") ||
-		strings.Contains(v, "ricoh") || strings.Contains(v, "konica") {
-		return "printer"
-	}
-
-	// Phones/Mobile
-	if strings.Contains(v, "samsung") || strings.Contains(v, "xiaomi") ||
-		strings.Contains(v, "apple") || strings.Contains(v, "oppo") ||
-		strings.Contains(v, "vivo") || strings.Contains(v, "huawei") ||
-		strings.Contains(v, "nokia") || strings.Contains(v, "hmd global") ||
-		strings.Contains(v, "oneplus") || strings.Contains(v, "realme") {
-		return "phone"
-	}
-
-	// IoT
-	if strings.Contains(v, "esp") || strings.Contains(v, "espressif") ||
-		strings.Contains(v, "tuya") || strings.Contains(v, "shenzhen") ||
-		strings.Contains(v, "giga-tms") {
-		return "iot"
-	}
-
-	// VMs
-	if strings.Contains(v, "vmware") || strings.Contains(v, "hyper-v") ||
-		strings.Contains(v, "virtualbox") || strings.Contains(v, "qemu") ||
-		strings.Contains(v, "kvm") || strings.Contains(v, "xen") {
-		return "vm"
-	}
-
-	// Switches/Networking (not endpoint)
-	if strings.Contains(v, "snr") || strings.Contains(v, "cisco") ||
-		strings.Contains(v, "mikrotik") || strings.Contains(v, "hp") ||
-		strings.Contains(v, "hpe") || strings.Contains(v, "dell") ||
-		strings.Contains(v, "d-link") || strings.Contains(v, "tp-link") {
-		return "network"
-	}
-
 	return "endpoint"
+}
+
+// ouiHasWord reports whether s contains w as a whole word: the bytes around
+// the match are not letters, digits or apostrophes ("dell'idea" is no "dell").
+func ouiHasWord(s, w string) bool {
+	for i := 0; ; {
+		j := strings.Index(s[i:], w)
+		if j < 0 {
+			return false
+		}
+		j += i
+		end := j + len(w)
+		if (j == 0 || !ouiWordByte(s[j-1])) && (end == len(s) || !ouiWordByte(s[end])) {
+			return true
+		}
+		i = j + 1
+	}
+}
+
+func ouiWordByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '\'' || b >= 0x80
 }
