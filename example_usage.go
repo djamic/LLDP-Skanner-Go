@@ -581,9 +581,9 @@ func normalizeID(id string, subtype int) string {
 
 	switch subtype {
 	case 4: // MAC Address (6 bytes)
-		// Input could be "4C AE A3 8E 42 11" or raw bytes
-		if strings.Contains(id, " ") {
-			return hexStringToMAC(id)
+		// Input could be "4C AE A3 8E 42 11", any other MAC spelling or raw bytes
+		if mac := graphCanonicalMAC(id); mac != "" {
+			return mac
 		}
 		if len(id) == 6 {
 			// Raw 6 bytes - convert to hex
@@ -592,25 +592,24 @@ func normalizeID(id string, subtype int) string {
 		// Already formatted — normalize
 		return normalizeMAC(id)
 
-	case 5: // Network Address (IP)
-		// Try to parse as IP
+	case 5: // Network Address: IANA family byte + address ("01 AC 10 01 0F")
+		// Raw address bytes
 		if len(id) == 4 { // IPv4
 			return net.IP([]byte(id)).String()
 		}
 		if len(id) == 16 { // IPv6
 			return net.IP([]byte(id)).String()
 		}
-		// Fallback to hex if weird length
-		return hexStringToMAC(id)
+		// Hex text; "" when it is no complete IPv4/IPv6 address
+		return graphNetworkAddress(id)
 
 	case 7: // Locally Assigned (string identifier)
-		// Sometimes devices send ASCII-encoded MAC like "f4-b5-20-19-12-5e"
-		// Normalize if it looks like a MAC address
+		// Sometimes devices send a MAC like "f4-b5-20-19-12-5e" or
+		// "FA EF EF EF AA 4F": normalize anything that spells a MAC
+		if mac := graphCanonicalMAC(id); mac != "" {
+			return mac
+		}
 		if isPrintableString(id) {
-			// Check if it looks like a MAC (contains dashes or colons with hex chars)
-			if (strings.Contains(id, "-") || strings.Contains(id, ":")) && len(id) >= 17 {
-				return normalizeMAC(id)
-			}
 			return id
 		}
 		// If not printable, convert bytes to readable string
@@ -748,31 +747,100 @@ func graphDeviceNodeID(d *DeviceData) string {
 	return d.IP
 }
 
+// graphNetworkAddress decodes an LLDP network-address id (chassis subtype 5,
+// port subtype 4): an IANA address family byte and the address, printed as
+// hex ("01 AC 10 01 0F" is IPv4 172.16.1.15). Anything else gives "".
+func graphNetworkAddress(id string) string {
+	nibble := func(c byte) byte {
+		if c <= '9' {
+			return c - '0'
+		}
+		return c - 'a' + 10
+	}
+	var b []byte
+	for _, f := range strings.FieldsFunc(strings.ToLower(id), func(r rune) bool { return r == ' ' || r == ':' }) {
+		if len(f) != 2 || !graphIsHexDigit(f[0]) || !graphIsHexDigit(f[1]) {
+			return ""
+		}
+		b = append(b, nibble(f[0])<<4|nibble(f[1]))
+	}
+	switch {
+	case len(b) == 5 && b[0] == 1:
+		return net.IP(b[1:]).String()
+	case len(b) == 17 && b[0] == 2:
+		return net.IP(b[1:]).String()
+	}
+	return ""
+}
+
+// graphNormalizePortID normalizes an LLDP port id with the port subtype
+// table (1 interfaceAlias, 2 portComponent, 3 macAddress, 4 networkAddress,
+// 5 interfaceName, 6 agentCircuitId, 7 local), not the chassis one: only
+// a MAC port id (or a MAC-looking local one) gives a MAC, names stay names.
+func graphNormalizePortID(id string, subtype int) string {
+	switch subtype {
+	case 3:
+		return normalizeID(id, 4)
+	case 4:
+		return normalizeID(id, 5)
+	case 7:
+		return normalizeID(id, 7)
+	case 1, 2, 5, 6:
+		return cleanSNMPValue(id)
+	default:
+		return normalizeID(id, 0)
+	}
+}
+
+// graphUsableMAC returns id as a canonical MAC when it is one that may be a
+// node id (isInvalidID rejects null, broadcast and multicast MACs), else "".
+func graphUsableMAC(id string) string {
+	if mac := graphCanonicalMAC(id); mac != "" && !isInvalidID(mac) {
+		return mac
+	}
+	return ""
+}
+
+// graphUsableTargetID reports whether an LLDP target may be a node id: a MAC
+// that isInvalidID accepts, or a printable name or IP of 5 or more characters
+// that is not all zeros. Names get no MAC bit tests ('B-318/1', 'E109-9' and
+// '173.16.1.15' are kept).
+func graphUsableTargetID(id string) bool {
+	if graphCanonicalMAC(id) != "" {
+		return graphUsableMAC(id) != ""
+	}
+	return isPrintableString(id) && len(id) >= 5 && strings.Trim(id, "0.:- ") != ""
+}
+
 // resolveLLDPTarget picks the graph node id and display name for one LLDP
-// neighbor: the chassis id when it is a MAC; otherwise the port id when that
-// is a MAC (the chassis id or RemSysName becomes the display name); otherwise
-// the chassis id itself (could be a hostname).
+// neighbor: the chassis id when it is a usable MAC (a locally assigned one
+// only when the port id is no MAC); otherwise the port id when that is a MAC
+// (RemSysName, or a chassis id that is no MAC, becomes the display name);
+// otherwise the chassis id itself (a hostname or IP; "" if it is an unusable
+// MAC). A null or MAC-looking chassis id is never the display name.
 func resolveLLDPTarget(neighbor LLDPNeighbor) (targetID, displayName string) {
 	chassisID := normalizeID(neighbor.RemChassisId, neighbor.RemChassisIdSubtype)
-	portID := normalizeID(neighbor.RemPortId, neighbor.RemPortIdSubtype)
+	portID := graphNormalizePortID(neighbor.RemPortId, neighbor.RemPortIdSubtype)
+	chassisMAC := graphUsableMAC(chassisID)
+	portMAC := graphUsableMAC(portID)
+	chassisIsName := graphCanonicalMAC(chassisID) == ""
 
-	// Check if ChassisID looks like a MAC (contains colons and correct length)
-	chassisIsMAC := strings.Count(chassisID, ":") == 5 && len(chassisID) == 17
-	portIsMAC := strings.Count(portID, ":") == 5 && len(portID) == 17
-
-	if chassisIsMAC {
+	if chassisMAC != "" && (neighbor.RemChassisIdSubtype != 7 || portMAC == "") {
 		// ChassisID is MAC - use it
-		return chassisID, neighbor.RemSysName
+		return chassisMAC, neighbor.RemSysName
 	}
-	if portIsMAC {
+	if portMAC != "" {
 		// ChassisID is hostname, but PortID is MAC - use PortID as node ID
-		displayName = chassisID // Use hostname from ChassisID for display
-		if neighbor.RemSysName != "" && neighbor.RemSysName != chassisID {
-			displayName = neighbor.RemSysName
+		displayName = neighbor.RemSysName
+		if displayName == "" && chassisIsName {
+			displayName = chassisID // Use hostname from ChassisID for display
 		}
-		return portID, displayName
+		return portMAC, displayName
 	}
-	// No MAC found - use ChassisID as fallback (could be hostname)
+	if !chassisIsName {
+		return "", neighbor.RemSysName // a null or multicast chassis MAC
+	}
+	// No MAC found - use ChassisID as fallback (could be hostname or IP)
 	return chassisID, neighbor.RemSysName
 }
 
@@ -789,7 +857,11 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		graphAddSwitchNode(graph, data)
 	}
 
-	// Add LLDP neighbors as edges
+	// Add LLDP neighbors as edges. knownMACs collects their node ids (the
+	// resolved targets) and lldpPorts the ports they are on; a neighbor that
+	// is rejected counts for neither.
+	knownMACs := make(map[string]bool)
+	lldpPorts := make(map[int]bool)
 	logDebug("  Found %d LLDP neighbors", len(data.Neighbors))
 	for _, neighbor := range data.Neighbors {
 		// Determine Target ID - prefer MAC address for uniqueness
@@ -800,11 +872,21 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 			continue
 		}
 
-		// Skip invalid/garbage target IDs
-		if isInvalidID(targetID) {
+		// Skip invalid/garbage target IDs (MAC rules only for MAC ids)
+		if !graphUsableTargetID(targetID) {
 			logDebug("    -> SKIPPED: Invalid TargetID '%s' (matches known garbage patterns)", targetID)
 			continue
 		}
+
+		// Resolve local port name
+		localPort := getLocalPortName(data, neighbor.LocalPortNum)
+		// Skip NULL0 interface — virtual discard port, not a real connection
+		// (before the node is made, so no orphan node is left)
+		if isNullInterface(localPort) {
+			continue
+		}
+		knownMACs[targetID] = true
+		lldpPorts[neighbor.LocalPortNum] = true
 
 		logDebug("    -> Neighbor: %s (ID: %s) via LocalPort: %d", displayName, targetID, neighbor.LocalPortNum)
 
@@ -812,8 +894,11 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		if !graph.Nodes[targetID] {
 			graph.AddNode(targetID)
 
-			// Get vendor from MAC if targetID looks like a MAC
-			vendor := getMACVendor(targetID)
+			// Get vendor from MAC if targetID is a MAC
+			vendor := ""
+			if graphCanonicalMAC(targetID) != "" {
+				vendor = getMACVendor(targetID)
+			}
 
 			// Build info from LLDP neighbor data with [LLDP-EP] marker
 			var info string
@@ -846,12 +931,6 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 			logDebug("       [NEW NODE] Created LLDP Endpoint node: %s", targetID)
 		}
 
-		// Resolve local port name
-		localPort := getLocalPortName(data, neighbor.LocalPortNum)
-		// Skip NULL0 interface — virtual discard port, not a real connection
-		if isNullInterface(localPort) {
-			continue
-		}
 		remotePort := neighbor.RemPortDesc
 
 		// Fallback logic for Remote Port
@@ -919,13 +998,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 	}
 
 	// Process MAC Address Table - create endpoint nodes
-	// Track which MACs are already known (from LLDP)
-	knownMACs := make(map[string]bool)
-	for _, neighbor := range data.Neighbors {
-		// Normalize and add LLDP neighbor MACs
-		mac := normalizeMAC(neighbor.RemChassisId)
-		knownMACs[mac] = true
-	}
+	// (MACs already known via LLDP are in knownMACs)
 
 	// Build MAC to IP lookup from local ARP table (normalize keys)
 	macToIP := make(map[string]string)
@@ -946,7 +1019,11 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 	portMACs := make(map[int][]string)
 
 	for _, macEntry := range data.MACTable {
-		normMAC := normalizeMAC(macEntry.MACAddress)
+		// The canonical MAC is both the node id and the key of every check
+		normMAC := graphCanonicalMAC(macEntry.MACAddress)
+		if normMAC == "" {
+			continue // not a MAC
+		}
 
 		// Skip NULL0 interface — virtual discard port, not a real connection
 		if isNullInterface(getLocalPortName(data, macEntry.PortNumber)) {
@@ -969,11 +1046,11 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		}
 
 		// Skip special/invalid MAC addresses (use robust check)
-		if isInvalidID(macEntry.MACAddress) {
+		if isInvalidID(normMAC) {
 			continue
 		}
 
-		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], macEntry.MACAddress)
+		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], normMAC)
 	}
 
 	// Create endpoint nodes for MAC-discovered devices.
@@ -981,14 +1058,8 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 	// the node is created (first creator wins) by the same port on every build.
 	for _, portNum := range slices.Sorted(maps.Keys(portMACs)) {
 		macs := portMACs[portNum]
-		// Skip if this port already has LLDP neighbors
-		hasLLDPNeighbor := false
-		for _, neighbor := range data.Neighbors {
-			if neighbor.LocalPortNum == portNum {
-				hasLLDPNeighbor = true
-				break
-			}
-		}
+		// Skip if this port already has LLDP neighbors (accepted ones)
+		hasLLDPNeighbor := lldpPorts[portNum]
 
 		portName := getLocalPortName(data, portNum)
 		// Skip NULL0 interface

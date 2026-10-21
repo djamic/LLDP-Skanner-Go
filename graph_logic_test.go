@@ -176,3 +176,168 @@ func TestGraphSwitchIdentityBuild(t *testing.T) {
 		t.Errorf("buildSwitchChassisMACs = %v", switchMACs)
 	}
 }
+
+// TestGraphLLDPIDNormalization covers the chassis subtype table (F40, F41)
+// and the separate port subtype table (F42).
+func TestGraphLLDPIDNormalization(t *testing.T) {
+	chassis := []struct {
+		id      string
+		subtype int
+		want    string
+	}{
+		{"01 AC 10 01 0F", 5, "172.16.1.15"},
+		{"01 AC 10", 5, ""},
+		{"01 AC 10 01", 5, ""},
+		{"02 20 01 0D B8 00 00 00 00 00 00 00 00 00 00 00 01", 5, "2001:db8::1"},
+		{"FA EF EF EF AA 4F", 7, "fa:ef:ef:ef:aa:4f"},
+		{"00 00 00 00 00 00", 7, "00:00:00:00:00:00"},
+		{"\"f4-b5-20-19-12-5e\"", 7, "f4:b5:20:19:12:5e"},
+		{"\"DESKTOP-V380CHD\"", 7, "DESKTOP-V380CHD"},
+		{"\"WORKSTATION-ROOM-301\"", 7, "WORKSTATION-ROOM-301"},
+		{"\"5894.8000.f7a3\"", 4, "58:94:80:00:f7:a3"},
+		{"4C AE A3 8E 42 11", 4, "4c:ae:a3:8e:42:11"},
+		{"\"pM{?WA\"", 4, "70:4d:7b:3f:57:41"},
+	}
+	for _, c := range chassis {
+		if got := normalizeID(c.id, c.subtype); got != c.want {
+			t.Errorf("normalizeID(%q, %d) = %q, want %q", c.id, c.subtype, got, c.want)
+		}
+	}
+	ports := []struct {
+		id      string
+		subtype int
+		want    string
+	}{
+		{"\"eth0\"", 5, "eth0"},
+		{"\"GigabitEthernet1/0/47\"", 5, "GigabitEthernet1/0/47"},
+		{"\"uplink\"", 1, "uplink"},
+		{"\"LAN\"", 1, "LAN"},
+		{"10 7C 61 C0 9E AA", 3, "10:7c:61:c0:9e:aa"},
+		{"\"c8-41-8a-20-51-72\"", 3, "c8:41:8a:20:51:72"},
+		{"\"pM{?WA\"", 3, "70:4d:7b:3f:57:41"},
+		{"01 AC 10 01 0F", 4, "172.16.1.15"},
+		{"\"28\"", 7, "28"},
+		{"\"f4-b5-20-19-12-5e\"", 7, "f4:b5:20:19:12:5e"},
+		{"98 EE CB E0 89 74", 0, "98:ee:cb:e0:89:74"},
+	}
+	for _, c := range ports {
+		if got := graphNormalizePortID(c.id, c.subtype); got != c.want {
+			t.Errorf("graphNormalizePortID(%q, %d) = %q, want %q", c.id, c.subtype, got, c.want)
+		}
+	}
+}
+
+// TestGraphResolveLLDPTarget covers Q13 target selection: a null or locally
+// assigned chassis MAC is neither the node id (when the port id is a real
+// MAC) nor the display name (F43), a network-address chassis is an IP (F40),
+// port names never become fake MACs (F42) and hostname targets are kept.
+func TestGraphResolveLLDPTarget(t *testing.T) {
+	cases := []struct {
+		name          string
+		n             LLDPNeighbor
+		target, shown string
+		usable        bool
+	}{
+		{"null chassis, port MAC", LLDPNeighbor{RemChassisIdSubtype: 7, RemChassisId: "00 00 00 00 00 00", RemPortIdSubtype: 3, RemPortId: "\"c8-41-8a-20-51-72\""},
+			"c8:41:8a:20:51:72", "", true},
+		{"null chassis, port MAC, sysName", LLDPNeighbor{RemChassisIdSubtype: 7, RemChassisId: "00 00 00 00 00 00", RemPortIdSubtype: 3, RemPortId: "\"c8-41-8a-20-51-72\"", RemSysName: "cam-7"},
+			"c8:41:8a:20:51:72", "cam-7", true},
+		{"local MAC-like chassis, port MAC", LLDPNeighbor{RemChassisIdSubtype: 7, RemChassisId: "FA EF EF EF AA 4F", RemPortIdSubtype: 3, RemPortId: "\"40-c2-ba-4d-fc-3d\""},
+			"40:c2:ba:4d:fc:3d", "", true},
+		{"local MAC-like chassis, port name", LLDPNeighbor{RemChassisIdSubtype: 7, RemChassisId: "FA EF EF EF AA 4F", RemPortIdSubtype: 5, RemPortId: "\"eth0\""},
+			"fa:ef:ef:ef:aa:4f", "", true},
+		{"network address chassis, port name", LLDPNeighbor{RemChassisIdSubtype: 5, RemChassisId: "01 AC 10 01 0F", RemPortIdSubtype: 5, RemPortId: "\"eth0\"", RemSysName: "GXP1610"},
+			"172.16.1.15", "GXP1610", true},
+		{"network address chassis, port MAC", LLDPNeighbor{RemChassisIdSubtype: 5, RemChassisId: "01 AC 10 01 0F", RemPortIdSubtype: 3, RemPortId: "EC 74 D7 64 CB AC"},
+			"ec:74:d7:64:cb:ac", "172.16.1.15", true},
+		{"truncated network address", LLDPNeighbor{RemChassisIdSubtype: 5, RemChassisId: "01 AC 10", RemPortIdSubtype: 3, RemPortId: "EC 74 D7 64 CB B1"},
+			"ec:74:d7:64:cb:b1", "", true},
+		{"hostname chassis, local port", LLDPNeighbor{RemChassisIdSubtype: 7, RemChassisId: "B-318/1", RemPortIdSubtype: 7, RemPortId: "\"28\"", RemSysName: "B-318/1"},
+			"B-318/1", "B-318/1", true},
+		{"hostname chassis, 6-char alias port", LLDPNeighbor{RemChassisIdSubtype: 7, RemChassisId: "\"host-x\"", RemPortIdSubtype: 1, RemPortId: "\"uplink\""},
+			"host-x", "", true},
+		{"MAC chassis, interface name port", LLDPNeighbor{RemChassisIdSubtype: 4, RemChassisId: "4C AE A3 09 00 03", RemPortIdSubtype: 5, RemPortId: "\"GigabitEthernet1/0/48\"", RemSysName: "sw-b"},
+			"4c:ae:a3:09:00:03", "sw-b", true},
+		{"hostname chassis, port MAC", LLDPNeighbor{RemChassisIdSubtype: 7, RemChassisId: "\"DESKTOP-V380CHD\"", RemPortIdSubtype: 3, RemPortId: "10 7C 61 C0 9E AA"},
+			"10:7c:61:c0:9e:aa", "DESKTOP-V380CHD", true},
+		{"null chassis, local port", LLDPNeighbor{RemChassisIdSubtype: 7, RemChassisId: "00 00 00 00 00 00", RemPortIdSubtype: 7, RemPortId: "\"1\""},
+			"", "", false},
+		{"empty", LLDPNeighbor{}, "", "", false},
+	}
+	for _, c := range cases {
+		target, shown := resolveLLDPTarget(c.n)
+		if target != c.target || shown != c.shown {
+			t.Errorf("%s: resolveLLDPTarget = (%q, %q), want (%q, %q)", c.name, target, shown, c.target, c.shown)
+		}
+		if got := graphUsableTargetID(target); got != c.usable {
+			t.Errorf("%s: graphUsableTargetID(%q) = %v, want %v", c.name, target, got, c.usable)
+		}
+	}
+	for id, want := range map[string]bool{
+		"E109-9": true, "173.16.1.15": true, "172.16.1.15": true, "F-3(2)": true, "4caea32784cb": true,
+		"0.0.0.0": false, "0:0:0:0": false, "::": false, "": false, "SW1": false,
+		"00:00:00:00:00:00": false, "01:00:5e:00:00:fb": false, "ff:ff:ff:ff:ff:ff": false,
+	} {
+		if got := graphUsableTargetID(id); got != want {
+			t.Errorf("graphUsableTargetID(%q) = %v, want %v", id, got, want)
+		}
+	}
+}
+
+// TestGraphLLDPBuild covers the LLDP part of buildGraphEdges: no orphan node
+// for a neighbor on a NULL or "Port 0" port (F44), a port whose only
+// neighbor was rejected keeps its FDB endpoints (F48), an LLDP-known MAC is
+// matched by its resolved target (F46), FDB node ids are canonical (F47),
+// and hostname and network-address targets get nodes (Q13).
+func TestGraphLLDPBuild(t *testing.T) {
+	resetState(t)
+	sw := &DeviceData{
+		IP: "10.9.6.1", SysName: "sw", ChassisID: "4c:ae:a3:06:01:00",
+		Interfaces: gigabitPorts(12, map[int]string{9: "NULL0"}),
+		Neighbors: []LLDPNeighbor{
+			{LocalPortNum: 0, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: "AA BB CC 06 00 01", RemPortIdSubtype: 3, RemPortId: "AA BB CC 06 00 01"},
+			{LocalPortNum: 9, RemIndex: 2, RemChassisIdSubtype: 4, RemChassisId: "AA BB CC 06 00 02", RemPortIdSubtype: 3, RemPortId: "AA BB CC 06 00 02"},
+			{LocalPortNum: 7, RemIndex: 3, RemChassisIdSubtype: 7, RemChassisId: "00 00 00 00 00 00", RemPortIdSubtype: 7, RemPortId: "\"1\""},
+			{LocalPortNum: 2, RemIndex: 4, RemChassisIdSubtype: 7, RemChassisId: "\"PC-2\"", RemPortIdSubtype: 3, RemPortId: "00 1B 21 06 02 01"},
+			{LocalPortNum: 3, RemIndex: 5, RemChassisIdSubtype: 7, RemChassisId: "B-318/1", RemPortIdSubtype: 7, RemPortId: "\"28\"", RemSysName: "B-318/1"},
+			{LocalPortNum: 4, RemIndex: 6, RemChassisIdSubtype: 5, RemChassisId: "01 AC 10 01 0F", RemPortIdSubtype: 5, RemPortId: "\"eth0\"", RemSysName: "phone-4"},
+		},
+		MACTable: append(append(append(
+			macEntries(7, "00:1b:21:06:07:01"),
+			macEntries(5, "00:1b:21:06:02:01", "00:1b:21:06:05:02")...),
+			macEntries(6, "00-50-56-AA-BB-CC")...),
+			macEntries(8, "00:1b:21:06:08:01")...),
+	}
+	g := buildGraphFromSnapshot(map[string]*DeviceData{sw.IP: sw})
+	for _, id := range []string{"aa:bb:cc:06:00:01", "aa:bb:cc:06:00:02", "00-50-56-AA-BB-CC", "00:00:00:00:00:00"} {
+		if g.Nodes[id] {
+			t.Errorf("unexpected node %q (%q)", id, g.SwitchInfo[id])
+		}
+	}
+	src := "4c:ae:a3:06:01:00"
+	checks := []struct{ id, label string }{
+		{"00:1b:21:06:07:01", "GE1/0/7|"},    // F48: the rejected neighbor does not hide it
+		{"00:1b:21:06:02:01", "GE1/0/2 1G|001B21060201"}, // LLDP edge; not a hub member on port 5 (F46)
+		{"00:1b:21:06:05:02", "GE1/0/5|"},    // port 5 is left with one MAC: direct endpoint
+		{"00:50:56:aa:bb:cc", "GE1/0/6|"},    // F47: canonical node id
+		{"B-318/1", "GE1/0/3 1G|28"},
+		{"172.16.1.15", "GE1/0/4 1G|eth0"},
+	}
+	for _, c := range checks {
+		if !g.Nodes[c.id] {
+			t.Errorf("node %q missing", c.id)
+			continue
+		}
+		if got := g.GetEdgeLabel(src, c.id); got != c.label {
+			t.Errorf("edge %s -> %s = %q, want %q", src, c.id, got, c.label)
+		}
+	}
+	for id := range g.Nodes {
+		if strings.HasPrefix(id, "hub-") {
+			t.Errorf("unexpected hub %s", id)
+		}
+	}
+	if got := g.SwitchInfo["172.16.1.15"]; got != "[LLDP-EP]\nphone-4" {
+		t.Errorf("network-address neighbor label = %q", got)
+	}
+}

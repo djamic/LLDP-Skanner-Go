@@ -264,9 +264,10 @@ type lldpTarget struct {
 }
 
 // TestGoldenLLDPTargets pins, for every LLDP neighbor in the fixture (in
-// stored order), the normalized ids, the node id and display name chosen by
-// resolveLLDPTarget, whether isInvalidID drops it, whether the local port is
-// a NULL interface, and the knownMACs key (normalizeMAC of the raw chassis).
+// stored order), the normalized ids (chassis and port subtype tables), the
+// node id and display name chosen by resolveLLDPTarget, whether
+// graphUsableTargetID drops it, whether the local port is a NULL interface,
+// and the knownMACs key (the target of an accepted neighbor).
 func TestGoldenLLDPTargets(t *testing.T) {
 	resetState(t)
 	devices := fixtureDevices(t)
@@ -275,6 +276,10 @@ func TestGoldenLLDPTargets(t *testing.T) {
 		for _, n := range d.Neighbors {
 			target, display := resolveLLDPTarget(n)
 			portName := getLocalPortName(d, n.LocalPortNum)
+			known := ""
+			if graphUsableTargetID(target) && !isNullInterface(portName) {
+				known = target
+			}
 			rows = append(rows, lldpTarget{
 				Device:         d.IP,
 				LocalPort:      n.LocalPortNum,
@@ -287,11 +292,11 @@ func TestGoldenLLDPTargets(t *testing.T) {
 				SysName:        n.RemSysName,
 				MgmtIP:         n.RemMgmtIP,
 				NormChassis:    normalizeID(n.RemChassisId, n.RemChassisIdSubtype),
-				NormPort:       normalizeID(n.RemPortId, n.RemPortIdSubtype),
+				NormPort:       graphNormalizePortID(n.RemPortId, n.RemPortIdSubtype),
 				Target:         target,
 				Display:        display,
-				Invalid:        isInvalidID(target),
-				KnownMAC:       normalizeMAC(n.RemChassisId),
+				Invalid:        !graphUsableTargetID(target),
+				KnownMAC:       known,
 			})
 		}
 	}
