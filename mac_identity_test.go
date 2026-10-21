@@ -1,0 +1,119 @@
+package main
+
+import (
+	"bufio"
+	"os"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// ouiTestIEEENames reads the organization name of every record of the shipped
+// oui.txt, keyed "aa:bb:cc". It parses the file itself, so these tests do not
+// depend on the loader they check.
+func ouiTestIEEENames(t *testing.T) map[string]string {
+	t.Helper()
+	f, err := os.Open("oui.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	re := regexp.MustCompile(`^([0-9A-Fa-f]{2})-([0-9A-Fa-f]{2})-([0-9A-Fa-f]{2})\s+\(hex\)\s*(.*)$`)
+	names := map[string]string{}
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		if m := re.FindStringSubmatch(sc.Text()); m != nil {
+			names[strings.ToLower(m[1]+":"+m[2]+":"+m[3])] = strings.TrimSpace(m[4])
+		}
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return names
+}
+
+// ouiTestSameCompany lists, for every curated vendor name, the lowercase
+// fragments of an IEEE organization name that mean "the same company".
+var ouiTestSameCompany = map[string][]string{
+	"SNR": {"nagtech"}, "HPE": {"hewlett"}, "H3C": {"h3c"}, "HP": {"hewlett", "hp inc"},
+	"HP Aruba": {"hewlett", "aruba"}, "Aruba": {"hewlett", "aruba"}, "Ubiquiti": {"ubiquiti"},
+	"Cisco": {"cisco"}, "Dell": {"dell"}, "MikroTik": {"routerboard", "mikrotik"},
+	"Huawei": {"huawei"}, "ZTE": {"zte"}, "TP-Link": {"tp-link"}, "D-Link": {"d-link"},
+	"Eltex": {"eltex"}, "BizLink": {"bizlink"}, "Fortinet": {"fortinet"},
+	"VMware": {"vmware"}, "Hyper-V": {"microsoft"}, "VirtualBox": {"pcs systemtechnik", "oracle"},
+	"Xen": {"xensource"}, "Proxmox": {"proxmox"}, "QEMU/KVM": nil,
+	"Dahua": {"dahua"}, "Hikvision": {"hikvision"}, "Lengda": {"lengda"},
+	"Realtek": {"realtek"}, "EliteGroup": {"elitegroup"}, "Gigabyte": {"giga-byte"},
+	"Intel": {"intel"}, "ASUS": {"asustek"}, "Biostar": {"biostar"}, "Supermicro": {"super micro"},
+	"Tyan": {"tyan"}, "MSI": {"micro-star"}, "Wistron": {"wistron"}, "Compal": {"compal"},
+	"Shiyuan": {"shiyuan"}, "Quanta": {"quanta"}, "LCFC": {"lcfc"}, "AzureWave": {"azurewave"},
+	"Lianrui": {"lianrui"}, "Inventec": {"inventec"}, "Hon Hai": {"hon hai"}, "Fugui": {"fugui"},
+	"Inspire Tech": {"inspire tech"}, "Murata": {"murata"},
+	"Apple": {"apple"}, "Samsung": {"samsung"}, "Xiaomi": {"xiaomi"}, "OPPO": {"oppo"}, "vivo": {"vivo"},
+	"Epson": {"epson"}, "Canon": {"canon"}, "Brother": {"brother"},
+	"ESP (Espressif)": {"espressif"}, "IANA (VRRP)": {"iana"},
+}
+
+// ouiTestUnlisted are curated OUIs that oui.txt does not list at all. IEEE
+// does not contradict them, so they keep their curated name.
+var ouiTestUnlisted = map[string]bool{"00:cf:e0": true, "88:44:36": true, "5c:69:60": true}
+
+// ouiTestNamelessIEEE are curated OUIs whose IEEE record has an empty name.
+var ouiTestNamelessIEEE = map[string]bool{"52:54:00": true}
+
+// TestOUICuratedVendorsAgreeWithIEEE is the evidence for the curated vendor
+// names (Q2, Q3): every name must be the company IEEE registered the OUI to.
+// No placeholder names, no "Private" registrations.
+func TestOUICuratedVendorsAgreeWithIEEE(t *testing.T) {
+	ieee := ouiTestIEEENames(t)
+	if len(ieee) < 39000 {
+		t.Fatalf("oui.txt has %d records, want about 39,000", len(ieee))
+	}
+	for prefix, vendor := range extendedVendorDB {
+		org, listed := ieee[prefix]
+		words, known := ouiTestSameCompany[vendor]
+		switch {
+		case !known:
+			t.Errorf("%s %q: curated name without an IEEE alias in ouiTestSameCompany", prefix, vendor)
+		case !listed:
+			if !ouiTestUnlisted[prefix] {
+				t.Errorf("%s %q: not in oui.txt", prefix, vendor)
+			}
+		case org == "":
+			if !ouiTestNamelessIEEE[prefix] {
+				t.Errorf("%s %q: oui.txt has no name for it", prefix, vendor)
+			}
+		case !ouiTestContainsAny(strings.ToLower(org), words):
+			t.Errorf("%s: curated %q, but IEEE registers it to %q", prefix, vendor, org)
+		}
+	}
+}
+
+func ouiTestContainsAny(s string, words []string) bool {
+	for _, w := range words {
+		if strings.Contains(s, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestOUIVendorRenames pins the owner decisions on vendor text (Q2, Q3).
+func TestOUIVendorRenames(t *testing.T) {
+	for _, c := range []struct{ mac, want string }{
+		{"4c:ae:a3:27:84:cb", "HPE"}, // Q2: HPE Comware switches, was "SNR"
+		{"00:0f:e2:11:22:33", "H3C"}, // Q2: was "SNR"
+		{"f8:f0:82:7a:d9:69", "SNR"}, // NAGTECH builds the SNR switches
+		{"78:45:58:11:22:33", "Ubiquiti"},
+		{"bc:9b:5e:11:22:33", "Hikvision"},
+		{"98:ee:cb:11:22:33", "Wistron"},
+		{"00:e2:69:53:ec:10", "Unknown"}, // placeholder "Unknown (OUI 00:e2:69)" dropped
+		{"64:6e:ea:11:22:33", "Unknown"}, // placeholder "Unknown (OUI 64:6e:ea)" dropped
+		{"48:f3:17:07:58:7f", "Unknown"}, // IEEE "Private": "Shenzhen Reecam" dropped
+		{"52:54:00:12:34:56", "QEMU/KVM"},
+	} {
+		if got := lookupVendor(c.mac); got != c.want {
+			t.Errorf("lookupVendor(%q) = %q, want %q", c.mac, got, c.want)
+		}
+	}
+}

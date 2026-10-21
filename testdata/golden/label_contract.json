@@ -1,13 +1,13 @@
 {
   "groups": {
-    "access_point": {"graph_nodes": 32, "index_html_data_group": true, "app_js_literal": true},
+    "access_point": {"graph_nodes": 82, "index_html_data_group": true, "app_js_literal": true},
     "bmc": {"graph_nodes": 1, "index_html_data_group": true, "app_js_literal": true},
-    "camera": {"graph_nodes": 43, "index_html_data_group": true, "app_js_literal": true},
-    "endpoint": {"graph_nodes": 607, "index_html_data_group": true, "app_js_literal": true},
+    "camera": {"graph_nodes": 39, "index_html_data_group": true, "app_js_literal": true},
+    "endpoint": {"graph_nodes": 674, "index_html_data_group": true, "app_js_literal": true},
     "hub": {"graph_nodes": 33, "index_html_data_group": true, "app_js_literal": true},
     "hypervisor": {"graph_nodes": 4, "index_html_data_group": true, "app_js_literal": true},
-    "iot": {"graph_nodes": 29, "index_html_data_group": true, "app_js_literal": true},
-    "phone": {"graph_nodes": 84, "index_html_data_group": true, "app_js_literal": true},
+    "iot": {"graph_nodes": 0, "index_html_data_group": true, "app_js_literal": true},
+    "phone": {"graph_nodes": 0, "index_html_data_group": true, "app_js_literal": true},
     "printer": {"graph_nodes": 0, "index_html_data_group": false, "app_js_literal": true},
     "router": {"graph_nodes": 0, "index_html_data_group": true, "app_js_literal": true},
     "server": {"graph_nodes": 0, "index_html_data_group": false, "app_js_literal": true},
@@ -17,7 +17,7 @@
     "wifi_random": {"graph_nodes": 2, "index_html_data_group": true, "app_js_literal": true}
   },
   "tokens": {
-    "Server\n": {"graph_nodes": 8, "graph_edges": 0, "app_js": false, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
+    "Server\n": {"graph_nodes": 6, "graph_edges": 0, "app_js": false, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "Unmanaged": {"graph_nodes": 33, "graph_edges": 0, "app_js": true, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
     "VMs:": {"graph_nodes": 4, "graph_edges": 0, "app_js": false, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "VMware ESXi": {"graph_nodes": 4, "graph_edges": 0, "app_js": false, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
@@ -25,7 +25,7 @@
     "[DNS]": {"graph_nodes": 20, "graph_edges": 0, "app_js": false, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "[ENDPOINT]": {"graph_nodes": 258, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "[HUB]": {"graph_nodes": 33, "graph_edges": 0, "app_js": true, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
-    "[HYPERVISOR]": {"graph_nodes": 12, "graph_edges": 0, "app_js": false, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
+    "[HYPERVISOR]": {"graph_nodes": 10, "graph_edges": 0, "app_js": false, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
     "[LLDP-EP]": {"graph_nodes": 544, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "[MAC-REF]": {"graph_nodes": 0, "graph_edges": 2, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "[T]": {"graph_nodes": 0, "graph_edges": 97, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
