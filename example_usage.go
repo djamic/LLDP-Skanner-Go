@@ -1830,8 +1830,44 @@ func pingOnce(ip string) (string, error) {
 	return outBuf.String(), nil
 }
 
-// detectOSByTTL pings an IP once and checks TTL to determine OS
+// ttlOSCache holds the answer of detectOSByTTL per IP until it expires, so
+// a graph rebuild (every VM with an IP gets a TTL ping, about 62 in the
+// fixture) pings an IP at most once per ttlOSCacheTTL. A silent IP is
+// cached too: each such ping costs up to a second.
+var (
+	ttlOSCache      = make(map[string]ttlOSEntry)
+	ttlOSCacheMutex sync.Mutex
+)
+
+// ttlOSEntry is one cached TTL answer ("" for no guess or no reply).
+type ttlOSEntry struct {
+	os      string
+	expires time.Time
+}
+
+// ttlOSCacheTTL is how long a TTL answer is reused.
+const ttlOSCacheTTL = 30 * time.Minute
+
+// detectOSByTTL pings an IP once and checks TTL to determine OS; the answer
+// is reused for ttlOSCacheTTL (ttlOSCache).
 func detectOSByTTL(ip string) string {
+	now := time.Now()
+	ttlOSCacheMutex.Lock()
+	if entry, ok := ttlOSCache[ip]; ok && now.Before(entry.expires) {
+		ttlOSCacheMutex.Unlock()
+		return entry.os
+	}
+	ttlOSCacheMutex.Unlock()
+
+	osLabel := pingOSByTTL(ip)
+	ttlOSCacheMutex.Lock()
+	ttlOSCache[ip] = ttlOSEntry{os: osLabel, expires: now.Add(ttlOSCacheTTL)}
+	ttlOSCacheMutex.Unlock()
+	return osLabel
+}
+
+// pingOSByTTL pings ip once and guesses the OS from the reply's TTL.
+func pingOSByTTL(ip string) string {
 	outputStr, err := runPing(ip)
 	if err != nil {
 		return ""

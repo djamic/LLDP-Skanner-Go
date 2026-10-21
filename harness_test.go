@@ -199,6 +199,9 @@ func resetState(t *testing.T) {
 	dnsCacheMutex.Lock()
 	dnsCache = make(map[string]string)
 	dnsCacheMutex.Unlock()
+	ttlOSCacheMutex.Lock()
+	ttlOSCache = make(map[string]ttlOSEntry)
+	ttlOSCacheMutex.Unlock()
 
 	gatewayIP = fixedGatewayIP
 	ignoredIssuesMutex.Lock()
@@ -402,10 +405,14 @@ func captureData(id string, devices []*DeviceData, graph *DJGraph) FullCaptureDa
 
 // ─── Ping and DNS stubs ───────────────────────────────────────────────────────
 
+// pingCount counts the pings fakePing answered.
+var pingCount atomic.Int64
+
 // fakePing answers like "ping -c 1" for IPv4 addresses, chosen by the last
 // octet: 0 → no reply, 1 → TTL 64 (Linux), 2 → TTL 128 (Windows),
 // 3 → TTL 255 (no OS guess).
 func fakePing(ip string) (string, error) {
+	pingCount.Add(1)
 	addr, err := netip.ParseAddr(ip)
 	if err != nil || !addr.Is4() {
 		return "", fmt.Errorf("fake ping: unknown host %s", ip)

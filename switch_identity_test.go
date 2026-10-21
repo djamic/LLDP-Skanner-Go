@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // identityDevices are two polled switches whose stored chassis ids are not
@@ -208,5 +209,44 @@ func TestChassisIDKeptOnFlakyPoll(t *testing.T) {
 	collectedDataMutex.RUnlock()
 	if d == nil || d.ChassisID != "" || graphDeviceNodeID(d) != never {
 		t.Errorf("switch without a valid chassis id: %+v", d)
+	}
+}
+
+// TestDetectOSByTTLCache (H10): detectOSByTTL answers from a per-IP cache
+// until the entry expires, so a graph rebuild does not ping every VM with an
+// IP again (about 62 in the fixture since F26/F29/F30); an IP that did not
+// answer is cached too, since each silent ping costs up to a second.
+func TestDetectOSByTTLCache(t *testing.T) {
+	resetState(t)
+	start := pingCount.Load()
+	pings := func() int64 { return pingCount.Load() - start }
+	for _, c := range []struct{ ip, want string }{
+		{"10.0.9.1", "🐧 Linux"}, {"10.0.9.1", "🐧 Linux"}, {"10.0.9.2", "🪟 Windows"}, {"10.0.9.4", ""}, {"10.0.9.4", ""},
+	} {
+		if got := detectOSByTTL(c.ip); got != c.want {
+			t.Errorf("detectOSByTTL(%s) = %q, want %q", c.ip, got, c.want)
+		}
+	}
+	if pings() != 3 {
+		t.Errorf("%d pings for 3 distinct IPs", pings())
+	}
+	ttlOSCacheMutex.Lock()
+	entry := ttlOSCache["10.0.9.1"]
+	entry.expires = time.Now().Add(-time.Second)
+	ttlOSCache["10.0.9.1"] = entry
+	ttlOSCacheMutex.Unlock()
+	if detectOSByTTL("10.0.9.1"); pings() != 4 {
+		t.Errorf("expired entry not pinged again: %d pings", pings())
+	}
+
+	// Two builds of the fixture graph: the second pings nothing
+	g1 := buildFixtureGraph(t)
+	afterFirst := pingCount.Load()
+	g2 := buildGraphFromSnapshot(snapshotCollectedData())
+	if n := pingCount.Load() - afterFirst; n != 0 {
+		t.Errorf("second build sent %d pings", n)
+	}
+	if !maps.Equal(g1.SwitchInfo, g2.SwitchInfo) {
+		t.Error("cached TTL answers changed the labels")
 	}
 }
