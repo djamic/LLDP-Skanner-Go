@@ -19,6 +19,10 @@ graph TD
   ENDPOINT_VMwarebr195_158_2_211["[ENDPOINT] VMware<br>195.158.2.211"]
   VM_Windows_VMwarebr10_10_10_66["[VM] 🪟 Windows VMware<br>10.10.10.66"]
   VM_Windows_VMwarebr10_10_10_22["[VM] 🪟 Windows VMware<br>10.10.10.22"]
+  Huawe["Huawe"]
+  172_20_230_40["172.20.230.40"]
+  172_20_230_44["172.20.230.44"]
+  HUAWEI["HUAWEI"]
   HPbr172_20_254_247["HP<br>172.20.254.247"]
   A_Mobilbr172_20_230_50["A Mobil<br>172.20.230.50"]
   D_1br172_20_230_3["D - 1<br>172.20.230.3"]
@@ -98,8 +102,7 @@ graph TD
   HYPERVISOR_VMware_ESXibr3_VMs_on_ge105brVMs_10_10_10_30_10_10_10_23_10_10_10_22["[HYPERVISOR] VMware ESXi<br>3 VMs on ge1/0/5<br>VMs: 10.10.10.30, 10.10.10.23, 10.10.10.22"]
   HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_9_121_195_158_2_214["[HYPERVISOR] VMware ESXi<br>2 VMs on ge1/0/32<br>VMs: 172.20.9.121, 195.158.2.214"]
   HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_13_243_172_20_6_247["[HYPERVISOR] VMware ESXi<br>2 VMs on ge1/0/32<br>VMs: 172.20.13.243, 172.20.6.247"]
-  br172_20_230_44["<br>172.20.230.44"]
-  HUAWEIbr172_20_254_249["HUAWEI<br>172.20.254.249"]
+  HUAWEI-- "GE0/0/14 [MAC-REF] ↔ " -->TTJ_34br172_20_230_23
   D_1br172_20_230_3-- "TGE1/0/52 [T] 1G ↔ TGE1/0/49" -->HPEbr172_20_253_10
   D_1br172_20_230_3-- "TGE1/0/51 [T] 1G ↔ TGE1/0/52" -->D_1_2br172_20_230_48
   HPEbr172_20_254_10-- "GE1/0/48 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_254_202
@@ -192,7 +195,6 @@ graph TD
   HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_9_121_195_158_2_214-- "vNIC" -->ENDPOINT_VMwarebr195_158_2_214
   HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_13_243_172_20_6_247-- "vNIC" -->VM_VMware_VM_VMwarebr172_20_13_243
   HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_13_243_172_20_6_247-- "vNIC" -->VM_VMware_VM_VMwarebr172_20_6_247
-  HUAWEIbr172_20_254_249-- "GE0/0/14 [MAC-REF] ↔ " -->TTJ_34br172_20_230_23
   style VM_Windows_VMwarebr10_10_10_30 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style ENDPOINT_VMwarebr172_20_9_121 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Linux_VMwarebr10_10_10_25 fill:#9C27B0,stroke:#7B1FA2,color:#fff
@@ -210,6 +212,10 @@ graph TD
   style ENDPOINT_VMwarebr195_158_2_211 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Windows_VMwarebr10_10_10_66 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Windows_VMwarebr10_10_10_22 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style Huawe fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style 172_20_230_40 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style 172_20_230_44 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style HUAWEI fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style HPbr172_20_254_247 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style A_Mobilbr172_20_230_50 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style D_1br172_20_230_3 fill:#4A90E2,stroke:#2A6FC2,color:#fff
@@ -289,8 +295,6 @@ graph TD
   style HYPERVISOR_VMware_ESXibr3_VMs_on_ge105brVMs_10_10_10_30_10_10_10_23_10_10_10_22 fill:#26C6DA,stroke:#0097A7,color:#fff
   style HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_9_121_195_158_2_214 fill:#26C6DA,stroke:#0097A7,color:#fff
   style HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_13_243_172_20_6_247 fill:#26C6DA,stroke:#0097A7,color:#fff
-  style br172_20_230_44 fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  style HUAWEIbr172_20_254_249 fill:#4A90E2,stroke:#2A6FC2,color:#fff
 
 ```
 

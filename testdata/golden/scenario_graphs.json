@@ -20,6 +20,8 @@
       "0c:c4:7a:09:09:05": "hypervisor | [HYPERVISOR] SuperMicro Server\n[VM] ❓ Unknown VM Supermicro",
       "0c:c4:7a:09:0d:01": "bmc | [BMC] Supermicro IPMI Supermicro",
       "0c:c4:7a:09:15:01": "bmc | [BMC] Supermicro IPMI Supermicro\n10.0.9.21",
+      "10.0.9.5": "switch | sw-d",
+      "10.0.9.6": "switch | sw-e",
       "10.0.9.7": "switch | sw-f",
       "10:7c:61:c0:9e:aa": "endpoint | [LLDP-EP]\nDESKTOP-V380CHD",
       "4c:ae:a3:09:00:02": "switch | sw-a\n10.0.9.2",
@@ -40,10 +42,10 @@
       "hub-4c:ae:a3:09:00:02-p11": "hub | [HUB] Unmanaged\n7 devices",
       "hub-4c:ae:a3:09:00:02-p24": "hub | [HUB] Unmanaged\n2 devices",
       "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware vSphere\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43",
-      "no:such:object:available:on:this:agent:at:this:oid": "switch | sw-e\n10.0.9.6"
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware vSphere\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43"
     },
     "edges": [
+      "10.0.9.5 -> 00:1b:21:09:51:01 : \"GE1/0/1|\"",
       "10.0.9.7 -> hyp-10.0.9.7-ge1_0_2 : \"ge1/0/2\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:03:01 : \"GE1/0/3 [V100]|\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:0d:03 : \"GE1/0/13 [T]|\"",
@@ -80,11 +82,10 @@
       "hyp-10.0.9.7-ge1_0_2 -> 00:50:56:09:72:02 : \"vNIC\"",
       "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:01 : \"vNIC\"",
       "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:02 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:03 : \"vNIC\"",
-      "no:such:object:available:on:this:agent:at:this:oid -> 00:1b:21:09:51:01 : \"GE1/0/1|\""
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:03 : \"vNIC\""
     ],
     "status": {
-      "no:such:object:available:on:this:agent:at:this:oid": "unreachable"
+      "10.0.9.6": "unreachable"
     }
   },
   "build_synthetic_network_esxi": {
@@ -108,11 +109,13 @@
       "0c:c4:7a:09:09:05": "hypervisor | [HYPERVISOR] SuperMicro Server\n[VM] ❓ Unknown VM Supermicro",
       "0c:c4:7a:09:0d:01": "bmc | [BMC] Supermicro IPMI Supermicro",
       "0c:c4:7a:09:15:01": "bmc | [BMC] Supermicro IPMI Supermicro\n10.0.9.21",
+      "10.0.9.5": "switch | sw-d",
+      "10.0.9.6": "switch | sw-e",
       "10.0.9.7": "switch | sw-f",
       "10:7c:61:c0:9e:aa": "endpoint | [LLDP-EP]\nDESKTOP-V380CHD",
       "4c:ae:a3:09:00:02": "switch | sw-a\n10.0.9.2",
       "4c:ae:a3:09:00:03": "switch | sw-b\n10.0.9.3",
-      "4c:ae:a3:09:00:04": "hypervisor | [HYPERVISOR] VMware ESXi\nsw-c\n10.0.9.4",
+      "4c:ae:a3:09:00:04": "switch | [HYPERVISOR] VMware ESXi\nsw-c\n10.0.9.4",
       "52:54:00:09:08:01": "wifi_random | [WiFi] QEMU/KVM",
       "5c:ed:8c:09:00:17": "endpoint | [HYPERVISOR] HPE ProLiant Server\n[LLDP-EP] Intel\nILOCZJ33411C3",
       "5c:ed:8c:09:09:04": "hypervisor | [HYPERVISOR] HPE ProLiant Server\n[VM] ❓ Unknown VM Intel\n10.0.9.44",
@@ -128,10 +131,10 @@
       "hub-4c:ae:a3:09:00:02-p11": "hub | [HUB] Unmanaged\n7 devices",
       "hub-4c:ae:a3:09:00:02-p24": "hub | [HUB] Unmanaged\n2 devices",
       "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware vSphere\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43",
-      "no:such:object:available:on:this:agent:at:this:oid": "switch | sw-e\n10.0.9.6"
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware vSphere\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43"
     },
     "edges": [
+      "10.0.9.5 -> 00:1b:21:09:51:01 : \"GE1/0/1|\"",
       "10.0.9.7 -> hyp-10.0.9.7-ge1_0_2 : \"ge1/0/2\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:03:01 : \"GE1/0/3 [V100]|\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:0d:03 : \"GE1/0/13 [T]|\"",
@@ -168,11 +171,10 @@
       "hyp-10.0.9.7-ge1_0_2 -> 00:50:56:09:72:02 : \"vNIC\"",
       "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:01 : \"vNIC\"",
       "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:02 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:03 : \"vNIC\"",
-      "no:such:object:available:on:this:agent:at:this:oid -> 00:1b:21:09:51:01 : \"GE1/0/1|\""
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:03 : \"vNIC\""
     ],
     "status": {
-      "no:such:object:available:on:this:agent:at:this:oid": "unreachable"
+      "10.0.9.6": "unreachable"
     }
   },
   "hyp_hub_children": {

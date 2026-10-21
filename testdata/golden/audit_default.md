@@ -23,6 +23,10 @@ Tizim: LLDP Network Scanner v2.0
 
 ```mermaid
 graph TD
+  Huawe["Huawe"]
+  172_20_230_40["172.20.230.40"]
+  172_20_230_44["172.20.230.44"]
+  HUAWEI["HUAWEI"]
   HPbr172_20_254_247["HP<br>172.20.254.247"]
   A_Mobilbr172_20_230_50["A Mobil<br>172.20.230.50"]
   D_1br172_20_230_3["D - 1<br>172.20.230.3"]
@@ -127,8 +131,7 @@ graph TD
   HUB_Unmanagedbr6_devices_5(("[HUB] Unmanaged<br>6 devices"))
   HUB_Unmanagedbr6_devices_6(("[HUB] Unmanaged<br>6 devices"))
   HUB_Unmanagedbr3_devices_4(("[HUB] Unmanaged<br>3 devices"))
-  br172_20_230_44["<br>172.20.230.44"]
-  HUAWEIbr172_20_254_249["HUAWEI<br>172.20.254.249"]
+  HUAWEI-- "GE0/0/14 [MAC-REF] ↔ " -->TTJ_34br172_20_230_23
   D_1br172_20_230_3-- "TGE1/0/52 [T] 1G ↔ TGE1/0/49" -->HPEbr172_20_253_10
   D_1br172_20_230_3-- "TGE1/0/51 [T] 1G ↔ TGE1/0/52" -->D_1_2br172_20_230_48
   F_9br172_20_240_12-- "GE1/0/48 ↔ Hub" -->HUB_Unmanagedbr7_devices
@@ -231,7 +234,10 @@ graph TD
   br172_20_230_47-- "Eth1/0/25 [MAC-REF] ↔ " -->br172_20_230_253br172_20_7_227
   A_padval_SNRbr172_20_230_51-- "Eth1/0/28 1G ↔ " -->SNR_S2995G_24FXbr172_20_230_254
   A_padval_SNRbr172_20_230_51-- "Eth1/0/3 ↔ Hub" -->HUB_Unmanagedbr3_devices_4
-  HUAWEIbr172_20_254_249-- "GE0/0/14 [MAC-REF] ↔ " -->TTJ_34br172_20_230_23
+  style Huawe fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style 172_20_230_40 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style 172_20_230_44 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style HUAWEI fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style HPbr172_20_254_247 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style A_Mobilbr172_20_230_50 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style D_1br172_20_230_3 fill:#4A90E2,stroke:#2A6FC2,color:#fff
@@ -336,8 +342,6 @@ graph TD
   style HUB_Unmanagedbr6_devices_5 fill:#FF9800,stroke:#E68A00,color:#fff
   style HUB_Unmanagedbr6_devices_6 fill:#FF9800,stroke:#E68A00,color:#fff
   style HUB_Unmanagedbr3_devices_4 fill:#FF9800,stroke:#E68A00,color:#fff
-  style br172_20_230_44 fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  style HUAWEIbr172_20_254_249 fill:#4A90E2,stroke:#2A6FC2,color:#fff
 
 ```
 

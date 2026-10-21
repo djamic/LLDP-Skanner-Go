@@ -2,15 +2,17 @@
   "api_graph": {
     "health_score": 70,
     "links": 927,
-    "node_anomalies": {},
-    "nodes": 928,
+    "node_anomalies": {
+      "172.20.254.249": ["shadow_it", "shadow_it", "shadow_it"]
+    },
+    "nodes": 930,
     "total_macs": 107756
   },
   "report_summary": {
     "health_score": 70,
-    "total_switches": 73,
+    "total_switches": 75,
     "total_macs": 107756,
-    "total_nodes": 928,
+    "total_nodes": 930,
     "total_edges": 927,
     "anomalies": {},
     "top_devices": [

@@ -1,10 +1,10 @@
 {
   "summary": {
-    "nodes": 928,
+    "nodes": 930,
     "links": 927,
     "edges": 927,
-    "groups": {"access_point": 32, "bmc": 1, "camera": 43, "endpoint": 607, "hub": 33, "hypervisor": 4, "iot": 29, "phone": 84, "switch": 73, "vm": 20, "wifi_random": 2},
-    "unreachable_nodes": 1
+    "groups": {"access_point": 32, "bmc": 1, "camera": 43, "endpoint": 607, "hub": 33, "hypervisor": 4, "iot": 29, "phone": 84, "switch": 75, "vm": 20, "wifi_random": 2},
+    "unreachable_nodes": 2
   },
   "nodes": [
     {"id": "00:0c:29:14:e3:ea", "group": "vm", "type": "vm", "label": "[VM] 🪟 Windows VMware\n10.10.10.30\n00:0c:29:14:e3:ea", "sysName": "[VM] 🪟 Windows VMware\n10.10.10.30"},
@@ -253,6 +253,10 @@
     {"id": "14:5a:fc:3e:b9:33", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT]\n172.16.22.168\n14:5a:fc:3e:b9:33", "sysName": "[ENDPOINT]\n172.16.22.168"},
     {"id": "14:85:7f:cc:b7:6c", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] ZTE\n172.16.9.63\n14:85:7f:cc:b7:6c", "sysName": "[ENDPOINT] ZTE\n172.16.9.63"},
     {"id": "14:b3:1f:0e:b4:f9", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT]\n14:b3:1f:0e:b4:f9", "sysName": "[ENDPOINT]"},
+    {"id": "172.20.230.17", "group": "switch", "type": "switch", "label": "Huawe\n172.20.230.17", "sysName": "Huawe", "ip": "172.20.230.17", "unreachable": true},
+    {"id": "172.20.230.40", "group": "switch", "type": "switch", "label": "172.20.230.40", "ip": "172.20.230.40"},
+    {"id": "172.20.230.44", "group": "switch", "type": "switch", "label": "172.20.230.44", "ip": "172.20.230.44"},
+    {"id": "172.20.254.249", "group": "switch", "type": "switch", "label": "HUAWEI\n172.20.254.249", "sysName": "HUAWEI", "ip": "172.20.254.249", "unreachable": true},
     {"id": "18:60:24:8f:c3:93", "group": "endpoint", "type": "endpoint", "label": "[LLDP-EP]\n172.16.32.19\n18:60:24:8f:c3:93", "sysName": "[LLDP-EP]\n172.16.32.19"},
     {"id": "18:a6:f7:c9:dc:d1", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT]\n172.16.35.138\n18:a6:f7:c9:dc:d1", "sysName": "[ENDPOINT]\n172.16.35.138"},
     {"id": "18:a9:05:3d:38:18", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] HP\n172.20.9.187\n18:a9:05:3d:38:18", "sysName": "[ENDPOINT] HP\n172.20.9.187"},
@@ -932,11 +936,10 @@
     {"id": "hyp-4c:ae:a3:27:7e:ca-ge1_0_4", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n5 VMs on ge1/0/4\nVMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66\nhyp-4c:ae:a3:27:7e:ca-ge1_0_4", "sysName": "[HYPERVISOR] VMware ESXi\n5 VMs on ge1/0/4\nVMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66"},
     {"id": "hyp-4c:ae:a3:27:7e:ca-ge1_0_5", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/5\nVMs: 10.10.10.30, 10.10.10.23, 10.10.10.22\nhyp-4c:ae:a3:27:7e:ca-ge1_0_5", "sysName": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/5\nVMs: 10.10.10.30, 10.10.10.23, 10.10.10.22"},
     {"id": "hyp-4c:ae:a3:27:86:4a-ge1_0_32", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.9.121, 195.158.2.214\nhyp-4c:ae:a3:27:86:4a-ge1_0_32", "sysName": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.9.121, 195.158.2.214"},
-    {"id": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247\nhyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "sysName": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247"},
-    {"id": "no:such:instance:currently:exists:at:this:oid", "group": "switch", "type": "switch", "label": "\n172.20.230.44\nno:such:instance:currently:exists:at:this:oid", "sysName": "\n172.20.230.44"},
-    {"id": "no:such:object:available:on:this:agent:at:this:oid", "group": "switch", "type": "switch", "label": "HUAWEI\n172.20.254.249\nno:such:object:available:on:this:agent:at:this:oid", "sysName": "HUAWEI\n172.20.254.249", "unreachable": true}
+    {"id": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247\nhyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "sysName": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247"}
   ],
   "links": [
+    {"source": "172.20.254.249", "target": "4c:ae:a3:a2:01:ac", "label": "GE0/0/14 [MAC-REF]|", "sourceLabel": "GE0/0/14 [MAC-REF]", "unreachable": true},
     {"source": "44:31:92:ac:20:b6", "target": "70:a7:41:aa:11:6d", "label": "GE1/0/4 [V1500] 1G|eth0", "sourceLabel": "GE1/0/4 [V1500] 1G", "targetLabel": "eth0"},
     {"source": "4c:ae:a3:27:53:aa", "target": "00:e0:4c:50:dd:4c", "label": "GE1/0/22 [V1620] 1G|", "sourceLabel": "GE1/0/22 [V1620] 1G"},
     {"source": "4c:ae:a3:27:53:aa", "target": "00:e0:4c:50:dd:92", "label": "GE1/0/40 [V1620] 100M|", "sourceLabel": "GE1/0/40 [V1620] 100M"},
@@ -1862,8 +1865,7 @@
     {"source": "hyp-4c:ae:a3:27:86:4a-ge1_0_32", "target": "00:0c:29:1c:a1:db", "label": "vNIC"},
     {"source": "hyp-4c:ae:a3:27:86:4a-ge1_0_32", "target": "00:0c:29:71:af:af", "label": "vNIC"},
     {"source": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "target": "00:0c:29:73:5e:0b", "label": "vNIC"},
-    {"source": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "target": "00:0c:29:7f:19:4e", "label": "vNIC"},
-    {"source": "no:such:object:available:on:this:agent:at:this:oid", "target": "4c:ae:a3:a2:01:ac", "label": "GE0/0/14 [MAC-REF]|", "sourceLabel": "GE0/0/14 [MAC-REF]", "unreachable": true}
+    {"source": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "target": "00:0c:29:7f:19:4e", "label": "vNIC"}
   ],
   "switch_info": {
     "00:0c:29:14:e3:ea": "[VM] 🪟 Windows VMware\n10.10.10.30",
@@ -2112,6 +2114,10 @@
     "14:5a:fc:3e:b9:33": "[ENDPOINT]\n172.16.22.168",
     "14:85:7f:cc:b7:6c": "[ENDPOINT] ZTE\n172.16.9.63",
     "14:b3:1f:0e:b4:f9": "[ENDPOINT]",
+    "172.20.230.17": "Huawe",
+    "172.20.230.40": "",
+    "172.20.230.44": "",
+    "172.20.254.249": "HUAWEI",
     "18:60:24:8f:c3:93": "[LLDP-EP]\n172.16.32.19",
     "18:a6:f7:c9:dc:d1": "[ENDPOINT]\n172.16.35.138",
     "18:a9:05:3d:38:18": "[ENDPOINT] HP\n172.20.9.187",
@@ -2791,11 +2797,10 @@
     "hyp-4c:ae:a3:27:7e:ca-ge1_0_4": "[HYPERVISOR] VMware ESXi\n5 VMs on ge1/0/4\nVMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66",
     "hyp-4c:ae:a3:27:7e:ca-ge1_0_5": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/5\nVMs: 10.10.10.30, 10.10.10.23, 10.10.10.22",
     "hyp-4c:ae:a3:27:86:4a-ge1_0_32": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.9.121, 195.158.2.214",
-    "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247",
-    "no:such:instance:currently:exists:at:this:oid": "\n172.20.230.44",
-    "no:such:object:available:on:this:agent:at:this:oid": "HUAWEI\n172.20.254.249"
+    "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247"
   },
   "node_status": {
-    "no:such:object:available:on:this:agent:at:this:oid": "unreachable"
+    "172.20.230.17": "unreachable",
+    "172.20.254.249": "unreachable"
   }
 }

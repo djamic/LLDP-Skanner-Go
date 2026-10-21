@@ -9,7 +9,7 @@
     "interface": {"details": {"community": "{$SNMP_COMMUNITY}"}, "interface_ref": "if1", "port": "161", "type": "SNMP"},
     "inventory_mode": "DISABLED"
   },
-  "host_count": 928,
+  "host_count": 930,
   "hosts": {
     "00:0c:29:14:e3:ea": {"name": "00:0c:29:14:e3:ea", "ip": "00:0c:29:14:e3:ea", "templates": "generic"},
     "00:0c:29:1c:a1:db": {"name": "00:0c:29:1c:a1:db", "ip": "00:0c:29:1c:a1:db", "templates": "generic"},
@@ -257,6 +257,10 @@
     "14:5a:fc:3e:b9:33": {"name": "14:5a:fc:3e:b9:33", "ip": "14:5a:fc:3e:b9:33", "templates": "generic"},
     "14:85:7f:cc:b7:6c": {"name": "14:85:7f:cc:b7:6c", "ip": "14:85:7f:cc:b7:6c", "templates": "generic"},
     "14:b3:1f:0e:b4:f9": {"name": "14:b3:1f:0e:b4:f9", "ip": "14:b3:1f:0e:b4:f9", "templates": "generic"},
+    "172.20.230.17": {"name": "172.20.230.17", "ip": "172.20.230.17", "templates": "generic"},
+    "172.20.230.40": {"name": "172.20.230.40", "ip": "172.20.230.40", "templates": "generic"},
+    "172.20.230.44": {"name": "172.20.230.44", "ip": "172.20.230.44", "templates": "generic"},
+    "172.20.254.249": {"name": "172.20.254.249", "ip": "172.20.254.249", "templates": "generic"},
     "18:60:24:8f:c3:93": {"name": "18:60:24:8f:c3:93", "ip": "18:60:24:8f:c3:93", "templates": "generic"},
     "18:a6:f7:c9:dc:d1": {"name": "18:a6:f7:c9:dc:d1", "ip": "18:a6:f7:c9:dc:d1", "templates": "generic"},
     "18:a9:05:3d:38:18": {"name": "18:a9:05:3d:38:18", "ip": "18:a9:05:3d:38:18", "templates": "generic"},
@@ -936,9 +940,7 @@
     "hyp-4c:ae:a3:27:7e:ca-ge1_0_4": {"name": "hyp-4c:ae:a3:27:7e:ca-ge1_0_4", "ip": "hyp-4c:ae:a3:27:7e:ca-ge1_0_4", "templates": "generic"},
     "hyp-4c:ae:a3:27:7e:ca-ge1_0_5": {"name": "hyp-4c:ae:a3:27:7e:ca-ge1_0_5", "ip": "hyp-4c:ae:a3:27:7e:ca-ge1_0_5", "templates": "generic"},
     "hyp-4c:ae:a3:27:86:4a-ge1_0_32": {"name": "hyp-4c:ae:a3:27:86:4a-ge1_0_32", "ip": "hyp-4c:ae:a3:27:86:4a-ge1_0_32", "templates": "generic"},
-    "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32": {"name": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "ip": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "templates": "generic"},
-    "no:such:instance:currently:exists:at:this:oid": {"name": "no:such:instance:currently:exists:at:this:oid", "ip": "no:such:instance:currently:exists:at:this:oid", "templates": "generic"},
-    "no:such:object:available:on:this:agent:at:this:oid": {"name": "no:such:object:available:on:this:agent:at:this:oid", "ip": "no:such:object:available:on:this:agent:at:this:oid", "templates": "generic"}
+    "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32": {"name": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "ip": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "templates": "generic"}
   },
   "template_sets": {
     "generic": ["Network Generic Device by SNMP"],

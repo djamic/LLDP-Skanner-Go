@@ -640,6 +640,114 @@ func normalizeID(id string, subtype int) string {
 	}
 }
 
+// graphCanonicalMAC returns s as "aa:bb:cc:dd:ee:ff" when it spells a MAC
+// address, else "". Accepted: an optional "Hex-STRING: "/"STRING: " prefix,
+// quotes and spaces around; six groups split by ':' (1-2 hex digits) or by
+// '-' or spaces (2 digits); Cisco "xxxx.xxxx.xxxx"; 12 bare hex digits.
+// It stands in for the shared MAC parser until that one is merged.
+func graphCanonicalMAC(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "Hex-STRING: ")
+	s = strings.TrimPrefix(s, "STRING: ")
+	s = strings.ToLower(strings.TrimSpace(strings.Trim(strings.TrimSpace(s), "\"")))
+	var groups []string
+	switch {
+	case strings.Count(s, ":") == 5:
+		groups = strings.Split(s, ":")
+	case strings.Count(s, "-") == 5:
+		groups = strings.Split(s, "-")
+	case strings.Count(s, ".") == 2 && len(s) == 14:
+		for _, g := range strings.Split(s, ".") {
+			if len(g) != 4 {
+				return ""
+			}
+			groups = append(groups, g[:2], g[2:])
+		}
+	case len(s) == 12:
+		for i := 0; i < 12; i += 2 {
+			groups = append(groups, s[i:i+2])
+		}
+	default:
+		groups = strings.Fields(s)
+	}
+	if len(groups) != 6 {
+		return ""
+	}
+	for i, g := range groups {
+		if len(g) == 1 && strings.Count(s, ":") == 5 {
+			g = "0" + g
+		}
+		if len(g) != 2 || !graphIsHexDigit(g[0]) || !graphIsHexDigit(g[1]) {
+			return ""
+		}
+		groups[i] = g
+	}
+	return strings.Join(groups, ":")
+}
+
+// graphIsHexDigit reports whether c is a lowercase hex digit.
+func graphIsHexDigit(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
+}
+
+// graphIsSNMPException reports whether a value is net-snmp exception text
+// ("No Such Object available on this agent at this OID", "No Such Instance
+// …", "No more variables …"), raw or as normalizeMAC left it in saved data.
+func graphIsSNMPException(s string) bool {
+	s = strings.ToLower(strings.Trim(strings.TrimSpace(s), "\""))
+	s = strings.ReplaceAll(s, ":", " ")
+	return strings.HasPrefix(s, "no such object") || strings.HasPrefix(s, "no such instance") ||
+		strings.HasPrefix(s, "no more variables")
+}
+
+// graphLocalChassisID normalizes a switch's own lldpLocChassisId value (SNMP
+// exception text must be rejected before): any MAC spelling becomes
+// canonical, a 6-byte STRING is the MAC's raw octets (the form neighbors and
+// the FDB see), other STRING text stays as written, and any other value keeps
+// the normalizeMAC form.
+func graphLocalChassisID(val string) string {
+	if mac := graphCanonicalMAC(val); mac != "" {
+		return mac
+	}
+	v := strings.TrimSpace(val)
+	if len(v) < 2 || v[0] != '"' || v[len(v)-1] != '"' {
+		return normalizeMAC(v)
+	}
+	s := v[1 : len(v)-1]
+	if len(s) == 6 {
+		return formatAsHex(s)
+	}
+	return strings.TrimSpace(s)
+}
+
+// graphChassisKey is a switch's own-MAC key: its chassis id as a canonical
+// MAC, or "" when the chassis id is not a MAC (exception text, a name) or is
+// the null or broadcast address.
+func graphChassisKey(chassisID string) string {
+	mac := graphCanonicalMAC(chassisID)
+	if mac == "00:00:00:00:00:00" || mac == "ff:ff:ff:ff:ff:ff" {
+		return ""
+	}
+	return mac
+}
+
+// graphDeviceNodeID is the graph node id of a polled device: the chassis MAC
+// in canonical form, a non-MAC chassis id as normalizeID gives it, or the
+// device IP when the chassis id is empty, SNMP exception text or the null
+// MAC. Every place that needs a switch's node id uses it.
+func graphDeviceNodeID(d *DeviceData) string {
+	if key := graphChassisKey(d.ChassisID); key != "" {
+		return key
+	}
+	if graphIsSNMPException(d.ChassisID) || graphCanonicalMAC(d.ChassisID) != "" {
+		return d.IP
+	}
+	if id := normalizeID(d.ChassisID, 0); id != "" {
+		return id
+	}
+	return d.IP
+}
+
 // resolveLLDPTarget picks the graph node id and display name for one LLDP
 // neighbor: the chassis id when it is a MAC; otherwise the port id when that
 // is a MAC (the chassis id or RemSysName becomes the display name); otherwise
@@ -673,22 +781,12 @@ func resolveLLDPTarget(neighbor LLDPNeighbor) (targetID, displayName string) {
 func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[string]string) {
 	logDebug("Analyzing Edges for Host: %s (%s) [Chassis: %s]", data.IP, data.SysName, data.ChassisID)
 
-	// Source Node (Assume subtype 4/MAC for local collected data for now,
-	// as collectLocalChassisID returns formatted hex)
-	srcID := normalizeID(data.ChassisID, 0)
-	if srcID == "" {
-		srcID = data.IP
-	}
+	// Source Node: the switch's chassis MAC, or its IP (graphDeviceNodeID)
+	srcID := graphDeviceNodeID(data)
 
 	// Ensure Source Node exists (should be added in main loop, but safety check)
 	if !graph.Nodes[srcID] {
-		graph.AddNode(srcID)
-		// Add metadata
-		info := data.SysName
-		if srcID != data.IP {
-			info = fmt.Sprintf("%s\n%s", data.SysName, data.IP)
-		}
-		graph.SwitchInfo[srcID] = info
+		graphAddSwitchNode(graph, data)
 	}
 
 	// Add LLDP neighbors as edges
@@ -861,7 +959,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		}
 
 		// Skip switch's own MACs (usually ports have their own MACs)
-		if normMAC == normalizeMAC(data.ChassisID) {
+		if normMAC == graphChassisKey(data.ChassisID) {
 			continue
 		}
 
@@ -2486,19 +2584,33 @@ func discoverFromLLDP(snmpObject *SNMPObject) {
 	}
 }
 
+// graphAddSwitchNode adds the node of a polled device, labelled
+// "SysName\nIP" ("SysName" when the node id is the IP), marks it as a
+// switch and returns its id.
+func graphAddSwitchNode(graph *DJGraph, d *DeviceData) string {
+	id := graphDeviceNodeID(d)
+	graph.AddNode(id)
+	info := d.SysName
+	if id != d.IP {
+		info = fmt.Sprintf("%s\n%s", d.SysName, d.IP)
+	}
+	graph.SwitchInfo[id] = info
+	if graph.graphSwitches == nil {
+		graph.graphSwitches = make(map[string]bool)
+	}
+	graph.graphSwitches[id] = true
+	return id
+}
+
 // buildSwitchChassisMACs creates a map of normalized switch MACs -> node IDs
 // Used to identify switch-to-switch connections via MAC table cross-reference
 func buildSwitchChassisMACs(devices map[string]*DeviceData) map[string]string {
 	switchMACs := make(map[string]string)
 	for _, ip := range sortedDeviceIPs(devices) {
 		d := devices[ip]
-		nodeID := normalizeID(d.ChassisID, 0)
-		if nodeID == "" {
-			nodeID = d.IP
-		}
-		// Add ChassisID MAC
-		if mac := normalizeMAC(d.ChassisID); mac != "" && !isInvalidID(mac) {
-			switchMACs[mac] = nodeID
+		// Add ChassisID MAC (none for exception text or a non-MAC chassis id)
+		if mac := graphChassisKey(d.ChassisID); mac != "" && !isInvalidID(mac) {
+			switchMACs[mac] = graphDeviceNodeID(d)
 		}
 	}
 	return switchMACs
@@ -2515,10 +2627,7 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 	deviceIPs := sortedDeviceIPs(allDevices)
 	for _, srcIP := range deviceIPs {
 		srcDevice := allDevices[srcIP]
-		srcID := normalizeID(srcDevice.ChassisID, 0)
-		if srcID == "" {
-			srcID = srcDevice.IP
-		}
+		srcID := graphDeviceNodeID(srcDevice)
 
 		// Phase 1: Count switch MACs per port
 		portSwitchMACs := make(map[int][]string) // portNum -> list of switch node IDs
@@ -2570,15 +2679,9 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 
 			// Ensure target node exists in graph
 			if !graph.Nodes[targetID] {
-				graph.AddNode(targetID)
 				for _, tdIP := range deviceIPs {
-					td := allDevices[tdIP]
-					tid := normalizeID(td.ChassisID, 0)
-					if tid == "" {
-						tid = td.IP
-					}
-					if tid == targetID {
-						graph.SwitchInfo[targetID] = fmt.Sprintf("%s\n%s", td.SysName, td.IP)
+					if td := allDevices[tdIP]; graphDeviceNodeID(td) == targetID {
+						graphAddSwitchNode(graph, td)
 						break
 					}
 				}
@@ -2665,16 +2768,7 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	// IP order sets the label)
 	for _, ip := range deviceIPs {
 		d := snapshot[ip]
-		id := normalizeID(d.ChassisID, 0)
-		if id == "" {
-			id = d.IP
-		}
-		newGraph.AddNode(id)
-		info := d.SysName
-		if id != d.IP {
-			info = fmt.Sprintf("%s\n%s", d.SysName, d.IP)
-		}
-		newGraph.SwitchInfo[id] = info
+		id := graphAddSwitchNode(newGraph, d)
 
 		// Phase 8: Transfer unreachable status to graph
 		if d.Unreachable {
@@ -2834,9 +2928,7 @@ func detectHypervisors(graph *DJGraph) {
 	collectedDataMutex.RLock()
 	for _, dev := range collectedData {
 		switchNodeIDs[dev.IP] = true
-		if dev.ChassisID != "" {
-			switchNodeIDs[normalizeMAC(dev.ChassisID)] = true
-		}
+		switchNodeIDs[graphDeviceNodeID(dev)] = true
 	}
 	collectedDataMutex.RUnlock()
 

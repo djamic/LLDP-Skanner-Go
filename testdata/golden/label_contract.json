@@ -11,7 +11,7 @@
     "printer": {"graph_nodes": 0, "index_html_data_group": false, "app_js_literal": true},
     "router": {"graph_nodes": 0, "index_html_data_group": true, "app_js_literal": true},
     "server": {"graph_nodes": 0, "index_html_data_group": false, "app_js_literal": true},
-    "switch": {"graph_nodes": 73, "index_html_data_group": true, "app_js_literal": true},
+    "switch": {"graph_nodes": 75, "index_html_data_group": true, "app_js_literal": true},
     "unknown": {"graph_nodes": 0, "index_html_data_group": false, "app_js_literal": true},
     "vm": {"graph_nodes": 20, "index_html_data_group": true, "app_js_literal": true},
     "wifi_random": {"graph_nodes": 2, "index_html_data_group": true, "app_js_literal": true}
