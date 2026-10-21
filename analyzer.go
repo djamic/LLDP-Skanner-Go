@@ -406,31 +406,57 @@ func (na *NetworkAnalyzer) analyzePaths() []OptimizationSuggestion {
 	return suggestions
 }
 
-// coreNode returns the topology node of the core gateway (gatewayIP): the
-// node with that id, the node of the polled switch with that IP, or a node
-// whose label has the gateway IP on a line of its own (for example an LLDP
-// endpoint with that management IP). Otherwise it returns the first router
-// node, or "" when the topology has neither.
+// coreNode returns the core node of the analyzed topology (topologyCore).
 func (na *NetworkAnalyzer) coreNode() string {
 	ix := na.idx()
-	ids := slices.Sorted(maps.Keys(ix.nodes))
+	return topologyCore(ix.nodes, ix.byIP)
+}
+
+// topologyCore is the core node of a topology, the root of both the
+// analyzer's path check (analyzePaths) and bfs_depths.json (ExportBFSDepths),
+// so both measure hops from the same node (AC-2, R6). It is the gateway
+// (gatewayIP): the node with that id, the node of the polled device with
+// that IP, a switch or router node whose label has the gateway IP as a line
+// of its own, or an LLDP neighbor ([LLDP-EP]: a router the scanner does not
+// poll) with that line; else the first router node. Nodes are tried in id
+// order. Otherwise it returns "", and nothing is guessed: a guessed root
+// (the node with the most links, as bfs_depths.json once took) measured
+// hops from an access switch. A VM or FDB endpoint that carries the gateway
+// IP is never the core. On the university network the gateway
+// (172.20.1.254) is a VM that is no graph node and there are no router
+// nodes, so path analysis and bfs_depths.json stay off until gateway_ip
+// names the core switch.
+func topologyCore(nodes map[string]GraphNode, devices map[string]*DeviceData) string {
+	ids := slices.Sorted(maps.Keys(nodes))
 	if gatewayIP != "" {
-		if _, ok := ix.nodes[gatewayIP]; ok {
+		if _, ok := nodes[gatewayIP]; ok {
 			return gatewayIP
 		}
-		if id := ix.switchNode(gatewayIP); id != gatewayIP {
-			return id
-		}
-		for _, id := range ids {
-			for _, line := range strings.Split(ix.nodes[id].SysName, "\n") {
-				if strings.TrimSpace(line) == gatewayIP {
+		if d, ok := devices[gatewayIP]; ok {
+			for _, id := range analyzerSwitchIDs(d) {
+				if _, ok := nodes[id]; ok {
 					return id
 				}
 			}
 		}
+		hasGatewayLine := func(n GraphNode) bool {
+			return slices.ContainsFunc(strings.Split(n.SysName, "\n"), func(line string) bool {
+				return strings.TrimSpace(line) == gatewayIP
+			})
+		}
+		for _, id := range ids {
+			if n := nodes[id]; (n.NodeType == "switch" || n.NodeType == "router") && hasGatewayLine(n) {
+				return id
+			}
+		}
+		for _, id := range ids {
+			if n := nodes[id]; strings.Contains(n.SysName, "[LLDP-EP]") && hasGatewayLine(n) {
+				return id
+			}
+		}
 	}
 	for _, id := range ids {
-		if ix.nodes[id].NodeType == "router" {
+		if nodes[id].NodeType == "router" {
 			return id
 		}
 	}
@@ -944,6 +970,7 @@ func (na *NetworkAnalyzer) CalculateHealthScore(report *Report) int {
 	// Category-level penalty caps to avoid false-positive flood
 	shadowPenalty := 0
 	stpPenalty := 0
+	pathPenalty := 0
 
 	for _, sugg := range report.Suggestions {
 		switch sugg.Type {
@@ -960,7 +987,7 @@ func (na *NetworkAnalyzer) CalculateHealthScore(report *Report) int {
 		case "stp":
 			stpPenalty += 10
 		case "path":
-			score -= 2
+			pathPenalty += 2
 		case "stability":
 			score -= 3
 		case "loopback":
@@ -968,15 +995,22 @@ func (na *NetworkAnalyzer) CalculateHealthScore(report *Report) int {
 		}
 	}
 
-	// Apply capped penalties: shadow_it max -20, stp max -15
+	// Apply capped penalties: shadow_it max -20, stp max -15, path max -10.
+	// Path depth is a design recommendation, and once a core resolves a
+	// flat network has dozens of switches past 3 hops (30 to 61 of the 75
+	// fixture switches): uncapped, the health score fell to 0-10 (AC-2).
 	if shadowPenalty > 20 {
 		shadowPenalty = 20
 	}
 	if stpPenalty > 15 {
 		stpPenalty = 15
 	}
+	if pathPenalty > 10 {
+		pathPenalty = 10
+	}
 	score -= shadowPenalty
 	score -= stpPenalty
+	score -= pathPenalty
 
 	if score < 0 {
 		score = 0

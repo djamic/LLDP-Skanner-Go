@@ -535,6 +535,79 @@ func TestAnalyzerPathDepthsFromCore(t *testing.T) {
 	}
 }
 
+// TestPathCoreOneRule (AC-2, R6): the analyzer's path check and
+// bfs_depths.json take their core from one rule (topologyCore) and run the
+// same BFS, so the switches and routers bfs_depths.json lists deeper than 3
+// hops are exactly the path suggestions. With the fixture's gateway (a VM
+// that is no graph node, as on the live network) there is no core: no path
+// suggestion, and a bfs_depths.json that says so (it used to measure from
+// the busiest access switch, 871 deep devices). With the gateway set to a
+// polled switch the core resolves, and the path penalty is capped at -10, so
+// the health score stays sensible (it fell to 10 and 0).
+func TestPathCoreOneRule(t *testing.T) {
+	graph := buildFixtureGraph(t)
+	collectedDataMutex.RLock()
+	devices := sortedDevices(collectedData)
+	collectedDataMutex.RUnlock()
+	t.Cleanup(func() { gatewayIP = fixedGatewayIP })
+	nodeType := map[string]string{}
+	for _, n := range graph.GetGraphData().Nodes {
+		nodeType[n.ID] = n.NodeType
+	}
+	for _, c := range []struct {
+		gateway, core string
+		paths, health int
+	}{
+		{fixedGatewayIP, "", 0, 70},
+		{"172.20.254.202", "4c:ae:a3:8d:ee:c9", 30, 60}, // the switch that learned the gateway's MAC
+		{"172.20.230.48", "4c:ae:a3:a2:15:ec", 61, 60},  // the old guessed root, an access switch
+	} {
+		gatewayIP = c.gateway
+		na := NewAnalyzer(captureData("core", devices, graph))
+		report := na.BuildReport()
+		var pathNodes []string
+		for _, s := range report.Suggestions {
+			if s.Type == "path" {
+				pathNodes = append(pathNodes, s.nodeID)
+			}
+		}
+		slices.Sort(pathNodes)
+		out := reportBFSExport(t, graph)
+		var deepSwitches []string
+		for _, d := range out.DeepDevices {
+			if nodeType[d.NodeID] == "switch" || nodeType[d.NodeID] == "router" {
+				deepSwitches = append(deepSwitches, d.NodeID)
+			}
+		}
+		slices.Sort(deepSwitches)
+		if core := na.coreNode(); core != c.core || out.CoreSwitchIP != c.core || out.CoreFound != (c.core != "") {
+			t.Errorf("gateway %s: analyzer core %q, bfs_depths core %q (found %v), want %q", c.gateway, core, out.CoreSwitchIP, out.CoreFound, c.core)
+		}
+		if !slices.Equal(pathNodes, deepSwitches) {
+			t.Errorf("gateway %s: path suggestions and bfs_depths' deep switches differ:\npaths (%d): %v\nbfs (%d): %v", c.gateway, len(pathNodes), pathNodes, len(deepSwitches), deepSwitches)
+		}
+		if len(pathNodes) != c.paths || report.Summary["path_issues"] != c.paths || report.HealthScore != c.health {
+			t.Errorf("gateway %s: %d path suggestions (path_issues %d), health %d; want %d and health %d",
+				c.gateway, len(pathNodes), report.Summary["path_issues"], report.HealthScore, c.paths, c.health)
+		}
+		if c.core == "" && (out.TotalNodes != 0 || len(out.DeepDevices) != 0 || !strings.Contains(out.Note, c.gateway)) {
+			t.Errorf("gateway %s: bfs_depths.json without a core = %+v, want no depths and a note naming the gateway", c.gateway, out)
+		}
+	}
+
+	// The cap: 40 path suggestions cost 10 points, as 5 do.
+	var many []OptimizationSuggestion
+	for range 40 {
+		many = append(many, OptimizationSuggestion{Type: "path"})
+	}
+	if got := (&NetworkAnalyzer{}).CalculateHealthScore(&Report{Suggestions: many}); got != 90 {
+		t.Errorf("health with 40 path suggestions = %d, want 90 (path penalty capped at 10)", got)
+	}
+	if got := (&NetworkAnalyzer{}).CalculateHealthScore(&Report{Suggestions: many[:3]}); got != 94 {
+		t.Errorf("health with 3 path suggestions = %d, want 94", got)
+	}
+}
+
 // TestAnalyzerAnomaliesOnGraphNodes: every anomaly is keyed by the graph node
 // /api/graph draws: Shadow-IT on the hub node, the others on the switch node
 // (F11).

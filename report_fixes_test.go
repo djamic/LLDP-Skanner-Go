@@ -488,20 +488,28 @@ func TestReportZabbixExportUsesDeviceIPs(t *testing.T) {
 	}
 }
 
-// reportBFSCore runs ExportBFSDepths and returns core_switch_ip.
-func reportBFSCore(t *testing.T, g *DJGraph) string {
+// reportBFSExport runs ExportBFSDepths and returns bfs_depths.json.
+func reportBFSExport(t *testing.T, g *DJGraph) BFSDepthExport {
 	t.Helper()
 	dir := t.TempDir()
 	exportsDir = dir
+	defer func() { exportsDir = guardExportsDir }()
 	ExportBFSDepths(g)
 	var out BFSDepthExport
 	reportReadJSON(t, filepath.Join(dir, "bfs_depths.json"), &out)
-	return out.CoreSwitchIP
+	return out
 }
 
-// TestReportBFSRoot (F76): the BFS root is the gateway's switch node, never a
-// VM or endpoint whose label merely contains the gateway IP, and without a
-// gateway node it is the same busiest switch on every run.
+// reportBFSCore runs ExportBFSDepths and returns core_switch_ip.
+func reportBFSCore(t *testing.T, g *DJGraph) string {
+	t.Helper()
+	return reportBFSExport(t, g).CoreSwitchIP
+}
+
+// TestReportBFSRoot (F76, R6): the BFS root is the gateway's switch node,
+// never a VM or endpoint whose label merely contains the gateway IP, on
+// every run. Without a gateway node there is no root: bfs_depths.json says
+// so instead of measuring from a guessed switch.
 func TestReportBFSRoot(t *testing.T) {
 	resetState(t)
 	gw := "aa:bb:cc:76:00:01"
@@ -527,9 +535,9 @@ func TestReportBFSRoot(t *testing.T) {
 		}
 	}
 
-	// The gateway is neither a node nor polled: the busiest switch, with ties
-	// broken the same way on every run. The endpoint's label contains the
-	// gateway IP as a substring only.
+	// The gateway is neither a node nor polled, and the endpoint's label
+	// contains the gateway IP as a substring only: no core, and the file
+	// says so (the busiest switch used to be taken, R6).
 	reportSetDevices()
 	gatewayIP = "10.0.76.1"
 	t.Cleanup(func() { gatewayIP = fixedGatewayIP })
@@ -540,10 +548,9 @@ func TestReportBFSRoot(t *testing.T) {
 	addInfoNode(h, "00:1b:21:76:00:14", "[ENDPOINT] Intel\n10.0.76.14")
 	h.AddEdge("aa:bb:cc:76:00:11", "00:1b:21:76:00:13", "GE1/0/3|")
 	h.AddEdge("aa:bb:cc:76:00:12", "00:1b:21:76:00:14", "GE1/0/3|")
-	for i := 0; i < 40; i++ {
-		if core := reportBFSCore(t, h); core != "aa:bb:cc:76:00:11" {
-			t.Fatalf("run %d: BFS root = %s, want aa:bb:cc:76:00:11", i, core)
-		}
+	out := reportBFSExport(t, h)
+	if out.CoreFound || out.CoreSwitchIP != "" || out.TotalNodes != 0 || len(out.DeepDevices) != 0 || !strings.Contains(out.Note, "10.0.76.1") {
+		t.Errorf("no gateway node: bfs_depths.json = %+v, want no core and a note naming the gateway", out)
 	}
 }
 

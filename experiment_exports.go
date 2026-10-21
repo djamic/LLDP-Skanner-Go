@@ -144,15 +144,19 @@ func ExportHealthScores(devices []*DeviceData, graph *DJGraph) {
 // A.4 — BFS Depth Export
 // ============================================================
 
-// BFSDepthExport holds BFS analysis results
+// BFSDepthExport holds BFS analysis results. CoreFound is false when the
+// topology has no core node (topologyCore): the file then holds no depths,
+// and Note says why.
 type BFSDepthExport struct {
-	ExportTime       string            `json:"export_time"`
-	CoreSwitchIP     string            `json:"core_switch_ip"`
+	ExportTime        string           `json:"export_time"`
+	CoreSwitchIP      string           `json:"core_switch_ip"`
+	CoreFound         bool             `json:"core_found"`
+	Note              string           `json:"note,omitempty"`
 	DepthDistribution map[int]int      `json:"depth_distribution"`
-	MaxDepth         int               `json:"max_depth"`
-	AverageDepth     float64           `json:"average_depth"`
-	DeepDevices      []DeepDeviceInfo  `json:"deep_devices"`
-	TotalNodes       int               `json:"total_nodes"`
+	MaxDepth          int              `json:"max_depth"`
+	AverageDepth      float64          `json:"average_depth"`
+	DeepDevices       []DeepDeviceInfo `json:"deep_devices"`
+	TotalNodes        int              `json:"total_nodes"`
 }
 
 // DeepDeviceInfo holds info about devices with depth > 3
@@ -162,20 +166,35 @@ type DeepDeviceInfo struct {
 	Info   string `json:"info"`
 }
 
-// ExportBFSDepths runs BFS from core and exports depth data
+// ExportBFSDepths runs BFS from core and exports depth data. The core and
+// the BFS are the analyzer's (topologyCore over the graph and the polled
+// devices, analyzerHopDepths over the links), so the switches and routers
+// listed deeper than 3 hops are exactly the path suggestions (AC-2, R6).
+// Without a core the file says so (core_found false) instead of measuring
+// from a guessed root.
 func ExportBFSDepths(graph *DJGraph) {
 	if graph == nil || len(graph.Nodes) == 0 {
 		return
 	}
 
-	coreID := reportBFSRoot(graph)
-	depths := graph.CalculateDepths(coreID)
+	data := graph.GetGraphData()
+	nodes := make(map[string]GraphNode, len(data.Nodes))
+	for _, n := range data.Nodes {
+		nodes[n.ID] = n
+	}
+	collectedDataMutex.RLock()
+	coreID := topologyCore(nodes, collectedData)
+	collectedDataMutex.RUnlock()
 
 	// Build depth distribution
 	distribution := make(map[int]int)
 	maxDepth := 0
 	totalDepth := 0
-	var deepDevices []DeepDeviceInfo
+	deepDevices := []DeepDeviceInfo{}
+	var depths map[string]int
+	if coreID != "" {
+		depths = analyzerHopDepths(data.Links, coreID)
+	}
 
 	for nodeID, depth := range depths {
 		distribution[depth]++
@@ -209,70 +228,21 @@ func ExportBFSDepths(graph *DJGraph) {
 	export := BFSDepthExport{
 		ExportTime:        time.Now().Format("2006-01-02 15:04:05"),
 		CoreSwitchIP:      coreID,
+		CoreFound:         coreID != "",
 		DepthDistribution: distribution,
 		MaxDepth:          maxDepth,
 		AverageDepth:      avgDepth,
 		DeepDevices:       deepDevices,
 		TotalNodes:        len(depths),
 	}
+	if coreID == "" {
+		export.Note = fmt.Sprintf("no core node: the gateway %s is not in the graph (no node with that IP, no polled device, no switch, router or LLDP neighbor with it as a label line) and there is no router node; set gateway_ip to the core switch IP", gatewayIP)
+	}
 
 	os.MkdirAll(exportsDir, 0755)
 	jsonData, _ := json.MarshalIndent(export, "", "  ")
 	os.WriteFile(filepath.Join(exportsDir, "bfs_depths.json"), jsonData, 0644)
 	fmt.Println("✅ BFS depth ma'lumotlari saqlandi: results/bfs_depths.json")
-}
-
-// reportBFSRoot picks the BFS root: the gateway's node (gatewayIP is a node
-// id, or the gateway is a polled switch), else a switch or router node with
-// the gateway IP as a whole label line, else the switch or router with the
-// most links. Nodes are visited in id order and ties go to the smallest id,
-// so a graph always gives the same root, and a VM or endpoint whose label
-// merely contains the gateway IP is never chosen.
-func reportBFSRoot(graph *DJGraph) string {
-	if graph.Nodes[gatewayIP] {
-		return gatewayIP
-	}
-	gatewayNode := ""
-	collectedDataMutex.RLock()
-	if gw, ok := collectedData[gatewayIP]; ok {
-		gatewayNode = reportDeviceNode(graph, gw)
-	}
-	collectedDataMutex.RUnlock()
-	if gatewayNode != "" {
-		return gatewayNode
-	}
-
-	ids := slices.Sorted(maps.Keys(graph.Nodes))
-	var switches []string
-	for _, id := range ids {
-		if group := graph.determineDeviceGroup(id, graph.SwitchInfo[id]); group == "switch" || group == "router" {
-			switches = append(switches, id)
-		}
-	}
-	for _, id := range switches {
-		if slices.Contains(strings.Split(graph.SwitchInfo[id], "\n"), gatewayIP) {
-			return id
-		}
-	}
-
-	candidates := switches
-	if len(candidates) == 0 {
-		candidates = ids
-	}
-	links := make(map[string]int)
-	for src, targets := range graph.Edges {
-		links[src] += len(targets)
-		for tgt := range targets {
-			links[tgt]++
-		}
-	}
-	root := candidates[0]
-	for _, id := range candidates {
-		if links[id] > links[root] {
-			root = id
-		}
-	}
-	return root
 }
 
 // ============================================================
