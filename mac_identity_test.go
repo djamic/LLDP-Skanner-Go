@@ -74,7 +74,11 @@ func TestOUICuratedVendorsAgreeWithIEEE(t *testing.T) {
 	if len(ieee) < 39000 {
 		t.Fatalf("oui.txt has %d records, want about 39,000", len(ieee))
 	}
-	for prefix, vendor := range extendedVendorDB {
+	for prefix, role := range ouiRegistry {
+		vendor := role.Vendor
+		if vendor == "" {
+			continue
+		}
 		org, listed := ieee[prefix]
 		words, known := ouiTestSameCompany[vendor]
 		switch {
@@ -123,10 +127,10 @@ func TestOUIVendorRenames(t *testing.T) {
 	}
 }
 
-// TestCategorizeVendor: curated names have an explicit category; IEEE names
+// TestOUICategorizeVendor: curated names have an explicit category; IEEE names
 // go through whole-word rules that leave multi-category vendors at
 // "endpoint" and never give "vm" (F6).
-func TestCategorizeVendor(t *testing.T) {
+func TestOUICategorizeVendor(t *testing.T) {
 	for _, c := range []struct{ vendor, want string }{
 		// curated names
 		{"SNR", "network"}, {"HPE", "network"}, {"H3C", "network"}, {"Eltex", "network"},
@@ -164,22 +168,71 @@ func TestCategorizeVendor(t *testing.T) {
 	}
 }
 
-// TestOUICuratedCategories: every curated vendor name has a category, and
-// "vm" belongs exactly to the virtual-NIC OUIs.
+// TestOUICuratedCategories: every curated vendor has an explicit category,
+// one per vendor name, and "vm" belongs exactly to the virtual-NIC OUIs.
 func TestOUICuratedCategories(t *testing.T) {
 	valid := map[string]bool{"camera": true, "access_point": true, "printer": true, "phone": true,
 		"iot": true, "vm": true, "network": true, "endpoint": true}
-	virtual := map[string]bool{}
-	for _, p := range hypervisorMACPrefixes {
-		virtual[p] = true
-	}
-	for prefix, vendor := range extendedVendorDB {
-		cat, ok := ouiVendorCategory[vendor]
-		if !ok || !valid[cat] {
-			t.Errorf("%s %q: category %q", prefix, vendor, cat)
+	byName := map[string]string{}
+	for prefix, role := range ouiRegistry {
+		if (role.Vendor == "") != (role.Category == "") || role.Vendor != "" && !valid[role.Category] {
+			t.Errorf("%s: vendor %q, category %q", prefix, role.Vendor, role.Category)
 		}
-		if (cat == "vm") != virtual[prefix] {
-			t.Errorf("%s %q: category %q, virtual NIC %v", prefix, vendor, cat, virtual[prefix])
+		if (role.Category == "vm") != (role.VirtNIC != "") {
+			t.Errorf("%s: category %q, virtual NIC %q", prefix, role.Category, role.VirtNIC)
+		}
+		if c, seen := byName[role.Vendor]; seen && c != role.Category {
+			t.Errorf("%s: vendor %q has categories %q and %q", prefix, role.Vendor, c, role.Category)
+		}
+		byName[role.Vendor] = role.Category
+	}
+}
+
+// TestOUIRegistry checks the shape of the one OUI table: how many OUIs carry
+// each role, and that every virtual NIC has its vendor, hypervisor type and
+// VM OS text.
+func TestOUIRegistry(t *testing.T) {
+	counts := map[string]int{}
+	for prefix, role := range ouiRegistry {
+		if _, ok := parseMAC(prefix + ":00:00:00"); !ok || strings.ToLower(prefix) != prefix {
+			t.Errorf("key %q is no lowercase OUI", prefix)
+		}
+		if role == (ouiRole{}) {
+			t.Errorf("%s has no role", prefix)
+		}
+		for field, value := range map[string]string{"Vendor": role.Vendor, "VirtNIC": role.VirtNIC,
+			"HypType": role.HypType, "VMOS": role.VMOS, "ServerNIC": role.ServerNIC, "BMC": role.BMC} {
+			if value != "" {
+				counts[field]++
+			}
+		}
+		if role.VirtNIC != "" && (role.Vendor == "" || role.HypType == "" || role.VMOS == "") {
+			t.Errorf("%s: virtual NIC without vendor, hypervisor type or VM OS: %+v", prefix, role)
+		}
+		if role.VirtNIC == "" && (role.HypType != "" || role.VMOS != "") {
+			t.Errorf("%s: hypervisor type or VM OS without a virtual NIC: %+v", prefix, role)
+		}
+	}
+	want := map[string]int{"Vendor": 225, "VirtNIC": 9, "HypType": 9, "VMOS": 9, "ServerNIC": 34, "BMC": 33}
+	if fmt.Sprint(counts) != fmt.Sprint(want) || len(ouiRegistry) != 272 {
+		t.Errorf("%d OUIs with roles %v, want 272 with %v", len(ouiRegistry), counts, want)
+	}
+}
+
+// TestMACHypervisorTypeOf: one hypervisor type per virtual-NIC OUI, the same
+// "VMware ESXi" for every VMware OUI.
+func TestMACHypervisorTypeOf(t *testing.T) {
+	for _, c := range []struct{ mac, want string }{
+		{"00:50:56:00:00:01", "VMware ESXi"}, {"00:0c:29:00:00:01", "VMware ESXi"},
+		{"00:05:69:00:00:01", "VMware ESXi"}, {"00:1c:14:00:00:01", "VMware ESXi"},
+		{"bc:24:11:00:00:01", "Proxmox VE"}, {"52:54:00:00:00:01", "QEMU/KVM"},
+		{"00:15:5d:00:00:01", "Hyper-V"}, {"00:16:3e:00:00:01", "Xen"}, {"08:00:27:00:00:01", "VirtualBox"},
+		{"00-50-56-00-00-01", "VMware ESXi"},
+		{"f8:db:88:11:22:33", ""}, {"hyp-x", ""}, {"", ""},
+	} {
+		got, ok := hypervisorTypeOf(c.mac)
+		if got != c.want || ok != (c.want != "") {
+			t.Errorf("hypervisorTypeOf(%q) = %q, %v; want %q", c.mac, got, ok, c.want)
 		}
 	}
 }
@@ -193,9 +246,9 @@ var ouiTestServerMakers = map[string][]string{
 	"Cisco UCS": {"cisco"}, "Fujitsu": {"fujitsu"}, "IBM": {"ibm"},
 }
 
-// TestServerNICsAreServerMakers: every OUI isServerNIC accepts belongs to the
+// TestOUIServerNICsAreServerMakers: every OUI isServerNIC accepts belongs to the
 // server maker of its label, so no PC or switch maker is a "server" (Q6, Q7).
-func TestServerNICsAreServerMakers(t *testing.T) {
+func TestOUIServerNICsAreServerMakers(t *testing.T) {
 	n := 0
 	for prefix, org := range ouiTestIEEENames(t) {
 		ok, label := isServerNIC(prefix + ":00:00:01")
@@ -212,8 +265,8 @@ func TestServerNICsAreServerMakers(t *testing.T) {
 	}
 }
 
-// TestServerNICDecisions pins the owner decisions on the server-NIC table.
-func TestServerNICDecisions(t *testing.T) {
+// TestMACServerNICDecisions pins the owner decisions on the server-NIC table.
+func TestMACServerNICDecisions(t *testing.T) {
 	for _, c := range []struct {
 		mac   string
 		ok    bool
@@ -241,9 +294,9 @@ func TestServerNICDecisions(t *testing.T) {
 	}
 }
 
-// TestIsBMC: a BMC is recognised only by a keyword in its LLDP or DNS name;
+// TestMACIsBMC: a BMC is recognised only by a keyword in its LLDP or DNS name;
 // the OUI only names the maker of a generic "BMC"/"IPMI" (Q5; F32, F33).
-func TestIsBMC(t *testing.T) {
+func TestMACIsBMC(t *testing.T) {
 	for _, c := range []struct{ mac, name, want string }{
 		{"", "", ""},
 		{"00:18:82:11:22:33", "", ""}, // Huawei NICs share the iBMC OUI
@@ -292,8 +345,8 @@ func TestIsBMC(t *testing.T) {
 	}
 }
 
-// TestBMCKeywordsReachable: no keyword is shadowed by an earlier one.
-func TestBMCKeywordsReachable(t *testing.T) {
+// TestMACBMCKeywordsReachable: no keyword is shadowed by an earlier one.
+func TestMACBMCKeywordsReachable(t *testing.T) {
 	for _, kw := range macBMCKeywords {
 		if kw.match == "serial" {
 			continue
@@ -313,9 +366,9 @@ var ouiTestBMCMakers = map[string][]string{
 	"Huawei iBMC": {"huawei"},
 }
 
-// TestBMCOUIMakers: every BMC type an OUI names is the maker IEEE registers
+// TestOUIBMCMakers: every BMC type an OUI names is the maker IEEE registers
 // the OUI to (F33).
-func TestBMCOUIMakers(t *testing.T) {
+func TestOUIBMCMakers(t *testing.T) {
 	n := 0
 	for prefix, org := range ouiTestIEEENames(t) {
 		kind := bmcTypeByOUI(prefix + ":00:00:01")
@@ -332,9 +385,9 @@ func TestBMCOUIMakers(t *testing.T) {
 	}
 }
 
-// TestVirtualNICOUIs: every virtual-NIC OUI is in every VM list: the
+// TestOUIVirtualNICs: every virtual-NIC OUI is in every VM list: the
 // virtual-NIC set, the vendor table (category vm) and the VM OS text (Q8).
-func TestVirtualNICOUIs(t *testing.T) {
+func TestOUIVirtualNICs(t *testing.T) {
 	noData := &DeviceData{}
 	for _, c := range []struct{ mac, vendor, os string }{
 		{"00:50:56:00:00:01", "VMware", "💻 VMware VM"},
@@ -515,9 +568,9 @@ func TestSpecialMAC(t *testing.T) {
 	}
 }
 
-// TestInvalidID: a MAC id is invalid when it is special; a hostname, IP or
+// TestMACInvalidID: a MAC id is invalid when it is special; a hostname, IP or
 // port id only when it is empty, all zeros, or a broken MAC (F38, F39; Q11).
-func TestInvalidID(t *testing.T) {
+func TestMACInvalidID(t *testing.T) {
 	for _, c := range []struct {
 		id   string
 		want bool
@@ -701,10 +754,10 @@ func TestOUIFetch(t *testing.T) {
 	}
 }
 
-// TestLookupVendorOrder: the curated name first; for other OUIs the IEEE
+// TestOUILookupVendorOrder: the curated name first; for other OUIs the IEEE
 // name; an IEEE record that names no vendor (empty, Private, an IEEE
 // Registration Authority block) is unknown (Q1; F5).
-func TestLookupVendorOrder(t *testing.T) {
+func TestOUILookupVendorOrder(t *testing.T) {
 	if !ouiDBOk || ouiDB == nil || len(ouiDB.RawDB()) < 39000 {
 		t.Fatalf("TestMain did not load oui.txt: ok=%v", ouiDBOk)
 	}
@@ -726,6 +779,104 @@ func TestLookupVendorOrder(t *testing.T) {
 	} {
 		if got := lookupVendor(c.mac); got != c.want {
 			t.Errorf("lookupVendor(%q) = %q, want %q", c.mac, got, c.want)
+		}
+	}
+}
+
+// TestParseMACOctets: a 6-byte OCTET STRING printed as text is read as the
+// raw bytes; canonicalMAC is parseMAC's canonical text.
+func TestParseMACOctets(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"\"P(J3:L\"", "50:28:4a:33:3a:4c"},
+		{"\"pM{?WA\"", "70:4d:7b:3f:57:41"},
+		{"STRING: \"pM{?WA\"", "70:4d:7b:3f:57:41"},
+		{"pM{?WA", "70:4d:7b:3f:57:41"},
+		{"\"eth0\"", ""},
+		{"\"GigabitEthernet1/0/47\"", ""},
+		{"", ""},
+	} {
+		m, ok := parseMACOctets(c.in)
+		got := ""
+		if ok {
+			got = m.String()
+		}
+		if got != c.want {
+			t.Errorf("parseMACOctets(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	for in, want := range map[string]string{"4C AE A3 8E 42 11": "4c:ae:a3:8e:42:11", "5894.8000.f7a3": "58:94:80:00:f7:a3",
+		"0:c:29:aa:bb:cd": "00:0c:29:aa:bb:cd", "FERUZA": "", "no:such:object": ""} {
+		if got := canonicalMAC(in); got != want {
+			t.Errorf("canonicalMAC(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestIdentifyMAC pins the one entry point on typical addresses.
+func TestIdentifyMAC(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want MACIdentity
+	}{
+		{"00-50-56-AA-BB-CC", MACIdentity{Valid: true, Canonical: "00:50:56:aa:bb:cc", OUI: "00:50:56",
+			Vendor: "VMware", Category: "vm", VirtNIC: "VMware", HypType: "VMware ESXi", VMOS: "💻 VMware VM"}},
+		{"52:54:00:12:34:56", MACIdentity{Valid: true, Canonical: "52:54:00:12:34:56", OUI: "52:54:00", Local: true,
+			Vendor: "QEMU/KVM", Category: "vm", VirtNIC: "QEMU/KVM", HypType: "QEMU/KVM", VMOS: "💻 KVM/Proxmox VM"}},
+		{"F8 DB 88 11 22 33", MACIdentity{Valid: true, Canonical: "f8:db:88:11:22:33", OUI: "f8:db:88",
+			Vendor: "Dell", Category: "network", ServerNIC: "Dell", BMCType: "Dell iDRAC"}},
+		{"74:ac:b9:96:47:f5", MACIdentity{Valid: true, Canonical: "74:ac:b9:96:47:f5", OUI: "74:ac:b9",
+			Vendor: "Ubiquiti Inc", Category: "access_point"}},
+		{"da:a1:19:00:00:01", MACIdentity{Valid: true, Canonical: "da:a1:19:00:00:01", OUI: "da:a1:19",
+			Local: true, Random: true, Category: "endpoint"}},
+		{"01:00:5e:00:00:fb", MACIdentity{Valid: true, Canonical: "01:00:5e:00:00:fb", OUI: "01:00:5e",
+			Multicast: true, Special: true, Category: "endpoint"}},
+		{"00:00:00:12:34:56", MACIdentity{Valid: true, Canonical: "00:00:00:12:34:56", OUI: "00:00:00",
+			ZeroOUI: true, Special: true, Category: "endpoint"}},
+		{"ff:ff:ff:ff:ff:ff", MACIdentity{Valid: true, Canonical: "ff:ff:ff:ff:ff:ff", OUI: "ff:ff:ff",
+			Broadcast: true, Multicast: true, Local: true, Special: true, Category: "endpoint"}},
+		{"B-318/1", MACIdentity{Category: "endpoint"}},
+	} {
+		got := IdentifyMAC(c.in)
+		want := c.want
+		want.Input = c.in
+		if want.Valid {
+			want.MAC, _ = parseMAC(c.in)
+		}
+		if got != want {
+			t.Errorf("IdentifyMAC(%q) =\n %+v\nwant\n %+v", c.in, got, want)
+		}
+	}
+}
+
+// TestIdentifyMACMatchesHelpers: the entry point and the helpers the other
+// files call give the same answers, on the fixture's MACs, one MAC per
+// registry OUI and every text form of a few.
+func TestIdentifyMACMatchesHelpers(t *testing.T) {
+	corpus := map[string]bool{"": true, "B-318/1": true, "fe80::1": true, "no:such:object:available:on:this:agent:at:this:oid": true}
+	for _, d := range fixtureDevices(t) {
+		corpus[d.ChassisID] = true
+		for _, e := range d.MACTable {
+			corpus[e.MACAddress] = true
+		}
+	}
+	for prefix := range ouiRegistry {
+		for _, form := range ouiTestForms(prefix + ":0a:0b:0c") {
+			corpus[form] = true
+		}
+	}
+	for s := range corpus {
+		id := IdentifyMAC(s)
+		category := "endpoint"
+		if v := getMACVendor(s); v != "" {
+			category = categorizeVendor(v)
+		}
+		server, serverName := isServerNIC(s)
+		hyp, hypOK := hypervisorTypeOf(s)
+		if id.Vendor != getMACVendor(s) || id.Category != category || (id.VirtNIC != "") != isHypervisorMAC(s) ||
+			(id.ServerNIC != "") != server || id.ServerNIC != serverName || id.HypType != hyp || (hyp != "") != hypOK ||
+			id.VMOS != vmOSFromOUI(s) || id.BMCType != bmcTypeByOUI(s) || id.Random != isRandomMAC(s) ||
+			id.Special != isSpecialMAC(s) || id.Canonical != canonicalMAC(s) || (id.Valid && id.OUI != ouiKey(s)) {
+			t.Fatalf("IdentifyMAC(%q) = %+v disagrees with the helpers", s, id)
 		}
 	}
 }

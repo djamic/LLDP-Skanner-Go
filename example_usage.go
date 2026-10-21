@@ -567,11 +567,6 @@ func cleanSNMPValue(val string) string {
 	return val
 }
 
-// hexStringToMAC converts any MAC format to canonical "4c:ae:a3:8e:42:11"
-func hexStringToMAC(hex string) string {
-	return normalizeMAC(hex)
-}
-
 // Helper to normalize Chassis IDs based on Subtype (RFC 2922)
 func normalizeID(id string, subtype int) string {
 	id = cleanSNMPValue(id)
@@ -1486,112 +1481,6 @@ func runMonitor24h() {
 	os.Exit(0)
 }
 
-// Hypervisor MAC prefixes (VMware, Proxmox/KVM, Hyper-V, Xen) — these are VIRTUAL NIC OUIs
-var hypervisorMACPrefixes = []string{
-	// VMware
-	"00:50:56", "00:0c:29", "00:05:69", "00:1c:14",
-	// Proxmox / KVM / QEMU
-	"bc:24:11", "52:54:00",
-	// Microsoft Hyper-V
-	"00:15:5d",
-	// Xen
-	"00:16:3e",
-	// Oracle VirtualBox
-	"08:00:27",
-}
-
-// isHypervisorMAC checks if a MAC address belongs to a known hypervisor vendor
-func isHypervisorMAC(mac string) bool {
-	key := ouiKey(mac)
-	return key != "" && slices.Contains(hypervisorMACPrefixes, key)
-}
-
-// isHypervisorPort checks if the majority of MACs on a port are from hypervisors
-func isHypervisorPort(macs []string) bool {
-	if len(macs) == 0 {
-		return false
-	}
-	vmCount := 0
-	for _, mac := range macs {
-		if isHypervisorMAC(mac) {
-			vmCount++
-		}
-	}
-	// If more than 50% of MACs are hypervisor MACs, it's a VM server
-	return float64(vmCount)/float64(len(macs)) > 0.5
-}
-
-// isServerNIC returns true if the MAC belongs to a known server vendor NIC
-// (Dell PowerEdge, HPE ProLiant, SuperMicro, Lenovo ThinkSystem, Cisco UCS etc.)
-// Used to detect ESXi/KVM hypervisors that run on physical servers.
-func isServerNIC(mac string) (bool, string) {
-	// Only OUIs of server makers: PC/laptop ODMs (LCFC, Wistron, Inventec,
-	// Quanta, GIGA-BYTE, Intel, Dell 00:23:ae) and the SNR switches
-	// (f8:f0:82) are left out (Q6, Q7).
-	prefixVendor := map[string]string{
-		// Dell
-		"4c:d9:8f": "Dell PowerEdge", "f8:db:88": "Dell",
-		"18:db:f2": "Dell", "b0:83:fe": "Dell", "b4:45:06": "Dell",
-		"00:14:22": "Dell", "00:21:9b": "Dell",
-		"00:1a:a0": "Dell", "d4:ae:52": "Dell",
-		"34:17:eb": "Dell", "00:26:b9": "Dell",
-		// HPE ProLiant NIC OUIs (iLO, FlexLOM — NOT 4c:ae:a3 which is HPE switch)
-		"10:e7:c6": "HPE",
-		"00:26:55": "HPE", "1c:98:ec": "HPE",
-		"94:57:a5": "HPE", "ec:b1:d7": "HPE",
-		"b4:7a:f1": "HPE ProLiant", "e8:39:35": "HPE",
-		"3c:a8:2a": "HPE ProLiant", "48:df:37": "HPE ProLiant",
-		"5c:ed:8c": "HPE ProLiant", "9c:b6:54": "HPE ProLiant",
-		// SuperMicro, Tyan
-		"0c:c4:7a": "SuperMicro", "3c:ec:ef": "SuperMicro",
-		"ac:1f:6b": "SuperMicro",
-		"00:25:90": "SuperMicro", "a0:42:3f": "Tyan",
-		// Lenovo (34:40:b5 is registered to IBM, whose x86 servers Lenovo took over)
-		"34:40:b5": "Lenovo",
-		// Cisco UCS
-		"00:25:b5": "Cisco UCS", "00:2a:6a": "Cisco UCS", "a8:9d:21": "Cisco UCS",
-		// Fujitsu
-		"90:1b:0e": "Fujitsu",
-		// IBM
-		"00:14:5e": "IBM", "00:21:5e": "IBM",
-	}
-	if vendor, ok := prefixVendor[ouiKey(mac)]; ok {
-		return true, vendor
-	}
-	return false, ""
-}
-
-// detectOSFromMAC guesses the OS of a VM: by a TTL ping when its IP is known,
-// else by its virtual-NIC OUI. The *DeviceData argument is not used: the
-// LLDP-name step it fed could never match, because MACs known from LLDP never
-// reach the VM branch (F37).
-func detectOSFromMAC(mac string, macToIP map[string]string, _ *DeviceData) string {
-	macNorm := normalizeMAC(mac)
-
-	// 1. TTL fingerprinting via quick ping (1 attempt, 1 second timeout)
-	if ip, ok := macToIP[macNorm]; ok && ip != "" {
-		if osLabel := detectOSByTTL(ip); osLabel != "" {
-			return osLabel
-		}
-	}
-
-	// 2. Fallback: guess by MAC prefix
-	switch ouiKey(mac) {
-	case "00:50:56", "00:0c:29", "00:05:69", "00:1c:14":
-		return "💻 VMware VM"
-	case "52:54:00", "bc:24:11":
-		return "💻 KVM/Proxmox VM"
-	case "00:15:5d":
-		return "🪟 Hyper-V VM"
-	case "00:16:3e":
-		return "💻 Xen VM"
-	case "08:00:27":
-		return "💻 VirtualBox VM"
-	}
-
-	return "❓ Unknown VM"
-}
-
 // runPing sends the single ping used by detectOSByTTL and returns its output.
 // Tests replace it so no packets are sent.
 var runPing = pingOnce
@@ -1645,41 +1534,6 @@ func detectOSByTTL(ip string) string {
 	
 	return ""
 }
-// isSpecialMAC checks if MAC is broadcast, null, multicast or zero-OUI (should be
-// filtered everywhere, Q11). It reads the bits of the parsed address, so text that
-// is no MAC (a hostname, an IP) is never special (F38).
-func isSpecialMAC(mac string) bool {
-	m, ok := parseMAC(mac)
-	return ok && m.IsSpecial()
-}
-
-// isRandomMAC checks if a MAC address uses locally administered address (random/private):
-// the U/L bit is set and the I/G bit is not, e.g. da:a1:19:... (a phone's private
-// Wi-Fi address). A known virtual-NIC OUI is a VM, not random, even with the
-// U/L bit set (52:54:00 QEMU/KVM) (Q4). Text that is no MAC is never random.
-func isRandomMAC(mac string) bool {
-	m, ok := parseMAC(mac)
-	return ok && m.IsRandom() && !isHypervisorMAC(m.String())
-}
-
-// isBMC detects server BMC/management interfaces (iDRAC, iLO, IPMI, XCC, iRMC, CIMC)
-// by a keyword in the LLDP or DNS name (Q5). The OUI only names the maker of a
-// BMC whose name just says "BMC" or "IPMI": server makers use the same OUIs
-// for ordinary NICs, so a server NIC without such a name is no BMC.
-// Returns (isBMC bool, bmcType string e.g. "Dell iDRAC").
-func isBMC(mac, name string) (bool, string) {
-	kind := bmcTypeByName(name)
-	if kind == "" {
-		return false, ""
-	}
-	if kind == "BMC" || kind == "IPMI" {
-		if maker := bmcTypeByOUI(mac); maker != "" {
-			kind = maker
-		}
-	}
-	return true, kind
-}
-
 
 // DNS hostname cache to avoid repeated lookups
 var (
@@ -1734,34 +1588,6 @@ func resolveHostname(ip string) string {
 	dnsCacheMutex.Unlock()
 
 	return name
-}
-// isInvalidID checks if an ID is garbage/invalid (should be filtered).
-// A MAC is invalid when isSpecialMAC says so (null, broadcast, multicast,
-// zero OUI). Any other id (hostname, IP, port name) is invalid only when it is
-// empty or all zeros ("0.0.0.0", "0:0:0:0", "::"), or when it is a broken MAC
-// ("01:ac:10:01:0f"); short hostnames like "SW1" are valid (F38, F39; Q11).
-func isInvalidID(id string) bool {
-	if m, ok := parseMAC(id); ok {
-		return m.IsSpecial()
-	}
-	id = strings.TrimSpace(id)
-	if strings.Trim(id, "0:.- ") == "" {
-		return true
-	}
-	if net.ParseIP(id) != nil {
-		return false
-	}
-	return macIsBrokenMAC(id)
-}
-
-// getMACVendor returns vendor name for a MAC address based on OUI
-// Delegates to lookupVendor() which uses IEEE OUI database + extendedVendorDB
-func getMACVendor(mac string) string {
-	vendor := lookupVendor(mac)
-	if vendor == "Unknown" {
-		return ""
-	}
-	return vendor
 }
 
 // countEdges counts total edges in graph
