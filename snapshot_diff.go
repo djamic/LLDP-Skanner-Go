@@ -212,7 +212,7 @@ func CreateSnapshot(devices []*DeviceData, graph *DJGraph, report *Report) *Netw
 
 	// Populate ActiveHosts from devices
 	for _, dev := range devices {
-		vendor := getMACVendor(dev.ChassisID)
+		vendor := reportDeviceVendor(dev) // the vendor every report shows (F71)
 
 		// Calculate per-device health from report
 		deviceHealth := 100

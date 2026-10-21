@@ -164,7 +164,7 @@
     "172.20.254.223": {"SysName": "HP", "Vendor": "Hewlett Packard", "Health": 100, "Unreachable": false},
     "172.20.254.226": {"SysName": "Jamic", "Vendor": "Eltex", "Health": 100, "Unreachable": false},
     "172.20.254.247": {"SysName": "HP", "Vendor": "Hewlett Packard", "Health": 100, "Unreachable": false},
-    "172.20.254.249": {"SysName": "HUAWEI", "Vendor": "", "Health": 100, "Unreachable": true}
+    "172.20.254.249": {"SysName": "HUAWEI", "Vendor": "Huawei", "Health": 100, "Unreachable": true}
   },
   "snapshot_macs": {
     "00:00:01:00:01:15": {"switch": "172.20.230.46", "port": 48, "vendor": "XEROX CORPORATION"},

@@ -53,7 +53,7 @@ func reportMDSection(md, start string, ends ...string) string {
 var reportHTMLDeviceRow = regexp.MustCompile(`<tr><td>([0-9.]+)</td><td>[^<]*</td><td>([^<]*)</td>`)
 
 // TestReportDeviceVendorConsistent (F71): every report and export shows the
-// same vendor for a device. The OUI vendor comes first; without one the
+// same vendor for a device, and so do the snapshot hosts (H11). The OUI vendor comes first; without one the
 // sysName keywords decide; unknown is "" in the device rows and the
 // "Unknown" bucket in vendor_stats.json.
 func TestReportDeviceVendorConsistent(t *testing.T) {
@@ -124,6 +124,11 @@ func TestReportDeviceVendorConsistent(t *testing.T) {
 	}
 	var stats VendorStatsExport
 	reportReadJSON(t, filepath.Join(dir, "vendor_stats.json"), &stats)
+
+	// Snapshot hosts (InfluxDB device events, the event log), H11
+	for ip, host := range CreateSnapshot(devices, nil, nil).ActiveHosts {
+		record("snapshot", ip, host.Vendor)
+	}
 	gotBuckets := map[string]int{}
 	for _, v := range stats.Vendors {
 		gotBuckets[v.Vendor] = v.DeviceCount
@@ -131,7 +136,7 @@ func TestReportDeviceVendorConsistent(t *testing.T) {
 
 	wantBuckets := map[string]int{}
 	for ip, vendor := range want {
-		for _, source := range []string{"summary", "full", "audit", "health"} {
+		for _, source := range []string{"summary", "full", "audit", "health", "snapshot"} {
 			if v, ok := got[ip][source]; !ok || v != vendor {
 				t.Errorf("%s: %s vendor = %q (present %v), want %q", ip, source, v, ok, vendor)
 			}
