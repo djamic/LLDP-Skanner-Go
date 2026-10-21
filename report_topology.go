@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -980,15 +981,21 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 	}
 
 	data := graph.GetGraphData()
+	nodeByID := make(map[string]GraphNode, len(data.Nodes))
+	for _, n := range data.Nodes {
+		nodeByID[n.ID] = n
+	}
+	hostNICs, covered := reportHypervisorHosts(data, nodeByID)
 
-	// Find all hypervisor nodes
+	// Find all hypervisor nodes, except those drawn inside a hyp- node's
+	// diagram (its host NIC, or one of its vNIC children)
 	type hypInfo struct {
 		ID, Label, SafeID string
 	}
 	var hypervisors []hypInfo
 
 	for _, n := range data.Nodes {
-		if n.Group != "hypervisor" {
+		if n.Group != "hypervisor" || covered[n.ID] {
 			continue
 		}
 		label := n.SysName
@@ -1013,8 +1020,15 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 		var sb strings.Builder
 		sb.WriteString("graph LR\n")
 
-		// Hypervisor node (cyan hexagon)
+		// Hypervisor node (cyan hexagon), with the host's own NIC(s)
 		hypDisplayLabel := strings.ReplaceAll(hyp.Label, "\n", "<br>")
+		for _, nic := range hostNICs[hyp.ID] {
+			if ip := reportNodeIP(nodeByID[nic]); ip != "" {
+				hypDisplayLabel += fmt.Sprintf("<br>Host: %s (%s)", nic, ip)
+			} else {
+				hypDisplayLabel += "<br>Host: " + nic
+			}
+		}
 		sb.WriteString(fmt.Sprintf("  %s{{\"%s\"}}\n", hyp.SafeID, hypDisplayLabel))
 
 		// Find parent switch(es) connected TO this hypervisor
@@ -1051,27 +1065,29 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 			}
 		}
 
-		// Find VM children connected FROM this hypervisor
+		// Find VM children connected FROM this hypervisor: only vNIC links
+		// (detectHypervisors) lead to VMs. A VM that is itself a hypervisor
+		// (a nested ESXi) is drawn in the hypervisor colour.
 		vmCount := 0
 		for _, link := range data.Links {
-			if link.Source == hyp.ID {
+			if link.Source == hyp.ID && link.Label == "vNIC" {
 				tgtSafe := sanitizeMermaidID(link.Target)
 				if len(tgtSafe) <= 4 {
 					continue
 				}
 				tgtLabel := link.Target
-				for _, n := range data.Nodes {
-					if n.ID == link.Target {
-						if n.SysName != "" {
-							lines := strings.SplitN(n.SysName, "\n", 3)
-							tgtLabel = strings.Join(lines[:min(len(lines), 2)], "<br>")
-						}
-						break
-					}
+				child := nodeByID[link.Target]
+				if child.SysName != "" {
+					lines := strings.SplitN(child.SysName, "\n", 3)
+					tgtLabel = strings.Join(lines[:min(len(lines), 2)], "<br>")
 				}
 				sb.WriteString(fmt.Sprintf("  %s[\"%s\"]\n", tgtSafe, tgtLabel))
 				sb.WriteString(fmt.Sprintf("  %s-->%s\n", hyp.SafeID, tgtSafe))
-				sb.WriteString(fmt.Sprintf("  style %s fill:#9C27B0,stroke:#7B1FA2,color:#fff\n", tgtSafe))
+				if child.Group == "hypervisor" {
+					sb.WriteString(fmt.Sprintf("  style %s fill:#26C6DA,stroke:#0097A7,color:#fff\n", tgtSafe))
+				} else {
+					sb.WriteString(fmt.Sprintf("  style %s fill:#9C27B0,stroke:#7B1FA2,color:#fff\n", tgtSafe))
+				}
 				vmCount++
 			}
 		}
@@ -1086,6 +1102,70 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 	}
 
 	return md.String()
+}
+
+// reportHypervisorHosts finds the hypervisor-group nodes that belong to a
+// hyp- node: its vNIC children, and the host's own NIC, which the graph
+// keeps as a separate node on the same switch port. hosts maps a hyp- node
+// to its host NICs; covered marks all of these nodes, which get no diagram
+// of their own.
+func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts map[string][]string, covered map[string]bool) {
+	hypOnPort := map[string][]string{} // switch node + "|" + port → hyp- nodes
+	for _, l := range data.Links {
+		if strings.HasPrefix(l.Target, "hyp-") {
+			if port := reportEdgePort(l.Label); port != "" {
+				key := l.Source + "|" + port
+				hypOnPort[key] = append(hypOnPort[key], l.Target)
+			}
+		}
+	}
+	hosts = map[string][]string{}
+	covered = map[string]bool{}
+	for _, l := range data.Links {
+		n := nodes[l.Target]
+		if n.Group != "hypervisor" || strings.HasPrefix(n.ID, "hyp-") {
+			continue
+		}
+		if strings.HasPrefix(l.Source, "hyp-") && l.Label == "vNIC" {
+			covered[n.ID] = true
+			continue
+		}
+		for _, hyp := range hypOnPort[l.Source+"|"+reportEdgePort(l.Label)] {
+			covered[n.ID] = true
+			hosts[hyp] = append(hosts[hyp], n.ID)
+		}
+	}
+	for hyp, nics := range hosts {
+		slices.Sort(nics)
+		hosts[hyp] = slices.Compact(nics)
+	}
+	return hosts, covered
+}
+
+// reportEdgePort returns the local port an edge label starts with, as a
+// hypervisor port key: "GE1/0/4 [T] ↓1M ↑0M", "ge1/0/4" and
+// "GE1/0/4 [V100]|eth0" all give "ge1/0/4"; "" when there is none.
+func reportEdgePort(label string) string {
+	local, _, _ := strings.Cut(label, "|")
+	fields := strings.Fields(local)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.ToLower(normalizePortName(fields[0]))
+}
+
+// reportNodeIP returns a node's IP: its id when that is an IP, else the
+// first label line that is an IP address.
+func reportNodeIP(n GraphNode) string {
+	if n.IP != "" {
+		return n.IP
+	}
+	for _, line := range strings.Split(n.SysName, "\n") {
+		if trimmed := strings.TrimSpace(line); net.ParseIP(trimmed) != nil {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 // sanitizeMermaidID creates a safe mermaid node ID
@@ -1306,17 +1386,7 @@ func generateAuditMD(groups []string) string {
 					info = lines[0]
 				}
 
-				ip := n.IP
-				if ip == "" && n.SysName != "" {
-					// Try to extract IP from info lines
-					for _, line := range strings.Split(n.SysName, "\n") {
-						trimmed := strings.TrimSpace(line)
-						if net.ParseIP(trimmed) != nil {
-							ip = trimmed
-							break
-						}
-					}
-				}
+				ip := reportNodeIP(n)
 
 				conn := connectedTo[n.ID]
 				if conn == "" {

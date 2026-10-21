@@ -248,3 +248,96 @@ func TestReportParseHubID(t *testing.T) {
 		}
 	}
 }
+
+// reportHypDiagrams splits GenerateHypervisorDiagrams output into its
+// diagrams, keyed by the hypervisor node's mermaid id.
+func reportHypDiagrams(md string) map[string]string {
+	out := map[string]string{}
+	for _, part := range strings.Split(md, "### Hypervisor #")[1:] {
+		m := regexp.MustCompile("(?m)^```mermaid\ngraph LR\n  (\\w+)\\{\\{").FindStringSubmatch(part)
+		if m == nil {
+			out["?"+part] = part
+			continue
+		}
+		out[m[1]] = part
+	}
+	return out
+}
+
+func reportVMCount(part string) string {
+	m := regexp.MustCompile(`\*\*Virtual mashinalar:\*\* (\d+) ta`).FindStringSubmatch(part)
+	if m == nil {
+		return "?"
+	}
+	return m[1]
+}
+
+// TestReportHypervisorDiagramsMergeHost (F73): one diagram per hypervisor
+// port. The ESXi host's own NIC, which the graph keeps as a separate node on
+// the same switch port, is shown inside the hyp- diagram instead of as a
+// second hypervisor with 0 VMs, and only vNIC links count as VMs.
+func TestReportHypervisorDiagramsMergeHost(t *testing.T) {
+	resetState(t)
+	var macs []MACEntry
+	macs = append(macs, macEntries(4, "d4:f5:ef:73:04:01", "00:0c:29:73:04:02", "00:0c:29:73:04:03", "00:0c:29:73:04:04")...)
+	macs = append(macs, macEntries(6, "d4:f5:ef:73:06:01", "00:0c:29:73:06:02", "00:0c:29:73:06:03")...)
+	sw := &DeviceData{IP: "10.0.73.2", SysName: "sw-73", ChassisID: "4c:ae:a3:73:00:02",
+		Interfaces: gigabitPorts(8, nil), MACTable: macs}
+	reportSetDevices(sw)
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP["d4:f5:ef:73:04:01"] = "10.0.73.69"
+	globalMACtoIP["00:0c:29:73:04:02"] = "10.0.73.66"
+	globalMACtoIPMutex.Unlock()
+	ConfirmedESXiMACs.Store("d4:f5:ef:73:04:01", true) // host NIC next to hyp-…-ge1_0_4
+	ConfirmedESXiMACs.Store("00:0c:29:73:06:03", true) // vNIC child of hyp-…-ge1_0_6
+	g := reportBuildGraph()
+
+	hyp4, hyp6 := "hyp-4c:ae:a3:73:00:02-ge1_0_4", "hyp-4c:ae:a3:73:00:02-ge1_0_6"
+	for _, id := range []string{hyp4, hyp6} {
+		if !g.Nodes[id] {
+			t.Fatalf("precondition: graph has no %s", id)
+		}
+	}
+	md := GenerateHypervisorDiagrams(g)
+	diagrams := reportHypDiagrams(md)
+	if len(diagrams) != 2 {
+		t.Errorf("%d hypervisor diagrams, want 2 (one per hypervisor port):\n%s", len(diagrams), md)
+	}
+	d4 := diagrams[sanitizeMermaidID(hyp4)]
+	if c := reportVMCount(d4); c != "3" {
+		t.Errorf("%s: %s VMs, want 3", hyp4, c)
+	}
+	if !strings.Contains(d4, "Host: d4:f5:ef:73:04:01 (10.0.73.69)") {
+		t.Errorf("%s diagram does not name its host NIC:\n%s", hyp4, d4)
+	}
+	// The confirmed ESXi vNIC child (a nested ESXi) is one of the VMs, drawn
+	// in the hypervisor colour, and has no diagram of its own.
+	d6 := diagrams[sanitizeMermaidID(hyp6)]
+	if c := reportVMCount(d6); c != "2" {
+		t.Errorf("%s: %s VMs, want 2", hyp6, c)
+	}
+	nested := sanitizeMermaidID("00:0c:29:73:06:03")
+	if !strings.Contains(d6, "  style "+nested+" fill:#26C6DA,") {
+		t.Errorf("%s diagram does not draw its ESXi child as a hypervisor:\n%s", hyp6, d6)
+	}
+
+	// A hypervisor host on a port without a hyp- node keeps its own diagram.
+	// Only vNIC links lead to VMs: a node relabelled as a hypervisor (here a
+	// switch, see F36) gets no VMs from its other links.
+	h := NewDJGraph()
+	addInfoNode(h, "4c:ae:a3:73:00:09", "sw-x\n10.0.73.9")
+	addInfoNode(h, "5c:ed:8c:73:09:01", "[HYPERVISOR] HPE ProLiant Server\n[VM] 🐧 Linux\n10.0.73.91")
+	h.AddEdge("4c:ae:a3:73:00:09", "5c:ed:8c:73:09:01", "GE1/0/9 [T]")
+	addInfoNode(h, "4c:ae:a3:73:00:0a", "[HYPERVISOR] VMware ESXi\nsw-y\n10.0.73.10")
+	addInfoNode(h, "00:1b:21:73:0a:01", "[ENDPOINT]")
+	h.AddEdge("4c:ae:a3:73:00:09", "4c:ae:a3:73:00:0a", "GE1/0/24|GE1/0/1")
+	h.AddEdge("4c:ae:a3:73:00:0a", "00:1b:21:73:0a:01", "GE1/0/3|")
+	got := reportHypDiagrams(GenerateHypervisorDiagrams(h))
+	if len(got) != 2 {
+		t.Errorf("standalone hypervisor hosts: %d diagrams, want 2", len(got))
+	}
+	relabelled := got[sanitizeMermaidID("4c:ae:a3:73:00:0a")]
+	if c := reportVMCount(relabelled); c != "0" || strings.Contains(relabelled, sanitizeMermaidID("00:1b:21:73:0a:01")) {
+		t.Errorf("non-vNIC links of a hypervisor are drawn or counted as VMs (%s VMs):\n%s", c, relabelled)
+	}
+}
