@@ -21,10 +21,12 @@ type NetworkAnalyzer struct {
 	index *analyzerIndex // Data indexed for the checks, built on first use
 }
 
-// analyzerIndex is the analyzer input in a fixed order.
+// analyzerIndex is the analyzer input in a fixed order, with the topology
+// nodes by id.
 type analyzerIndex struct {
 	devices []*DeviceData          // DevicesData in IP order
 	byIP    map[string]*DeviceData // DevicesData by IP
+	nodes   map[string]GraphNode   // Topology nodes by id
 }
 
 // idx builds the index of na.Data on first use.
@@ -32,7 +34,7 @@ func (na *NetworkAnalyzer) idx() *analyzerIndex {
 	if na.index != nil {
 		return na.index
 	}
-	ix := &analyzerIndex{byIP: make(map[string]*DeviceData)}
+	ix := &analyzerIndex{byIP: make(map[string]*DeviceData), nodes: make(map[string]GraphNode)}
 	for i := range na.Data.DevicesData {
 		d := &na.Data.DevicesData[i]
 		ix.byIP[d.IP] = d
@@ -40,8 +42,34 @@ func (na *NetworkAnalyzer) idx() *analyzerIndex {
 	for _, ip := range sortedDeviceIPs(ix.byIP) {
 		ix.devices = append(ix.devices, ix.byIP[ip])
 	}
+	for _, n := range na.Data.Topology.Nodes {
+		ix.nodes[n.ID] = n
+	}
 	na.index = ix
 	return ix
+}
+
+// analyzerSwitchIDs lists the node ids the graph can give the polled switch
+// d: normalizeID of its chassis id (as buildGraphFromSnapshot does), then
+// its IP.
+func analyzerSwitchIDs(d *DeviceData) []string {
+	if id := normalizeID(d.ChassisID, 0); id != "" && id != d.IP {
+		return []string{id, d.IP}
+	}
+	return []string{d.IP}
+}
+
+// switchNode returns the topology node of the polled switch with this IP, or
+// the IP itself when the topology has no node for it.
+func (ix *analyzerIndex) switchNode(ip string) string {
+	if d, ok := ix.byIP[ip]; ok {
+		for _, id := range analyzerSwitchIDs(d) {
+			if _, ok := ix.nodes[id]; ok {
+				return id
+			}
+		}
+	}
+	return ip
 }
 
 // NewAnalyzer creates a new analyzer instance
@@ -283,45 +311,26 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 	}
 }
 
-// analyzePaths checks for long paths (hops > 3)
+// analyzePaths checks for long paths: switches and routers more than 3 hops
+// from the core (F19). Endpoints, hubs and VMs hang below their switch and
+// are not reported.
 func (na *NetworkAnalyzer) analyzePaths() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
 
-	// Reconstruct graph from topology data to run BFS
-	graph := NewDJGraph()
-	for _, node := range na.Data.Topology.Nodes {
-		graph.AddNode(node.ID)
-		graph.AddNodeInfo(node.ID, node.SysName)
-	}
-	for _, link := range na.Data.Topology.Links {
-		graph.AddEdge(link.Source, link.Target, link.Label)
-	}
-
 	// Calculate depths from Core Gateway
 	// Uses gatewayIP from 'gateway_ip' config file
-	coreID := gatewayIP
-	// If core not in nodes, try to find a "router" type node as fallback
-	if !graph.Nodes[coreID] {
-		for _, node := range na.Data.Topology.Nodes {
-			if node.NodeType == "router" {
-				coreID = node.ID
-				break
-			}
-		}
+	coreID := na.coreNode()
+	if coreID == "" {
+		return suggestions
 	}
+	ix := na.idx()
+	depths := analyzerHopDepths(na.Data.Topology.Links, coreID)
 
-	longPaths := graph.GetLongPaths(coreID, 3) // Threshold = 3 hops
-
-	for _, nodeID := range longPaths {
-		// Get node details
-		var nodeInfo GraphNode
-		for _, n := range na.Data.Topology.Nodes {
-			if n.ID == nodeID {
-				nodeInfo = n
-				break
-			}
+	for _, nodeID := range slices.Sorted(maps.Keys(depths)) {
+		nodeInfo := ix.nodes[nodeID]
+		if depths[nodeID] <= 3 || (nodeInfo.NodeType != "switch" && nodeInfo.NodeType != "router") {
+			continue // Threshold = 3 hops
 		}
-
 		suggestions = append(suggestions, OptimizationSuggestion{
 			Type:        "path",
 			Severity:    "medium",
@@ -332,6 +341,61 @@ func (na *NetworkAnalyzer) analyzePaths() []OptimizationSuggestion {
 	}
 
 	return suggestions
+}
+
+// coreNode returns the topology node of the core gateway (gatewayIP): the
+// node with that id, the node of the polled switch with that IP, or a node
+// whose label has the gateway IP on a line of its own (for example an LLDP
+// endpoint with that management IP). Otherwise it returns the first router
+// node, or "" when the topology has neither.
+func (na *NetworkAnalyzer) coreNode() string {
+	ix := na.idx()
+	ids := slices.Sorted(maps.Keys(ix.nodes))
+	if gatewayIP != "" {
+		if _, ok := ix.nodes[gatewayIP]; ok {
+			return gatewayIP
+		}
+		if id := ix.switchNode(gatewayIP); id != gatewayIP {
+			return id
+		}
+		for _, id := range ids {
+			for _, line := range strings.Split(ix.nodes[id].SysName, "\n") {
+				if strings.TrimSpace(line) == gatewayIP {
+					return id
+				}
+			}
+		}
+	}
+	for _, id := range ids {
+		if ix.nodes[id].NodeType == "router" {
+			return id
+		}
+	}
+	return ""
+}
+
+// analyzerHopDepths returns the hop count from root of every node the links
+// reach. Links are followed in both directions: the graph keeps one edge per
+// link, pointing away from whichever switch was polled first.
+func analyzerHopDepths(links []GraphLink, root string) map[string]int {
+	neighbors := make(map[string][]string)
+	for _, link := range links {
+		neighbors[link.Source] = append(neighbors[link.Source], link.Target)
+		neighbors[link.Target] = append(neighbors[link.Target], link.Source)
+	}
+	depths := map[string]int{root: 0}
+	queue := []string{root}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, next := range neighbors[current] {
+			if _, seen := depths[next]; !seen {
+				depths[next] = depths[current] + 1
+				queue = append(queue, next)
+			}
+		}
+	}
+	return depths
 }
 
 // analyzeCongestion checks for interface saturation and discards

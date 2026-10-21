@@ -9,8 +9,8 @@ import (
 )
 
 // Tests for the analyzer fixes: one per-port Shadow-IT rule shared with the
-// graph (Q14, F15, F16, F49), the loopback chassis guard (F17) and the STP
-// root check (F18).
+// graph (Q14, F15, F16, F49), the loopback chassis guard (F17), the STP
+// root check (F18) and path depths (F19).
 
 func analyzerIssueIDs(suggestions []OptimizationSuggestion, typ string) []string {
 	var out []string
@@ -268,6 +268,63 @@ func TestAnalyzerSTPRootBridges(t *testing.T) {
 		got := NewAnalyzer(FullCaptureData{DevicesData: values, Topology: topology}).analyzeSTP()
 		if len(got) != 1 || got[0].Device != "00:16:e0:5a:5c:e0" || got[0].Value != "2 non-core roots" {
 			t.Fatalf("run %d: got %+v, want one suggestion for root 00:16:e0:5a:5c:e0 with 2 non-core roots", run, got)
+		}
+	}
+}
+
+// analyzerPathChain is a chain of six switches from ids[0] (the core) with
+// a hub and an endpoint below the last one. Every link points toward the
+// core, as when the access switches were polled first.
+func analyzerPathChain(ids []string, core GraphNode) GraphData {
+	gd := GraphData{Nodes: []GraphNode{core}}
+	for i, id := range ids[1:] {
+		gd.Nodes = append(gd.Nodes, GraphNode{ID: id, Group: "switch", NodeType: "switch", SysName: fmt.Sprintf("sw-%d\n10.0.9.%d", 91+i, 91+i)})
+	}
+	gd.Nodes = append(gd.Nodes,
+		GraphNode{ID: "hub-4c:ae:a3:09:00:95-p3", Group: "hub", NodeType: "hub", SysName: "[HUB] Unmanaged\n2 devices"},
+		GraphNode{ID: "00:1b:21:09:95:01", Group: "endpoint", NodeType: "endpoint", SysName: "[ENDPOINT]"})
+	for i := len(ids) - 1; i > 0; i-- {
+		gd.Links = append(gd.Links, GraphLink{Source: ids[i], Target: ids[i-1], Label: "GE1/0/1|GE1/0/2"})
+	}
+	gd.Links = append(gd.Links,
+		GraphLink{Source: ids[5], Target: "hub-4c:ae:a3:09:00:95-p3", Label: "GE1/0/3|Hub"},
+		GraphLink{Source: "hub-4c:ae:a3:09:00:95-p3", Target: "00:1b:21:09:95:01"})
+	return gd
+}
+
+// TestAnalyzerPathDepthsFromCore: the core is found from the gateway IP even
+// when its node is MAC-keyed or only an LLDP endpoint, links count in both
+// directions, and only switches and routers are reported (F19).
+func TestAnalyzerPathDepthsFromCore(t *testing.T) {
+	resetState(t)
+	ids := []string{"4c:ae:a3:09:00:90", "4c:ae:a3:09:00:91", "4c:ae:a3:09:00:92", "4c:ae:a3:09:00:93", "4c:ae:a3:09:00:94", "4c:ae:a3:09:00:95"}
+	far := []string{"4c:ae:a3:09:00:94", "4c:ae:a3:09:00:95"}
+	cases := []struct {
+		name string
+		data FullCaptureData
+		want []string
+	}{
+		{"polled core switch", FullCaptureData{
+			DevicesData: devicesData(&DeviceData{IP: fixedGatewayIP, SysName: "core", ChassisID: "4c:ae:a3:09:00:90"}),
+			Topology:    analyzerPathChain(ids, GraphNode{ID: ids[0], Group: "switch", NodeType: "switch", SysName: "core\n" + fixedGatewayIP}),
+		}, far},
+		{"core as LLDP endpoint", FullCaptureData{
+			Topology: analyzerPathChain(ids, GraphNode{ID: ids[0], Group: "endpoint", NodeType: "endpoint", SysName: "[LLDP-EP] Cisco\ncore-gw\n" + fixedGatewayIP}),
+		}, far},
+		{"no core in topology", FullCaptureData{
+			Topology: analyzerPathChain(ids, GraphNode{ID: ids[0], Group: "switch", NodeType: "switch", SysName: "core\n10.0.9.90"}),
+		}, nil},
+	}
+	for _, c := range cases {
+		var got []string
+		for _, s := range NewAnalyzer(c.data).analyzePaths() {
+			got = append(got, strings.TrimSuffix(s.Device[strings.LastIndex(s.Device, "(")+1:], ")"))
+			if want := "Device is too far from Core (" + ids[0] + ")."; !strings.HasPrefix(s.Description, want) {
+				t.Errorf("%s: description %q, want it to name the core %s", c.name, s.Description, ids[0])
+			}
+		}
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%s: path suggestions for %v, want %v", c.name, got, c.want)
 		}
 	}
 }
