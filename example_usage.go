@@ -170,16 +170,21 @@ func main() {
 	savedData, err := LoadSavedData()
 	hasSavedHosts := err == nil && savedData != nil && len(savedData.Hosts) > 0
 
-	// Saved hosts and the first graph, then the MAC-IP cache and gateway ARP
+	// Saved hosts, then the MAC-IP cache and the gateway ARP table, all before
+	// the first graph is built (F51)
 	var savedHosts map[string]*DeviceData
 	if hasSavedHosts {
 		savedHosts = savedData.Hosts
 	}
 	loadStartupData(savedHosts)
 
-	// Start web server immediately in background
+	// Start web server immediately in background (it serves the empty graph
+	// until the first build below is published)
 	go StartWebServer("8088")
 	fmt.Println("🌐 Web server started on http://localhost:8088")
+
+	// First graph from the saved hosts, with the cache's IP and DNS lines
+	buildStartupGraph(savedHosts)
 
 	// ============================================================
 	// Mode dispatch: benchmark and monitor24h exit early
@@ -190,12 +195,14 @@ func main() {
 	}
 	if *modeFlag == "monitor24h" && hasSavedHosts {
 		// Start traffic monitoring in background
-		snmpObj := newMonitorSNMPObject()
+		snmpObj := newRescanSNMPObject()
 		startTrafficPolling(snmpObj)
 		startPeriodicLabelRefresh()
 		startPeriodicRescan(snmpObj)
 		startRescueScanner(snmpObj) // Phase 15: Dead Node Recovery
-		go startPeriodicAnalysis()
+		// No startPeriodicAnalysis here: runMonitor24h runs the same analysis
+		// and snapshot diff every minute, and two loops wrote every event and
+		// network summary twice (F52).
 		runMonitor24h()
 		os.Exit(0)
 	}
@@ -206,8 +213,9 @@ func main() {
 		fmt.Println("📊 Loaded saved hosts. Use 'Rescan' in menu to refresh.")
 		fmt.Println("🔄 Starting traffic monitoring...")
 
-		// Create SNMP Object for traffic polling
-		snmpObject := newSavedHostsSNMPObject()
+		// Create SNMP Object for traffic polling and rescans (its callbacks
+		// store every rescan, F53)
+		snmpObject := newRescanSNMPObject()
 		startTrafficPolling(snmpObject)
 		startPeriodicLabelRefresh()
 		startPeriodicRescan(snmpObject)
@@ -368,8 +376,11 @@ func main() {
 				startPeriodicLabelRefresh()
 				startPeriodicRescan(snmpObject)
 
-				// Start periodic analysis loop for alerts
-				go startPeriodicAnalysis()
+				// Start periodic analysis loop for alerts (monitor24h runs its
+				// own per-minute analysis below, F52)
+				if *modeFlag != "monitor24h" {
+					go startPeriodicAnalysis()
+				}
 
 				if *modeFlag == "experiment" {
 					fmt.Println("\n✅ EXPERIMENT MODE COMPLETED.")
@@ -448,10 +459,12 @@ func main() {
 	} // End of else block
 }
 
-// loadStartupData runs the startup steps before the mode dispatch: the saved
-// hosts (nil when there are none) go into collectedData and the first graph
-// is built from them; then the MAC-IP service loads its cache and starts, and
-// the gateway ARP table is read.
+// loadStartupData runs the startup steps before the web server starts: the
+// saved hosts (nil when there are none) go into collectedData with their
+// traffic baselines; then the MAC-IP service loads its cache and starts, and
+// the gateway ARP table is read. The first graph is built after that
+// (buildStartupGraph), so it already has the IP and DNS lines (F51: they
+// used to appear only after the first rescan).
 func loadStartupData(savedHosts map[string]*DeviceData) {
 	if len(savedHosts) > 0 {
 		fmt.Println("📂 Found saved network data, loading...")
@@ -464,10 +477,6 @@ func loadStartupData(savedHosts map[string]*DeviceData) {
 			updateTrafficCounters(ip, data.Interfaces)
 		}
 		collectedDataMutex.Unlock()
-
-		// Rebuild graph
-		rebuildGraph()
-		fmt.Printf("✅ Loaded %d hosts from saved data\n", len(savedHosts))
 	}
 
 	// MAC-IP Service: load cache and start background ARP collection
@@ -479,50 +488,61 @@ func loadStartupData(savedHosts map[string]*DeviceData) {
 	collectGatewayARP()
 }
 
+// buildStartupGraph builds and publishes the first graph from the saved
+// hosts that loadStartupData stored. Without saved hosts the first scan
+// builds the graph as switches are collected.
+func buildStartupGraph(savedHosts map[string]*DeviceData) {
+	if len(savedHosts) == 0 {
+		return
+	}
+	rebuildGraph()
+	fmt.Printf("✅ Loaded %d hosts from saved data\n", len(savedHosts))
+}
+
 // storeCollectedDevice stores the data of a successful SNMP poll in
 // collectedData and marks the switch reachable (the OnSuccess callbacks).
+// The tables of walks that failed in this poll are kept from the previous
+// poll (F57), and the traffic counters are only updated from interfaces
+// walked just now.
 func storeCollectedDevice(data *DeviceData) {
 	// Phase 8: Mark as reachable
 	data.Unreachable = false
 	data.LastSeen = time.Now()
 	collectedDataMutex.Lock()
+	collectKeepPrevious(data, collectedData[data.IP])
 	collectedData[data.IP] = data
 	collectedDataMutex.Unlock()
+	if !data.collectWalkFailed(collectWalkInterfaces) {
+		updateTrafficCounters(data.IP, data.Interfaces)
+	}
 }
 
 // markUnreachable flags a known switch as unreachable after a failed poll
-// and keeps its last data (the OnFailure callbacks).
+// and keeps its last data (the OnFailure callbacks). The struct is replaced,
+// not changed: snapshots and the analyzer read the stored pointers without
+// the lock.
 func markUnreachable(ip string) {
 	// Phase 8: Mark as unreachable but PRESERVE old data
 	collectedDataMutex.Lock()
+	defer collectedDataMutex.Unlock()
 	if existing, ok := collectedData[ip]; ok {
-		existing.Unreachable = true
+		marked := *existing
+		marked.Unreachable = true
 		// LastSeen stays unchanged — keeps last successful poll time
+		collectedData[ip] = &marked
 	}
-	collectedDataMutex.Unlock()
 }
 
-// newMonitorSNMPObject returns the SNMP object of monitor24h mode with saved
-// hosts: every poll is stored and updates the traffic counters, and a failed
-// poll marks the switch unreachable.
-func newMonitorSNMPObject() *SNMPObject {
-	return NewSNMPObject(
-		func(data *DeviceData) {
-			storeCollectedDevice(data)
-			updateTrafficCounters(data.IP, data.Interfaces)
-		},
-		func(ip string, err error) {
-			markUnreachable(ip)
-			fmt.Printf("🔴 [Monitor] Switch unreachable: %s (%v)\n", ip, err)
-		},
-	)
-}
-
-// newSavedHostsSNMPObject returns the SNMP object of normal mode with saved
-// hosts (traffic polling, periodic and rescue rescans). It has no callbacks,
-// so the data its CollectData calls collect is not stored.
-func newSavedHostsSNMPObject() *SNMPObject {
-	return NewSNMPObject(nil, nil)
+// newRescanSNMPObject returns the SNMP object for traffic polling and
+// rescans when saved data was loaded (normal and monitor24h mode): every
+// poll is stored (storeCollectedDevice) and a failed poll marks the switch
+// unreachable. Normal mode used to pass nil callbacks and threw every
+// periodic, rescue and LLDP-discovery rescan away (F53).
+func newRescanSNMPObject() *SNMPObject {
+	return NewSNMPObject(storeCollectedDevice, func(ip string, err error) {
+		markUnreachable(ip)
+		fmt.Printf("🔴 [Monitor] Switch unreachable: %s (%v)\n", ip, err)
+	})
 }
 
 // newReactiveSNMPObject returns the SNMP object of the first scan in normal
@@ -576,11 +596,9 @@ func analyzeLiveGraph(graph *DJGraph) {
 func handleReactiveDevice(data *DeviceData) *DJGraph {
 	atomic.AddInt32(&dataCollected, 1)
 
-	// Store data for later processing
+	// Store data for later processing: marks it reachable, keeps the tables
+	// of failed walks (F57) and sets the traffic baseline for the first poll
 	storeCollectedDevice(data)
-
-	// Update traffic counters (set baseline for first poll)
-	updateTrafficCounters(data.IP, data.Interfaces)
 
 	fmt.Printf("[📊] %s (%s) - %d interfaces, %d neighbors, ChassisID: %s\n",
 		data.IP, data.SysName, len(data.Interfaces), len(data.Neighbors), data.ChassisID)
@@ -1332,8 +1350,9 @@ func getLocalPortName(data *DeviceData, portNum int) string {
 
 // isNullInterface returns true if the interface name is NULL0 or similar
 // virtual discard interface that should be excluded from the topology graph.
+// IfDescr is stored quoted ("\"NULL0\""), so quotes are ignored (F61).
 func isNullInterface(name string) bool {
-	low := strings.ToLower(strings.TrimSpace(name))
+	low := strings.ToLower(strings.Trim(name, "\" \t"))
 	return low == "null0" || low == "null 0" ||
 		strings.HasPrefix(low, "null") ||
 		strings.Contains(low, "inloopback") ||
@@ -1946,21 +1965,19 @@ func collectGatewayARP() {
 		return
 	}
 
-	// Build global lookup
-	globalMACtoIPMutex.Lock()
-	for _, entry := range arpTable {
-		globalMACtoIP[entry.MACAddress] = entry.IPAddress
-	}
-	globalMACtoIPMutex.Unlock()
+	// Build global lookup with the policy of every ARP collector (F70: this
+	// one used to overwrite and skip the ESXi check)
+	collectMergeMACIP(arpTable, macIPClock())
 
 	fmt.Printf("✅ Collected %d ARP entries from gateway %s\n", len(arpTable), gatewayIP)
 }
 
-// getGlobalIP looks up IP address from global MAC-IP table
+// getGlobalIP looks up IP address from global MAC-IP table (any MAC text
+// form; the table is keyed by canonical MACs)
 func getGlobalIP(mac string) string {
 	globalMACtoIPMutex.RLock()
 	defer globalMACtoIPMutex.RUnlock()
-	return globalMACtoIP[mac]
+	return globalMACtoIP[collectCanonicalMAC(mac)]
 }
 
 // updateTrafficCounters updates traffic data for a device

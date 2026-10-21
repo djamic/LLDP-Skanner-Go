@@ -14,8 +14,8 @@ import (
 // TestGoldenScenarioRuntime pins the main() wiring that lives in named
 // functions: the SNMP objects of each mode with their store and unreachable
 // callbacks (storeCollectedDevice, markUnreachable), the startup sequence
-// (loadStartupData), the event durations written to InfluxDB, and the
-// network_summary point of a snapshot diff.
+// (loadStartupData, buildStartupGraph), the event durations written to
+// InfluxDB, and the network_summary point of a snapshot diff.
 func TestGoldenScenarioRuntime(t *testing.T) {
 	rec := map[string]any{
 		"snmp_objects":    runtimeSNMPObjects(t),
@@ -59,7 +59,7 @@ func trafficBaselines() []string {
 // records what reaches collectedData: monitor24h with saved hosts (a full
 // poll, a poll whose FDB walk fails, a poll where every walk fails), normal
 // mode with saved hosts (a saved and a new switch), and the failure callback
-// of the reactive first scan.
+// of the reactive first scan. Both saved-hosts modes use newRescanSNMPObject.
 func runtimeSNMPObjects(t *testing.T) []map[string]any {
 	resetState(t)
 	var steps []map[string]any
@@ -68,7 +68,7 @@ func runtimeSNMPObjects(t *testing.T) []map[string]any {
 	}
 
 	const monitorIP = "10.9.1.1"
-	monitor := newMonitorSNMPObject()
+	monitor := newRescanSNMPObject()
 	fakeSNMP.set(monitorIP, healthyAgent())
 	monitor.CollectData(monitorIP, "sw-monitor")
 	step("monitor24h: full poll", monitorIP)
@@ -85,7 +85,7 @@ func runtimeSNMPObjects(t *testing.T) []map[string]any {
 	collectedDataMutex.Lock()
 	collectedData[savedIP] = &DeviceData{IP: savedIP, SysName: "sw-saved", MACTable: macEntries(3, "00:1b:21:09:aa:01")}
 	collectedDataMutex.Unlock()
-	saved := newSavedHostsSNMPObject()
+	saved := newRescanSNMPObject()
 	fakeSNMP.set(savedIP, healthyAgent())
 	fakeSNMP.set(newIP, healthyAgent())
 	saved.CollectData(savedIP, "sw-saved-polled")
@@ -102,10 +102,11 @@ func runtimeSNMPObjects(t *testing.T) []map[string]any {
 	return steps
 }
 
-// runtimeStartup runs loadStartupData twice: with two saved switches, and
-// with no saved data. The MAC-IP cache file has IPs for every MAC of the
-// saved switches and the gateway's ARP table adds one more. The first graph
-// is recorded together with the graph the next rebuild publishes.
+// runtimeStartup runs the startup sequence of main() (loadStartupData, then
+// buildStartupGraph) twice: with two saved switches, and with no saved
+// data. The MAC-IP cache file has IPs for every MAC of the saved switches
+// and the gateway's ARP table adds one more. The first graph is recorded
+// together with the graph the next rebuild publishes.
 func runtimeStartup(t *testing.T) map[string]any {
 	out := map[string]any{}
 	for _, withHosts := range []bool{true, false} {
@@ -130,6 +131,7 @@ func runtimeStartup(t *testing.T) map[string]any {
 			}
 		}
 		loadStartupData(hosts)
+		buildStartupGraph(hosts)
 
 		rec := map[string]any{
 			"collected_data":    slices.Sorted(maps.Keys(snapshotCollectedData())),

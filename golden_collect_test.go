@@ -338,10 +338,10 @@ func TestGoldenScenarioSNMPCollect(t *testing.T) {
 }
 
 // TestGoldenScenarioMACIPCache pins the MAC→IP cache and the ESXi queue:
-// ARP collection from a switch (first write wins, new MACs queued), the
-// gateway ARP collector (last write wins, nothing queued), loading the cache
-// file (every new entry queued), saving it, the confirmed-ESXi skip, and the
-// cache over 30 days (no entry expires, a changed IP is ignored).
+// ARP collection from a switch and from the gateway (one policy: last write
+// wins, Q11 filter, observed MACs asked for the ESXi check), loading the
+// cache file (canonical keys, Q11 filter, nothing queued), saving it, the
+// confirmed-ESXi skip, and the cache over 30 days on the test clock.
 func TestGoldenScenarioMACIPCache(t *testing.T) {
 	resetState(t)
 	fakeSNMP.set("10.9.0.1", healthyAgent())
@@ -474,8 +474,8 @@ func TestNoSideEffectSeamsLeak(t *testing.T) {
 	if influxReady() {
 		t.Error("InfluxDB recording is on outside a recording window")
 	}
-	if !eventClock().Equal(fixedTime) {
-		t.Error("eventClock is not the test clock")
+	if !eventClock().Equal(fixedTime) || !macIPClock().Equal(fixedTime) {
+		t.Error("eventClock or macIPClock is not the test clock")
 	}
 	if capturesDir != guardCapturesDir || ouiFile != "oui.txt" {
 		t.Errorf("file seams were changed by a test: captures %q, oui %q", capturesDir, ouiFile)

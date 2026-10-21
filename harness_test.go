@@ -132,6 +132,7 @@ func installSeams(dir string) {
 		return nil, errors.New("harness: IEEE download disabled")
 	}
 	eventClock = testClock.Now
+	macIPClock = testClock.Now
 	startMacIPCollector = func() { macIPCollectorStarts.Add(1) }
 	startLiveAnalysis = func(*DJGraph) { liveAnalyses.Add(1) }
 	exportsDir = guardExportsDir
@@ -178,9 +179,15 @@ func resetState(t *testing.T) {
 
 	globalMACtoIPMutex.Lock()
 	globalMACtoIP = make(map[string]string)
+	collectMACIPSeen = make(map[string]time.Time)
 	globalMACtoIPMutex.Unlock()
 
 	clearConfirmedESXi()
+	collectESXiMu.Lock()
+	collectESXiChecked = make(map[string]string)
+	collectESXiRetry = make(map[string]collectESXiRetryJob)
+	collectESXiInflight = make(map[string]string)
+	collectESXiMu.Unlock()
 
 	interfaceTrafficMapMutex.Lock()
 	interfaceTrafficMap = make(map[string]map[int]*InterfaceTraffic)

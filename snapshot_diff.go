@@ -1,10 +1,14 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // ============================================================
@@ -141,7 +145,7 @@ func persistEventToInflux(evt NetworkEvent) {
 	durationS := 0
 
 	openEventTimesMutex.Lock()
-	key := fmt.Sprintf("%s:%d", evt.SwitchIP, evt.Port)
+	key := collectOpenEventKey(evt)
 
 	switch evt.Type {
 	case "host_down", "port_down":
@@ -157,6 +161,18 @@ func persistEventToInflux(evt NetworkEvent) {
 	openEventTimesMutex.Unlock()
 
 	WriteNetworkEventToInflux(evt, durationS)
+}
+
+// collectOpenEventKey pairs a closing event with the event that opened it:
+// port events by switch and port, host events by host IP. Host events have
+// no port, so every host used to share the key ":0" (F56) and the host_up of
+// one host closed the host_down of another.
+func collectOpenEventKey(evt NetworkEvent) string {
+	switch evt.Type {
+	case "port_down", "port_up":
+		return fmt.Sprintf("port|%s|%d", evt.SwitchIP, evt.Port)
+	}
+	return "host|" + evt.IP
 }
 
 // GetNetworkEvents returns a copy of the event log (thread-safe)
@@ -179,6 +195,21 @@ func CreateSnapshot(devices []*DeviceData, graph *DJGraph, report *Report) *Netw
 		Ports:       make(map[string]map[int]int),
 	}
 
+	// Devices in IP order, so the result does not depend on the caller's
+	// (map) order.
+	devices = slices.Clone(devices)
+	slices.SortStableFunc(devices, func(a, b *DeviceData) int { return compareIPs(a.IP, b.IP) })
+
+	// The host each suggestion is about ("" when it matches no switch)
+	var suggestionHosts []string
+	if report != nil {
+		suggestionHosts = collectSuggestionHosts(devices, report.Suggestions)
+	}
+
+	// Where each MAC was learned; a MAC seen on several switches gets one
+	// place (F54)
+	sightings := make(map[string]collectMACSighting)
+
 	// Populate ActiveHosts from devices
 	for _, dev := range devices {
 		vendor := getMACVendor(dev.ChassisID)
@@ -186,8 +217,8 @@ func CreateSnapshot(devices []*DeviceData, graph *DJGraph, report *Report) *Netw
 		// Calculate per-device health from report
 		deviceHealth := 100
 		if report != nil {
-			for _, sugg := range report.Suggestions {
-				if sugg.Device == dev.IP {
+			for i, sugg := range report.Suggestions {
+				if suggestionHosts[i] == dev.IP {
 					switch sugg.Type {
 					case "shadow_it":
 						deviceHealth -= 10
@@ -233,37 +264,35 @@ func CreateSnapshot(devices []*DeviceData, graph *DJGraph, report *Report) *Netw
 			snapshot.Ports[dev.IP] = portMap
 		}
 
-		// Populate ActiveMACs from each device's MAC table
-		for _, macEntry := range dev.MACTable {
-			mac := normalizeMAC(macEntry.MACAddress)
-			if mac == "" || isSpecialMAC(mac) {
-				continue
-			}
+		// Record where this device's FDB learned each MAC
+		collectSightMACs(sightings, dev)
+	}
 
-			macVendor := getMACVendor(mac)
-
-			// Try to resolve IP from global ARP table
-			ip := ""
-			globalMACtoIPMutex.RLock()
-			if resolved, ok := globalMACtoIP[mac]; ok {
-				ip = resolved
-			}
-			globalMACtoIPMutex.RUnlock()
-
-			snapshot.ActiveMACs[mac] = MACInfo{
-				IP:       ip,
-				SwitchIP: dev.IP,
-				Port:     macEntry.PortNumber,
-				Vendor:   macVendor,
-			}
+	// Populate ActiveMACs: switch and port of the chosen sighting (the port
+	// as ifIndex, like the port events, F60)
+	for mac, seen := range sightings {
+		snapshot.ActiveMACs[mac] = MACInfo{
+			SwitchIP: seen.dev.IP,
+			Port:     collectFDBIfIndex(seen.dev, seen.port),
+			Vendor:   getMACVendor(mac),
 		}
+	}
 
-		// Populate Anomalies from report
-		if report != nil {
-			for _, sugg := range report.Suggestions {
-				if sugg.Device == dev.IP {
-					snapshot.Anomalies[dev.IP] = append(snapshot.Anomalies[dev.IP], sugg.Type)
-				}
+	// Resolve IPs from the global ARP table (one read lock)
+	globalMACtoIPMutex.RLock()
+	for mac, info := range snapshot.ActiveMACs {
+		if ip := globalMACtoIP[mac]; ip != "" {
+			info.IP = ip
+			snapshot.ActiveMACs[mac] = info
+		}
+	}
+	globalMACtoIPMutex.RUnlock()
+
+	// Populate Anomalies from report
+	if report != nil {
+		for i, sugg := range report.Suggestions {
+			if host := suggestionHosts[i]; host != "" {
+				snapshot.Anomalies[host] = append(snapshot.Anomalies[host], sugg.Type)
 			}
 		}
 	}
@@ -280,6 +309,123 @@ func CreateSnapshot(devices []*DeviceData, graph *DJGraph, report *Report) *Netw
 	}
 
 	return snapshot
+}
+
+// collectMACSighting is where a snapshot MAC was learned: a switch, its
+// bridge port and how many usable MACs that port has.
+type collectMACSighting struct {
+	dev      *DeviceData
+	port     int
+	portMACs int
+}
+
+// collectSightMACs records the usable MACs of dev's FDB (Q11: no null,
+// broadcast, multicast or zero-OUI MACs, no malformed ones) in sightings,
+// keeping for each MAC the better of its sightings so far.
+func collectSightMACs(sightings map[string]collectMACSighting, dev *DeviceData) {
+	macs := make([]string, len(dev.MACTable))
+	perPort := make(map[int]int)
+	for i, entry := range dev.MACTable {
+		if mac := collectCanonicalMAC(entry.MACAddress); mac != "" && collectUsableMAC(mac) {
+			macs[i] = mac
+			perPort[entry.PortNumber]++
+		}
+	}
+	for i, entry := range dev.MACTable {
+		if macs[i] == "" {
+			continue
+		}
+		seen := collectMACSighting{dev: dev, port: entry.PortNumber, portMACs: perPort[entry.PortNumber]}
+		if prev, ok := sightings[macs[i]]; !ok || collectBetterSighting(seen, prev) {
+			sightings[macs[i]] = seen
+		}
+	}
+}
+
+// collectBetterSighting reports whether a beats b as the place of a MAC:
+// a reachable switch first, then the port with fewer MACs (the access port
+// rather than the uplinks that also learn the MAC). On a tie the earlier
+// sighting (lower switch IP) stays.
+func collectBetterSighting(a, b collectMACSighting) bool {
+	if a.dev.Unreachable != b.dev.Unreachable {
+		return !a.dev.Unreachable
+	}
+	return a.portMACs < b.portMACs
+}
+
+// collectNetworkAnomalies are the suggestion types about the whole network.
+// The analyzer reports one stp suggestion ("N root bridges not on the core")
+// and names one of the roots, picked by map order (F18), as its device, so
+// stp is kept under collectNetworkHost: it is new or fixed as a whole and the
+// snapshot does not change with the root the analyzer happened to name.
+var collectNetworkAnomalies = map[string]bool{"stp": true}
+
+// collectNetworkHost is the snapshot host of whole-network anomalies (the
+// events read "Anomaly: stp on network").
+const collectNetworkHost = "network"
+
+// collectSuggestionHosts returns, for each suggestion, the snapshot host it
+// is about, or "" when it matches no polled switch (F55: only Device ==
+// switch IP matched, so stp and path never did). Most suggestions name the
+// switch IP; path names a graph label "SysName (node id)", whose SysName part
+// is the node label and holds the switch IP; a switch can also be named by
+// its graph node id or chassis MAC. stp goes to collectNetworkHost.
+func collectSuggestionHosts(devices []*DeviceData, suggestions []OptimizationSuggestion) []string {
+	byKey := make(map[string]string) // switch IP, graph node id, chassis MAC → switch IP
+	for _, d := range devices {
+		byKey[d.IP] = d.IP
+	}
+	addKey := func(key, ip string) {
+		if _, taken := byKey[key]; key != "" && !taken {
+			byKey[key] = ip
+		}
+	}
+	for _, d := range devices {
+		nodeID := normalizeID(d.ChassisID, 0)
+		if nodeID == "" {
+			nodeID = d.IP
+		}
+		addKey(nodeID, d.IP)
+		addKey(collectCanonicalMAC(d.ChassisID), d.IP)
+	}
+
+	lookup := func(word string) (string, bool) {
+		if host, ok := byKey[word]; ok {
+			return host, true
+		}
+		host, ok := byKey[collectCanonicalMAC(word)]
+		return host, ok
+	}
+	hosts := make([]string, len(suggestions))
+	for i, sugg := range suggestions {
+		if collectNetworkAnomalies[sugg.Type] {
+			hosts[i] = collectNetworkHost
+			continue
+		}
+		if host, ok := lookup(sugg.Device); ok {
+			hosts[i] = host
+			continue
+		}
+		words := strings.FieldsFunc(sugg.Device, func(r rune) bool { return unicode.IsSpace(r) || strings.ContainsRune("(),", r) })
+		for _, word := range words {
+			if host, ok := lookup(word); ok {
+				hosts[i] = host
+				break
+			}
+		}
+	}
+	return hosts
+}
+
+// collectAnomalySet keys a snapshot's anomalies "host|type" for the diff.
+func collectAnomalySet(anomalies map[string][]string) map[string]AnomalyDiff {
+	set := make(map[string]AnomalyDiff)
+	for host, types := range anomalies {
+		for _, t := range types {
+			set[host+"|"+t] = AnomalyDiff{DeviceIP: host, AnomalyType: t}
+		}
+	}
+	return set
 }
 
 // CompareSnapshots compares two snapshots and returns their differences
@@ -333,40 +479,21 @@ func CompareSnapshots(prev, curr *NetworkSnapshot) *SnapshotDiff {
 	}
 
 	// --- Anomaly changes ---
-	// Build sets for previous and current anomalies
-	prevAnomalySet := make(map[string]bool) // "ip|type" → true
-	currAnomalySet := make(map[string]bool)
-
-	for ip, types := range prev.Anomalies {
-		for _, t := range types {
-			prevAnomalySet[ip+"|"+t] = true
-		}
-	}
-	for ip, types := range curr.Anomalies {
-		for _, t := range types {
-			currAnomalySet[ip+"|"+t] = true
-		}
-	}
+	// Sets of "ip|type" (whole-network types such as stp are on "network")
+	prevAnomalySet := collectAnomalySet(prev.Anomalies)
+	currAnomalySet := collectAnomalySet(curr.Anomalies)
 
 	// New anomalies: in current but not in previous
-	for key := range currAnomalySet {
-		if !prevAnomalySet[key] {
-			parts := strings.SplitN(key, "|", 2)
-			diff.NewAnomalies = append(diff.NewAnomalies, AnomalyDiff{
-				DeviceIP:    parts[0],
-				AnomalyType: parts[1],
-			})
+	for _, key := range slices.Sorted(maps.Keys(currAnomalySet)) {
+		if _, existed := prevAnomalySet[key]; !existed {
+			diff.NewAnomalies = append(diff.NewAnomalies, currAnomalySet[key])
 		}
 	}
 
 	// Fixed anomalies: in previous but not in current
-	for key := range prevAnomalySet {
-		if !currAnomalySet[key] {
-			parts := strings.SplitN(key, "|", 2)
-			diff.FixedAnomalies = append(diff.FixedAnomalies, AnomalyDiff{
-				DeviceIP:    parts[0],
-				AnomalyType: parts[1],
-			})
+	for _, key := range slices.Sorted(maps.Keys(prevAnomalySet)) {
+		if _, exists := currAnomalySet[key]; !exists {
+			diff.FixedAnomalies = append(diff.FixedAnomalies, prevAnomalySet[key])
 		}
 	}
 	// --- Phase 8: Unreachable / Restored hosts ---
@@ -405,6 +532,17 @@ func CompareSnapshots(prev, curr *NetworkSnapshot) *SnapshotDiff {
 			}
 		}
 	}
+
+	// Map order must not decide the event order (Q16)
+	byMAC := func(a, b MACDiffEntry) int { return strings.Compare(a.MAC, b.MAC) }
+	slices.SortFunc(diff.JoinedMACs, byMAC)
+	slices.SortFunc(diff.LeftMACs, byMAC)
+	for _, hosts := range [][]string{diff.NewHosts, diff.LostHosts, diff.UnreachableHosts, diff.RestoredHosts} {
+		slices.SortFunc(hosts, compareIPs)
+	}
+	slices.SortFunc(diff.PortStatusChanges, func(a, b PortStatusChange) int {
+		return cmp.Or(compareIPs(a.SwitchIP, b.SwitchIP), cmp.Compare(a.PortIndex, b.PortIndex))
+	})
 
 	return diff
 }

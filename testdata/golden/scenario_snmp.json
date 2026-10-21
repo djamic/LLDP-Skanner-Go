@@ -59,15 +59,13 @@
     "neighbors": [
       {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 7, "RemChassisIdSubtype": 0, "RemChassisId": "00 00 00 00 00 00", "RemPortIdSubtype": 0, "RemPortId": "", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
       {"TimeMarker": 0, "LocalPortNum": 25, "RemIndex": 2, "RemChassisIdSubtype": 7, "RemChassisId": "\"DESKTOP-V380CHD\"", "RemPortIdSubtype": 3, "RemPortId": "10 7C 61 C0 9E AA", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
-      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
+      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "172.20.0.3", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
     ],
     "mac_table_nil": true,
     "arp_table": [
       {"IPAddress": "172.20.1.105", "MACAddress": "00:0c:29:6f:e0:bc", "Interface": 5},
-      {"IPAddress": "172.20.1.107", "MACAddress": "01:00:5e:00:00:fb", "Interface": 5},
-      {"IPAddress": "172.20.1.108", "MACAddress": "00:00:00:12:34:56", "Interface": 5},
+      {"IPAddress": "172.20.1.106", "MACAddress": "50:28:4a:33:3a:4c", "Interface": 5},
       {"IPAddress": "172.20.1.111", "MACAddress": "00:50:56:01:02:04", "Interface": 5},
-      {"IPAddress": "172.20.1.112", "MACAddress": "00:50:56:01:02:05", "Interface": 2},
       {"IPAddress": "172.20.1.113", "MACAddress": "f8:f0:82:7a:d9:69", "Interface": 5}
     ],
     "port_vlans": [
@@ -100,7 +98,7 @@
     "neighbors": [
       {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 7, "RemChassisIdSubtype": 0, "RemChassisId": "00 00 00 00 00 00", "RemPortIdSubtype": 0, "RemPortId": "", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
       {"TimeMarker": 0, "LocalPortNum": 25, "RemIndex": 2, "RemChassisIdSubtype": 7, "RemChassisId": "\"DESKTOP-V380CHD\"", "RemPortIdSubtype": 3, "RemPortId": "10 7C 61 C0 9E AA", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
-      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
+      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "172.20.0.3", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
     ],
     "mac_table_nil": false,
     "mac_table": [
@@ -108,15 +106,12 @@
       {"MACAddress": "00:50:56:01:02:03", "PortNumber": 5, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "f8:f0:82:d1:67:5e", "PortNumber": 28, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "10:7c:61:c0:9e:aa", "PortNumber": 25, "VlanID": 0, "Status": "learned"},
-      {"MACAddress": "00:1b:21:09:3e7:01", "PortNumber": 7, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "01:00:5e:00:00:fb", "PortNumber": 2, "VlanID": 0, "Status": "learned"}
     ],
     "arp_table": [
       {"IPAddress": "172.20.1.105", "MACAddress": "00:0c:29:6f:e0:bc", "Interface": 5},
-      {"IPAddress": "172.20.1.107", "MACAddress": "01:00:5e:00:00:fb", "Interface": 5},
-      {"IPAddress": "172.20.1.108", "MACAddress": "00:00:00:12:34:56", "Interface": 5},
+      {"IPAddress": "172.20.1.106", "MACAddress": "50:28:4a:33:3a:4c", "Interface": 5},
       {"IPAddress": "172.20.1.111", "MACAddress": "00:50:56:01:02:04", "Interface": 5},
-      {"IPAddress": "172.20.1.112", "MACAddress": "00:50:56:01:02:05", "Interface": 2},
       {"IPAddress": "172.20.1.113", "MACAddress": "f8:f0:82:7a:d9:69", "Interface": 5}
     ],
     "port_vlans": [

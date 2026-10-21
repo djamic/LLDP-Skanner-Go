@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,6 +89,100 @@ type DeviceData struct {
 	Timestamp   time.Time
 	Unreachable bool      `json:"unreachable,omitempty"` // Phase 8: true = SNMP timeout, device is down
 	LastSeen    time.Time `json:"lastSeen,omitempty"`    // Phase 8: last successful SNMP poll time
+	// MACEntry.PortNumber is a dot1dBasePort; this maps it to the ifIndex
+	// (dot1dBasePortIfIndex). Nil when the switch did not report it.
+	BridgePortIfIndex map[int]int `json:"bridgePortIfIndex,omitempty"`
+
+	// Walks that failed in the poll that produced this data (not saved).
+	failedWalks []string
+}
+
+// Parts of one CollectData poll, as recorded in DeviceData.failedWalks.
+const (
+	collectWalkInterfaces  = "interfaces"
+	collectWalkLLDP        = "lldp"
+	collectWalkFDB         = "fdb"
+	collectWalkBridgePorts = "bridge ports"
+	collectWalkARP         = "arp"
+	collectWalkVLAN        = "vlan"
+	collectWalkSTP         = "stp"
+)
+
+// collectWalkFailed reports whether the walk of part failed in the poll
+// that produced d.
+func (d *DeviceData) collectWalkFailed(part string) bool {
+	return slices.Contains(d.failedWalks, part)
+}
+
+// collectKeepPrevious fills the tables of data whose walk failed (a partial
+// success) from prev, the stored data of the same switch, so one timed-out
+// walk does not empty a table until the next poll (F57: every MAC of the
+// switch would LEAVE, then JOIN again five minutes later). A walk that
+// answered with no rows is not a failure. The chassis id is not tracked or
+// carried over (its read decides the switch identity).
+func collectKeepPrevious(data, prev *DeviceData) {
+	if prev == nil || prev == data {
+		return
+	}
+	for _, part := range data.failedWalks {
+		switch part {
+		case collectWalkInterfaces:
+			data.Interfaces = prev.Interfaces
+		case collectWalkLLDP:
+			data.Neighbors = prev.Neighbors
+		case collectWalkFDB:
+			data.MACTable = prev.MACTable
+			data.BridgePortIfIndex = prev.BridgePortIfIndex
+		case collectWalkBridgePorts:
+			data.BridgePortIfIndex = prev.BridgePortIfIndex
+		case collectWalkARP:
+			data.ARPTable = prev.ARPTable
+		case collectWalkVLAN:
+			data.PortVLANs = prev.PortVLANs
+		case collectWalkSTP:
+			data.STPInfo = prev.STPInfo
+		}
+	}
+}
+
+// collectBasePortIfIndexOID is dot1dBasePortIfIndex.<bridge port> = ifIndex.
+const collectBasePortIfIndexOID = ".1.3.6.1.2.1.17.1.4.1.2"
+
+// collectFDBIfIndex returns the ifIndex of FDB bridge port bridgePort, for
+// port names (getLocalPortName). When the switch did not report the mapping
+// the bridge port number is used as the ifIndex, the old assumption (true on
+// switches that number both alike, such as the HPE and SNR ones here).
+func collectFDBIfIndex(data *DeviceData, bridgePort int) int {
+	if ifIndex, ok := data.BridgePortIfIndex[bridgePort]; ok && ifIndex > 0 {
+		return ifIndex
+	}
+	return bridgePort
+}
+
+// collectBridgePortIfIndex walks dot1dBasePortIfIndex (bridge port → ifIndex).
+// It returns nil when the walk fails or reports nothing.
+func (s *SNMPObject) collectBridgePortIfIndex(ip string) (map[int]int, error) {
+	lines, err := s.runSNMPWalk(ip, collectBasePortIfIndexOID)
+	if err != nil {
+		return nil, err
+	}
+	var ports map[int]int
+	for _, line := range lines {
+		oid, val, err := parseSNMPLine(line)
+		if err != nil {
+			continue
+		}
+		idx, ok := collectOIDIndex(oid, collectBasePortIfIndexOID)
+		ifIndex, convErr := strconv.Atoi(val)
+		if !ok || len(idx) != 1 || convErr != nil || ifIndex <= 0 {
+			continue
+		}
+		if ports == nil {
+			ports = make(map[int]int)
+		}
+		ports[idx[0]] = ifIndex
+	}
+	return ports, nil
 }
 
 // STPData holds Spanning Tree Protocol information
@@ -158,6 +253,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("interfaces err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkInterfaces)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -174,6 +270,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("lldp err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkLLDP)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -190,10 +287,18 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("mac table err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkFDB)
 			mu.Unlock()
 		} else {
+			// The FDB reports bridge ports; their ifIndex names the port (F60).
+			// Optional: without it the bridge port is used as the ifIndex.
+			bridgePorts, bpErr := s.collectBridgePortIfIndex(ip)
 			mu.Lock()
 			data.MACTable = macTable
+			data.BridgePortIfIndex = bridgePorts
+			if bpErr != nil {
+				data.failedWalks = append(data.failedWalks, collectWalkBridgePorts)
+			}
 			mu.Unlock()
 		}
 	}()
@@ -206,6 +311,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("arp table err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkARP)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -222,6 +328,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("vlan err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkVLAN)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -238,6 +345,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, fmt.Errorf("stp err: %v", err))
+			data.failedWalks = append(data.failedWalks, collectWalkSTP)
 			mu.Unlock()
 		} else {
 			mu.Lock()
@@ -267,7 +375,8 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		}
 	}
 
-	// Partial or full success — deliver data
+	// Partial or full success — deliver data. The callback keeps the tables
+	// of failed walks from the previous poll (collectKeepPrevious).
 	data.Timestamp = time.Now()
 	if s.OnSuccess != nil {
 		s.OnSuccess(data)
@@ -569,12 +678,9 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 		}
 	}
 
-	// Convert map to slice
-	result := make([]LLDPNeighbor, 0, len(neighborMap))
 	for _, n := range neighborMap {
 		logDebug("  [SNMP-RAW] %s: Neighbor on LocalPort %d -> RemChassis: %s (Subtype: %d), RemPort: %s",
 			ip, n.LocalPortNum, n.RemChassisId, n.RemChassisIdSubtype, n.RemPortId)
-		result = append(result, *n)
 	}
 
 	// Collect Management Addresses and populate RemMgmtIP
@@ -583,8 +689,8 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 		fmt.Printf("Warning: Failed to collect management IPs for %s: %v\n", ip, err)
 	}
 
-	// Re-convert to slice after enrichment
-	result = make([]LLDPNeighbor, 0, len(neighborMap))
+	// Convert map to slice
+	result := make([]LLDPNeighbor, 0, len(neighborMap))
 	for _, n := range neighborMap {
 		result = append(result, *n)
 	}
@@ -595,7 +701,7 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 // enrichWithManagementIPs collects Management IP addresses from lldpRemManAddrTable
 func (s *SNMPObject) enrichWithManagementIPs(ip string, neighborMap map[string]*LLDPNeighbor) error {
 	// Walk lldpRemManAddrTable (.1.0.8802.1.1.2.1.4.2.1)
-	lines, err := s.runSNMPWalk(ip, ".1.0.8802.1.1.2.1.4.2.1")
+	lines, err := s.runSNMPWalk(ip, collectLLDPManAddrOID)
 	if err != nil {
 		return err
 	}
@@ -605,47 +711,195 @@ func (s *SNMPObject) enrichWithManagementIPs(ip string, neighborMap map[string]*
 		if err != nil {
 			continue
 		}
-
-		// OID format: .1.0.8802.1.1.2.1.4.2.1.COLUMN.TimeMark.LocalPort.RemIndex.AddrSubtype.Address
-		// We're interested in column 3 (lldpRemManAddrIfSubtype) which contains the address type
-		// The actual IP is embedded in the OID itself as the last components
-
-		parts := strings.Split(oid, ".")
-		if len(parts) < 18 {
+		// The address is in the index (every accessible column repeats it).
+		// The first IPv4 address in walk order wins.
+		key, mgmtIP, ok := collectLLDPManAddr(oid)
+		if !ok {
 			continue
 		}
-
-		// Extract indices
-		// Last 4 octets are the IP address (for IPv4)
-		// Format: ...TimeMark.LocalPort.RemIndex.1.A.B.C.D
-		// where 1 is IPv4 address subtype
-
-		// Find column number
-		colStr := parts[12] // Column is at fixed position after base OID
-		col, _ := strconv.Atoi(colStr)
-
-		if col != 3 { // We only care about column 3 (lldpRemManAddrIfSubtype)
-			continue
-		}
-
-		// Extract TimeMark, LocalPort, RemIndex
-		localPortStr := parts[14]
-		remIdxStr := parts[15]
-		addrSubtype := parts[16]
-
-		key := fmt.Sprintf("%s.%s", localPortStr, remIdxStr)
-
-		if neighbor, exists := neighborMap[key]; exists {
-			// Check if it's IPv4 (subtype 1)
-			if addrSubtype == "1" && len(parts) >= 20 {
-				// Extract IP from last 4 octets
-				ipAddr := fmt.Sprintf("%s.%s.%s.%s", parts[17], parts[18], parts[19], parts[20])
-				neighbor.RemMgmtIP = ipAddr
-			}
+		if neighbor, exists := neighborMap[key]; exists && neighbor.RemMgmtIP == "" {
+			neighbor.RemMgmtIP = mgmtIP
 		}
 	}
 
 	return nil
+}
+
+// collectLLDPManAddrOID is lldpRemManAddrTable (LLDP-MIB). Its index is
+// lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex.lldpRemManAddrSubtype.
+// lldpRemManAddr, and the address is an OCTET STRING index: its length, then
+// its octets (IPv4: ...<column>.<timeMark>.<localPort>.<remIndex>.1.4.a.b.c.d).
+const collectLLDPManAddrOID = ".1.0.8802.1.1.2.1.4.2.1"
+
+// collectLLDPManAddr decodes one lldpRemManAddrTable OID into the neighbor
+// key ("localPort.remIndex", as in collectLLDPNeighbors) and its IPv4
+// management address. Agents that leave out the length octet are accepted
+// (four octets not starting with 4, which would be a truncated length-4
+// address); other address families give ok=false.
+func collectLLDPManAddr(oid string) (key, ip string, ok bool) {
+	idx, ok := collectOIDIndex(oid, collectLLDPManAddrOID)
+	// column, time mark, local port, remote index, address family, address
+	if !ok || len(idx) < 6 || idx[4] != 1 { // IANA address family 1 = IPv4
+		return "", "", false
+	}
+	addr := idx[5:]
+	switch {
+	case len(addr) == 5 && addr[0] == 4:
+		addr = addr[1:]
+	case len(addr) == 4 && addr[0] != 4:
+	default:
+		return "", "", false
+	}
+	if slices.ContainsFunc(addr, func(b int) bool { return b > 255 }) ||
+		slices.Equal(addr, []int{0, 0, 0, 0}) {
+		return "", "", false
+	}
+	return fmt.Sprintf("%d.%d", idx[2], idx[3]),
+		fmt.Sprintf("%d.%d.%d.%d", addr[0], addr[1], addr[2], addr[3]), true
+}
+
+// OIDs of the FDB and ARP walks.
+const (
+	collectFDBPortOID = ".1.3.6.1.2.1.17.4.3.1.2" // dot1dTpFdbPort.<6 MAC octets> = bridge port
+	collectARPPhysOID = ".1.3.6.1.2.1.4.22.1.2"   // ipNetToMediaPhysAddress.<ifIndex>.<4 IP octets> = MAC
+)
+
+// collectUsableMAC applies the Q11 MAC filter: false for anything that is
+// not a 6-octet MAC, and for null, broadcast, multicast (I/G bit set) and
+// zero-OUI (00:00:00) addresses.
+func collectUsableMAC(mac string) bool {
+	b, ok := collectTextMAC(mac)
+	return ok && b[0]&1 == 0 && (b[0]|b[1]|b[2]) != 0
+}
+
+// collectCanonicalMAC returns a text MAC as "aa:bb:cc:dd:ee:ff", or "" when
+// it is not one.
+func collectCanonicalMAC(mac string) string {
+	b, ok := collectTextMAC(mac)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5])
+}
+
+// collectSNMPValue splits one snmpbulkwalk -On line into the OID, the value
+// type ("Hex-STRING", "STRING", "INTEGER"...; "" when there is none, as for
+// exception text) and the value.
+func collectSNMPValue(line string) (oid, typ, val string, ok bool) {
+	oid, raw, ok := strings.Cut(line, " = ")
+	if !ok {
+		return "", "", "", false
+	}
+	typ, val, found := strings.Cut(raw, ": ")
+	if !found {
+		typ, val = "", raw
+	}
+	return oid, typ, strings.TrimSpace(val), true
+}
+
+// collectPhysAddress decodes an ipNetToMediaPhysAddress value into canonical
+// MAC text. net-snmp prints the 6 octets as "Hex-STRING: 00 0C 29 6F E0 BC",
+// or as a quoted STRING when every byte is printable ("P(J3:L" is
+// 50:28:4a:33:3a:4c, with \" and \\ escaped), or with the PhysAddress
+// DISPLAY-HINT when MIBs are loaded ("STRING: 0:c:29:aa:bb:cd"). Text MACs
+// with dashes ("f8-f0-82-7a-d9-69") are accepted as before.
+func collectPhysAddress(typ, val string) (string, bool) {
+	var b [6]byte
+	switch typ {
+	case "Hex-STRING":
+		fields := strings.Fields(val)
+		if len(fields) != 6 {
+			return "", false
+		}
+		for i, f := range fields {
+			n, err := strconv.ParseUint(f, 16, 8)
+			if err != nil || len(f) != 2 {
+				return "", false
+			}
+			b[i] = byte(n)
+		}
+	case "STRING", "":
+		text := val
+		if raw, quoted := collectUnquote(val); quoted {
+			if len(raw) == 6 {
+				copy(b[:], raw)
+				break
+			}
+			text = raw
+		}
+		mac := collectCanonicalMAC(text)
+		return mac, mac != ""
+	default:
+		return "", false
+	}
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5]), true
+}
+
+// collectUnquote removes the quotes net-snmp puts around a printable STRING
+// and undoes its \" and \\ escapes. quoted is false when s is not quoted.
+func collectUnquote(s string) (raw string, quoted bool) {
+	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
+		return "", false
+	}
+	s = s[1 : len(s)-1]
+	var sb strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\\') {
+			i++
+		}
+		sb.WriteByte(s[i])
+	}
+	return sb.String(), true
+}
+
+// collectTextMAC parses a MAC written as text: six groups of one or two hex
+// digits separated by ':' or '-' (the unpadded net-snmp form included), or
+// six two-digit groups separated by spaces.
+func collectTextMAC(s string) ([6]byte, bool) {
+	var b [6]byte
+	s = strings.TrimSpace(s)
+	sep := ":"
+	switch {
+	case strings.Count(s, "-") == 5:
+		sep = "-"
+	case strings.Count(s, " ") == 5:
+		sep = " "
+	}
+	groups := strings.Split(s, sep)
+	if len(groups) != 6 {
+		return b, false
+	}
+	for i, g := range groups {
+		if len(g) == 0 || len(g) > 2 || sep == " " && len(g) != 2 {
+			return b, false
+		}
+		n, err := strconv.ParseUint(g, 16, 8)
+		if err != nil {
+			return b, false
+		}
+		b[i] = byte(n)
+	}
+	return b, true
+}
+
+// collectOIDIndex returns the index components after base in a numeric OID
+// (snmpbulkwalk -On), or ok=false when the OID is not below base or one of
+// the components is not a number.
+func collectOIDIndex(oid, base string) ([]int, bool) {
+	rest, found := strings.CutPrefix(strings.TrimPrefix(oid, "."), strings.TrimPrefix(base, ".")+".")
+	if !found || rest == "" {
+		return nil, false
+	}
+	parts := strings.Split(rest, ".")
+	idx := make([]int, len(parts))
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 0 || p[0] == '+' {
+			return nil, false
+		}
+		idx[i] = n
+	}
+	return idx, true
 }
 
 // parseSNMPLine parses specific snmpwalk output line
@@ -682,7 +936,7 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 	// OID format: .1.3.6.1.2.1.17.4.3.1.2.M1.M2.M3.M4.M5.M6 = INTEGER: PortNum
 	// where M1-M6 are the 6 bytes of MAC address
 
-	lines, err := s.runSNMPWalk(ip, ".1.3.6.1.2.1.17.4.3.1.2")
+	lines, err := s.runSNMPWalk(ip, collectFDBPortOID)
 	if err != nil {
 		return nil, err
 	}
@@ -697,19 +951,13 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 
 		// Extract MAC address from OID
 		// OID: .1.3.6.1.2.1.17.4.3.1.2.76.174.163.142.66.17
-		parts := strings.Split(oid, ".")
-		if len(parts) < 17 {
+		// The index is exactly the six MAC octets.
+		octets, ok := collectOIDIndex(oid, collectFDBPortOID)
+		if !ok || len(octets) != 6 || slices.ContainsFunc(octets, func(b int) bool { return b > 255 }) {
 			continue
 		}
-
-		// Last 6 parts are MAC address bytes
-		macParts := parts[len(parts)-6:]
-		macBytes := make([]string, 6)
-		for i, p := range macParts {
-			b, _ := strconv.Atoi(p)
-			macBytes[i] = fmt.Sprintf("%02x", b)
-		}
-		macAddr := strings.Join(macBytes, ":")
+		macAddr := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
+			octets[0], octets[1], octets[2], octets[3], octets[4], octets[5])
 
 		// Parse port number from value
 		val = strings.TrimPrefix(val, "INTEGER: ")
@@ -739,7 +987,7 @@ func (s *SNMPObject) collectARPTable(ip string) ([]ARPEntry, error) {
 	// Walk ipNetToMediaPhysAddress (.1.3.6.1.2.1.4.22.1.2)
 	// OID format: .1.3.6.1.2.1.4.22.1.2.IfIndex.IP1.IP2.IP3.IP4 = Hex-STRING: MAC
 
-	lines, err := s.runSNMPWalk(ip, ".1.3.6.1.2.1.4.22.1.2")
+	lines, err := s.runSNMPWalk(ip, collectARPPhysOID)
 	if err != nil {
 		return nil, err
 	}
@@ -747,46 +995,35 @@ func (s *SNMPObject) collectARPTable(ip string) ([]ARPEntry, error) {
 	result := []ARPEntry{}
 
 	for _, line := range lines {
-		oid, val, err := parseSNMPLine(line)
-		if err != nil {
+		oid, typ, val, ok := collectSNMPValue(line)
+		if !ok {
 			continue
 		}
 
 		// Extract IP address from OID
 		// OID: .1.3.6.1.2.1.4.22.1.2.1.192.168.1.100
-		parts := strings.Split(oid, ".")
-		if len(parts) < 15 {
+		// The index is exactly the interface index and the 4 IP octets.
+		idx, ok := collectOIDIndex(oid, collectARPPhysOID)
+		if !ok || len(idx) != 5 || slices.ContainsFunc(idx[1:], func(b int) bool { return b > 255 }) {
+			continue
+		}
+		ifIndex := idx[0]
+		ipAddr := fmt.Sprintf("%d.%d.%d.%d", idx[1], idx[2], idx[3], idx[4])
+
+		// Parse the MAC: Hex-STRING, or STRING when all six bytes are
+		// printable or MIBs are loaded (F58). Incomplete entries fail here.
+		macAddr, ok := collectPhysAddress(typ, val)
+		if !ok {
 			continue
 		}
 
-		// Last 4 parts are IP address octets, part before that is interface index
-		ipParts := parts[len(parts)-4:]
-		ipAddr := strings.Join(ipParts, ".")
-
-		// Interface index is before IP
-		ifIndex, _ := strconv.Atoi(parts[len(parts)-5])
-
-		// Parse MAC address from value (Hex-STRING format)
-		// Value: "4C AE A3 8E 42 11" or similar
-		val = strings.TrimPrefix(val, "Hex-STRING: ")
-		val = strings.TrimPrefix(val, "STRING: ")
-		val = strings.Trim(val, "\"")
-
-		// Convert hex string to MAC format
-		macAddr := normalizeChassisID(val)
-
-		// Skip incomplete entries
-		if len(macAddr) < 17 {
-			continue
-		}
-		
 		// Skip invalid IPs
-		if ipAddr == "0.0.0.0" || strings.HasPrefix(ipAddr, "0.") {
+		if idx[1] == 0 {
 			continue
 		}
 
-		// Skip broadcast/null MACs
-		if macAddr == "00:00:00:00:00:00" || macAddr == "ff:ff:ff:ff:ff:ff" {
+		// Skip null, broadcast, multicast and zero-OUI MACs (Q11)
+		if !collectUsableMAC(macAddr) {
 			continue
 		}
 

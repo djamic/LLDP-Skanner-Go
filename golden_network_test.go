@@ -140,40 +140,45 @@ func fakeESXiNetwork() *fakeTransport {
 	}}
 }
 
-// esxiUICheck runs esxiUIAnswers (the HTTP part of probeESXiHost) with the
-// worker's client settings and a fake transport.
+// esxiUICheck runs probeESXiHost (the HTTP check after the TCP :443 check)
+// with the worker's client settings and a fake transport.
 func esxiUICheck() map[string]any {
 	transport := fakeESXiNetwork()
 	client := newESXiClient(transport)
 	out := map[string]any{}
 	for _, ip := range []string{"10.9.9.1", "10.9.9.2", "10.9.9.3", "10.9.9.4", "10.9.9.5", "10.9.9.6"} {
-		ok := esxiUIAnswers(client, ip)
+		ok := probeESXiHost(client, ip)
 		out[ip] = map[string]any{"confirmed": ok, "requests": transport.taken()}
 	}
 	return out
 }
 
 // esxiWorker feeds four jobs to runESXiWorker, one of them for a host that is
-// down, and records how often each IP was probed and which MACs ended up
-// confirmed.
+// down (no TCP :443), and records how often each IP was probed, which MACs
+// ended up confirmed and which checks wait for a retry. The jobs' MACs map to
+// their IPs in the MAC-IP table, as for jobs queued by an ARP sweep.
 func esxiWorker() map[string]any {
 	clearConfirmedESXi()
 	defer clearConfirmedESXi()
 	client := newESXiClient(fakeESXiNetwork())
 	jobs := make(chan esxiJob, 4)
+	globalMACtoIPMutex.Lock()
 	for _, j := range []esxiJob{
 		{mac: "00:0c:29:99:00:01", ip: "10.9.9.1"},
 		{mac: "00:0c:29:99:00:05", ip: "10.9.9.5"},
 		{mac: "00:0c:29:99:00:02", ip: "10.9.9.2"},
 		{mac: "00:0c:29:99:00:06", ip: "10.9.9.6"},
 	} {
+		globalMACtoIP[j.mac] = j.ip
 		jobs <- j
 	}
+	globalMACtoIPMutex.Unlock()
 	close(jobs)
 	probes := map[string]int{}
-	runESXiWorker(jobs, func(ip string) bool {
+	reachable := func(ip string) bool { return ip != "10.9.9.5" }
+	runESXiWorker(jobs, reachable, func(ip string) bool {
 		probes[ip]++
-		return esxiUIAnswers(client, ip)
+		return probeESXiHost(client, ip)
 	})
 	var confirmed []string
 	ConfirmedESXiMACs.Range(func(k, _ any) bool {
@@ -181,7 +186,13 @@ func esxiWorker() map[string]any {
 		return true
 	})
 	slices.Sort(confirmed)
-	return map[string]any{"probes": probes, "confirmed": confirmed}
+	collectESXiMu.Lock()
+	retry := map[string]any{}
+	for mac, r := range collectESXiRetry {
+		retry[mac] = map[string]any{"ip": r.ip, "tries": r.tries}
+	}
+	collectESXiMu.Unlock()
+	return map[string]any{"probes": probes, "confirmed": confirmed, "retry": retry}
 }
 
 // captureReports saves a capture session (topology only, as StopCapture

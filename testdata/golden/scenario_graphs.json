@@ -1,21 +1,14 @@
 {
   "build_synthetic_network": {
     "nodes": {
-      "00:0c:29:09:0a:01": "vm | [VM] 💻 VMware VM VMware",
-      "00:0c:29:09:0a:02": "vm | [VM] 💻 VMware VM VMware",
-      "00:0c:29:09:0a:03": "vm | [VM] 💻 VMware VM VMware",
-      "00:0c:29:09:0a:04": "vm | [VM] 💻 VMware VM VMware",
       "00:1b:21:09:03:01": "endpoint | [ENDPOINT]\n10.0.9.31",
       "00:1b:21:09:0b:01": "endpoint | [ENDPOINT]\n10.0.9.81",
       "00:1b:21:09:0b:02": "endpoint | [ENDPOINT]",
       "00:1b:21:09:0b:03": "endpoint | [ENDPOINT]",
-      "00:1b:21:09:0b:04": "endpoint | [ENDPOINT]",
-      "00:1b:21:09:0b:05": "endpoint | [ENDPOINT]",
-      "00:1b:21:09:0d:03": "bmc | [BMC] Dell iDRAC\n10.0.9.13\n[DNS] srv01-idrac",
+      "00:1b:21:09:0d:03": "endpoint | [ENDPOINT]\n10.0.9.13\n[DNS] srv01-idrac",
       "00:1b:21:09:16:01": "endpoint | [ENDPOINT]\n10.0.9.25\n[DNS] pc-9-25",
       "00:1b:21:09:18:01": "endpoint | [ENDPOINT]",
       "00:1b:21:09:18:02": "endpoint | [ENDPOINT]",
-      "00:1b:21:09:1e:01": "endpoint | [ENDPOINT]",
       "00:1b:21:09:51:01": "endpoint | [ENDPOINT]",
       "00:50:56:09:09:01": "vm | [VM] 💻 VMware VM VMware\n10.0.9.99\n10.0.9.41",
       "00:50:56:09:09:02": "vm | [VM] 🪟 Windows VMware\n10.0.9.42",
@@ -23,43 +16,39 @@
       "00:50:56:09:72:01": "vm | [VM] 💻 VMware VM VMware\n10.0.9.71",
       "00:50:56:09:72:02": "vm | [VM] 💻 VMware VM VMware\n10.0.9.72",
       "0c:c4:7a:09:00:16": "bmc | [BMC] Supermicro IPMI\nnode16-ipmi\n10.0.9.16",
-      "0c:c4:7a:09:09:05": "bmc | [BMC] Supermicro IPMI Supermicro",
+      "0c:c4:7a:09:09:05": "hypervisor | [HYPERVISOR] SuperMicro Server\n[VM] ❓ Unknown VM Supermicro",
       "0c:c4:7a:09:0d:01": "bmc | [BMC] Supermicro IPMI Supermicro",
       "0c:c4:7a:09:15:01": "bmc | [BMC] Supermicro IPMI Supermicro\n10.0.9.21",
-      "10.0.9.5": "switch | sw-d",
-      "10.0.9.6": "switch | sw-e",
       "10.0.9.7": "switch | sw-f",
       "10:7c:61:c0:9e:aa": "endpoint | [LLDP-EP]\nDESKTOP-V380CHD",
       "4c:ae:a3:09:00:02": "switch | sw-a\n10.0.9.2",
       "4c:ae:a3:09:00:03": "switch | sw-b\n10.0.9.3",
       "4c:ae:a3:09:00:04": "switch | sw-c\n10.0.9.4",
-      "52:54:00:09:08:01": "vm | [VM] 💻 KVM/Proxmox VM QEMU/KVM",
+      "52:54:00:09:08:01": "wifi_random | [WiFi] QEMU/KVM",
       "5c:ed:8c:09:00:17": "endpoint | [HYPERVISOR] HPE ProLiant Server\n[LLDP-EP] Intel\nILOCZJ33411C3",
-      "5c:ed:8c:09:09:04": "endpoint | [HYPERVISOR] HPE ProLiant Server\n[ENDPOINT] Intel\n10.0.9.44",
-      "74:56:3c:bb:d0:16": "endpoint | [HYPERVISOR] SuperMicro (GIGA-BYTE) Server\n[LLDP-EP]",
-      "B-318/1": "endpoint | [LLDP-EP]",
-      "aa:bb:cc:09:0e:01": "wifi_random | [WiFi]",
-      "b0:83:fe:09:0b:07": "bmc | [BMC] Dell iDRAC Dell",
-      "da:a1:19:09:0b:06": "wifi_random | [WiFi]",
+      "5c:ed:8c:09:09:04": "hypervisor | [HYPERVISOR] HPE ProLiant Server\n[VM] ❓ Unknown VM Intel\n10.0.9.44",
+      "74:56:3c:bb:d0:16": "endpoint | [HYPERVISOR] SuperMicro (GIGA-BYTE) Server\n[LLDP-EP]\n00 00 00 00 00 00",
+      "AA:BB:CC:09:0E:01": "wifi_random | [WiFi]",
+      "aa:bb:cc:09:00:29": "endpoint | [LLDP-EP]",
+      "b0:83:fe:09:0b:07": "endpoint | [HYPERVISOR] Dell Server\n[ENDPOINT] Dell",
+      "da:a1:19:09:0b:06": "endpoint | [ENDPOINT]",
       "da:a1:19:09:0d:02": "wifi_random | [WiFi]\n10.0.9.15\n[DNS] pc-9-15",
       "de:a1:19:09:17:01": "wifi_random | [WiFi]",
       "ec:74:d7:64:cb:b1": "endpoint | [LLDP-EP]\nGXP1610_ec:74:d7:64:cb:b1",
       "f4:b5:20:19:12:5e": "endpoint | [LLDP-EP]\nprinter-7\nHP LaserJet",
       "hub-4c:ae:a3:09:00:02-p11": "hub | [HUB] Unmanaged\n7 devices",
       "hub-4c:ae:a3:09:00:02-p24": "hub | [HUB] Unmanaged\n2 devices",
-      "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10": "hypervisor | [HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/10",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/9\nVMs: 10.0.9.99, 10.0.9.42, 10.0.9.43"
+      "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware vSphere\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43",
+      "no:such:object:available:on:this:agent:at:this:oid": "switch | sw-e\n10.0.9.6"
     },
     "edges": [
-      "10.0.9.5 -> 00:1b:21:09:51:01 : \"GE1/0/1|\"",
       "10.0.9.7 -> hyp-10.0.9.7-ge1_0_2 : \"ge1/0/2\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:03:01 : \"GE1/0/3 [V100]|\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:0d:03 : \"GE1/0/13 [T]|\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:16:01 : \"GE1/0/22|\"",
-      "4c:ae:a3:09:00:02 -> 00:1b:21:09:1e:01 : \"NULL0|\"",
       "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:00:16 : \"GE1/0/16 1G|0CC47A090016\"",
-      "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:09:05 : \"GE1/0/9|\"",
+      "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:09:05 : \"GE1/0/9 [T]\"",
       "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:0d:01 : \"GE1/0/13 [T]|\"",
       "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:15:01 : \"GE1/0/21|\"",
       "4c:ae:a3:09:00:02 -> 10:7c:61:c0:9e:aa : \"GE1/0/2 1G|107C61C09EAA\"",
@@ -67,59 +56,45 @@
       "4c:ae:a3:09:00:02 -> 4c:ae:a3:09:00:04 : \"GE1/0/18 [MAC-REF]|\"",
       "4c:ae:a3:09:00:02 -> 52:54:00:09:08:01 : \"GE1/0/8|\"",
       "4c:ae:a3:09:00:02 -> 5c:ed:8c:09:00:17 : \"GE1/0/17 1G|5CED8C090017\"",
-      "4c:ae:a3:09:00:02 -> 5c:ed:8c:09:09:04 : \"GE1/0/9|\"",
+      "4c:ae:a3:09:00:02 -> 5c:ed:8c:09:09:04 : \"GE1/0/9 [T]\"",
       "4c:ae:a3:09:00:02 -> 74:56:3c:bb:d0:16 : \"GE1/0/5 1G|74563CBBD016\"",
-      "4c:ae:a3:09:00:02 -> B-318/1 : \"GE1/0/6 1G|28\"",
-      "4c:ae:a3:09:00:02 -> aa:bb:cc:09:0e:01 : \"GE1/0/14|\"",
+      "4c:ae:a3:09:00:02 -> AA:BB:CC:09:0E:01 : \"GE1/0/14|\"",
       "4c:ae:a3:09:00:02 -> da:a1:19:09:0d:02 : \"GE1/0/13 [T]|\"",
       "4c:ae:a3:09:00:02 -> de:a1:19:09:17:01 : \"GE1/0/23|\"",
       "4c:ae:a3:09:00:02 -> ec:74:d7:64:cb:b1 : \"GE1/0/4 1G|EC74D764CBB1\"",
       "4c:ae:a3:09:00:02 -> f4:b5:20:19:12:5e : \"GE1/0/7 1G|eth0\"",
       "4c:ae:a3:09:00:02 -> hub-4c:ae:a3:09:00:02-p11 : \"GE1/0/11|Hub\"",
       "4c:ae:a3:09:00:02 -> hub-4c:ae:a3:09:00:02-p24 : \"GE1/0/24|Hub\"",
-      "4c:ae:a3:09:00:02 -> hyp-4c:ae:a3:09:00:02-ge1_0_10 : \"ge1/0/10\"",
       "4c:ae:a3:09:00:02 -> hyp-4c:ae:a3:09:00:02-ge1_0_9 : \"ge1/0/9\"",
       "4c:ae:a3:09:00:03 -> 4c:ae:a3:09:00:04 : \"GE1/0/2 [MAC-REF]|\"",
       "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:01 : \"\"",
       "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:02 : \"\"",
       "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:03 : \"\"",
-      "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:04 : \"\"",
-      "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:05 : \"\"",
       "hub-4c:ae:a3:09:00:02-p11 -> b0:83:fe:09:0b:07 : \"\"",
       "hub-4c:ae:a3:09:00:02-p11 -> da:a1:19:09:0b:06 : \"\"",
       "hub-4c:ae:a3:09:00:02-p24 -> 00:1b:21:09:18:01 : \"\"",
       "hub-4c:ae:a3:09:00:02-p24 -> 00:1b:21:09:18:02 : \"\"",
       "hyp-10.0.9.7-ge1_0_2 -> 00:50:56:09:72:01 : \"vNIC\"",
       "hyp-10.0.9.7-ge1_0_2 -> 00:50:56:09:72:02 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10 -> 00:0c:29:09:0a:01 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10 -> 00:0c:29:09:0a:02 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10 -> 00:0c:29:09:0a:03 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10 -> 00:0c:29:09:0a:04 : \"vNIC\"",
       "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:01 : \"vNIC\"",
       "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:02 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:03 : \"vNIC\""
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:03 : \"vNIC\"",
+      "no:such:object:available:on:this:agent:at:this:oid -> 00:1b:21:09:51:01 : \"GE1/0/1|\""
     ],
     "status": {
-      "10.0.9.6": "unreachable"
+      "no:such:object:available:on:this:agent:at:this:oid": "unreachable"
     }
   },
   "build_synthetic_network_esxi": {
     "nodes": {
-      "00:0c:29:09:0a:01": "vm | [VM] 💻 VMware VM VMware",
-      "00:0c:29:09:0a:02": "vm | [VM] 💻 VMware VM VMware",
-      "00:0c:29:09:0a:03": "vm | [VM] 💻 VMware VM VMware",
-      "00:0c:29:09:0a:04": "vm | [VM] 💻 VMware VM VMware",
-      "00:1b:21:09:03:01": "hypervisor | [HYPERVISOR] VMware ESXi\n[ENDPOINT]\n10.0.9.31",
+      "00:1b:21:09:03:01": "endpoint | [HYPERVISOR] VMware ESXi\n[ENDPOINT]\n10.0.9.31",
       "00:1b:21:09:0b:01": "endpoint | [ENDPOINT]\n10.0.9.81",
       "00:1b:21:09:0b:02": "endpoint | [ENDPOINT]",
       "00:1b:21:09:0b:03": "endpoint | [ENDPOINT]",
-      "00:1b:21:09:0b:04": "endpoint | [ENDPOINT]",
-      "00:1b:21:09:0b:05": "endpoint | [ENDPOINT]",
-      "00:1b:21:09:0d:03": "bmc | [BMC] Dell iDRAC\n10.0.9.13\n[DNS] srv01-idrac",
+      "00:1b:21:09:0d:03": "endpoint | [ENDPOINT]\n10.0.9.13\n[DNS] srv01-idrac",
       "00:1b:21:09:16:01": "endpoint | [ENDPOINT]\n10.0.9.25\n[DNS] pc-9-25",
-      "00:1b:21:09:18:01": "hypervisor | [HYPERVISOR] VMware ESXi\n[ENDPOINT]",
+      "00:1b:21:09:18:01": "endpoint | [HYPERVISOR] VMware ESXi\n[ENDPOINT]",
       "00:1b:21:09:18:02": "endpoint | [ENDPOINT]",
-      "00:1b:21:09:1e:01": "endpoint | [ENDPOINT]",
       "00:1b:21:09:51:01": "endpoint | [ENDPOINT]",
       "00:50:56:09:09:01": "vm | [VM] 💻 VMware VM VMware\n10.0.9.99\n10.0.9.41",
       "00:50:56:09:09:02": "vm | [VM] 🪟 Windows VMware\n10.0.9.42",
@@ -127,44 +102,39 @@
       "00:50:56:09:72:01": "vm | [VM] 💻 VMware VM VMware\n10.0.9.71",
       "00:50:56:09:72:02": "vm | [VM] 💻 VMware VM VMware\n10.0.9.72",
       "0c:c4:7a:09:00:16": "bmc | [BMC] Supermicro IPMI\nnode16-ipmi\n10.0.9.16",
-      "0c:c4:7a:09:09:05": "bmc | [BMC] Supermicro IPMI Supermicro",
+      "0c:c4:7a:09:09:05": "hypervisor | [HYPERVISOR] SuperMicro Server\n[VM] ❓ Unknown VM Supermicro",
       "0c:c4:7a:09:0d:01": "bmc | [BMC] Supermicro IPMI Supermicro",
       "0c:c4:7a:09:15:01": "bmc | [BMC] Supermicro IPMI Supermicro\n10.0.9.21",
-      "10.0.9.5": "switch | sw-d",
-      "10.0.9.6": "switch | sw-e",
       "10.0.9.7": "switch | sw-f",
       "10:7c:61:c0:9e:aa": "endpoint | [LLDP-EP]\nDESKTOP-V380CHD",
       "4c:ae:a3:09:00:02": "switch | sw-a\n10.0.9.2",
       "4c:ae:a3:09:00:03": "switch | sw-b\n10.0.9.3",
-      "4c:ae:a3:09:00:04": "switch | sw-c\n10.0.9.4",
-      "52:54:00:09:08:01": "vm | [VM] 💻 KVM/Proxmox VM QEMU/KVM",
-      "5c:ed:8c:09:00:17": "hypervisor | [HYPERVISOR] HPE ProLiant Server\n[LLDP-EP] Intel\nILOCZJ33411C3",
-      "5c:ed:8c:09:09:04": "endpoint | [HYPERVISOR] HPE ProLiant Server\n[ENDPOINT] Intel\n10.0.9.44",
-      "74:56:3c:bb:d0:16": "endpoint | [HYPERVISOR] SuperMicro (GIGA-BYTE) Server\n[LLDP-EP]",
-      "B-318/1": "endpoint | [LLDP-EP]",
-      "aa:bb:cc:09:0e:01": "wifi_random | [WiFi]",
-      "b0:83:fe:09:0b:07": "bmc | [BMC] Dell iDRAC Dell",
-      "da:a1:19:09:0b:06": "wifi_random | [WiFi]",
-      "da:a1:19:09:0d:02": "hypervisor | [HYPERVISOR] VMware ESXi\n[WiFi]\n10.0.9.15\n[DNS] pc-9-15",
+      "4c:ae:a3:09:00:04": "hypervisor | [HYPERVISOR] VMware ESXi\nsw-c\n10.0.9.4",
+      "52:54:00:09:08:01": "wifi_random | [WiFi] QEMU/KVM",
+      "5c:ed:8c:09:00:17": "endpoint | [HYPERVISOR] HPE ProLiant Server\n[LLDP-EP] Intel\nILOCZJ33411C3",
+      "5c:ed:8c:09:09:04": "hypervisor | [HYPERVISOR] HPE ProLiant Server\n[VM] ❓ Unknown VM Intel\n10.0.9.44",
+      "74:56:3c:bb:d0:16": "endpoint | [HYPERVISOR] SuperMicro (GIGA-BYTE) Server\n[LLDP-EP]\n00 00 00 00 00 00",
+      "AA:BB:CC:09:0E:01": "wifi_random | [WiFi]",
+      "aa:bb:cc:09:00:29": "endpoint | [LLDP-EP]",
+      "b0:83:fe:09:0b:07": "endpoint | [HYPERVISOR] Dell Server\n[ENDPOINT] Dell",
+      "da:a1:19:09:0b:06": "endpoint | [ENDPOINT]",
+      "da:a1:19:09:0d:02": "wifi_random | [HYPERVISOR] VMware ESXi\n[WiFi]\n10.0.9.15\n[DNS] pc-9-15",
       "de:a1:19:09:17:01": "wifi_random | [WiFi]",
       "ec:74:d7:64:cb:b1": "endpoint | [LLDP-EP]\nGXP1610_ec:74:d7:64:cb:b1",
       "f4:b5:20:19:12:5e": "endpoint | [LLDP-EP]\nprinter-7\nHP LaserJet",
       "hub-4c:ae:a3:09:00:02-p11": "hub | [HUB] Unmanaged\n7 devices",
-      "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10": "hypervisor | [HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/10",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/9\nVMs: 10.0.9.99, 10.0.9.42, 10.0.9.43"
+      "hub-4c:ae:a3:09:00:02-p24": "hub | [HUB] Unmanaged\n2 devices",
+      "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware vSphere\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43",
+      "no:such:object:available:on:this:agent:at:this:oid": "switch | sw-e\n10.0.9.6"
     },
     "edges": [
-      "10.0.9.5 -> 00:1b:21:09:51:01 : \"GE1/0/1|\"",
       "10.0.9.7 -> hyp-10.0.9.7-ge1_0_2 : \"ge1/0/2\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:03:01 : \"GE1/0/3 [V100]|\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:0d:03 : \"GE1/0/13 [T]|\"",
       "4c:ae:a3:09:00:02 -> 00:1b:21:09:16:01 : \"GE1/0/22|\"",
-      "4c:ae:a3:09:00:02 -> 00:1b:21:09:18:01 : \"GE1/0/24|\"",
-      "4c:ae:a3:09:00:02 -> 00:1b:21:09:18:02 : \"GE1/0/24|\"",
-      "4c:ae:a3:09:00:02 -> 00:1b:21:09:1e:01 : \"NULL0|\"",
       "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:00:16 : \"GE1/0/16 1G|0CC47A090016\"",
-      "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:09:05 : \"GE1/0/9|\"",
+      "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:09:05 : \"GE1/0/9 [T]\"",
       "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:0d:01 : \"GE1/0/13 [T]|\"",
       "4c:ae:a3:09:00:02 -> 0c:c4:7a:09:15:01 : \"GE1/0/21|\"",
       "4c:ae:a3:09:00:02 -> 10:7c:61:c0:9e:aa : \"GE1/0/2 1G|107C61C09EAA\"",
@@ -172,37 +142,33 @@
       "4c:ae:a3:09:00:02 -> 4c:ae:a3:09:00:04 : \"GE1/0/18 [MAC-REF]|\"",
       "4c:ae:a3:09:00:02 -> 52:54:00:09:08:01 : \"GE1/0/8|\"",
       "4c:ae:a3:09:00:02 -> 5c:ed:8c:09:00:17 : \"GE1/0/17 1G|5CED8C090017\"",
-      "4c:ae:a3:09:00:02 -> 5c:ed:8c:09:09:04 : \"GE1/0/9|\"",
+      "4c:ae:a3:09:00:02 -> 5c:ed:8c:09:09:04 : \"GE1/0/9 [T]\"",
       "4c:ae:a3:09:00:02 -> 74:56:3c:bb:d0:16 : \"GE1/0/5 1G|74563CBBD016\"",
-      "4c:ae:a3:09:00:02 -> B-318/1 : \"GE1/0/6 1G|28\"",
-      "4c:ae:a3:09:00:02 -> aa:bb:cc:09:0e:01 : \"GE1/0/14|\"",
+      "4c:ae:a3:09:00:02 -> AA:BB:CC:09:0E:01 : \"GE1/0/14|\"",
       "4c:ae:a3:09:00:02 -> da:a1:19:09:0d:02 : \"GE1/0/13 [T]|\"",
       "4c:ae:a3:09:00:02 -> de:a1:19:09:17:01 : \"GE1/0/23|\"",
       "4c:ae:a3:09:00:02 -> ec:74:d7:64:cb:b1 : \"GE1/0/4 1G|EC74D764CBB1\"",
       "4c:ae:a3:09:00:02 -> f4:b5:20:19:12:5e : \"GE1/0/7 1G|eth0\"",
       "4c:ae:a3:09:00:02 -> hub-4c:ae:a3:09:00:02-p11 : \"GE1/0/11|Hub\"",
-      "4c:ae:a3:09:00:02 -> hyp-4c:ae:a3:09:00:02-ge1_0_10 : \"ge1/0/10\"",
+      "4c:ae:a3:09:00:02 -> hub-4c:ae:a3:09:00:02-p24 : \"GE1/0/24|Hub\"",
       "4c:ae:a3:09:00:02 -> hyp-4c:ae:a3:09:00:02-ge1_0_9 : \"ge1/0/9\"",
       "4c:ae:a3:09:00:03 -> 4c:ae:a3:09:00:04 : \"GE1/0/2 [MAC-REF]|\"",
       "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:01 : \"\"",
       "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:02 : \"\"",
       "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:03 : \"\"",
-      "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:04 : \"\"",
-      "hub-4c:ae:a3:09:00:02-p11 -> 00:1b:21:09:0b:05 : \"\"",
       "hub-4c:ae:a3:09:00:02-p11 -> b0:83:fe:09:0b:07 : \"\"",
       "hub-4c:ae:a3:09:00:02-p11 -> da:a1:19:09:0b:06 : \"\"",
+      "hub-4c:ae:a3:09:00:02-p24 -> 00:1b:21:09:18:01 : \"\"",
+      "hub-4c:ae:a3:09:00:02-p24 -> 00:1b:21:09:18:02 : \"\"",
       "hyp-10.0.9.7-ge1_0_2 -> 00:50:56:09:72:01 : \"vNIC\"",
       "hyp-10.0.9.7-ge1_0_2 -> 00:50:56:09:72:02 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10 -> 00:0c:29:09:0a:01 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10 -> 00:0c:29:09:0a:02 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10 -> 00:0c:29:09:0a:03 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_10 -> 00:0c:29:09:0a:04 : \"vNIC\"",
       "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:01 : \"vNIC\"",
       "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:02 : \"vNIC\"",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:03 : \"vNIC\""
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9 -> 00:50:56:09:09:03 : \"vNIC\"",
+      "no:such:object:available:on:this:agent:at:this:oid -> 00:1b:21:09:51:01 : \"GE1/0/1|\""
     ],
     "status": {
-      "10.0.9.6": "unreachable"
+      "no:such:object:available:on:this:agent:at:this:oid": "unreachable"
     }
   },
   "hyp_hub_children": {
@@ -212,14 +178,14 @@
       "00:1b:21:00:07:03": "endpoint | [ENDPOINT] ",
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
       "hub-4c:ae:a3:00:01:01-p7": "hub | [HUB] Unmanaged\n3 devices",
-      "hyp-hub-4c:ae:a3:00:01:01-p7-ge1_0_7": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/7"
+      "hyp-hub-4c:ae:a3:00:01:01-p7-port": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on port"
     },
     "edges": [
       "4c:ae:a3:00:01:01 -> hub-4c:ae:a3:00:01:01-p7 : \"GE1/0/7|Hub\"",
       "hub-4c:ae:a3:00:01:01-p7 -> 00:1b:21:00:07:03 : \"\"",
-      "hub-4c:ae:a3:00:01:01-p7 -> hyp-hub-4c:ae:a3:00:01:01-p7-ge1_0_7 : \"\"",
-      "hyp-hub-4c:ae:a3:00:01:01-p7-ge1_0_7 -> 00:0c:29:00:07:01 : \"vNIC\"",
-      "hyp-hub-4c:ae:a3:00:01:01-p7-ge1_0_7 -> 00:0c:29:00:07:02 : \"vNIC\""
+      "hub-4c:ae:a3:00:01:01-p7 -> hyp-hub-4c:ae:a3:00:01:01-p7-port : \"port\"",
+      "hyp-hub-4c:ae:a3:00:01:01-p7-port -> 00:0c:29:00:07:01 : \"vNIC\"",
+      "hyp-hub-4c:ae:a3:00:01:01-p7-port -> 00:0c:29:00:07:02 : \"vNIC\""
     ]
   },
   "hyp_kvm_52_54_00": {
@@ -254,13 +220,11 @@
     "nodes": {
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
       "bc:24:11:00:05:01": "vm | [VM] 💻 VMware VM ",
-      "bc:24:11:00:05:02": "vm | [VM] 💻 VMware VM ",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_5": "hypervisor | [HYPERVISOR] Proxmox VE\n2 VMs on ge1/0/5"
+      "bc:24:11:00:05:02": "vm | [VM] 💻 VMware VM "
     },
     "edges": [
-      "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_5 : \"ge1/0/5\"",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_5 -> bc:24:11:00:05:01 : \"vNIC\"",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_5 -> bc:24:11:00:05:02 : \"vNIC\""
+      "4c:ae:a3:00:01:01 -> bc:24:11:00:05:01 : \"GE1/0/5 [T]\"",
+      "4c:ae:a3:00:01:01 -> bc:24:11:00:05:02 : \"GE1/0/5 [T]\""
     ]
   },
   "hyp_server_nic_phase2": {
@@ -277,7 +241,7 @@
       "b4:7a:f1:00:00:06": "endpoint | [HYPERVISOR] VMware ESXi\n[ENDPOINT] Supermicro",
       "e8:39:35:00:00:08": "switch | Cisco IOS\n172.20.0.8",
       "ec:b1:d7:00:00:12": "switch | HUAWEI S5720\n172.20.0.12",
-      "f8:f0:82:00:00:01": "endpoint | [HYPERVISOR] HPE Server\n[ENDPOINT] SNR",
+      "f8:f0:82:00:00:01": "endpoint | [ENDPOINT] SNR",
       "f8:f0:82:00:00:02": "endpoint | [HYPERVISOR] HPE Server\n[ENDPOINT] NAGTECH LLC",
       "hub-x-p1": "hub | [HUB] Unmanaged\n2 devices",
       "hyp-x-ge1": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1"
@@ -298,12 +262,12 @@
       "00:50:56:00:09:01": "vm | [VM] 💻 VMware VM VMware",
       "00:50:56:00:09:02": "vm | [VM] 💻 VMware VM VMware",
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/9"
+      "hyp-4c:ae:a3:00:01:01-ge1_0_91g↓5m↑3m": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/91g↓5m↑3m"
     },
     "edges": [
-      "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_9 : \"ge1/0/9\"",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_9 -> 00:50:56:00:09:01 : \"vNIC\"",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_9 -> 00:50:56:00:09:02 : \"vNIC\""
+      "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_91g↓5m↑3m : \"ge1/0/91g↓5m↑3m\"",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_91g↓5m↑3m -> 00:50:56:00:09:01 : \"vNIC\"",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_91g↓5m↑3m -> 00:50:56:00:09:02 : \"vNIC\""
     ]
   },
   "hyp_vm_on_two_switches": {
@@ -313,8 +277,8 @@
       "00:50:56:00:0a:03": "vm | [VM] 💻 VMware VM VMware",
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
       "4c:ae:a3:00:01:02": "switch | SNR-S2985G\n172.20.0.12",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_3": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/3",
-      "hyp-4c:ae:a3:00:01:02-ge1_0_4": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/4"
+      "hyp-4c:ae:a3:00:01:01-ge1_0_3": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/3",
+      "hyp-4c:ae:a3:00:01:02-ge1_0_4": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/4"
     },
     "edges": [
       "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_3 : \"ge1/0/3\"",
@@ -329,13 +293,11 @@
     "nodes": {
       "00:05:69:00:06:01": "vm | [VM] 💻 VMware VM ",
       "00:05:69:00:06:02": "vm | [VM] 💻 VMware VM ",
-      "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_6": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/6"
+      "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11"
     },
     "edges": [
-      "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_6 : \"ge1/0/6\"",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_6 -> 00:05:69:00:06:01 : \"vNIC\"",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_6 -> 00:05:69:00:06:02 : \"vNIC\""
+      "4c:ae:a3:00:01:01 -> 00:05:69:00:06:01 : \"GE1/0/6 [T]\"",
+      "4c:ae:a3:00:01:01 -> 00:05:69:00:06:02 : \"GE1/0/6 [T]\""
     ]
   }
 }
