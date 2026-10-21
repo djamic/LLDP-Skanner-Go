@@ -10,6 +10,12 @@
       "links": 1026,
       "nodes_by_group": {"access_point": 98, "bmc": 4, "camera": 56, "endpoint": 668, "hub": 33, "hypervisor": 13, "switch": 75, "vm": 65, "wifi_random": 17}
     },
+    "rule": {
+      "kept_by_group": {"endpoint": 38, "hub": 7, "hypervisor": 3, "switch": 2, "vm": 7, "wifi_random": 4},
+      "kept_links": 60,
+      "links": 60,
+      "nodes_by_group": {"endpoint": 38, "hub": 7, "hypervisor": 3, "switch": 2, "vm": 7, "wifi_random": 4}
+    },
     "ui": {
       "kept_by_group": {"endpoint": 9, "hub": 3, "hypervisor": 1, "printer": 1, "server": 1, "switch": 2, "unknown": 1, "vm": 2},
       "kept_links": 18,
@@ -156,12 +162,21 @@
     "fixture": {
       "headings": ["📡 172.20.230.76", "📡 A_padval_SNR (172.20.230.51)", "📡 B-318/2 (172.20.230.11)", "📡 B-318/3 (172.20.230.1)", "📡 B-423 (172.20.230.15)", "📡 D 1-2 (172.20.230.48)", "📡 E-209 (172.20.230.33)", "📡 E109 (172.20.230.22)", "📡 E109-2 (172.20.230.24)", "📡 E205-24 (172.20.230.32)", "📡 F-1 (172.20.240.13)", "📡 F-3(1) (172.20.240.10)", "📡 F-4_48P (172.20.240.1)", "📡 F-5 (172.20.240.5)", "📡 F-6(1) (172.20.240.8)", "📡 F-7(1) (172.20.240.6)", "📡 F-8 (172.20.240.4)", "📡 F-9 (172.20.240.12)", "📡 HP (172.20.254.204)", "📡 HPE (172.20.230.35)", "📡 HPE (172.20.230.5)", "📡 HPE (172.20.230.7)", "📡 HPE (172.20.230.9)", "📡 HPE (172.20.253.11)", "📡 HPE (172.20.254.10)", "📡 HPE (172.20.254.202)", "📡 TTJ-3&amp;4 (172.20.230.23)"],
       "labels": ["[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:8d:ec:c1-p4", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:8d:ec:c1-p28", "[HUB] Unmanaged · 3 devices · hub-f8:f0:82:d8:7e:81-p3", "[HUB] Unmanaged · 7 devices · hub-4c:ae:a3:27:85:ea-p11", "[HUB] Unmanaged · 8 devices · hub-4c:ae:a3:a2:18:2c-p40", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:a2:03:2c-p17", "[HUB] Unmanaged · 6 devices · hub-4c:ae:a3:a2:15:ec-p2", "[HUB] Unmanaged · 2 devices · hub-f8:f0:82:7c:2c:c7-p2", "[HUB] Unmanaged · 3 devices · hub-f8:f0:82:7c:2c:c7-p27", "[HUB] Unmanaged · 6 devices · hub-f8:f0:82:7a:d9:69-p2", "[HUB] Unmanaged · 5 devices · hub-f8:f0:82:7a:d9:69-p48", "[HUB] Unmanaged · 4 devices · hub-f8:f0:82:7c:2d:17-p18", "[HUB] Unmanaged · 6 devices · hub-f8:f0:82:7c:30:cf-p17", "[HUB] Unmanaged · 8 devices · hub-f8:f0:82:7c:fa:ca-p1", "[HUB] Unmanaged · 7 devices · hub-f8:f0:82:7c:fa:ca-p20", "[HUB] Unmanaged · 7 devices · hub-f8:f0:82:7c:f9:58-p24", "[HUB] Unmanaged · 6 devices · hub-f8:f0:82:d0:23:92-p48", "[HUB] Unmanaged · 6 devices · hub-f8:f0:82:d0:23:0a-p48", "[HUB] Unmanaged · 9 devices · hub-f8:f0:82:7c:fa:72-p24", "[HUB] Unmanaged · 5 devices · hub-f8:f0:82:7c:fa:26-p24", "[HUB] Unmanaged · 4 devices · hub-f8:f0:82:d0:22:ce-p48", "[HUB] Unmanaged · 7 devices · hub-4c:ae:a3:27:76:8a-p48", "[HUB] Unmanaged · 8 devices · hub-78:48:59:72:ec:ee-p13", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:a2:0d:4c-p39", "[HUB] Unmanaged · 8 devices · hub-4c:ae:a3:a2:18:ec-p1", "[HUB] Unmanaged · 6 devices · hub-4c:ae:a3:a2:18:ec-p7", "[HUB] Unmanaged · 5 devices · hub-4c:ae:a3:8e:19:09-p37", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:a2:19:ac-p3", "[HUB] Unmanaged · 3 devices · hub-4c:ae:a3:a2:19:ac-p47", "[HUB] Unmanaged · 3 devices · hub-4c:ae:a3:8d:d5:99-p27", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:27:7e:ca-p3", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:8d:ee:c9-p18", "[HUB] Unmanaged · 8 devices · hub-4c:ae:a3:a2:01:ac-p1"],
+      "node_ids": ["hub-4c:ae:a3:8d:ec:c1-p4", "hub-4c:ae:a3:8d:ec:c1-p28", "hub-f8:f0:82:d8:7e:81-p3", "hub-4c:ae:a3:27:85:ea-p11", "hub-4c:ae:a3:a2:18:2c-p40", "hub-4c:ae:a3:a2:03:2c-p17", "hub-4c:ae:a3:a2:15:ec-p2", "hub-f8:f0:82:7c:2c:c7-p2", "hub-f8:f0:82:7c:2c:c7-p27", "hub-f8:f0:82:7a:d9:69-p2", "hub-f8:f0:82:7a:d9:69-p48", "hub-f8:f0:82:7c:2d:17-p18", "hub-f8:f0:82:7c:30:cf-p17", "hub-f8:f0:82:7c:fa:ca-p1", "hub-f8:f0:82:7c:fa:ca-p20", "hub-f8:f0:82:7c:f9:58-p24", "hub-f8:f0:82:d0:23:92-p48", "hub-f8:f0:82:d0:23:0a-p48", "hub-f8:f0:82:7c:fa:72-p24", "hub-f8:f0:82:7c:fa:26-p24", "hub-f8:f0:82:d0:22:ce-p48", "hub-4c:ae:a3:27:76:8a-p48", "hub-78:48:59:72:ec:ee-p13", "hub-4c:ae:a3:a2:0d:4c-p39", "hub-4c:ae:a3:a2:18:ec-p1", "hub-4c:ae:a3:a2:18:ec-p7", "hub-4c:ae:a3:8e:19:09-p37", "hub-4c:ae:a3:a2:19:ac-p3", "hub-4c:ae:a3:a2:19:ac-p47", "hub-4c:ae:a3:8d:d5:99-p27", "hub-4c:ae:a3:27:7e:ca-p3", "hub-4c:ae:a3:8d:ee:c9-p18", "hub-4c:ae:a3:a2:01:ac-p1"],
       "port_lines": ["Port: GE1/0/4", "Port: GE1/0/28", "Port: Eth1/0/3", "Port: GE1/0/11", "Port: GE1/0/40", "Port: GE1/0/17", "Port: GE1/0/2", "Port: Eth1/0/2", "Port: Eth1/0/27", "Port: Eth1/0/2", "Port: Eth1/0/48", "Port: Eth1/0/18", "Port: Eth1/0/17", "Port: Eth1/0/1", "Port: Eth1/0/20", "Port: Eth1/0/24", "Port: Eth1/0/48", "Port: Eth1/0/48", "Port: Eth1/0/24", "Port: Eth1/0/24", "Port: Eth1/0/48", "Port: GE1/0/48", "Port: GE1/0/13", "Port: GE1/0/39", "Port: GE1/0/1", "Port: GE1/0/7", "Port: GE1/0/37", "Port: GE1/0/3", "Port: GE1/0/47", "Port: GE1/0/27", "Port: GE1/0/3", "Port: GE1/0/18", "Port: GE1/0/1"],
+      "raw_img_tag_in_html": false
+    },
+    "rule": {
+      "headings": ["📡 sw-60 (10.0.9.60)"],
+      "labels": ["[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:60:00:60-p2", "[HUB] Unmanaged · 20 devices · hub-4c:ae:a3:60:00:60-p4", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:60:00:60-p12", "[HUB] Unmanaged · 5 devices · hub-4c:ae:a3:60:00:60-p13", "[HUB] Unmanaged · 3 devices · hub-4c:ae:a3:60:00:60-p14", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:60:00:60-p16", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:60:00:60-p17"],
+      "node_ids": ["hub-4c:ae:a3:60:00:60-p2", "hub-4c:ae:a3:60:00:60-p4", "hub-4c:ae:a3:60:00:60-p12", "hub-4c:ae:a3:60:00:60-p13", "hub-4c:ae:a3:60:00:60-p14", "hub-4c:ae:a3:60:00:60-p16", "hub-4c:ae:a3:60:00:60-p17"],
+      "port_lines": ["Port: GE1/0/2", "Port: GE1/0/4", "Port: GE1/0/12", "Port: GE1/0/13", "Port: GE1/0/14", "Port: GE1/0/16", "Port: GE1/0/17"],
       "raw_img_tag_in_html": false
     },
     "ui": {
       "headings": ["📡 sw-x (10.0.9.90)"],
       "labels": ["[HUB] Unmanaged · 2 devices · hub-no:such:object:available:on:this:agent:at:this:oid-p3"],
+      "node_ids": ["hub-no:such:object:available:on:this:agent:at:this:oid-p3"],
       "port_lines": ["Port: GE1/0/3"],
       "raw_img_tag_in_html": false
     }

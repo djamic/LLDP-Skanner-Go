@@ -1,42 +1,50 @@
 package main
 
 import (
-	"fmt"
+	"maps"
 	"slices"
+	"strings"
 	"testing"
 )
 
 // shadowRuleViews lists one network's Shadow-IT ports as each consumer sees
-// them, as "hub-<switch node>-p<port> <MACs>" (the report lists hub ids
-// only): the graph's hub nodes, the analyzer's alerts, the audit report's
-// Shadow-IT section, and the experiment metrics' hub count. devices must be
-// in collectedData (the report checks the live FDB tables).
-func shadowRuleViews(t *testing.T, devices []*DeviceData) (graphHubs, alerts, reportHubs []string, metricHubs int) {
+// them, as "hub-<switch node>-p<port> <MACs>" (the report and the UI list
+// hub ids only): the graph's hub nodes, the analyzer's alerts, the audit
+// report's Shadow-IT section, the experiment metrics' hub count, and the UI's
+// Shadow-IT modal on the /api/graph data (uiOK is false without Node.js).
+// devices must be in collectedData (the report checks the live FDB tables).
+func shadowRuleViews(t *testing.T, devices []*DeviceData) (g *DJGraph, graphHubs, alerts, reportHubs []string, metricHubs int, uiHubs []string, uiOK bool) {
 	t.Helper()
 	byIP := make(map[string]*DeviceData, len(devices))
 	for _, d := range devices {
 		byIP[d.IP] = d
 	}
-	g := buildGraphFromSnapshot(byIP)
+	g = buildGraphFromSnapshot(byIP)
 	graphHubs = analyzerGraphHubs(g)
 	alerts = analyzerShadowPorts(t, devices, NewAnalyzer(captureData("rule", devices, g)).analyzeShadowIT())
 	reportHubs = reportShadowHubs(g, GenerateShadowDiagrams(g))
 	metricHubs = analyzerShadowCounts(devices).Hubs
-	return graphHubs, alerts, reportHubs, metricHubs
+	uiHubs, uiOK = uiShadowModalHubs(t, g.GetGraphData())
+	return g, graphHubs, alerts, reportHubs, metricHubs, uiHubs, uiOK
 }
 
-// checkShadowRuleViews fails unless the graph, the alerts, the report and
-// the metrics list the same Shadow-IT ports.
-func checkShadowRuleViews(t *testing.T, name string, devices []*DeviceData) []string {
-	t.Helper()
-	graphHubs, alerts, reportHubs, metricHubs := shadowRuleViews(t, devices)
-	var hubIDs []string
-	for _, h := range graphHubs {
-		var id string
-		var n int
-		fmt.Sscanf(h, "%s %d", &id, &n)
-		hubIDs = append(hubIDs, id)
+// shadowHubIDs drops the MAC counts of shadowRuleViews' lists.
+func shadowHubIDs(views []string) []string {
+	var ids []string
+	for _, v := range views {
+		id, _, _ := strings.Cut(v, " ")
+		ids = append(ids, id)
 	}
+	return ids
+}
+
+// checkShadowRuleViews fails unless the graph, the alerts, the report, the
+// metrics and the UI modal list the same Shadow-IT ports. It returns the
+// graph and its hubs.
+func checkShadowRuleViews(t *testing.T, name string, devices []*DeviceData) (*DJGraph, []string) {
+	t.Helper()
+	g, graphHubs, alerts, reportHubs, metricHubs, uiHubs, uiOK := shadowRuleViews(t, devices)
+	hubIDs := shadowHubIDs(graphHubs)
 	if !slices.Equal(alerts, graphHubs) {
 		t.Errorf("%s: alerts and graph hubs differ:\nalerts (%d): %v\nhubs (%d): %v", name, len(alerts), alerts, len(graphHubs), graphHubs)
 	}
@@ -46,7 +54,10 @@ func checkShadowRuleViews(t *testing.T, name string, devices []*DeviceData) []st
 	if metricHubs != len(graphHubs) {
 		t.Errorf("%s: experiment shadow_it_filtered = %d, graph has %d hubs", name, metricHubs, len(graphHubs))
 	}
-	return graphHubs
+	if uiOK && !slices.Equal(uiHubs, hubIDs) {
+		t.Errorf("%s: UI Shadow-IT modal and graph hubs differ:\nmodal (%d): %v\nhubs (%d): %v", name, len(uiHubs), uiHubs, len(hubIDs), hubIDs)
+	}
+	return g, graphHubs
 }
 
 // shadowRuleNetwork is a switch whose LLDP neighbors the graph resolves
@@ -72,11 +83,12 @@ func shadowRuleNetwork() []*DeviceData {
 }
 
 // TestShadowITOneRule (H1, Q14): the graph's hubs, the Shadow-IT alerts, the
-// experiment metrics and the audit's Shadow-IT section come from one
-// per-port rule (fdbPorts), so they list the same ports: on a switch whose
-// LLDP neighbors the graph resolves differently from the raw chassis ids, on
-// the fixture, and on the fixture with HTTP-confirmed ESXi hosts, also when
-// a host is confirmed after the graph was built.
+// experiment metrics, the audit's Shadow-IT section and the UI's Shadow-IT
+// modal come from one per-port rule (fdbPorts), so they list the same
+// ports: on a switch whose LLDP neighbors the graph resolves differently
+// from the raw chassis ids, on the fixture, and on the fixture with
+// HTTP-confirmed ESXi hosts, also when a host is confirmed after the graph
+// was built.
 func TestShadowITOneRule(t *testing.T) {
 	resetState(t)
 	devices := shadowRuleNetwork()
@@ -84,7 +96,7 @@ func TestShadowITOneRule(t *testing.T) {
 	collectedData = map[string]*DeviceData{devices[0].IP: devices[0]}
 	collectedDataMutex.Unlock()
 	ConfirmedESXiMACs.Store("00:1b:21:80:06:02", true)
-	got := checkShadowRuleViews(t, "synthetic", devices)
+	_, got := checkShadowRuleViews(t, "synthetic", devices)
 	want := []string{"hub-4c:ae:a3:80:00:80-p3 2", "hub-4c:ae:a3:80:00:80-p5 2", "hub-4c:ae:a3:80:00:80-p7 2"}
 	if !slices.Equal(got, want) {
 		t.Errorf("synthetic hubs = %v, want %v", got, want)
@@ -98,16 +110,17 @@ func TestShadowITOneRule(t *testing.T) {
 	collectedDataMutex.RLock()
 	fixture := sortedDevices(collectedData)
 	collectedDataMutex.RUnlock()
-	plain := checkShadowRuleViews(t, "fixture", fixture)
+	_, plain := checkShadowRuleViews(t, "fixture", fixture)
 	for _, mac := range esxiConfirmedMACs {
 		ConfirmedESXiMACs.Store(mac, true)
 	}
-	esxi := checkShadowRuleViews(t, "fixture with ESXi hosts", fixture)
+	_, esxi := checkShadowRuleViews(t, "fixture with ESXi hosts", fixture)
 	if len(esxi) >= len(plain) {
 		t.Errorf("the confirmed ESXi hosts exempt no hub: %d hubs, %d without them", len(esxi), len(plain))
 	}
 
-	// A host confirmed after the build: the report and the alerts follow the
+	// A host confirmed after the build: the report, the alerts and the UI
+	// modal (the member's group is read when the graph is served) follow the
 	// live rule at once, and the next build drops the hub.
 	clearConfirmedESXi()
 	byIP := make(map[string]*DeviceData, len(fixture))
@@ -120,5 +133,94 @@ func TestShadowITOneRule(t *testing.T) {
 	alerts := analyzerShadowPorts(t, fixture, NewAnalyzer(captureData("late", fixture, g)).analyzeShadowIT())
 	if len(section) != len(plain)-1 || len(alerts) != len(plain)-1 {
 		t.Errorf("host confirmed after the build: report lists %d hubs, alerts %d, want %d", len(section), len(alerts), len(plain)-1)
+	}
+	if ui, ok := uiShadowModalHubs(t, g.GetGraphData()); ok && !slices.Equal(ui, shadowHubIDs(alerts)) {
+		t.Errorf("host confirmed after the build: UI modal lists %v, alerts %v", ui, shadowHubIDs(alerts))
+	}
+}
+
+// shadowVMHubNetwork is a switch with three hubs. Port 5 holds two VMware VM
+// NICs and three PCs: the VMs are no majority, so the port is a hub, and
+// detectHypervisors puts a hyp- node (group hypervisor, label "[HYPERVISOR]
+// VMware ESXi") between the hub and the two VMs. Port 7 is a plain hub and
+// port 9 a hub with one VM NIC (no hyp- node).
+func shadowVMHubNetwork() []*DeviceData {
+	var fdb []MACEntry
+	fdb = append(fdb, macEntries(5, "00:50:56:81:05:01", "00:50:56:81:05:02", "00:1b:21:81:05:03", "00:1b:21:81:05:04", "00:1b:21:81:05:05")...)
+	fdb = append(fdb, macEntries(7, "00:1b:21:81:07:01", "00:1b:21:81:07:02")...)
+	fdb = append(fdb, macEntries(9, "00:0c:29:81:09:01", "00:1b:21:81:09:02", "00:1b:21:81:09:03", "00:1b:21:81:09:04")...)
+	return []*DeviceData{{IP: "10.0.9.81", SysName: "sw-81", ChassisID: "4c:ae:a3:81:00:81", Interfaces: gigabitPorts(12, nil), MACTable: fdb}}
+}
+
+// TestShadowITModalHubWithVMs (G1, AC-1, R1; Q14): a hub whose VM NICs are no
+// majority is a Shadow-IT port for the graph, the alerts, the report, the
+// metrics and the UI modal alike. The modal used to take the synthetic hyp-
+// node below such a hub (group hypervisor, "[HYPERVISOR] VMware ESXi"
+// label) for an HTTP-confirmed ESXi host and dropped the hub, while
+// Telegram alerted on it. A VM NIC behind the hyp- node that is confirmed
+// after the build does exempt the hub, as it does for the alerts. The same
+// holds on the rule network's port 13 (two VMware NICs, three others).
+func TestShadowITModalHubWithVMs(t *testing.T) {
+	if nodePath() == "" {
+		t.Skip("Node.js 16 or newer is not installed, so static/app.js is not checked")
+	}
+	resetState(t)
+	devices := shadowVMHubNetwork()
+	collectedDataMutex.Lock()
+	collectedData = analyzerDeviceMap(devices)
+	collectedDataMutex.Unlock()
+	g, hubs := checkShadowRuleViews(t, "hubs with VM NICs", devices)
+	hyp := "hyp-hub-4c:ae:a3:81:00:81-p5-ge1_0_5"
+	if !g.Nodes[hyp] || g.Edges["hub-4c:ae:a3:81:00:81-p5"][hyp] != "" {
+		t.Fatalf("precondition: no hyp- node %s below the port 5 hub (nodes %v)", hyp, slices.Sorted(maps.Keys(g.Nodes)))
+	}
+	want := []string{"hub-4c:ae:a3:81:00:81-p5 5", "hub-4c:ae:a3:81:00:81-p7 2", "hub-4c:ae:a3:81:00:81-p9 4"}
+	if !slices.Equal(hubs, want) {
+		t.Errorf("hubs = %v, want %v", hubs, want)
+	}
+	// The audit's diagram of that hub draws the VMs below the hyp- node and
+	// counts the hub's 5 devices, as the alert does ("5 MACs on single
+	// port"), not 3 PCs plus the hyp- node.
+	md := GenerateShadowDiagrams(g)
+	hubSafe, hypSafe := sanitizeMermaidID("hub-4c:ae:a3:81:00:81-p5"), sanitizeMermaidID(hyp)
+	start := strings.Index(md, "  "+hubSafe+"((")
+	if start < 0 {
+		t.Fatalf("no Shadow-IT diagram for the port 5 hub:\n%s", md)
+	}
+	section := md[start:]
+	if end := strings.Index(section, "**Ulanganlar:**"); end >= 0 {
+		section = section[:min(len(section), end+len("**Ulanganlar:** 5 ta qurilma"))]
+	}
+	for _, line := range []string{
+		"  " + hubSafe + "-->" + hypSafe,
+		"  " + hypSafe + "-->" + sanitizeMermaidID("00:50:56:81:05:01"),
+		"  " + hypSafe + "-->" + sanitizeMermaidID("00:50:56:81:05:02"),
+		"  style " + hypSafe + " fill:#26C6DA,stroke:#0097A7,color:#fff",
+		"  style " + sanitizeMermaidID("00:50:56:81:05:01") + " fill:#9C27B0,stroke:#7B1FA2,color:#fff",
+		"**Ulanganlar:** 5 ta qurilma",
+	} {
+		if !strings.Contains(section, line+"\n") && !strings.HasSuffix(section, line) {
+			t.Errorf("Shadow-IT diagram of the port 5 hub lacks %q:\n%s", line, section)
+		}
+	}
+
+	// A VM behind the hyp- node turns out to be an ESXi host (nested ESXi)
+	// after the build: the live rule exempts the port, so do the alerts and
+	// the modal.
+	ConfirmedESXiMACs.Store("00:50:56:81:05:02", true)
+	alerts := analyzerShadowPorts(t, devices, NewAnalyzer(captureData("late", devices, g)).analyzeShadowIT())
+	ui, _ := uiShadowModalHubs(t, g.GetGraphData())
+	if wantLate := []string{"hub-4c:ae:a3:81:00:81-p7", "hub-4c:ae:a3:81:00:81-p9"}; !slices.Equal(shadowHubIDs(alerts), wantLate) || !slices.Equal(ui, wantLate) {
+		t.Errorf("VM confirmed as ESXi after the build: alerts %v, UI modal %v, want %v", shadowHubIDs(alerts), ui, wantLate)
+	}
+
+	clearConfirmedESXi()
+	rule := analyzerRuleNetwork()
+	collectedDataMutex.Lock()
+	collectedData = analyzerDeviceMap(rule)
+	collectedDataMutex.Unlock()
+	g, hubs = checkShadowRuleViews(t, "rule network", rule)
+	if !g.Nodes["hyp-hub-4c:ae:a3:60:00:60-p13-ge1_0_13"] || !slices.Contains(hubs, "hub-4c:ae:a3:60:00:60-p13 5") {
+		t.Errorf("precondition: the rule network's port 13 is no hub with a hyp- node (hubs %v)", hubs)
 	}
 }

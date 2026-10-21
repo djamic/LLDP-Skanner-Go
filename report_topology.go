@@ -883,47 +883,71 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 			}
 		}
 
-		// Find children connected FROM this hub
+		// Find children connected FROM this hub. A hyp- child is the
+		// hypervisor detectHypervisors put between the hub and two or more
+		// VM NICs of its port: it is drawn with its VMs below it, and the
+		// VMs, not the hyp- node, are counted, so the count is the number of
+		// MACs the hub label and the alert give (AC-1).
 		childCount := 0
-		for _, link := range data.Links {
-			srcID := link.Source
-			tgtID := link.Target
-			if srcID == hub.ID {
-				// hub → child
-				tgtSafe := sanitizeMermaidID(tgtID)
-				// Skip phantom nodes with very short IDs (corrupt LLDP port IDs)
-				if len(tgtSafe) <= 4 {
-					continue
+		drawChild := func(parentSafe, tgtID string) {
+			tgtSafe := sanitizeMermaidID(tgtID)
+			// Skip phantom nodes with very short IDs (corrupt LLDP port IDs)
+			if len(tgtSafe) <= 4 {
+				return
+			}
+			tgtLabel := tgtID
+			tgtGroup := "endpoint"
+			for _, n := range data.Nodes {
+				if n.ID == tgtID {
+					if n.SysName != "" {
+						// Clean multi-line info for Mermaid display
+						lines := strings.SplitN(n.SysName, "\n", 3)
+						tgtLabel = strings.Join(lines[:min(len(lines), 2)], "<br>")
+					}
+					tgtGroup = n.Group
+					break
 				}
-				tgtLabel := tgtID
-				tgtGroup := "endpoint"
-				for _, n := range data.Nodes {
-					if n.ID == tgtID {
-						if n.SysName != "" {
-							// Clean multi-line info for Mermaid display
-							lines := strings.SplitN(n.SysName, "\n", 3)
-							tgtLabel = strings.Join(lines[:min(len(lines), 2)], "<br>")
-						}
-						tgtGroup = n.Group
-						break
+			}
+			sb.WriteString(fmt.Sprintf("  %s[\"%s\"]\n", tgtSafe, tgtLabel))
+			sb.WriteString(fmt.Sprintf("  %s-->%s\n", parentSafe, tgtSafe))
+			// Color children by group
+			switch {
+			case strings.HasPrefix(tgtID, "hyp-"), parentSafe != hub.SafeID:
+				// the hyp- node and its VMs, as in the hypervisor diagrams
+				colors := reportGroupColors[tgtGroup]
+				if strings.HasPrefix(tgtID, "hyp-") {
+					colors = reportGroupColors["hypervisor"]
+				}
+				if colors[0] == "" {
+					colors = reportGroupColors["vm"]
+				}
+				sb.WriteString(fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", tgtSafe, colors[0], colors[1]))
+			case tgtGroup == "phone":
+				sb.WriteString(fmt.Sprintf("  style %s fill:#3F51B5,stroke:#303F9F,color:#fff\n", tgtSafe))
+			case tgtGroup == "camera":
+				sb.WriteString(fmt.Sprintf("  style %s fill:#E91E63,stroke:#C2185B,color:#fff\n", tgtSafe))
+			case tgtGroup == "iot":
+				sb.WriteString(fmt.Sprintf("  style %s fill:#607D8B,stroke:#455A64,color:#fff\n", tgtSafe))
+			default: // endpoint and the other groups
+				sb.WriteString(fmt.Sprintf("  style %s fill:#8BC34A,stroke:#6B9F30,color:#fff\n", tgtSafe))
+			}
+			if !strings.HasPrefix(tgtID, "hyp-") {
+				childCount++
+			}
+		}
+		for _, link := range data.Links {
+			if link.Source != hub.ID {
+				continue
+			}
+			// hub → child
+			drawChild(hub.SafeID, link.Target)
+			if strings.HasPrefix(link.Target, "hyp-") {
+				// hyp- → VM
+				for _, vmLink := range data.Links {
+					if vmLink.Source == link.Target {
+						drawChild(sanitizeMermaidID(link.Target), vmLink.Target)
 					}
 				}
-				sb.WriteString(fmt.Sprintf("  %s[\"%s\"]\n", tgtSafe, tgtLabel))
-				sb.WriteString(fmt.Sprintf("  %s-->%s\n", hub.SafeID, tgtSafe))
-				// Color children by group
-				switch tgtGroup {
-				case "endpoint":
-					sb.WriteString(fmt.Sprintf("  style %s fill:#8BC34A,stroke:#6B9F30,color:#fff\n", tgtSafe))
-				case "phone":
-					sb.WriteString(fmt.Sprintf("  style %s fill:#3F51B5,stroke:#303F9F,color:#fff\n", tgtSafe))
-				case "camera":
-					sb.WriteString(fmt.Sprintf("  style %s fill:#E91E63,stroke:#C2185B,color:#fff\n", tgtSafe))
-				case "iot":
-					sb.WriteString(fmt.Sprintf("  style %s fill:#607D8B,stroke:#455A64,color:#fff\n", tgtSafe))
-				default:
-					sb.WriteString(fmt.Sprintf("  style %s fill:#8BC34A,stroke:#6B9F30,color:#fff\n", tgtSafe))
-				}
-				childCount++
 			}
 		}
 

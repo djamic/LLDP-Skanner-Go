@@ -2,7 +2,8 @@
 // app_probe.js runs static/app.js, unmodified, in a Node vm sandbox with a
 // small DOM stub and prints JSON describing what its helpers do with the
 // graphs it is given. It sends nothing anywhere: fetch never resolves,
-// timers and WebSocket are stubs. Used by TestGoldenUIApp:
+// timers and WebSocket are stubs. Used by TestGoldenUIApp and, for the
+// Shadow-IT modal, by the per-port rule tests (uiShadowModalHubs):
 //
 //   node app_probe.js <app.js> <index.html> <cases.json>
 //
@@ -94,6 +95,8 @@ function useGraph(name) {
 // Text of an HTML fragment: tags removed, whitespace collapsed.
 const text = (html) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 const matches = (html, re) => [...html.matchAll(re)].map((m) => text(m[1]));
+// An attribute value with uiEscapeHTML's entities decoded.
+const unescapeAttr = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 const out = { group_colors: run('JSON.parse(JSON.stringify(groupColors))'), legend_colors: legend };
 
@@ -165,6 +168,7 @@ for (const name of cases.shadow_it) {
     headings: matches(html, /<div class="shadow-switch-name">([\s\S]*?)<\/div>/g),
     labels: matches(html, /<div class="shadow-label">([\s\S]*?)<\/div>/g),
     port_lines: matches(html, /<div class="shadow-port">([\s\S]*?)<\/div>/g),
+    node_ids: [...html.matchAll(/<div class="shadow-item" data-node-id="([^"]*)"/g)].map((m) => unescapeAttr(m[1])),
     raw_img_tag_in_html: html.includes('<img src=x'),
   };
 }

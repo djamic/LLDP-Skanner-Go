@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -73,12 +74,15 @@ func uiCaseGraph() GraphData {
 
 // TestGoldenUIApp runs static/app.js, unmodified, in Node.js with a stub DOM
 // (testdata/ui/app_probe.js) and pins what its helpers do with the fixture
-// graph and uiCaseGraph: the group colours next to the filter legend, the
-// group filter, "Show Connected Devices", the info panel, the IP that
-// History and Connect use, and the Shadow-IT list. Skipped when Node.js is
-// not installed.
+// graph, uiCaseGraph and the rule network's graph (built by the production
+// build, with a hub whose two VM NICs sit below a hyp- node): the group
+// colours next to the filter legend, the group filter, "Show Connected
+// Devices", the info panel, the IP that History and Connect use, and the
+// Shadow-IT list. Skipped when Node.js is not installed.
 func TestGoldenUIApp(t *testing.T) {
 	node := nodeBinary(t)
+	resetState(t)
+	rule := buildGraphFromSnapshot(analyzerDeviceMap(analyzerRuleNetwork())).GetGraphData()
 	fixture := buildFixtureGraph(t).GetGraphData()
 	busiest, links := "", -1
 	degree := map[string]int{}
@@ -93,7 +97,7 @@ func TestGoldenUIApp(t *testing.T) {
 	}
 	hyp := "hyp-" + uiSwitch + "-ge1_0_2"
 	cases := map[string]any{
-		"graphs": map[string]GraphData{"fixture": fixture, "ui": uiCaseGraph()},
+		"graphs": map[string]GraphData{"fixture": fixture, "ui": uiCaseGraph(), "rule": rule},
 		"connected": []map[string]string{
 			{"graph": "fixture", "node": busiest},
 			{"graph": "ui", "node": uiSwitch},
@@ -110,7 +114,7 @@ func TestGoldenUIApp(t *testing.T) {
 			{"graph": "ui", "node": "00:1b:21:09:80:03"},
 			{"graph": "ui", "node": uiSwitch},
 		},
-		"shadow_it": []string{"fixture", "ui"},
+		"shadow_it": []string{"fixture", "ui", "rule"},
 	}
 	data, err := json.Marshal(cases)
 	if err != nil {
@@ -141,6 +145,15 @@ func TestGoldenUIApp(t *testing.T) {
 // nodeBinary returns a Node.js 16+ binary, or skips the test.
 func nodeBinary(t *testing.T) string {
 	t.Helper()
+	if path := nodePath(); path != "" {
+		return path
+	}
+	t.Skip("Node.js 16 or newer is not installed, so static/app.js is not checked")
+	return ""
+}
+
+// nodePath returns a Node.js 16+ binary, or "" when none is installed.
+func nodePath() string {
 	for _, name := range []string{"node", "nodejs"} {
 		path, err := exec.LookPath(name)
 		if err != nil {
@@ -152,8 +165,51 @@ func nodeBinary(t *testing.T) string {
 			return path
 		}
 	}
-	t.Skip("Node.js 16 or newer is not installed, so static/app.js is not checked")
 	return ""
+}
+
+// uiShadowModalHubs runs static/app.js's Shadow-IT modal (showShadowIT) on
+// data, as /api/graph serves it, and returns the node ids of its entries,
+// sorted; ok is false when Node.js is not installed.
+func uiShadowModalHubs(t *testing.T, data GraphData) (hubs []string, ok bool) {
+	t.Helper()
+	node := nodePath()
+	if node == "" {
+		return nil, false
+	}
+	cases := map[string]any{
+		"graphs":    map[string]GraphData{"g": data},
+		"connected": []any{}, "info_panel": []any{}, "ip_choice": []any{},
+		"shadow_it": []string{"g"},
+	}
+	raw, err := json.Marshal(cases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	casesPath := filepath.Join(t.TempDir(), "cases.json")
+	if err := os.WriteFile(casesPath, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(node, filepath.Join("testdata", "ui", "app_probe.js"),
+		filepath.Join("static", "app.js"), filepath.Join("static", "index.html"), casesPath)
+	cmd.Env = []string{}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("app_probe.js: %v\n%s", err, stderr.String())
+	}
+	var rec struct {
+		ShadowIT map[string]struct {
+			NodeIDs []string `json:"node_ids"`
+		} `json:"shadow_it"`
+	}
+	if err := json.Unmarshal(out, &rec); err != nil {
+		t.Fatalf("app_probe.js output: %v\n%.500s", err, out)
+	}
+	hubs = slices.Clone(rec.ShadowIT["g"].NodeIDs)
+	slices.Sort(hubs)
+	return hubs, true
 }
 
 // TestNoBotTokenInSource fails when a Telegram bot token is written into the
