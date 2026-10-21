@@ -243,9 +243,9 @@ func TestGoldenScenarioGraphs(t *testing.T) {
 		g.AddEdge(sw2, "00:50:56:00:0a:03", "GE1/0/4 [T]")
 	})
 
-	collectedDataMutex.Lock()
-	collectedData = map[string]*DeviceData{"172.20.0.50": {IP: "172.20.0.50", SysName: "SW-50", ChassisID: "3C A8 2A 00 00 50"}}
-	collectedDataMutex.Unlock()
+	// Switch protection comes from the build: polled devices
+	// (graphAddSwitchNode) and LLDP sysName/sysDescr text (graphAddSysText),
+	// not from vendor words in labels.
 	rec["hyp_server_nic_phase2"] = hypervisorCase(func(g *DJGraph) {
 		addInfoNode(g, "f8:f0:82:00:00:01", "[ENDPOINT] SNR")
 		addInfoNode(g, "f8:f0:82:00:00:02", "[ENDPOINT] NAGTECH LLC")
@@ -253,13 +253,16 @@ func TestGoldenScenarioGraphs(t *testing.T) {
 		addInfoNode(g, "0c:c4:7a:00:00:04", "[BMC] Supermicro IPMI Supermicro")
 		addInfoNode(g, "5c:ed:8c:00:00:05", "[LLDP-EP] Intel\nILOCZJ33411C3")
 		addInfoNode(g, "b4:7a:f1:00:00:06", "[HYPERVISOR] VMware ESXi\n[ENDPOINT] Supermicro")
-		addInfoNode(g, "3c:a8:2a:00:00:50", "SW-50\n172.20.0.50")
+		graphAddSwitchNode(g, &DeviceData{IP: "172.20.0.50", SysName: "SW-50", ChassisID: "3C A8 2A 00 00 50"})
 		addInfoNode(g, "4c:ae:a3:00:00:07", "[LLDP-EP] SNR\nB-318/1")
 		addInfoNode(g, "e8:39:35:00:00:08", "Cisco IOS\n172.20.0.8")
-		addInfoNode(g, "10:e7:c6:00:00:09", "HPE\n172.20.0.9")
+		graphAddSysText(g, "e8:39:35:00:00:08", "Cisco IOS")
+		graphAddSwitchNode(g, &DeviceData{IP: "172.20.0.9", SysName: "HPE", ChassisID: "10:e7:c6:00:00:09"})
 		addInfoNode(g, "94:57:a5:00:00:10", "[ENDPOINT] HP")
 		addInfoNode(g, "1c:98:ec:00:00:11", "Comware switch")
+		graphAddSysText(g, "1c:98:ec:00:00:11", "Comware switch")
 		addInfoNode(g, "ec:b1:d7:00:00:12", "HUAWEI S5720\n172.20.0.12")
+		graphAddSysText(g, "ec:b1:d7:00:00:12", "HUAWEI S5720")
 		addInfoNode(g, "00:14:22:00:00:13", "")
 		addInfoNode(g, "hub-x-p1", "[HUB] Unmanaged\n2 devices")
 		addInfoNode(g, "hyp-x-ge1", "[HYPERVISOR] VMware ESXi\n2 VMs on ge1")

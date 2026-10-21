@@ -272,8 +272,9 @@ type lldpTarget struct {
 }
 
 // lldpTargetRows lists the LLDP neighbors of the devices (IP order, stored
-// neighbor order) with the ids production derives from them, and the MACs
-// each device treats as known from LLDP (lldpKnownMACs, sorted).
+// neighbor order) with the ids production derives from them (chassis and
+// port subtype tables), and the MACs each device treats as known from LLDP
+// (lldpKnownMACs, sorted: the targets of accepted neighbors).
 func lldpTargetRows(devices map[string]*DeviceData) ([]lldpTarget, map[string][]string) {
 	var rows []lldpTarget
 	known := map[string][]string{}
@@ -296,7 +297,7 @@ func lldpTargetRows(devices map[string]*DeviceData) ([]lldpTarget, map[string][]
 				NormPort:       lldpPortID(n),
 				Target:         target,
 				Display:        display,
-				Invalid:        isInvalidID(target),
+				Invalid:        !graphUsableTargetID(target),
 			})
 		}
 		if macs := lldpKnownMACs(d); len(macs) > 0 {
@@ -308,10 +309,11 @@ func lldpTargetRows(devices map[string]*DeviceData) ([]lldpTarget, map[string][]
 
 // TestGoldenLLDPTargets pins, for every LLDP neighbor in the fixture and in
 // the synthetic scenario network (in stored order), the normalized chassis
-// and port ids resolveLLDPTarget works with, the node id and display name it
-// chooses, whether isInvalidID drops the target and whether the local port is
-// a NULL interface; and per device the MACs buildGraphEdges treats as known
-// from LLDP (lldpKnownMACs).
+// and port ids resolveLLDPTarget works with (chassis and port subtype
+// tables), the node id and display name it chooses, whether
+// graphUsableTargetID drops the target and whether the local port is a NULL
+// interface; and per device the MACs buildGraphEdges treats as known from
+// LLDP (lldpKnownMACs: the targets of accepted neighbors).
 func TestGoldenLLDPTargets(t *testing.T) {
 	resetState(t)
 	rows, known := lldpTargetRows(fixtureDevices(t))

@@ -628,9 +628,9 @@ func normalizeID(id string, subtype int) string {
 
 	switch subtype {
 	case 4: // MAC Address (6 bytes)
-		// Input could be "4C AE A3 8E 42 11" or raw bytes
-		if strings.Contains(id, " ") {
-			return hexStringToMAC(id)
+		// Input could be "4C AE A3 8E 42 11", any other MAC spelling or raw bytes
+		if mac := graphCanonicalMAC(id); mac != "" {
+			return mac
 		}
 		if len(id) == 6 {
 			// Raw 6 bytes - convert to hex
@@ -639,25 +639,24 @@ func normalizeID(id string, subtype int) string {
 		// Already formatted — normalize
 		return normalizeMAC(id)
 
-	case 5: // Network Address (IP)
-		// Try to parse as IP
+	case 5: // Network Address: IANA family byte + address ("01 AC 10 01 0F")
+		// Raw address bytes
 		if len(id) == 4 { // IPv4
 			return net.IP([]byte(id)).String()
 		}
 		if len(id) == 16 { // IPv6
 			return net.IP([]byte(id)).String()
 		}
-		// Fallback to hex if weird length
-		return hexStringToMAC(id)
+		// Hex text; "" when it is no complete IPv4/IPv6 address
+		return graphNetworkAddress(id)
 
 	case 7: // Locally Assigned (string identifier)
-		// Sometimes devices send ASCII-encoded MAC like "f4-b5-20-19-12-5e"
-		// Normalize if it looks like a MAC address
+		// Sometimes devices send a MAC like "f4-b5-20-19-12-5e" or
+		// "FA EF EF EF AA 4F": normalize anything that spells a MAC
+		if mac := graphCanonicalMAC(id); mac != "" {
+			return mac
+		}
 		if isPrintableString(id) {
-			// Check if it looks like a MAC (contains dashes or colons with hex chars)
-			if (strings.Contains(id, "-") || strings.Contains(id, ":")) && len(id) >= 17 {
-				return normalizeMAC(id)
-			}
 			return id
 		}
 		// If not printable, convert bytes to readable string
@@ -687,31 +686,208 @@ func normalizeID(id string, subtype int) string {
 	}
 }
 
+// graphCanonicalMAC returns s as "aa:bb:cc:dd:ee:ff" when it spells a MAC
+// address, else "". Accepted: an optional "Hex-STRING: "/"STRING: " prefix,
+// quotes and spaces around; six groups split by ':' (1-2 hex digits) or by
+// '-' or spaces (2 digits); Cisco "xxxx.xxxx.xxxx"; 12 bare hex digits.
+// It stands in for the shared MAC parser until that one is merged.
+func graphCanonicalMAC(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "Hex-STRING: ")
+	s = strings.TrimPrefix(s, "STRING: ")
+	s = strings.ToLower(strings.TrimSpace(strings.Trim(strings.TrimSpace(s), "\"")))
+	var groups []string
+	switch {
+	case strings.Count(s, ":") == 5:
+		groups = strings.Split(s, ":")
+	case strings.Count(s, "-") == 5:
+		groups = strings.Split(s, "-")
+	case strings.Count(s, ".") == 2 && len(s) == 14:
+		for _, g := range strings.Split(s, ".") {
+			if len(g) != 4 {
+				return ""
+			}
+			groups = append(groups, g[:2], g[2:])
+		}
+	case len(s) == 12:
+		for i := 0; i < 12; i += 2 {
+			groups = append(groups, s[i:i+2])
+		}
+	default:
+		groups = strings.Fields(s)
+	}
+	if len(groups) != 6 {
+		return ""
+	}
+	for i, g := range groups {
+		if len(g) == 1 && strings.Count(s, ":") == 5 {
+			g = "0" + g
+		}
+		if len(g) != 2 || !graphIsHexDigit(g[0]) || !graphIsHexDigit(g[1]) {
+			return ""
+		}
+		groups[i] = g
+	}
+	return strings.Join(groups, ":")
+}
+
+// graphIsHexDigit reports whether c is a lowercase hex digit.
+func graphIsHexDigit(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
+}
+
+// graphIsSNMPException reports whether a value is net-snmp exception text
+// ("No Such Object available on this agent at this OID", "No Such Instance
+// …", "No more variables …"), raw or as normalizeMAC left it in saved data.
+func graphIsSNMPException(s string) bool {
+	s = strings.ToLower(strings.Trim(strings.TrimSpace(s), "\""))
+	s = strings.ReplaceAll(s, ":", " ")
+	return strings.HasPrefix(s, "no such object") || strings.HasPrefix(s, "no such instance") ||
+		strings.HasPrefix(s, "no more variables")
+}
+
+// graphLocalChassisID normalizes a switch's own lldpLocChassisId value (SNMP
+// exception text must be rejected before): any MAC spelling becomes
+// canonical, a 6-byte STRING is the MAC's raw octets (the form neighbors and
+// the FDB see), other STRING text stays as written, and any other value keeps
+// the normalizeMAC form.
+func graphLocalChassisID(val string) string {
+	if mac := graphCanonicalMAC(val); mac != "" {
+		return mac
+	}
+	v := strings.TrimSpace(val)
+	if len(v) < 2 || v[0] != '"' || v[len(v)-1] != '"' {
+		return normalizeMAC(v)
+	}
+	s := v[1 : len(v)-1]
+	if len(s) == 6 {
+		return formatAsHex(s)
+	}
+	return strings.TrimSpace(s)
+}
+
+// graphChassisKey is a switch's own-MAC key: its chassis id as a canonical
+// MAC, or "" when the chassis id is not a MAC (exception text, a name) or is
+// the null or broadcast address.
+func graphChassisKey(chassisID string) string {
+	mac := graphCanonicalMAC(chassisID)
+	if mac == "00:00:00:00:00:00" || mac == "ff:ff:ff:ff:ff:ff" {
+		return ""
+	}
+	return mac
+}
+
+// graphDeviceNodeID is the graph node id of a polled device: the chassis MAC
+// in canonical form, a non-MAC chassis id as normalizeID gives it, or the
+// device IP when the chassis id is empty, SNMP exception text or the null
+// MAC. Every place that needs a switch's node id uses it.
+func graphDeviceNodeID(d *DeviceData) string {
+	if key := graphChassisKey(d.ChassisID); key != "" {
+		return key
+	}
+	if graphIsSNMPException(d.ChassisID) || graphCanonicalMAC(d.ChassisID) != "" {
+		return d.IP
+	}
+	if id := normalizeID(d.ChassisID, 0); id != "" {
+		return id
+	}
+	return d.IP
+}
+
+// graphNetworkAddress decodes an LLDP network-address id (chassis subtype 5,
+// port subtype 4): an IANA address family byte and the address, printed as
+// hex ("01 AC 10 01 0F" is IPv4 172.16.1.15). Anything else gives "".
+func graphNetworkAddress(id string) string {
+	nibble := func(c byte) byte {
+		if c <= '9' {
+			return c - '0'
+		}
+		return c - 'a' + 10
+	}
+	var b []byte
+	for _, f := range strings.FieldsFunc(strings.ToLower(id), func(r rune) bool { return r == ' ' || r == ':' }) {
+		if len(f) != 2 || !graphIsHexDigit(f[0]) || !graphIsHexDigit(f[1]) {
+			return ""
+		}
+		b = append(b, nibble(f[0])<<4|nibble(f[1]))
+	}
+	switch {
+	case len(b) == 5 && b[0] == 1:
+		return net.IP(b[1:]).String()
+	case len(b) == 17 && b[0] == 2:
+		return net.IP(b[1:]).String()
+	}
+	return ""
+}
+
+// graphNormalizePortID normalizes an LLDP port id with the port subtype
+// table (1 interfaceAlias, 2 portComponent, 3 macAddress, 4 networkAddress,
+// 5 interfaceName, 6 agentCircuitId, 7 local), not the chassis one: only
+// a MAC port id (or a MAC-looking local one) gives a MAC, names stay names.
+func graphNormalizePortID(id string, subtype int) string {
+	switch subtype {
+	case 3:
+		return normalizeID(id, 4)
+	case 4:
+		return normalizeID(id, 5)
+	case 7:
+		return normalizeID(id, 7)
+	case 1, 2, 5, 6:
+		return cleanSNMPValue(id)
+	default:
+		return normalizeID(id, 0)
+	}
+}
+
+// graphUsableMAC returns id as a canonical MAC when it is one that may be a
+// node id (isInvalidID rejects null, broadcast and multicast MACs), else "".
+func graphUsableMAC(id string) string {
+	if mac := graphCanonicalMAC(id); mac != "" && !isInvalidID(mac) {
+		return mac
+	}
+	return ""
+}
+
+// graphUsableTargetID reports whether an LLDP target may be a node id: a MAC
+// that isInvalidID accepts, or a printable name or IP of 5 or more characters
+// that is not all zeros. Names get no MAC bit tests ('B-318/1', 'E109-9' and
+// '173.16.1.15' are kept).
+func graphUsableTargetID(id string) bool {
+	if graphCanonicalMAC(id) != "" {
+		return graphUsableMAC(id) != ""
+	}
+	return isPrintableString(id) && len(id) >= 5 && strings.Trim(id, "0.:- ") != ""
+}
+
 // resolveLLDPTarget picks the graph node id and display name for one LLDP
-// neighbor: the chassis id when it is a MAC; otherwise the port id when that
-// is a MAC (the chassis id or RemSysName becomes the display name); otherwise
-// the chassis id itself (could be a hostname).
+// neighbor: the chassis id when it is a usable MAC (a locally assigned one
+// only when the port id is no MAC); otherwise the port id when that is a MAC
+// (RemSysName, or a chassis id that is no MAC, becomes the display name);
+// otherwise the chassis id itself (a hostname or IP; "" if it is an unusable
+// MAC). A null or MAC-looking chassis id is never the display name.
 func resolveLLDPTarget(neighbor LLDPNeighbor) (targetID, displayName string) {
 	chassisID := lldpChassisID(neighbor)
 	portID := lldpPortID(neighbor)
+	chassisMAC := graphUsableMAC(chassisID)
+	portMAC := graphUsableMAC(portID)
+	chassisIsName := graphCanonicalMAC(chassisID) == ""
 
-	// Check if ChassisID looks like a MAC (contains colons and correct length)
-	chassisIsMAC := strings.Count(chassisID, ":") == 5 && len(chassisID) == 17
-	portIsMAC := strings.Count(portID, ":") == 5 && len(portID) == 17
-
-	if chassisIsMAC {
+	if chassisMAC != "" && (neighbor.RemChassisIdSubtype != 7 || portMAC == "") {
 		// ChassisID is MAC - use it
-		return chassisID, neighbor.RemSysName
+		return chassisMAC, neighbor.RemSysName
 	}
-	if portIsMAC {
+	if portMAC != "" {
 		// ChassisID is hostname, but PortID is MAC - use PortID as node ID
-		displayName = chassisID // Use hostname from ChassisID for display
-		if neighbor.RemSysName != "" && neighbor.RemSysName != chassisID {
-			displayName = neighbor.RemSysName
+		displayName = neighbor.RemSysName
+		if displayName == "" && chassisIsName {
+			displayName = chassisID // Use hostname from ChassisID for display
 		}
-		return portID, displayName
+		return portMAC, displayName
 	}
-	// No MAC found - use ChassisID as fallback (could be hostname)
+	if !chassisIsName {
+		return "", neighbor.RemSysName // a null or multicast chassis MAC
+	}
+	// No MAC found - use ChassisID as fallback (could be hostname or IP)
 	return chassisID, neighbor.RemSysName
 }
 
@@ -721,19 +897,20 @@ func lldpChassisID(neighbor LLDPNeighbor) string {
 }
 
 // lldpPortID is the normalized port id resolveLLDPTarget checks for a port
-// MAC.
+// MAC, read with the port subtype table (graphNormalizePortID).
 func lldpPortID(neighbor LLDPNeighbor) string {
-	return normalizeID(neighbor.RemPortId, neighbor.RemPortIdSubtype)
+	return graphNormalizePortID(neighbor.RemPortId, neighbor.RemPortIdSubtype)
 }
 
 // lldpKnownMACs returns the MACs that buildGraphEdges treats as known from
-// LLDP: FDB entries with these MACs get no endpoint node.
+// LLDP: the resolved targets of the neighbors the graph accepts (F46). FDB
+// entries with these MACs get no endpoint node.
 func lldpKnownMACs(data *DeviceData) map[string]bool {
 	knownMACs := make(map[string]bool)
-	for _, neighbor := range data.Neighbors {
-		// Normalize and add LLDP neighbor MACs
-		mac := normalizeMAC(neighbor.RemChassisId)
-		knownMACs[mac] = true
+	for _, n := range data.Neighbors {
+		if targetID, _, ok := graphLLDPNeighborTarget(data, n); ok {
+			knownMACs[targetID] = true
+		}
 	}
 	return knownMACs
 }
@@ -743,40 +920,42 @@ func lldpKnownMACs(data *DeviceData) map[string]bool {
 func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[string]string) {
 	logDebug("Analyzing Edges for Host: %s (%s) [Chassis: %s]", data.IP, data.SysName, data.ChassisID)
 
-	// Source Node (Assume subtype 4/MAC for local collected data for now,
-	// as collectLocalChassisID returns formatted hex)
-	srcID := normalizeID(data.ChassisID, 0)
-	if srcID == "" {
-		srcID = data.IP
-	}
+	// Source Node: the switch's chassis MAC, or its IP (graphDeviceNodeID)
+	srcID := graphDeviceNodeID(data)
 
 	// Ensure Source Node exists (should be added in main loop, but safety check)
 	if !graph.Nodes[srcID] {
-		graph.AddNode(srcID)
-		// Add metadata
-		info := data.SysName
-		if srcID != data.IP {
-			info = fmt.Sprintf("%s\n%s", data.SysName, data.IP)
-		}
-		graph.SwitchInfo[srcID] = info
+		graphAddSwitchNode(graph, data)
 	}
+
+	// Build MAC to IP lookup from local ARP table (normalize keys)
+	macToIP := make(map[string]string)
+	for _, arpEntry := range data.ARPTable {
+		macToIP[normalizeMAC(arpEntry.MACAddress)] = arpEntry.IPAddress
+	}
+
+	// Also merge global gateway ARP data (more complete)
+	globalMACtoIPMutex.RLock()
+	for mac, ip := range globalMACtoIP {
+		if _, exists := macToIP[mac]; !exists {
+			macToIP[mac] = ip
+		}
+	}
+	globalMACtoIPMutex.RUnlock()
 
 	// Add LLDP neighbors as edges
 	logDebug("  Found %d LLDP neighbors", len(data.Neighbors))
 	for _, neighbor := range data.Neighbors {
-		// Determine Target ID - prefer MAC address for uniqueness
-		targetID, displayName := resolveLLDPTarget(neighbor)
-
-		if targetID == "" {
-			logDebug("    -> SKIPPED: Resolved Empty TargetID for neighbor on port %d", neighbor.LocalPortNum)
+		// Determine Target ID - prefer MAC address for uniqueness; skip
+		// garbage targets and NULL0 ports (before the node is made, so no
+		// orphan node is left)
+		targetID, displayName, ok := graphLLDPNeighborTarget(data, neighbor)
+		if !ok {
+			logDebug("    -> SKIPPED: TargetID '%s' for neighbor on port %d (empty, garbage or NULL0 port)", targetID, neighbor.LocalPortNum)
 			continue
 		}
-
-		// Skip invalid/garbage target IDs
-		if isInvalidID(targetID) {
-			logDebug("    -> SKIPPED: Invalid TargetID '%s' (matches known garbage patterns)", targetID)
-			continue
-		}
+		localPort := getLocalPortName(data, neighbor.LocalPortNum)
+		graphAddSysText(graph, targetID, neighbor.RemSysName, neighbor.RemSysDesc)
 
 		logDebug("    -> Neighbor: %s (ID: %s) via LocalPort: %d", displayName, targetID, neighbor.LocalPortNum)
 
@@ -784,14 +963,23 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		if !graph.Nodes[targetID] {
 			graph.AddNode(targetID)
 
-			// Get vendor from MAC if targetID looks like a MAC
-			vendor := getMACVendor(targetID)
+			// Get vendor from MAC if targetID is a MAC
+			vendor := ""
+			if graphCanonicalMAC(targetID) != "" {
+				vendor = getMACVendor(targetID)
+			}
 
 			// Build info from LLDP neighbor data with [LLDP-EP] marker
 			var info string
 
-			// Check BMC/management interface FIRST (OUI → name)
-			if bmcDetected, bmcType := isBMC(targetID, displayName); bmcDetected {
+			// DNS name of the neighbor (when its IP is known), for the BMC check
+			dnsName := ""
+			if ip := macToIP[targetID]; ip != "" {
+				dnsName = resolveHostname(ip)
+			}
+
+			// Check BMC/management interface FIRST (LLDP name, DNS name)
+			if bmcDetected, bmcType := graphIsBMC(targetID, displayName, dnsName); bmcDetected {
 				info = fmt.Sprintf("[BMC] %s", bmcType)
 
 			} else if vendor != "" {
@@ -818,12 +1006,6 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 			logDebug("       [NEW NODE] Created LLDP Endpoint node: %s", targetID)
 		}
 
-		// Resolve local port name
-		localPort := getLocalPortName(data, neighbor.LocalPortNum)
-		// Skip NULL0 interface — virtual discard port, not a real connection
-		if isNullInterface(localPort) {
-			continue
-		}
 		remotePort := neighbor.RemPortDesc
 
 		// Fallback logic for Remote Port
@@ -890,30 +1072,90 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		}
 	}
 
-	// Process MAC Address Table - create endpoint nodes
-	// Track which MACs are already known (from LLDP)
-	knownMACs := lldpKnownMACs(data)
+	// Process MAC Address Table - create endpoint nodes.
+	// Ports come in ascending order, so when a MAC is seen on two ports the
+	// node is created (first creator wins) by the same port on every build.
+	for _, p := range graphFDBPorts(data, switchChassisMACs) {
+		portName := getLocalPortName(data, p.Port)
+		if p.Hub {
+			// Non-VM hub: create aggregated hub node; every member gets a
+			// node (a hub has at most 20 MACs)
+			nodeID := fmt.Sprintf("hub-%s-p%d", srcID, p.Port)
+			nodeLabel := fmt.Sprintf("[HUB] Unmanaged\n%d devices", len(p.MACs))
+			edgeLabel := fmt.Sprintf("%s|Hub", normalizePortName(portName))
 
-	// Build MAC to IP lookup from local ARP table (normalize keys)
-	macToIP := make(map[string]string)
-	for _, arpEntry := range data.ARPTable {
-		macToIP[normalizeMAC(arpEntry.MACAddress)] = arpEntry.IPAddress
-	}
+			if !graph.Nodes[nodeID] {
+				graph.AddNode(nodeID)
+				graph.SwitchInfo[nodeID] = nodeLabel
+			}
+			graph.AddEdge(srcID, nodeID, edgeLabel)
 
-	// Also merge global gateway ARP data (more complete)
-	globalMACtoIPMutex.RLock()
-	for mac, ip := range globalMACtoIP {
-		if _, exists := macToIP[mac]; !exists {
-			macToIP[mac] = ip
+			for _, mac := range p.MACs {
+				graphAddFDBEndpoint(graph, data, macToIP, nodeID, mac, "")
+			}
+			continue
+		}
+
+		// Direct endpoints (few MACs, a VM port or an ESXi host's port):
+		// every MAC is linked to the switch, so detectHypervisors() can put
+		// the VMs under a hyp- node. Edge label: "GE1/0/5 [V10]|".
+		// Do NOT create aggregated vm- node here — that conflicts with detectHypervisors.
+		portLabel := normalizePortName(portName)
+		if vlanStr := getPortVLANLabel(data.PortVLANs, p.Port); vlanStr != "" {
+			portLabel = fmt.Sprintf("%s %s", portLabel, vlanStr)
+		}
+		for _, mac := range p.MACs {
+			graphAddFDBEndpoint(graph, data, macToIP, srcID, mac, portLabel+"|")
 		}
 	}
-	globalMACtoIPMutex.RUnlock()
+}
 
-	// Track MACs per port for Virtual Hub detection
+// graphLLDPNeighborTarget resolves one LLDP neighbor of a switch to its node
+// id and display name; ok is false when the graph drops the neighbor (no
+// usable target, or a NULL0/"Port 0" local port).
+func graphLLDPNeighborTarget(data *DeviceData, n LLDPNeighbor) (targetID, displayName string, ok bool) {
+	targetID, displayName = resolveLLDPTarget(n)
+	ok = graphUsableTargetID(targetID) && !isNullInterface(getLocalPortName(data, n.LocalPortNum))
+	return targetID, displayName, ok
+}
+
+// graphFDBPort is how the graph shows the FDB MACs learned on one port.
+type graphFDBPort struct {
+	Port int
+	MACs []string // canonical, after the graph's filters
+	Hub  bool     // an unmanaged switch (shadow IT); else each MAC is linked to the switch
+}
+
+// graphFDBPorts is the graph's per-port rule for the FDB of one switch, in
+// port order; ports that get no nodes are left out. The MACs of a port are
+// its FDB entries minus non-MACs, LLDP-known neighbors, the switch's own and
+// other polled switches' chassis MACs and isInvalidID ones. A port with an
+// accepted LLDP neighbor or a NULL0 name gets nothing. A VM-majority port is
+// direct (also on a trunk or with more than 20 MACs, unless another switch's
+// MAC is learned there); a VLAN trunk or a port with more than 20 MACs is
+// otherwise an uplink (nothing, or direct for at most 3 MACs); 2-20 MACs
+// are a hub unless one is an HTTP-confirmed ESXi host (direct, Q14).
+func graphFDBPorts(data *DeviceData, switchChassisMACs map[string]string) []graphFDBPort {
+	// MACs already known via LLDP, and the ports with an accepted neighbor
+	knownMACs := lldpKnownMACs(data)
+	lldpPorts := make(map[int]bool)
+	for _, n := range data.Neighbors {
+		if _, _, ok := graphLLDPNeighborTarget(data, n); ok {
+			lldpPorts[n.LocalPortNum] = true
+		}
+	}
+
+	// Track MACs per port for Virtual Hub detection, and the ports where
+	// another polled switch's MAC is learned (switch links)
 	portMACs := make(map[int][]string)
-
+	portSeesSwitch := make(map[int]bool)
+	ownMAC := graphChassisKey(data.ChassisID)
 	for _, macEntry := range data.MACTable {
-		normMAC := normalizeMAC(macEntry.MACAddress)
+		// The canonical MAC is both the node id and the key of every check
+		normMAC := graphCanonicalMAC(macEntry.MACAddress)
+		if normMAC == "" {
+			continue // not a MAC
+		}
 
 		// Skip NULL0 interface — virtual discard port, not a real connection
 		if isNullInterface(getLocalPortName(data, macEntry.PortNumber)) {
@@ -926,40 +1168,33 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		}
 
 		// Skip switch's own MACs (usually ports have their own MACs)
-		if normMAC == normalizeMAC(data.ChassisID) {
+		if normMAC == ownMAC {
 			continue
 		}
 
 		// Skip if this MAC belongs to another known switch (handled by MAC cross-ref)
 		if _, isSwitch := switchChassisMACs[normMAC]; isSwitch {
+			portSeesSwitch[macEntry.PortNumber] = true
 			continue
 		}
 
 		// Skip special/invalid MAC addresses (use robust check)
-		if isInvalidID(macEntry.MACAddress) {
+		if isInvalidID(normMAC) {
 			continue
 		}
 
-		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], macEntry.MACAddress)
+		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], normMAC)
 	}
 
-	// Create endpoint nodes for MAC-discovered devices.
-	// Ports are visited in ascending order, so when a MAC is seen on two ports
-	// the node is created (first creator wins) by the same port on every build.
+	var out []graphFDBPort
 	for _, portNum := range slices.Sorted(maps.Keys(portMACs)) {
 		macs := portMACs[portNum]
-		// Skip if this port already has LLDP neighbors
-		hasLLDPNeighbor := false
-		for _, neighbor := range data.Neighbors {
-			if neighbor.LocalPortNum == portNum {
-				hasLLDPNeighbor = true
-				break
-			}
+		// Skip if this port already has LLDP neighbors (accepted ones)
+		if lldpPorts[portNum] {
+			continue
 		}
-
-		portName := getLocalPortName(data, portNum)
 		// Skip NULL0 interface
-		if isNullInterface(portName) {
+		if isNullInterface(getLocalPortName(data, portNum)) {
 			continue
 		}
 
@@ -978,107 +1213,108 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		// (e.g., D 1-2 port 51 has 58 MACs — clearly an uplink, not a hub)
 		if len(macs) > 20 && !isTrunkPort {
 			isTrunkPort = true
-			logDebug("       [UPLINK] Port %d on %s has %d MACs — treating as implicit uplink", portNum, srcID, len(macs))
-
+			logDebug("       [UPLINK] Port %d on %s has %d MACs — treating as implicit uplink", portNum, data.IP, len(macs))
 		}
 
-		if len(macs) >= 2 && !hasLLDPNeighbor && !isTrunkPort {
-			// Check if this is a hypervisor port (ESXi, Proxmox, KVM)
-			isVM := isHypervisorPort(macs)
+		// A port where most MACs are virtual NICs is a hypervisor host (ESXi,
+		// Proxmox, KVM), also on a VLAN trunk or with more than 20 MACs: ESXi
+		// hosts sit on trunk ports. A trunk or big port where another switch's
+		// MAC is learned is a switch link, though, whatever it carries.
+		vmPort := len(macs) >= 2 && isHypervisorPort(macs) && (!isTrunkPort || !portSeesSwitch[portNum])
 
-			if isVM {
-				// VM port: add direct switch→MAC edges so detectHypervisors()
-				// can see them and create hyp- nodes correctly.
-				// Do NOT create aggregated vm- node here — that conflicts with detectHypervisors.
-
-				for _, mac := range macs {
-					if !graph.Nodes[mac] {
-						graph.AddNode(mac)
-						osLabel := detectOSFromMAC(mac, macToIP, data)
-						info := fmt.Sprintf("[VM] %s", osLabel)
-						if vendor := getMACVendor(mac); vendor != "" {
-							info = fmt.Sprintf("%s %s", info, vendor)
-						}
-						if ip, ok := macToIP[mac]; ok {
-							info = fmt.Sprintf("%s\n%s", info, ip)
-						}
-						graph.SwitchInfo[mac] = info
-					}
-					portEdgeLabel := fmt.Sprintf("%s [T]", normalizePortName(portName))
-					graph.AddEdge(srcID, mac, portEdgeLabel)
-				}
-			} else {
-				// Non-VM hub: create aggregated hub node
-				nodeID := fmt.Sprintf("hub-%s-p%d", srcID, portNum)
-				nodeLabel := fmt.Sprintf("[HUB] Unmanaged\n%d devices", len(macs))
-				edgeLabel := fmt.Sprintf("%s|Hub", normalizePortName(portName))
-
-
-				if !graph.Nodes[nodeID] {
-					graph.AddNode(nodeID)
-					graph.SwitchInfo[nodeID] = nodeLabel
-				}
-				graph.AddEdge(srcID, nodeID, edgeLabel)
-
-				for i, mac := range macs {
-					if i >= 5 {
-						break
-					}
-					if !graph.Nodes[mac] {
-						graph.AddNode(mac)
-						info := "[ENDPOINT]"
-						if vendor := getMACVendor(mac); vendor != "" {
-							info = fmt.Sprintf("%s %s", info, vendor)
-						}
-						if ip, ok := macToIP[mac]; ok {
-							info = fmt.Sprintf("%s\n%s", info, ip)
-						}
-						graph.SwitchInfo[mac] = info
-					}
-					graph.AddEdge(nodeID, mac, "")
-				} // end for (hub macs)
-			} // end else (hub)
-		} else if len(macs) <= 3 && !hasLLDPNeighbor {
-			// Few MACs - create direct endpoint nodes
-			for _, mac := range macs {
-				endpointID := mac
-				if !graph.Nodes[endpointID] {
-					graph.AddNode(endpointID)
-					// Build endpoint info with IP and Vendor
-					info := "[ENDPOINT]"
-					// Check BMC first (by OUI)
-					if bmcDetected, bmcType := isBMC(mac, ""); bmcDetected {
-						info = fmt.Sprintf("[BMC] %s", bmcType)
-
-					} else if isRandomMAC(mac) {
-						info = "[WiFi]"
-					}
-					if vendor := getMACVendor(mac); vendor != "" {
-						info = fmt.Sprintf("%s %s", info, vendor)
-					}
-					// DNS reverse lookup for endpoint hostname
-					if ip, ok := macToIP[mac]; ok {
-						info = fmt.Sprintf("%s\n%s", info, ip)
-						if hostname := resolveHostname(ip); hostname != "" {
-							info = fmt.Sprintf("%s\n[DNS] %s", info, hostname)
-						}
-					}
-					graph.SwitchInfo[endpointID] = info
-					logDebug("       [NEW NODE] Created MAC endpoint node: %s", endpointID)
-				}
-				// Add VLAN info to label
-				vlanStr := getPortVLANLabel(data.PortVLANs, portNum)
-				portLabel := normalizePortName(portName)
-				if vlanStr != "" {
-					portLabel = fmt.Sprintf("%s %s", portLabel, vlanStr)
-				}
-				label := fmt.Sprintf("%s|", portLabel)
-				added, _ := graph.AddEdge(srcID, endpointID, label)
-				if added {
-					logDebug("       [NEW EDGE] Added MAC endpoint link: %s -> %s", srcID, endpointID)
-				}
-			}
+		switch {
+		case vmPort, len(macs) >= 2 && !isTrunkPort && graphPortHasConfirmedESXi(macs):
+			// VM port, or a port with an HTTP-confirmed ESXi host (never a
+			// shadow-IT hub)
+			out = append(out, graphFDBPort{Port: portNum, MACs: macs})
+		case len(macs) >= 2 && !isTrunkPort:
+			out = append(out, graphFDBPort{Port: portNum, MACs: macs, Hub: true})
+		case len(macs) <= 3:
+			// Few MACs - direct endpoint nodes
+			out = append(out, graphFDBPort{Port: portNum, MACs: macs})
 		}
+	}
+	return out
+}
+
+// graphIsConfirmedESXi reports whether id is the MAC of an ESXi host
+// confirmed by the HTTP probe.
+func graphIsConfirmedESXi(id string) bool {
+	_, ok := ConfirmedESXiMACs.Load(normalizeMAC(id))
+	return ok
+}
+
+// graphPortHasConfirmedESXi reports whether one of a port's MACs is an
+// HTTP-confirmed ESXi host.
+func graphPortHasConfirmedESXi(macs []string) bool {
+	return slices.ContainsFunc(macs, graphIsConfirmedESXi)
+}
+
+// graphIsBMC runs the BMC check with each known name of a device (LLDP
+// display name, DNS name) and finally with no name.
+func graphIsBMC(mac string, names ...string) (bool, string) {
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		if ok, kind := isBMC(mac, name); ok {
+			return ok, kind
+		}
+	}
+	return isBMC(mac, "")
+}
+
+// graphFDBEndpointLabel is the label of a MAC learned from the FDB (direct
+// port, VM port or hub member): "[VM] <os>" for a virtual NIC (checked before
+// the random-MAC rule), else "[BMC] <type>" (DNS name checked too), "[WiFi]"
+// for a random MAC or "[ENDPOINT]"; then the vendor, the IP and the DNS name.
+func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceData) string {
+	ip := macToIP[mac]
+	hostname := ""
+	if ip != "" {
+		hostname = resolveHostname(ip)
+	}
+	info := "[ENDPOINT]"
+	if isHypervisorMAC(mac) {
+		info = fmt.Sprintf("[VM] %s", detectOSFromMAC(mac, macToIP, data))
+	} else if bmcDetected, bmcType := graphIsBMC(mac, hostname); bmcDetected {
+		info = fmt.Sprintf("[BMC] %s", bmcType)
+	} else if isRandomMAC(mac) {
+		info = "[WiFi]"
+	}
+	if vendor := getMACVendor(mac); vendor != "" {
+		info = fmt.Sprintf("%s %s", info, vendor)
+	}
+	if ip != "" {
+		info = fmt.Sprintf("%s\n%s", info, ip)
+		if hostname != "" {
+			info = fmt.Sprintf("%s\n[DNS] %s", info, hostname)
+		}
+	}
+	return info
+}
+
+// graphLabelIP is the first label line that is an IP address, or "".
+func graphLabelIP(info string) string {
+	for _, line := range strings.Split(info, "\n") {
+		if net.ParseIP(line) != nil {
+			return line
+		}
+	}
+	return ""
+}
+
+// graphAddFDBEndpoint creates the node of an FDB MAC unless an earlier port
+// or switch created it (first creator wins) and links it from parent (the
+// switch or a hub node) with label.
+func graphAddFDBEndpoint(graph *DJGraph, data *DeviceData, macToIP map[string]string, parent, mac, label string) {
+	if !graph.Nodes[mac] {
+		graph.AddNode(mac)
+		graph.SwitchInfo[mac] = graphFDBEndpointLabel(mac, macToIP, data)
+		logDebug("       [NEW NODE] Created MAC endpoint node: %s", mac)
+	}
+	if added, _ := graph.AddEdge(parent, mac, label); added {
+		logDebug("       [NEW EDGE] Added MAC endpoint link: %s -> %s", parent, mac)
 	}
 }
 
@@ -2180,19 +2416,67 @@ func discoverFromLLDP(snmpObject *SNMPObject) {
 	}
 }
 
+// graphAddSwitchNode adds the node of a polled device, labelled
+// "SysName\nIP" ("SysName" when the node id is the IP), marks it as a
+// switch and returns its id.
+func graphAddSwitchNode(graph *DJGraph, d *DeviceData) string {
+	id := graphDeviceNodeID(d)
+	graph.AddNode(id)
+	info := d.SysName
+	if id != d.IP {
+		info = fmt.Sprintf("%s\n%s", d.SysName, d.IP)
+	}
+	graph.SwitchInfo[id] = info
+	if graph.graphSwitches == nil {
+		graph.graphSwitches = make(map[string]bool)
+	}
+	graph.graphSwitches[id] = true
+	graphAddSysText(graph, id, d.SysName)
+	return id
+}
+
+// graphAddSysText records sysName/sysDescr text for a node (each distinct
+// text once, in build order).
+func graphAddSysText(graph *DJGraph, id string, texts ...string) {
+	for _, text := range texts {
+		text = strings.TrimSpace(text)
+		if text == "" || strings.Contains(graph.graphSysText[id], text) {
+			continue
+		}
+		if graph.graphSysText == nil {
+			graph.graphSysText = make(map[string]string)
+		}
+		if graph.graphSysText[id] != "" {
+			text = graph.graphSysText[id] + "\n" + text
+		}
+		graph.graphSysText[id] = text
+	}
+}
+
+// graphSwitchSysMarkers are sysName/sysDescr words of switches (HPE/H3C
+// Comware, Huawei VRP, Cisco IOS, SNR).
+var graphSwitchSysMarkers = []string{"Comware", "HUAWEI", "Cisco", "SNR"}
+
+// graphIsSwitchNode reports whether a node is a switch: a polled device, or
+// an LLDP neighbor whose sysName/sysDescr names a switch platform. Vendor
+// text in labels plays no part.
+func graphIsSwitchNode(graph *DJGraph, id string) bool {
+	if graph.graphSwitches[id] {
+		return true
+	}
+	sys := graph.graphSysText[id]
+	return slices.ContainsFunc(graphSwitchSysMarkers, func(m string) bool { return strings.Contains(sys, m) })
+}
+
 // buildSwitchChassisMACs creates a map of normalized switch MACs -> node IDs
 // Used to identify switch-to-switch connections via MAC table cross-reference
 func buildSwitchChassisMACs(devices map[string]*DeviceData) map[string]string {
 	switchMACs := make(map[string]string)
 	for _, ip := range sortedDeviceIPs(devices) {
 		d := devices[ip]
-		nodeID := normalizeID(d.ChassisID, 0)
-		if nodeID == "" {
-			nodeID = d.IP
-		}
-		// Add ChassisID MAC
-		if mac := normalizeMAC(d.ChassisID); mac != "" && !isInvalidID(mac) {
-			switchMACs[mac] = nodeID
+		// Add ChassisID MAC (none for exception text or a non-MAC chassis id)
+		if mac := graphChassisKey(d.ChassisID); mac != "" && !isInvalidID(mac) {
+			switchMACs[mac] = graphDeviceNodeID(d)
 		}
 	}
 	return switchMACs
@@ -2209,10 +2493,7 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 	deviceIPs := sortedDeviceIPs(allDevices)
 	for _, srcIP := range deviceIPs {
 		srcDevice := allDevices[srcIP]
-		srcID := normalizeID(srcDevice.ChassisID, 0)
-		if srcID == "" {
-			srcID = srcDevice.IP
-		}
+		srcID := graphDeviceNodeID(srcDevice)
 
 		// Phase 1: Count switch MACs per port
 		portSwitchMACs := make(map[int][]string) // portNum -> list of switch node IDs
@@ -2264,15 +2545,9 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 
 			// Ensure target node exists in graph
 			if !graph.Nodes[targetID] {
-				graph.AddNode(targetID)
 				for _, tdIP := range deviceIPs {
-					td := allDevices[tdIP]
-					tid := normalizeID(td.ChassisID, 0)
-					if tid == "" {
-						tid = td.IP
-					}
-					if tid == targetID {
-						graph.SwitchInfo[targetID] = fmt.Sprintf("%s\n%s", td.SysName, td.IP)
+					if td := allDevices[tdIP]; graphDeviceNodeID(td) == targetID {
+						graphAddSwitchNode(graph, td)
 						break
 					}
 				}
@@ -2369,16 +2644,7 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	// IP order sets the label)
 	for _, ip := range deviceIPs {
 		d := snapshot[ip]
-		id := normalizeID(d.ChassisID, 0)
-		if id == "" {
-			id = d.IP
-		}
-		newGraph.AddNode(id)
-		info := d.SysName
-		if id != d.IP {
-			info = fmt.Sprintf("%s\n%s", d.SysName, d.IP)
-		}
-		newGraph.SwitchInfo[id] = info
+		id := graphAddSwitchNode(newGraph, d)
 
 		// Phase 8: Transfer unreachable status to graph
 		if d.Unreachable {
@@ -2403,56 +2669,103 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	return newGraph
 }
 
-// detectHypervisors scans the graph for switch ports where 2+ VM MACs are seen.
-// Such ports indicate a connected hypervisor server (ESXi, Hyper-V, QEMU, Xen, VirtualBox).
-// A virtual hypervisor node is inserted between the switch port and its VM endpoints.
-func detectHypervisors(graph *DJGraph) {
-	// VM OUI prefixes (first 3 bytes, lowercase colon-separated)
-	vmOUIPrefixes := map[string]string{
-		"00:0c:29": "VMware ESXi",
-		"00:50:56": "VMware vSphere",
-		"00:15:5d": "Hyper-V",
-		"08:00:27": "VirtualBox",
-		"52:54:00": "QEMU/KVM",
-		"00:16:3e": "Xen",
-	}
+// graphHypervisorTypes maps virtual-NIC OUIs (first 3 bytes, lowercase
+// colon-separated) to the platform shown on hyp- nodes.
+var graphHypervisorTypes = map[string]string{
+	"00:0c:29": "VMware ESXi",
+	"00:50:56": "VMware ESXi",
+	"00:05:69": "VMware ESXi",
+	"00:1c:14": "VMware ESXi",
+	"bc:24:11": "Proxmox VE",
+	"00:15:5d": "Hyper-V",
+	"08:00:27": "VirtualBox",
+	"52:54:00": "QEMU/KVM",
+	"00:16:3e": "Xen",
+}
 
-	// portVMs: switchNodeID → portLabel → []vmMAC
-	// Edges are visited in sorted order, so each port's VM list (and with it
-	// the hypervisor type taken from its first MAC) is the same on every build.
+// graphHypervisorType returns the platform of a virtual-NIC MAC.
+func graphHypervisorType(mac string) (string, bool) {
+	mac = normalizeMAC(mac)
+	if len(mac) < 8 {
+		return "", false
+	}
+	t, ok := graphHypervisorTypes[mac[:8]]
+	return t, ok
+}
+
+// graphDominantHypervisorType is the most common platform among the VM MACs
+// of one port; a tie goes to the alphabetically first platform.
+func graphDominantHypervisorType(vmMACs []string) string {
+	counts := map[string]int{}
+	for _, mac := range vmMACs {
+		if t, ok := graphHypervisorType(mac); ok {
+			counts[t]++
+		}
+	}
+	best := ""
+	for _, t := range slices.Sorted(maps.Keys(counts)) {
+		if counts[t] > counts[best] {
+			best = t
+		}
+	}
+	return best
+}
+
+// graphEdgePort is the port name at the start of an edge label: the first
+// field before '|' ("GE1/0/26 [T]|" and "GE1/0/9 1G ↓5M ↑3M|eth0" give
+// GE1/0/26 and GE1/0/9), or "" for an empty label.
+func graphEdgePort(label string) string {
+	src, _, _ := strings.Cut(label, "|")
+	if fields := strings.Fields(src); len(fields) > 0 {
+		return fields[0]
+	}
+	return ""
+}
+
+// graphHubUplinkPort is the switch port of a hub node (from its "port|Hub"
+// uplink edge), or "".
+func graphHubUplinkPort(graph *DJGraph, hubID string) string {
+	for _, src := range slices.Sorted(maps.Keys(graph.Edges)) {
+		if label, ok := graph.Edges[src][hubID]; ok {
+			return graphEdgePort(label)
+		}
+	}
+	return ""
+}
+
+// detectHypervisors scans the graph for switch ports where 2+ VM MACs are seen.
+// Such ports indicate a connected hypervisor server (ESXi, Proxmox, Hyper-V, QEMU, Xen, VirtualBox).
+// A virtual hypervisor node is inserted between the switch port and its VM endpoints;
+// VMs behind a hub get it between the hub and the VMs, keyed by the hub's switch port.
+func detectHypervisors(graph *DJGraph) {
+	// portVMs: switchNodeID (or hub node ID) → port key → []vmMAC
+	// Edges are visited in sorted order, so each port's VM list is the same
+	// on every build.
 	portVMs := map[string]map[string][]string{}
 
 	for _, src := range slices.Sorted(maps.Keys(graph.Edges)) {
 		targets := graph.Edges[src]
 		for _, tgt := range slices.Sorted(maps.Keys(targets)) {
-			edgeLabel := targets[tgt]
 			// Check if tgt MAC is a VM OUI
-			mac := normalizeMAC(tgt)
-			if len(mac) < 8 {
+			if _, isVM := graphHypervisorType(tgt); !isVM {
 				continue
 			}
-			prefix := mac[:8]
-			if _, isVM := vmOUIPrefixes[prefix]; isVM {
-				// Extract port from edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26")
-				port := edgeLabel
-				if idx := strings.Index(port, " ["); idx > 0 {
-					port = port[:idx]
-				}
-				if idx := strings.Index(port, "|"); idx > 0 {
-					port = port[:idx]
-				}
-				port = strings.TrimSpace(port)
-				if port == "" {
-					port = "port"
-				}
-				// Normalize port name: GigabitEthernet1/0/26 → GE1/0/26
-				// GigabitF1/0/26 → GE1/0/26, Ten-GE1/0/49 → TE1/0/49
-				portKey := normalizePortForHypervisor(port)
-				if portVMs[src] == nil {
-					portVMs[src] = map[string][]string{}
-				}
-				portVMs[src][portKey] = append(portVMs[src][portKey], tgt)
+			// Port from the edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26"); a
+			// hub member's edge has no label, so the hub's uplink port is used
+			port := graphEdgePort(targets[tgt])
+			if port == "" && strings.HasPrefix(src, "hub-") {
+				port = graphHubUplinkPort(graph, src)
 			}
+			if port == "" {
+				port = "port"
+			}
+			// Normalize port name: GigabitEthernet1/0/26 → GE1/0/26
+			// GigabitF1/0/26 → GE1/0/26, Ten-GE1/0/49 → TE1/0/49
+			portKey := normalizePortForHypervisor(port)
+			if portVMs[src] == nil {
+				portVMs[src] = map[string][]string{}
+			}
+			portVMs[src][portKey] = append(portVMs[src][portKey], tgt)
 		}
 	}
 
@@ -2465,15 +2778,8 @@ func detectHypervisors(graph *DJGraph) {
 				continue // single VM MAC — could be real NIC, skip
 			}
 
-			// Detect dominant hypervisor type
-			hypervisorType := "Hypervisor"
-			for _, mac := range vmMACs {
-				prefix := normalizeMAC(mac)[:8]
-				if ht, ok := vmOUIPrefixes[prefix]; ok {
-					hypervisorType = ht
-					break
-				}
-			}
+			// Dominant hypervisor type (majority, fixed tie-break)
+			hypervisorType := graphDominantHypervisorType(vmMACs)
 
 			// Build unique hypervisor node ID
 			safePort := strings.NewReplacer("/", "_", " ", "_", ":", "_").Replace(port)
@@ -2488,34 +2794,20 @@ func detectHypervisors(graph *DJGraph) {
 			graph.AddNode(hypID)
 			graph.SwitchInfo[hypID] = fmt.Sprintf("[HYPERVISOR] %s\n%d VMs on %s", hypervisorType, len(vmMACs), port)
 
-			// Replace switch→VM edges with switch→hypervisor→VM
+			// Replace switch→VM edges with switch→hypervisor→VM (the VM
+			// nodes exist: AddEdge only links existing nodes)
 			for _, vmMAC := range vmMACs {
-				// Get original edge label
-				origLabel := ""
-				if graph.Edges[switchID] != nil {
-					origLabel = graph.Edges[switchID][vmMAC]
-					// Remove switch→VM edge
-					delete(graph.Edges[switchID], vmMAC)
-				}
-				// AddEdge requires both nodes to exist — ensure VM MAC is in Nodes
-				if !graph.Nodes[vmMAC] {
-					graph.AddNode(vmMAC)
-					if graph.SwitchInfo[vmMAC] == "" {
-						vendor := getMACVendor(vmMAC)
-						if vendor != "" {
-							graph.SwitchInfo[vmMAC] = fmt.Sprintf("[VM] %s", vendor)
-						} else {
-							graph.SwitchInfo[vmMAC] = "[VM]"
-						}
-					}
-				}
-				// Add hypervisor→VM edge
+				delete(graph.Edges[switchID], vmMAC)
 				graph.AddEdge(hypID, vmMAC, "vNIC")
-				_ = origLabel
 			}
 
-			// Add switch→hypervisor edge
-			graph.AddEdge(switchID, hypID, port)
+			// Add switch→hypervisor edge (unlabelled from a hub, like the
+			// hub's other members)
+			parentLabel := port
+			if strings.HasPrefix(switchID, "hub-") {
+				parentLabel = ""
+			}
+			graph.AddEdge(switchID, hypID, parentLabel)
 			fmt.Printf("🖥️  Hypervisor detected: %s on %s port %s (%d VMs: %s)\n",
 				hypervisorType, switchID[:min(len(switchID), 20)], port, len(vmMACs), vmMACs[0])
 		}
@@ -2523,38 +2815,19 @@ func detectHypervisors(graph *DJGraph) {
 
 	// --- Phase 2: Server NIC detection ---
 	// Tag nodes from known server vendors (Dell/HPE/SuperMicro) as potential hypervisors.
-	// Only applies to endpoint/vm/unknown nodes — NOT switches.
-	// Build set of known switch node IDs first
-	switchNodeIDs := map[string]bool{}
-	for nid, info := range graph.SwitchInfo {
-		if strings.Contains(info, "[SWITCH]") || strings.Contains(info, "HPE\n172") ||
-			strings.Contains(info, "HUAWEI") || strings.Contains(info, "Cisco") ||
-			strings.Contains(info, "Comware") || strings.Contains(info, "SNR") {
-			switchNodeIDs[nid] = true
-		}
-	}
-	// Also mark all SNMP-managed devices (from collectedData) as switches
-	// These are devices we successfully walked — they are managed switches, not hypervisors
-	collectedDataMutex.RLock()
-	for _, dev := range collectedData {
-		switchNodeIDs[dev.IP] = true
-		if dev.ChassisID != "" {
-			switchNodeIDs[normalizeMAC(dev.ChassisID)] = true
-		}
-	}
-	collectedDataMutex.RUnlock()
-
-	for nodeID := range graph.Nodes {
+	// Only applies to endpoint/vm/unknown nodes — NOT switches: the polled
+	// devices of this build and LLDP neighbors whose sysName/sysDescr names
+	// a switch (graphIsSwitchNode; vendor words in labels do not count).
+	for _, nodeID := range slices.Sorted(maps.Keys(graph.Nodes)) {
 		if strings.HasPrefix(nodeID, "hyp-") || strings.HasPrefix(nodeID, "hub-") {
 			continue
 		}
-		if switchNodeIDs[nodeID] {
+		if graphIsSwitchNode(graph, nodeID) {
 			continue // skip switches
 		}
 		if isServer, vendor := isServerNIC(nodeID); isServer {
 			info := graph.SwitchInfo[nodeID]
-			if strings.Contains(info, "[HYPERVISOR]") || strings.Contains(info, "[SWITCH]") ||
-				strings.Contains(info, "[BMC]") {
+			if strings.Contains(info, "[HYPERVISOR]") || strings.Contains(info, "[BMC]") {
 				continue
 			}
 			graph.SwitchInfo[nodeID] = fmt.Sprintf("[HYPERVISOR] %s Server\n%s", vendor, info)

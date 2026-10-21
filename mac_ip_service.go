@@ -557,16 +557,18 @@ func enrichGraphWithIPs(graph *DJGraph) {
 		info := graph.SwitchInfo[mac]
 		changed := false
 
-		// Check if actively confirmed ESXi (works even without IP)
-		if _, isESXi := ConfirmedESXiMACs.Load(mac); isESXi {
-			if !strings.Contains(info, "[HYPERVISOR]") && !strings.Contains(info, "vmnic") && !strings.Contains(info, "[SWITCH]") {
+		// Check if actively confirmed ESXi (works even without IP); a switch
+		// (polled, or an LLDP neighbor naming a switch platform) is never
+		// relabelled, whatever MAC binding the cache holds
+		if graphIsConfirmedESXi(mac) && !graphIsSwitchNode(graph, mac) {
+			if !strings.Contains(info, "[HYPERVISOR]") {
 				info = "[HYPERVISOR] VMware ESXi\n" + info
 				changed = true
 			}
 		}
 
-		// Add IP label if available and not duplicate
-		if ip != "" && !strings.Contains(info, ip) {
+		// Add IP label if available and not already a label line
+		if ip != "" && !slices.Contains(strings.Split(info, "\n"), ip) {
 			info = info + "\n" + ip
 			changed = true
 		}
@@ -583,12 +585,13 @@ func enrichGraphWithIPs(graph *DJGraph) {
 			continue
 		}
 		// Find VM MACs connected to this hypervisor (in MAC order, so the
-		// "VMs:" line is the same on every build)
+		// "VMs:" line is the same on every build) and list the IP each VM's
+		// label shows first, so the line and the VM labels agree
 		vmIPs := []string{}
 		vmEdges := graph.Edges[nodeID]
 		for _, vmMAC := range slices.Sorted(maps.Keys(vmEdges)) {
 			if edgeLabel := vmEdges[vmMAC]; edgeLabel == "vNIC" {
-				if ip, ok := ipMap[vmMAC]; ok && ip != "" {
+				if ip := graphLabelIP(graph.SwitchInfo[vmMAC]); ip != "" {
 					vmIPs = append(vmIPs, ip)
 				}
 			}

@@ -331,7 +331,12 @@ func (s *SNMPObject) collectLocalChassisID(ip string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return normalizeChassisID(val), nil
+	// "No Such Object…" is no chassis id: the graph then uses the device IP
+	// instead of merging every switch that answers with the same text
+	if graphIsSNMPException(val) {
+		return "", fmt.Errorf("no lldpLocChassisId: %s", val)
+	}
+	return graphLocalChassisID(val), nil
 }
 
 // collectInterfaces walks IF-MIB with parallel OID groups for speed

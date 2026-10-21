@@ -27,6 +27,13 @@ type DJGraph struct {
 	SwitchInfo map[string]string
 	IDs        map[string]int
 	NodeStatus map[string]string // Phase 8: nodeID → "unreachable" or ""
+
+	// graphSwitches holds the node ids of the polled devices (set by the
+	// graph build): such a node is a switch, whatever its label says.
+	// graphSysText holds the sysName/sysDescr text known for a node (the
+	// polled sysName, LLDP RemSysName and RemSysDesc), never vendor text.
+	graphSwitches map[string]bool
+	graphSysText  map[string]string
 }
 
 // NewDJGraph creates a new graph instance
@@ -403,8 +410,17 @@ var sortGraphData = false
 
 // determineDeviceGroup categorizes devices based on their info
 func (g *DJGraph) determineDeviceGroup(node, info string) string {
-	infoLower := strings.ToLower(info)
-	nodeLower := strings.ToLower(node)
+	// A polled device is grouped by its own name only (server, router or
+	// switch), even when its label is empty.
+	if g.graphSwitches[node] {
+		return graphNameGroup(node, info, true)
+	}
+
+	// An HTTP-confirmed ESXi host is a hypervisor whatever tag its label
+	// has ([ENDPOINT], [LLDP-EP], [WiFi], [BMC]); a switch never is.
+	if graphIsConfirmedESXi(node) && !graphIsSwitchNode(g, node) {
+		return "hypervisor"
+	}
 
 	// Check for Wi-Fi random MAC endpoints
 	if strings.Contains(info, "[WiFi]") {
@@ -446,6 +462,16 @@ func (g *DJGraph) determineDeviceGroup(node, info string) string {
 		return "vm"
 	}
 
+	return graphNameGroup(node, info, false)
+}
+
+// graphNameGroup is the group of an untagged node from its name and label:
+// server, switch or router, else switch when it has a label or is a polled
+// device, else unknown.
+func graphNameGroup(node, info string, polled bool) string {
+	infoLower := strings.ToLower(info)
+	nodeLower := strings.ToLower(node)
+
 	// Check for server indicators
 	if strings.Contains(infoLower, "linux") || strings.Contains(infoLower, "windows") || strings.Contains(infoLower, "server") ||
 		strings.Contains(nodeLower, "linux") || strings.Contains(nodeLower, "windows") || strings.Contains(nodeLower, "server") {
@@ -468,7 +494,7 @@ func (g *DJGraph) determineDeviceGroup(node, info string) string {
 	}
 
 	// Default to "switch" for any discovered device with info
-	if info != "" {
+	if info != "" || polled {
 		return "switch"
 	}
 
@@ -482,12 +508,13 @@ func (g *DJGraph) GenerateZabbixTemplate(node string) []map[string]string {
 		{"name": "Network Generic Device by SNMP"},
 	}
 
-	info, err := g.GetNodeInfo(node)
-	if err != nil || info == "" {
+	// SNR devices by their sysName/sysDescr (polled sysName, LLDP), never by
+	// the vendor text in the label
+	if !g.Nodes[node] {
 		return templates
 	}
 
-	if strings.Contains(info, "SNR") {
+	if strings.Contains(g.graphSysText[node], "SNR") {
 		templates = []map[string]string{
 			{"name": "Template SNR Broadcast-Multicast-Unicast"},
 			{"name": "Template SNR CPU Usage"},
