@@ -1,0 +1,202 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"time"
+)
+
+// ScanSettings holds scanner configuration
+type ScanSettings struct {
+	IPRanges   []string `json:"ipRanges"`
+	Community  string   `json:"community"`
+	Timeout    int      `json:"timeout"` // seconds
+	MaxWorkers int      `json:"maxWorkers"`
+	UsePing    bool     `json:"usePing"`
+}
+
+// SavedData holds all persistent data
+type SavedData struct {
+	Hosts     map[string]*DeviceData `json:"hosts"`
+	Settings  ScanSettings           `json:"settings"`
+	Timestamp time.Time              `json:"timestamp"`
+}
+
+const savedDataFile = "network_data.json"
+
+var (
+	currentSettings      ScanSettings
+	currentSettingsMutex sync.RWMutex
+)
+
+// DefaultSettings returns default scan settings
+func DefaultSettings() ScanSettings {
+	return ScanSettings{
+		IPRanges:   []string{},
+		Community:  "public",
+		Timeout:    20,
+		MaxWorkers: 50,
+		UsePing:    false,
+	}
+}
+
+// GetCurrentSettings returns current settings
+// Falls back to reading swich_ips file if IPRanges is empty
+func GetCurrentSettings() ScanSettings {
+	currentSettingsMutex.RLock()
+	settings := currentSettings
+	currentSettingsMutex.RUnlock()
+
+	// If no saved IP ranges, read from swich_ips file
+	if len(settings.IPRanges) == 0 {
+		if ranges, err := readSwitchIPsFile(); err == nil && len(ranges) > 0 {
+			settings.IPRanges = ranges
+		}
+	}
+
+	return settings
+}
+
+// SetCurrentSettings updates current settings and syncs swich_ips file
+func SetCurrentSettings(s ScanSettings) {
+	currentSettingsMutex.Lock()
+	currentSettings = s
+	currentSettingsMutex.Unlock()
+
+	// Sync IP ranges to swich_ips file
+	if len(s.IPRanges) > 0 {
+		writeSwitchIPsFile(s.IPRanges)
+	}
+}
+
+// readSwitchIPsFile reads IP ranges from swich_ips file
+func readSwitchIPsFile() ([]string, error) {
+	data, err := os.ReadFile("swich_ips")
+	if err != nil {
+		return nil, err
+	}
+	var ranges []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			ranges = append(ranges, line)
+		}
+	}
+	return ranges, nil
+}
+
+// writeSwitchIPsFile writes IP ranges to swich_ips file
+func writeSwitchIPsFile(ranges []string) {
+	content := strings.Join(ranges, "\n") + "\n"
+	os.WriteFile("swich_ips", []byte(content), 0644)
+}
+
+// appendToSwitchIPs adds a single IP to swich_ips file if not already present.
+// Thread-safe with duplicate check. Used by LLDP auto-discovery.
+func appendToSwitchIPs(newIP string) bool {
+	newIP = strings.TrimSpace(newIP)
+	if newIP == "" {
+		return false
+	}
+
+	// Read existing entries and check for duplicates
+	existing, _ := readSwitchIPsFile()
+	for _, entry := range existing {
+		if entry == newIP {
+			return false // already exists
+		}
+	}
+
+	// Append to file
+	f, err := os.OpenFile("swich_ips", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("⚠️ [Discovery] Cannot append to swich_ips: %v\n", err)
+		return false
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "%s\n", newIP)
+	fmt.Printf("📝 [Discovery] Added %s to swich_ips\n", newIP)
+	return true
+}
+
+// LoadSavedData loads saved hosts and settings from file
+func LoadSavedData() (*SavedData, error) {
+	data, err := os.ReadFile(savedDataFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // No saved data
+		}
+		return nil, err
+	}
+
+	var saved SavedData
+	if err := json.Unmarshal(data, &saved); err != nil {
+		return nil, err
+	}
+
+	return &saved, nil
+}
+
+// SaveData saves hosts and settings to file
+func SaveData(hosts map[string]*DeviceData, settings ScanSettings) error {
+	saved := SavedData{
+		Hosts:     hosts,
+		Settings:  settings,
+		Timestamp: time.Now(),
+	}
+
+	data, err := json.MarshalIndent(saved, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(savedDataFile, data, 0644)
+}
+
+// ClearSavedData removes saved data file
+func ClearSavedData() error {
+	err := os.Remove(savedDataFile)
+	if os.IsNotExist(err) {
+		return nil // Already doesn't exist
+	}
+	return err
+}
+
+// HasSavedData checks if saved data exists
+func HasSavedData() bool {
+	_, err := os.Stat(savedDataFile)
+	return err == nil
+}
+
+func init() {
+	// Initialize with defaults
+	currentSettings = DefaultSettings()
+
+	// Load gateway IP from file
+	loadGatewayIP()
+
+	// Try to load saved settings
+	if saved, err := LoadSavedData(); err == nil && saved != nil {
+		currentSettings = saved.Settings
+		fmt.Printf("📂 Loaded settings from %s\n", savedDataFile)
+	}
+}
+
+// loadGatewayIP reads gateway IP from 'gateway_ip' file
+func loadGatewayIP() {
+	data, err := os.ReadFile("gateway_ip")
+	if err != nil {
+		fmt.Println("⚠️  gateway_ip fayl topilmadi! Yarating: echo '172.20.1.254' > gateway_ip")
+		return
+	}
+	ip := strings.TrimSpace(string(data))
+	if ip == "" {
+		fmt.Println("⚠️  gateway_ip fayl bo'sh!")
+		return
+	}
+	gatewayIP = ip
+	fmt.Printf("🌐 Gateway IP yuklandi: %s\n", gatewayIP)
+}

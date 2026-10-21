@@ -1,0 +1,2240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Switch History - Network Monitor</title>
+    <script src="/libs/chart.js"></script>
+    <script src="/libs/chartjs-adapter-date-fns"></script>
+    <link rel="stylesheet" href="/libs/xterm.css">
+    <script src="/libs/xterm.js"></script>
+    <script src="/libs/addon-fit.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* History Page Specific Styles — override global overflow:hidden */
+        body {
+            overflow: auto !important;
+            height: auto !important;
+        }
+
+        .container {
+            overflow: auto !important;
+            height: auto !important;
+        }
+
+        .history-container {
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .filter-panel {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding: 20px;
+            background: #16213e;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #0f3460;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-group label {
+            font-size: 12px;
+            color: #8a9bae;
+            text-transform: uppercase;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 10px 15px;
+            background: #0d1b2a;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+            min-width: 150px;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            border-color: #4A90E2;
+            outline: none;
+        }
+
+        .btn-apply {
+            align-self: flex-end;
+            padding: 10px 25px;
+            background: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-apply:hover {
+            background: #5AA0F2;
+            transform: translateY(-1px);
+        }
+
+        .chart-container {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #0f3460;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .chart-header h2 {
+            color: #e0e0e0;
+            font-size: 18px;
+            margin: 0;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 350px;
+        }
+
+        .state-table-container {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #0f3460;
+        }
+
+        .state-table-container h2 {
+            color: #e0e0e0;
+            font-size: 18px;
+            margin: 0 0 15px 0;
+        }
+
+        .state-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .state-table th {
+            background: #0f3460;
+            color: #8a9bae;
+            text-transform: uppercase;
+            font-size: 11px;
+            padding: 12px 15px;
+            text-align: left;
+        }
+
+        .state-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #0f3460;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .state-table tr:hover {
+            background: rgba(74, 144, 226, 0.1);
+        }
+
+        .status-up {
+            color: #4CAF50;
+            font-weight: 600;
+        }
+
+        .status-down {
+            color: #f44336;
+            font-weight: 600;
+        }
+
+        .loading-overlay {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: #8a9bae;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #0f3460;
+            border-top-color: #4A90E2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #8a9bae;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #4A90E2;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .summary-card .label {
+            font-size: 12px;
+            color: #8a9bae;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .summary-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+
+        .summary-card .value.up {
+            color: #4CAF50;
+        }
+
+        .summary-card .value.down {
+            color: #f44336;
+        }
+
+        /* ===== Switch Port Panel ===== */
+        .switch-panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #0f3460;
+        }
+
+        .switch-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .switch-panel-header h2 {
+            color: #e0e0e0;
+            font-size: 18px;
+            margin: 0;
+        }
+
+        .switch-port-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+        }
+
+        .switch-port-stats span {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .stat-up { background: rgba(76,175,80,0.2); color: #4CAF50; }
+        .stat-down { background: rgba(244,67,54,0.2); color: #f44336; }
+        .stat-admin { background: rgba(255,152,0,0.2); color: #FF9800; }
+
+        .switch-body {
+            background: linear-gradient(180deg, #1a2744 0%, #0f1d33 100%);
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #2a3f5f;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        .switch-body::before {
+            content: '';
+            position: absolute;
+            top: 6px;
+            left: 20px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+            box-shadow: 0 0 6px #4CAF50;
+        }
+
+        .switch-body::after {
+            content: '';
+            position: absolute;
+            top: 6px;
+            left: 36px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4A90E2;
+            box-shadow: 0 0 6px #4A90E2;
+        }
+
+        .port-section {
+            margin-bottom: 12px;
+        }
+
+        .port-section-label {
+            font-size: 10px;
+            color: #5a7a9a;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .port-row {
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+        }
+
+        .port-slot {
+            width: 42px;
+            height: 34px;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.15);
+            font-size: 9px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.9);
+            gap: 1px;
+        }
+
+        .port-slot:hover {
+            transform: scale(1.3);
+            z-index: 10;
+            box-shadow: 0 0 12px rgba(255,255,255,0.3);
+        }
+
+        .port-slot.selected {
+            outline: 2px solid #fff;
+            outline-offset: 1px;
+            transform: scale(1.15);
+        }
+
+        .port-up {
+            background: linear-gradient(180deg, #43A047, #2E7D32);
+            border-color: #4CAF50;
+        }
+
+        .port-down {
+            background: linear-gradient(180deg, #E53935, #B71C1C);
+            border-color: #f44336;
+        }
+
+        .port-admin-down {
+            background: linear-gradient(180deg, #FB8C00, #E65100);
+            border-color: #FF9800;
+        }
+
+        .port-no-data {
+            background: linear-gradient(180deg, #455A64, #37474F);
+            border-color: #546E7A;
+        }
+
+        .port-slot .port-num {
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        .port-slot .port-tag {
+            font-size: 8px;
+            line-height: 1;
+            opacity: 0.95;
+            margin-top: 0;
+            font-weight: 800;
+        }
+
+        .port-uplink {
+            width: 56px;
+            height: 38px;
+            border-width: 2px;
+        }
+
+        .port-uplink .port-num {
+            font-size: 11px;
+        }
+
+        .port-uplink .port-tag {
+            font-size: 9px;
+        }
+
+        /* Port Tooltip */
+        .port-tooltip {
+            display: none;
+            position: fixed;
+            background: #0d1b2a;
+            border: 1px solid #4A90E2;
+            border-radius: 8px;
+            padding: 12px 14px;
+            z-index: 10000;
+            min-width: 220px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            pointer-events: none;
+        }
+
+        .port-tooltip.visible {
+            display: block;
+        }
+
+        .port-tooltip .tt-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #e0e0e0;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #0f3460;
+            padding-bottom: 6px;
+        }
+
+        .port-tooltip .tt-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            padding: 2px 0;
+        }
+
+        .port-tooltip .tt-label {
+            color: #6c8ab0;
+        }
+
+        .port-tooltip .tt-value {
+            color: #e0e0e0;
+            font-weight: 600;
+        }
+
+        /* Switch Legend */
+        .switch-legend {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .switch-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #8a9bae;
+        }
+
+        .switch-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        /* ===== Connect Button ===== */
+        .btn-connect {
+            padding: 5px 14px;
+            background: linear-gradient(135deg, #1565C0, #0D47A1);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn-connect:hover {
+            background: linear-gradient(135deg, #1976D2, #1565C0);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(21,101,192,0.4);
+        }
+
+        /* ===== Connection Modal ===== */
+        .conn-modal-backdrop {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.6);
+            z-index: 20000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .conn-modal {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+            width: 440px;
+            animation: slideIn 0.2s ease;
+        }
+
+        .conn-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #0f3460;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .conn-modal-header h3 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 16px;
+        }
+
+        .conn-modal-body {
+            padding: 20px;
+        }
+
+        .port-scan-results {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .port-scan-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+
+        .port-scan-item.open {
+            background: rgba(76,175,80,0.15);
+            color: #4CAF50;
+            border-color: rgba(76,175,80,0.3);
+        }
+
+        .port-scan-item.open:hover {
+            background: rgba(76,175,80,0.25);
+        }
+
+        .port-scan-item.closed {
+            background: rgba(244,67,54,0.1);
+            color: #e57373;
+        }
+
+        .port-scan-item.selected {
+            border-color: #4A90E2;
+            background: rgba(74,144,226,0.2);
+            color: #64B5F6;
+        }
+
+        .port-scan-item.scanning {
+            background: rgba(255,255,255,0.05);
+            color: #8a9bae;
+        }
+
+        .conn-form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .conn-form-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .conn-form-group label {
+            font-size: 11px;
+            color: #6c8ab0;
+            text-transform: uppercase;
+        }
+
+        .conn-form-group input,
+        .conn-form-group select {
+            padding: 8px 12px;
+            background: #0d1b2a;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .conn-form-group input:focus,
+        .conn-form-group select:focus {
+            border-color: #4A90E2;
+        }
+
+        .conn-modal-footer {
+            padding: 12px 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #0f3460;
+        }
+
+        /* ===== Terminal Container (Floating) ===== */
+        .terminal-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 700px;
+            height: 450px;
+            background: #16213e;
+            border-radius: 12px;
+            padding: 0;
+            border: 1px solid #0f3460;
+            overflow: hidden;
+            z-index: 15000;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+            display: flex;
+            flex-direction: column;
+            resize: both;
+            min-width: 400px;
+            min-height: 250px;
+        }
+
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 14px;
+            background: linear-gradient(135deg, #0f3460, #1a2744);
+            cursor: move;
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .terminal-header h3 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .terminal-header .conn-info {
+            font-size: 10px;
+            color: #8a9bae;
+        }
+
+        .terminal-actions {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .terminal-actions button {
+            padding: 3px 8px;
+            font-size: 10px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-disconnect {
+            background: rgba(244,67,54,0.3);
+            color: #ef9a9a;
+        }
+
+        .btn-disconnect:hover {
+            background: rgba(244,67,54,0.5);
+        }
+
+        .btn-minimize {
+            background: rgba(255,193,7,0.3);
+            color: #FFD54F;
+        }
+
+        .btn-minimize:hover {
+            background: rgba(255,193,7,0.5);
+        }
+
+        .btn-maximize {
+            background: rgba(76,175,80,0.3);
+            color: #81C784;
+        }
+
+        .btn-maximize:hover {
+            background: rgba(76,175,80,0.5);
+        }
+
+        #terminalBox {
+            flex: 1;
+            padding: 4px;
+            overflow: hidden;
+        }
+
+        .terminal-container.minimized {
+            height: 38px !important;
+            min-height: 38px;
+            resize: none;
+        }
+
+        .terminal-container.minimized #terminalBox {
+            display: none;
+        }
+
+        /* Custom Chart Legend — full port names */
+        .custom-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px 6px;
+            padding: 10px 0;
+            margin-top: 8px;
+            overflow: visible;
+        }
+        .cleg-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            color: #c0c8d4;
+            cursor: pointer;
+            padding: 1px 3px;
+            border-radius: 3px;
+            transition: opacity 0.2s;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            white-space: nowrap;
+            max-width: none !important;
+        }
+        .cleg-item:hover { background: rgba(74,144,226,0.15); }
+        .cleg-box {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container" style="height: auto; min-height: 100vh;">
+        <header>
+            <h1>📊 Switch History</h1>
+            <div class="stats">
+                <a href="/" class="back-link">← Back to Topology</a>
+            </div>
+        </header>
+
+        <div class="history-container">
+            <!-- Filter Panel -->
+            <div class="filter-panel">
+                <div class="filter-group">
+                    <label>Device IP</label>
+                    <select id="deviceSelect">
+                        <option value="">Select Device...</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Timeframe</label>
+                    <select id="timeframeSelect">
+                        <option value="1">Last 1 Hour</option>
+                        <option value="6">Last 6 Hours</option>
+                        <option value="24" selected>Last 24 Hours</option>
+                        <option value="168">Last 7 Days</option>
+                        <option value="720">Last 30 Days</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Port</label>
+                    <select id="portSelect">
+                        <option value="all">All Ports</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Metric</label>
+                    <select id="metricSelect">
+                        <option value="traffic">Traffic (bps)</option>
+                        <option value="errors">Errors</option>
+                        <option value="discards">Discards</option>
+                    </select>
+                </div>
+
+                <button class="btn-apply" onclick="loadHistory()">📈 Apply</button>
+            </div>
+
+            <!-- Switch Port Panel -->
+            <div class="switch-panel" id="switchPanel" style="display: none;">
+                <div class="switch-panel-header">
+                    <h2>🖧 <span id="switchName">Switch</span></h2>
+                    <div class="switch-port-stats">
+                        <span class="stat-up" id="statUp">0 Up</span>
+                        <span class="stat-down" id="statDown">0 Down</span>
+                        <span class="stat-admin" id="statAdmin">0 Admin↓</span>
+                        <button class="btn-connect" id="btnConnect" onclick="openConnectModal()">🔌 Connect</button>
+                    </div>
+                </div>
+                <div class="switch-body" id="switchBody">
+                    <!-- Ports rendered by JS -->
+                </div>
+                <div class="switch-legend">
+                    <div class="switch-legend-item"><div class="switch-legend-dot" style="background:#4CAF50;"></div> Up</div>
+                    <div class="switch-legend-item"><div class="switch-legend-dot" style="background:#f44336;"></div> Down</div>
+                    <div class="switch-legend-item"><div class="switch-legend-dot" style="background:#FF9800;"></div> Admin Down</div>
+                    <div class="switch-legend-item"><div class="switch-legend-dot" style="background:#546E7A;"></div> No Data</div>
+                    <div class="switch-legend-item"><b style="color:#4A90E2;font-size:9px;">[T]</b> Trunk</div>
+                    <div class="switch-legend-item"><b style="color:#9C27B0;font-size:9px;">[V]</b> Access VLAN</div>
+                </div>
+            </div>
+
+            <!-- Port Tooltip -->
+            <div class="port-tooltip" id="portTooltip">
+                <div class="tt-name" id="ttName"></div>
+                <div class="tt-row" id="ttDescRow"><span class="tt-label">Description</span><span class="tt-value" id="ttDesc" style="color:#64B5F6">—</span></div>
+                <div class="tt-row"><span class="tt-label">Status</span><span class="tt-value" id="ttStatus"></span></div>
+                <div class="tt-row"><span class="tt-label">Speed</span><span class="tt-value" id="ttSpeed"></span></div>
+                <div class="tt-row"><span class="tt-label">VLAN</span><span class="tt-value" id="ttVlan"></span></div>
+                <div class="tt-row"><span class="tt-label">Traffic</span><span class="tt-value" id="ttTraffic"></span></div>
+                <div class="tt-row"><span class="tt-label">Errors</span><span class="tt-value" id="ttErrors"></span></div>
+            </div>
+
+            <!-- Terminal Container (Floating Window) -->
+            <div class="terminal-container" id="terminalContainer" style="display:none;">
+                <div class="terminal-header" id="terminalHeader">
+                    <h3>💻 <span id="termTitle">Terminal</span></h3>
+                    <div class="terminal-actions">
+                        <span class="conn-info" id="termInfo"></span>
+                        <button class="btn-minimize" onclick="toggleMinimize()" title="Minimize">―</button>
+                        <button class="btn-maximize" onclick="toggleMaximize()" title="Maximize">□</button>
+                        <button class="btn-disconnect" onclick="disconnectTerminal()">✖</button>
+                    </div>
+                </div>
+                <div id="terminalBox"></div>
+            </div>
+
+            <!-- Connection Modal (hidden) -->
+            <div class="conn-modal-backdrop" id="connModal" style="display:none;">
+                <div class="conn-modal">
+                    <div class="conn-modal-header">
+                        <h3>🔌 Connect to <span id="connDeviceName"></span></h3>
+                        <button class="close-btn" onclick="closeConnectModal()">✖</button>
+                    </div>
+                    <div class="conn-modal-body">
+                        <div class="port-scan-results" id="portScanResults">
+                            <div class="port-scan-item scanning">⏳ Scanning ports...</div>
+                        </div>
+
+                        <div class="conn-form-row">
+                            <div class="conn-form-group">
+                                <label>Protocol</label>
+                                <select id="connProto" onchange="onProtoChange()">
+                                    <option value="ssh">SSH</option>
+                                    <option value="telnet">Telnet</option>
+                                    <option value="http">HTTP (Web)</option>
+                                    <option value="https">HTTPS (Web)</option>
+                                    <option value="custom">Custom...</option>
+                                </select>
+                            </div>
+                            <div class="conn-form-group">
+                                <label>Port</label>
+                                <input type="number" id="connPort" value="22">
+                            </div>
+                        </div>
+
+                        <div class="conn-form-row" id="credentialsRow">
+                            <div class="conn-form-group">
+                                <label>Username</label>
+                                <input type="text" id="connUser" placeholder="admin" autocomplete="username">
+                            </div>
+                            <div class="conn-form-group">
+                                <label>Password</label>
+                                <input type="password" id="connPass" placeholder="••••••" autocomplete="current-password">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="conn-modal-footer">
+                        <button class="btn-secondary" onclick="closeConnectModal()">Cancel</button>
+                        <button class="btn-primary" onclick="doConnect()">🔌 Connect</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="summary-cards" id="summaryCards">
+                <div class="summary-card">
+                    <div class="label">Average Download</div>
+                    <div class="value" id="avgIn">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">Average Upload</div>
+                    <div class="value" id="avgOut">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">Total Errors</div>
+                    <div class="value" id="totalErrors">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">Data Points</div>
+                    <div class="value" id="dataPoints">-</div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h2>📈 Traffic Over Time</h2>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="trafficChart"></canvas>
+                </div>
+                <!-- Custom HTML Legend (full port names) -->
+                <div id="chartLegend" class="custom-legend"></div>
+                <div id="chartLoading" class="loading-overlay" style="display: none;">
+                    <div class="spinner"></div>
+                </div>
+                <div id="chartEmpty" class="empty-state" style="display: none;">
+                    <div class="icon">📭</div>
+                    <p>No data found for selected timeframe</p>
+                </div>
+            </div>
+
+            <!-- Phase 14: Tab Navigation -->
+            <div style="display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid #0f3460;">
+                <button class="history-tab active" id="tabTraffic" onclick="switchTab('traffic')">📊 Traffic History</button>
+                <button class="history-tab" id="tabEvents" onclick="switchTab('events')">🔌 Port Events</button>
+            </div>
+
+            <style>
+                .history-tab {
+                    padding: 12px 24px; background: transparent; border: none; color: #8a9bae;
+                    font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+                    border-bottom: 3px solid transparent; margin-bottom: -2px;
+                }
+                .history-tab:hover { color: #e0e0e0; }
+                .history-tab.active { color: #4A90E2; border-bottom-color: #4A90E2; }
+                .tab-content { display: none; }
+                .tab-content.active { display: block; }
+                .event-filter-bar { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:15px; }
+                .event-filter-bar label { font-size:12px; color:#8a9bae; display:flex; align-items:center; gap:5px; cursor:pointer; }
+                .event-filter-bar input[type=checkbox] { cursor:pointer; }
+                .event-actions { display:flex; gap:10px; margin-left:auto; }
+                .event-actions button { padding:8px 16px; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:12px; }
+                .btn-clear-all { background:rgba(244,67,54,0.3); color:#ef9a9a; }
+                .btn-clear-all:hover { background:rgba(244,67,54,0.5); }
+                .btn-refresh-events { background:rgba(74,144,226,0.3); color:#64B5F6; }
+                .btn-refresh-events:hover { background:rgba(74,144,226,0.5); }
+                .event-table { width:100%; border-collapse:collapse; }
+                .event-table th { background:#0f3460; color:#8a9bae; text-transform:uppercase; font-size:11px; padding:10px 12px; text-align:left; }
+                .event-table td { padding:10px 12px; border-bottom:1px solid #0f3460; color:#e0e0e0; font-size:13px; }
+                .event-table tr:hover { background:rgba(74,144,226,0.08); }
+                .evt-port_down, .evt-host_down, .evt-unreachable { color:#f44336; }
+                .evt-port_up, .evt-host_up, .evt-restored { color:#4CAF50; }
+                .evt-join { color:#2196F3; }
+                .evt-leave { color:#FF9800; }
+                .evt-anomaly { color:#FF5252; }
+                .evt-fixed { color:#66BB6A; }
+                .event-stats-bar { display:flex; gap:15px; margin-bottom:15px; }
+                .event-stat-card { background:#0d1b2a; padding:12px 18px; border-radius:8px; border:1px solid #0f3460; min-width:120px; }
+                .event-stat-card .es-label { font-size:10px; color:#6c8ab0; text-transform:uppercase; }
+                .event-stat-card .es-value { font-size:22px; font-weight:700; color:#e0e0e0; margin-top:4px; }
+            </style>
+
+            <!-- Tab 1: Traffic History (existing content) -->
+            <div class="tab-content active" id="contentTraffic">
+                <!-- State History Table -->
+                <div class="state-table-container">
+                    <h2>🔄 Port State Changes</h2>
+                    <table class="state-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Port</th>
+                                <th>Change Type</th>
+                                <th>Old Value → New Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stateTableBody">
+                            <tr>
+                                <td colspan="4" class="empty-state">Select a device and click Apply</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 2: Port Events (Phase 14) -->
+            <div class="tab-content" id="contentEvents">
+                <div class="event-filter-bar">
+                    <label><input type="checkbox" value="port_down" checked onchange="loadPortEvents()"> 🔴 Port DOWN</label>
+                    <label><input type="checkbox" value="port_up" checked onchange="loadPortEvents()"> 🟢 Port UP</label>
+                    <label><input type="checkbox" value="host_down" checked onchange="loadPortEvents()"> ❌ Host DOWN</label>
+                    <label><input type="checkbox" value="host_up" checked onchange="loadPortEvents()"> ✅ Host UP</label>
+                    <label><input type="checkbox" value="unreachable" checked onchange="loadPortEvents()"> 🔴 Unreachable</label>
+                    <label><input type="checkbox" value="restored" checked onchange="loadPortEvents()"> 🟢 Restored</label>
+                    <label><input type="checkbox" value="anomaly" checked onchange="loadPortEvents()"> ⚠️ Anomaly</label>
+                    <label><input type="checkbox" value="fixed" checked onchange="loadPortEvents()"> ✅ Fixed</label>
+                    <label><input type="checkbox" value="join" onchange="loadPortEvents()"> ➕ Join</label>
+                    <label><input type="checkbox" value="leave" onchange="loadPortEvents()"> ➖ Leave</label>
+                    <div class="event-actions">
+                        <button class="btn-refresh-events" onclick="loadPortEvents()">🔄 Refresh</button>
+                        <button class="btn-clear-all" onclick="clearAllEvents()">🗑️ Clear All</button>
+                    </div>
+                </div>
+
+                <div class="event-stats-bar" id="eventStatsBar">
+                    <div class="event-stat-card"><div class="es-label">Total Events</div><div class="es-value" id="esTotalEvents">—</div></div>
+                    <div class="event-stat-card"><div class="es-label">Port Down</div><div class="es-value" style="color:#f44336" id="esPortDown">—</div></div>
+                    <div class="event-stat-card"><div class="es-label">Unreachable</div><div class="es-value" style="color:#FF9800" id="esUnreachable">—</div></div>
+                    <div class="event-stat-card"><div class="es-label">Longest Outage</div><div class="es-value" id="esLongestOutage">—</div></div>
+                </div>
+
+                <div class="state-table-container">
+                    <h2>📋 Event History</h2>
+                    <table class="event-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Port</th>
+                                <th>Duration</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventTableBody">
+                            <tr><td colspan="5" class="empty-state">Select a device and switch to Port Events tab</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let trafficChart = null;
+        let historyData = [];
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadDevices();
+            initChart();
+
+            // Check for URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const deviceId = urlParams.get('id');
+            if (deviceId) {
+                document.getElementById('deviceSelect').value = deviceId;
+                loadHistory();
+
+                // Auto-open connect modal if connect=true
+                if (urlParams.get('connect') === 'true') {
+                    setTimeout(() => {
+                        openConnectModal();
+                    }, 500);
+                }
+            }
+        });
+
+        // Load available devices
+        async function loadDevices() {
+            try {
+                const res = await fetch('/api/hosts');
+                const data = await res.json();
+                const select = document.getElementById('deviceSelect');
+
+                if (data.hosts) {
+                    Object.keys(data.hosts).forEach(ip => {
+                        const device = data.hosts[ip];
+                        const opt = document.createElement('option');
+                        opt.value = ip;
+                        opt.textContent = `${device.SysName || ip} (${ip})`;
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to load devices:', err);
+            }
+        }
+
+        // Initialize Chart.js
+        function initChart() {
+            const ctx = document.getElementById('trafficChart').getContext('2d');
+            trafficChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#16213e',
+                            borderColor: '#0f3460',
+                            borderWidth: 1,
+                            titleColor: '#e0e0e0',
+                            bodyColor: '#8a9bae',
+                            callbacks: {
+                                label: function (context) {
+                                    const value = context.parsed.y;
+                                    return `${context.dataset.label}: ${formatSpeed(value)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                displayFormats: {
+                                    minute: 'HH:mm',
+                                    hour: 'HH:mm',
+                                    day: 'MM/dd'
+                                }
+                            },
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#8a9bae', maxTicksLimit: 10 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: {
+                                color: '#8a9bae',
+                                maxTicksLimit: 8,
+                                callback: function (value) {
+                                    return formatSpeed(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Load history data
+        async function loadHistory() {
+            const deviceIP = document.getElementById('deviceSelect').value;
+            const hours = document.getElementById('timeframeSelect').value;
+            const metric = document.getElementById('metricSelect').value;
+
+            if (!deviceIP) {
+                alert('Please select a device');
+                return;
+            }
+
+            showLoading(true);
+
+            try {
+                const res = await fetch(`/api/history?id=${deviceIP}&hours=${hours}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    showEmpty(data.error);
+                    return;
+                }
+
+                historyData = data.data || [];
+
+                if (historyData.length === 0) {
+                    showEmpty('No data found for selected timeframe');
+                    return;
+                }
+
+                // Update chart
+                updateChart(historyData, metric);
+
+                // Update summary
+                updateSummary(historyData);
+
+                // Update port selector
+                updatePortSelector(historyData);
+
+                // Update state table (find status changes)
+                updateStateTable(historyData);
+
+                // Load device detail for switch panel
+                loadDeviceDetail(deviceIP);
+
+                showLoading(false);
+
+            } catch (err) {
+                console.error('Failed to load history:', err);
+                showEmpty('Failed to load data: ' + err.message);
+            }
+        }
+
+        function updateChart(data, metric) {
+            const portData = {};
+            const portTotals = {};
+
+            // Group by port and calculate totals
+            data.forEach(point => {
+                const port = (point.if_name || 'unknown').replace(/"/g, '');
+                if (!portData[port]) {
+                    portData[port] = [];
+                    portTotals[port] = 0;
+                }
+
+                let inVal, outVal;
+                if (metric === 'traffic') {
+                    inVal = point.in_bps || 0;
+                    outVal = point.out_bps || 0;
+                } else if (metric === 'errors') {
+                    inVal = point.in_errors || 0;
+                    outVal = point.out_errors || 0;
+                } else {
+                    inVal = point.in_discards || 0;
+                    outVal = point.out_discards || 0;
+                }
+
+                portData[port].push({
+                    x: new Date(point.time),
+                    in: inVal,
+                    out: outVal
+                });
+                portTotals[port] += inVal + outVal;
+            });
+
+            const selectedPort = document.getElementById('portSelect').value;
+            const datasets = [];
+            const colors = ['#4A90E2', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0'];
+
+            if (selectedPort !== 'all') {
+                // Single port selected
+                const points = portData[selectedPort] || [];
+                if (points.length > 0) {
+                    datasets.push({
+                        label: `${selectedPort} ↓ Download`,
+                        data: points.map(p => ({ x: p.x, y: p.in })),
+                        borderColor: '#4A90E2',
+                        backgroundColor: 'rgba(74, 144, 226, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        borderWidth: 2
+                    });
+                    datasets.push({
+                        label: `${selectedPort} ↑ Upload`,
+                        data: points.map(p => ({ x: p.x, y: p.out })),
+                        borderColor: '#4CAF50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        borderWidth: 2
+                    });
+                }
+            } else {
+                // All ports - show each port individually for anomaly detection
+                const sortedPorts = Object.keys(portTotals)
+                    .sort((a, b) => portTotals[b] - portTotals[a]);
+
+                const allColors = [
+                    '#4A90E2', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0',
+                    '#00BCD4', '#FF5722', '#8BC34A', '#3F51B5', '#FFEB3B',
+                    '#795548', '#607D8B', '#F44336', '#009688', '#CDDC39',
+                    '#673AB7', '#2196F3', '#FFC107', '#00E676', '#FF4081'
+                ];
+
+                sortedPorts.forEach((port, idx) => {
+                    const points = portData[port];
+                    const color = allColors[idx % allColors.length];
+
+                    datasets.push({
+                        label: port,
+                        data: points.map(p => ({ x: p.x, y: p.in + p.out })),
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        borderWidth: 2
+                    });
+                });
+            }
+            trafficChart.data.datasets = datasets;
+            trafficChart.update();
+            renderCustomLegend();
+        }
+
+        // Custom HTML legend — port-status colored, full names
+        const _statusColors = {
+            'up': '#4CAF50', 'down': '#f44336', 'admin-down': '#FF9800',
+            'no-data': '#546E7A', 'trunk': '#42A5F5'
+        };
+        const _statusDots = {
+            'up': '🟢', 'down': '🔴', 'admin-down': '🟠', 'no-data': '⚫', 'trunk': '🔵'
+        };
+        function renderCustomLegend() {
+            const container = document.getElementById('chartLegend');
+            if (!container || !trafficChart) return;
+            const datasets = trafficChart.data.datasets;
+            const map = window._portStatusMap || {};
+            container.innerHTML = datasets.map((ds, i) => {
+                const hidden = trafficChart.getDatasetMeta(i).hidden;
+                const status = map[ds.label] || 'up';
+                const lineColor = ds.borderColor;
+                const statusDot = _statusDots[status] || '';
+                const opacity = hidden ? '0.3' : '1';
+                return `<span class="cleg-item" style="opacity:${opacity}" onclick="toggleDataset(${i})" title="${ds.label} (${status})">
+                    <span class="cleg-box" style="background:${lineColor}"></span>
+                    ${statusDot} ${ds.label}</span>`;
+            }).join('');
+        }
+        function toggleDataset(index) {
+            const meta = trafficChart.getDatasetMeta(index);
+            meta.hidden = !meta.hidden;
+            trafficChart.update();
+            renderCustomLegend();
+        }
+
+        function updateSummary(data) {
+            let totalIn = 0, totalOut = 0, totalErrors = 0;
+
+            data.forEach(p => {
+                totalIn += p.in_bps || 0;
+                totalOut += p.out_bps || 0;
+                totalErrors += (p.in_errors || 0) + (p.out_errors || 0);
+            });
+
+            const avgIn = data.length ? totalIn / data.length : 0;
+            const avgOut = data.length ? totalOut / data.length : 0;
+
+            document.getElementById('avgIn').textContent = formatSpeed(avgIn);
+            document.getElementById('avgOut').textContent = formatSpeed(avgOut);
+            document.getElementById('totalErrors').textContent = totalErrors.toLocaleString();
+            document.getElementById('totalErrors').className = 'value ' + (totalErrors > 0 ? 'down' : 'up');
+            document.getElementById('dataPoints').textContent = data.length.toLocaleString();
+        }
+
+        function updatePortSelector(data) {
+            const ports = new Set();
+            data.forEach(p => ports.add((p.if_name || 'unknown').replace(/"/g, '')));
+
+            const select = document.getElementById('portSelect');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="all">All Ports</option>';
+
+            Array.from(ports).sort().forEach(port => {
+                const opt = document.createElement('option');
+                opt.value = port;
+                opt.textContent = port;
+                select.appendChild(opt);
+            });
+
+            select.value = currentVal || 'all';
+        }
+
+        function updateStateTable(data) {
+            const tbody = document.getElementById('stateTableBody');
+
+            // Detect status changes (simplified - look for error spikes)
+            const changes = [];
+            let prevByPort = {};
+
+            data.forEach(point => {
+                const port = point.if_name;
+                const prev = prevByPort[port];
+
+                if (prev) {
+                    // Check for error changes
+                    if (point.in_errors > prev.in_errors) {
+                        changes.push({
+                            time: point.time,
+                            port: port,
+                            type: 'Error Spike',
+                            old: prev.in_errors,
+                            new: point.in_errors
+                        });
+                    }
+                    // Check for discard changes
+                    if (point.in_discards > prev.in_discards + 100) {
+                        changes.push({
+                            time: point.time,
+                            port: port,
+                            type: 'Discard Spike',
+                            old: prev.in_discards,
+                            new: point.in_discards
+                        });
+                    }
+                }
+
+                prevByPort[port] = point;
+            });
+
+            if (changes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No state changes detected</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = changes.slice(-50).reverse().map(c => `
+                <tr>
+                    <td>${formatTime(c.time)}</td>
+                    <td>${c.port}</td>
+                    <td>${c.type}</td>
+                    <td><span class="status-down">${c.old}</span> → <span class="status-up">${c.new}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function formatSpeed(bps) {
+            if (bps === null || bps === undefined || isNaN(bps)) return '0 bps';
+            bps = Math.abs(bps);
+
+            if (bps >= 1e12) return (bps / 1e12).toFixed(2) + ' Tbps';
+            if (bps >= 1e9) return (bps / 1e9).toFixed(2) + ' Gbps';
+            if (bps >= 1e6) return (bps / 1e6).toFixed(1) + ' Mbps';
+            if (bps >= 1e3) return (bps / 1e3).toFixed(0) + ' Kbps';
+            return Math.round(bps) + ' bps';
+        }
+
+        function formatTime(isoString) {
+            const d = new Date(isoString);
+            return d.toLocaleString('en-GB', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function showLoading(show) {
+            document.getElementById('chartLoading').style.display = show ? 'flex' : 'none';
+            document.getElementById('chartEmpty').style.display = 'none';
+            document.querySelector('.chart-wrapper canvas').style.display = show ? 'none' : 'block';
+        }
+
+        function showEmpty(message) {
+            document.getElementById('chartLoading').style.display = 'none';
+            document.getElementById('chartEmpty').style.display = 'block';
+            document.getElementById('chartEmpty').querySelector('p').textContent = message;
+            document.querySelector('.chart-wrapper canvas').style.display = 'none';
+        }
+
+        // ===== Switch Port Panel =====
+        let deviceDetailData = null;
+        let selectedPortIfDescr = null;
+
+        // Auto-load switch panel when device changes
+        document.getElementById('deviceSelect').addEventListener('change', function() {
+            const ip = this.value;
+            if (ip) {
+                loadDeviceDetail(ip);
+            } else {
+                document.getElementById('switchPanel').style.display = 'none';
+            }
+        });
+
+        async function loadDeviceDetail(deviceIP) {
+            try {
+                const res = await fetch(`/api/device-detail?id=${deviceIP}`);
+                const data = await res.json();
+                if (data.error) {
+                    console.warn('Device detail error:', data.error);
+                    document.getElementById('switchPanel').style.display = 'none';
+                    return;
+                }
+                deviceDetailData = data;
+                renderSwitchPanel(data);
+            } catch (err) {
+                console.error('Failed to load device detail:', err);
+            }
+        }
+
+        function renderSwitchPanel(data) {
+            const panel = document.getElementById('switchPanel');
+            const body = document.getElementById('switchBody');
+            panel.style.display = 'block';
+
+            // Set switch name
+            document.getElementById('switchName').textContent =
+                `${data.sys_name || 'Switch'} (${data.ip})`;
+
+            // Build VLAN lookup: ifIndex -> PortVLAN
+            const vlanMap = {};
+            if (data.port_vlans) {
+                data.port_vlans.forEach(pv => {
+                    vlanMap[pv.port_index] = pv;
+                });
+            }
+
+            // Classify interfaces
+            const virtualPrefixes = ['vlan', 'loopback', 'null', 'inloop', 'register',
+                                     'console', 'meth', 'stack', 'bridge'];
+
+            const physicalPorts = [];
+            const uplinkPorts = [];
+
+            (data.interfaces || []).forEach(iface => {
+                const name = (iface.if_descr || '').toLowerCase();
+
+                // Skip virtual interfaces
+                if (virtualPrefixes.some(p => name.startsWith(p))) return;
+                if (name === '' || name.includes('cpu') || name.includes('aux')) return;
+
+                // Enrich with VLAN data
+                iface._vlan = vlanMap[iface.if_index] || null;
+
+                // Classify: uplink (10G+) vs regular
+                if (name.includes('ten-') || name.includes('tengigabit') ||
+                    name.includes('40ge') || name.includes('100ge') ||
+                    name.includes('xgigabit') || (iface.if_speed >= 10000000000)) {
+                    uplinkPorts.push(iface);
+                } else if (name.includes('gigabit') || name.includes('ethernet') ||
+                           name.includes('ge') || name.includes('fastethernet')) {
+                    physicalPorts.push(iface);
+                } else if (iface.if_speed > 0 && iface.if_speed <= 10000000000) {
+                    physicalPorts.push(iface);
+                }
+            });
+
+            // Sort by extracting port number
+            const sortByPortNum = (a, b) => {
+                const numA = extractPortNum(a.if_descr);
+                const numB = extractPortNum(b.if_descr);
+                return numA - numB;
+            };
+            physicalPorts.sort(sortByPortNum);
+            uplinkPorts.sort(sortByPortNum);
+
+            // Count stats
+            const allPorts = [...physicalPorts, ...uplinkPorts];
+            window._portStatusMap = {};
+            allPorts.forEach(p => {
+                const name = normalizePortName(p.if_descr);
+                const isTrunk = p._vlan && p._vlan.is_trunk;
+                if (p.if_admin_status === 2) window._portStatusMap[name] = 'admin-down';
+                else if (p.if_oper_status === 1) window._portStatusMap[name] = isTrunk ? 'trunk' : 'up';
+                else if (p.if_oper_status === 2) window._portStatusMap[name] = 'down';
+                else window._portStatusMap[name] = 'no-data';
+            });
+            let upCount = 0, downCount = 0, adminDownCount = 0;
+            allPorts.forEach(p => {
+                if (p.if_admin_status === 2) adminDownCount++;
+                else if (p.if_oper_status === 1) upCount++;
+                else downCount++;
+            });
+
+            document.getElementById('statUp').textContent = `${upCount} Up`;
+            document.getElementById('statDown').textContent = `${downCount} Down`;
+            document.getElementById('statAdmin').textContent = `${adminDownCount} Admin↓`;
+
+            // Render
+            body.innerHTML = '';
+
+            if (physicalPorts.length > 0) {
+                const section = document.createElement('div');
+                section.className = 'port-section';
+                section.innerHTML = '<div class="port-section-label">Ethernet Ports</div>';
+
+                // Split into 2 rows: odd ports on top, even on bottom
+                const row1 = document.createElement('div');
+                row1.className = 'port-row';
+                const row2 = document.createElement('div');
+                row2.className = 'port-row';
+
+                physicalPorts.forEach((port, idx) => {
+                    const el = createPortElement(port, false);
+                    if (idx % 2 === 0) row1.appendChild(el);
+                    else row2.appendChild(el);
+                });
+
+                section.appendChild(row1);
+                section.appendChild(row2);
+                body.appendChild(section);
+            }
+
+            if (uplinkPorts.length > 0) {
+                const section = document.createElement('div');
+                section.className = 'port-section';
+                section.innerHTML = '<div class="port-section-label">Uplink Ports (10G+)</div>';
+                const row = document.createElement('div');
+                row.className = 'port-row';
+                uplinkPorts.forEach(port => {
+                    row.appendChild(createPortElement(port, true));
+                });
+                section.appendChild(row);
+                body.appendChild(section);
+            }
+
+            if (allPorts.length === 0) {
+                body.innerHTML = '<div style="text-align:center;color:#5a7a9a;padding:20px;">No physical ports detected</div>';
+            }
+        }
+
+        function createPortElement(port, isUplink) {
+            const el = document.createElement('div');
+            const statusClass = getPortStatusClass(port);
+            el.className = `port-slot ${statusClass} ${isUplink ? 'port-uplink' : ''}`;
+            if (selectedPortIfDescr === port.if_descr) {
+                el.classList.add('selected');
+            }
+
+            // Port number
+            const num = extractPortNum(port.if_descr);
+            const numLabel = num > 0 ? num : port.if_index;
+
+            // VLAN tag
+            let tagText = '';
+            if (port._vlan) {
+                if (port._vlan.is_trunk) {
+                    tagText = 'T';
+                } else if (port._vlan.pvid && port._vlan.pvid > 1) {
+                    tagText = 'V' + port._vlan.pvid;
+                }
+            }
+
+            el.innerHTML = `
+                <span class="port-num">${numLabel}</span>
+                ${tagText ? `<span class="port-tag" style="color:#000">${tagText}</span>` : ''}
+            `;
+
+            // Tooltip
+            el.addEventListener('mouseenter', (e) => showPortTooltip(e, port));
+            el.addEventListener('mousemove', (e) => movePortTooltip(e));
+            el.addEventListener('mouseleave', hidePortTooltip);
+
+            // Click to filter chart
+            el.addEventListener('click', () => {
+                const portName = normalizePortName(port.if_descr);
+                const select = document.getElementById('portSelect');
+
+                // Find matching option
+                let found = false;
+                for (let opt of select.options) {
+                    if (opt.value === portName || opt.value === port.if_descr) {
+                        select.value = opt.value;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found) {
+                    selectedPortIfDescr = port.if_descr;
+                    // Re-render to highlight
+                    if (deviceDetailData) renderSwitchPanel(deviceDetailData);
+                    // Update chart
+                    const metric = document.getElementById('metricSelect').value;
+                    if (historyData.length > 0) updateChart(historyData, metric);
+                }
+            });
+
+            return el;
+        }
+
+        function getPortStatusClass(port) {
+            if (port.if_admin_status === 2) return 'port-admin-down';
+            if (port.if_oper_status === 1) return 'port-up';
+            if (port.if_oper_status === 2) return 'port-down';
+            if (port.if_oper_status > 0) return 'port-down';
+            return 'port-no-data';
+        }
+
+        function extractPortNum(descr) {
+            if (!descr) return 0;
+            // Extract last number from port name: "GigabitEthernet1/0/24" -> 24
+            const m = descr.match(/(\d+)\s*$/);
+            if (m) return parseInt(m[1]);
+            // Try "X/Y/Z" pattern
+            const m2 = descr.match(/(\d+)\/(\d+)\/(\d+)/);
+            if (m2) return parseInt(m2[3]);
+            return 0;
+        }
+
+        function normalizePortName(name) {
+            if (!name) return '';
+            return name.replace(/"/g, '');
+        }
+
+        function showPortTooltip(e, port) {
+            const tt = document.getElementById('portTooltip');
+            document.getElementById('ttName').textContent = port.if_descr;
+
+            // Description (ifAlias)
+            const descEl = document.getElementById('ttDesc');
+            descEl.textContent = (port.if_alias && port.if_alias.length > 0) ? port.if_alias : '—';
+
+            // Status
+            const statusText = port.if_admin_status === 2 ? 'Admin Down' :
+                              port.if_oper_status === 1 ? '✅ Up' :
+                              port.if_oper_status === 2 ? '❌ Down' : 'Unknown';
+            const statusEl = document.getElementById('ttStatus');
+            statusEl.textContent = statusText;
+            statusEl.style.color = port.if_admin_status === 2 ? '#FF9800' :
+                                   port.if_oper_status === 1 ? '#4CAF50' : '#f44336';
+
+            // Speed
+            document.getElementById('ttSpeed').textContent = formatPortSpeed(port.if_speed);
+
+            // VLAN
+            let vlanText = '-';
+            if (port._vlan) {
+                if (port._vlan.is_trunk) {
+                    const cnt = port._vlan.vlans ? port._vlan.vlans.length : 0;
+                    vlanText = `Trunk (${cnt} VLANs)`;
+                } else if (port._vlan.pvid > 0) {
+                    vlanText = `Access VLAN ${port._vlan.pvid}`;
+                }
+            }
+            document.getElementById('ttVlan').textContent = vlanText;
+
+            // Traffic
+            const inBps = port.in_bps || 0;
+            const outBps = port.out_bps || 0;
+            document.getElementById('ttTraffic').textContent =
+                inBps || outBps ? `↓${formatSpeed(inBps)} ↑${formatSpeed(outBps)}` : 'No traffic';
+
+            // Errors
+            const totalErr = (port.in_errors || 0) + (port.out_errors || 0);
+            const totalDisc = (port.in_discards || 0) + (port.out_discards || 0);
+            const errEl = document.getElementById('ttErrors');
+            errEl.textContent = `${totalErr} err / ${totalDisc} disc`;
+            errEl.style.color = totalErr > 0 ? '#f44336' : '#8a9bae';
+
+            tt.classList.add('visible');
+            movePortTooltip(e);
+        }
+
+        function movePortTooltip(e) {
+            const tt = document.getElementById('portTooltip');
+            let x = e.clientX + 15;
+            let y = e.clientY + 15;
+            // Keep within viewport
+            if (x + 240 > window.innerWidth) x = e.clientX - 250;
+            if (y + 150 > window.innerHeight) y = e.clientY - 160;
+            tt.style.left = x + 'px';
+            tt.style.top = y + 'px';
+        }
+
+        function hidePortTooltip() {
+            document.getElementById('portTooltip').classList.remove('visible');
+        }
+
+        function formatPortSpeed(bps) {
+            if (!bps || bps === 0) return 'Unknown';
+            if (bps >= 100000000000) return '100 Gbps';
+            if (bps >= 40000000000) return '40 Gbps';
+            if (bps >= 10000000000) return '10 Gbps';
+            if (bps >= 1000000000) return '1 Gbps';
+            if (bps >= 100000000) return '100 Mbps';
+            if (bps >= 10000000) return '10 Mbps';
+            return formatSpeed(bps);
+        }
+
+        // ===== Web Terminal =====
+        let term = null;
+        let termWs = null;
+        let fitAddon = null;
+        let connectedDeviceIP = null;
+
+        function openConnectModal() {
+            const deviceIP = document.getElementById('deviceSelect').value;
+            if (!deviceIP) {
+                alert('Please select a device first');
+                return;
+            }
+            connectedDeviceIP = deviceIP;
+
+            // Set device name
+            const sel = document.getElementById('deviceSelect');
+            const deviceName = sel.options[sel.selectedIndex].text;
+            document.getElementById('connDeviceName').textContent = deviceName;
+
+            // Show modal
+            document.getElementById('connModal').style.display = 'flex';
+
+            // Start port scan
+            document.getElementById('portScanResults').innerHTML =
+                '<div class="port-scan-item scanning">⏳ Scanning ports...</div>';
+
+            scanDevicePorts(deviceIP);
+        }
+
+        function closeConnectModal() {
+            document.getElementById('connModal').style.display = 'none';
+        }
+
+        async function scanDevicePorts(ip) {
+            try {
+                const res = await fetch(`/api/check-ports?id=${ip}`);
+                const data = await res.json();
+
+                const container = document.getElementById('portScanResults');
+                container.innerHTML = '';
+
+                const protocols = [
+                    { key: 'ssh', name: 'SSH', port: data.ssh_port || 22, open: data.ssh },
+                    { key: 'telnet', name: 'Telnet', port: data.telnet_port || 23, open: data.telnet },
+                    { key: 'http', name: 'HTTP', port: data.http_port || 80, open: data.http },
+                    { key: 'https', name: 'HTTPS', port: data.https_port || 443, open: data.https },
+                ];
+
+                let firstOpen = null;
+
+                protocols.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = `port-scan-item ${p.open ? 'open' : 'closed'}`;
+                    item.innerHTML = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
+                    item.onclick = () => {
+                        document.getElementById('connProto').value = p.key;
+                        document.getElementById('connPort').value = p.port;
+                        onProtoChange();
+                        // Highlight selected
+                        container.querySelectorAll('.port-scan-item').forEach(el => el.classList.remove('selected'));
+                        item.classList.add('selected');
+                    };
+                    container.appendChild(item);
+
+                    if (p.open && !firstOpen) firstOpen = p;
+                });
+
+                // Auto-select first open protocol
+                if (firstOpen) {
+                    document.getElementById('connProto').value = firstOpen.key;
+                    document.getElementById('connPort').value = firstOpen.port;
+                    onProtoChange();
+                }
+
+            } catch (err) {
+                document.getElementById('portScanResults').innerHTML =
+                    '<div class="port-scan-item closed">❌ Port scan failed</div>';
+            }
+        }
+
+        function onProtoChange() {
+            const proto = document.getElementById('connProto').value;
+            const portMap = { ssh: 22, telnet: 23, http: 80, https: 443 };
+            const credRow = document.getElementById('credentialsRow');
+
+            if (proto === 'http' || proto === 'https') {
+                credRow.style.display = 'none';
+            } else {
+                credRow.style.display = 'flex';
+            }
+
+            if (proto !== 'custom' && portMap[proto]) {
+                document.getElementById('connPort').value = portMap[proto];
+            }
+        }
+
+        function doConnect() {
+            const ip = connectedDeviceIP;
+            const proto = document.getElementById('connProto').value;
+            const port = document.getElementById('connPort').value;
+            const user = document.getElementById('connUser').value;
+            const pass = document.getElementById('connPass').value;
+
+            closeConnectModal();
+
+            // Web protocols — open in new tab
+            if (proto === 'http') {
+                window.open(`http://${ip}:${port}`, '_blank');
+                return;
+            }
+            if (proto === 'https') {
+                window.open(`https://${ip}:${port}`, '_blank');
+                return;
+            }
+
+            // SSH / Telnet / Custom — open terminal
+            openTerminal(ip, proto === 'custom' ? 'telnet' : proto, port, user, pass);
+        }
+
+        function openTerminal(ip, proto, port, user, pass) {
+            // Show terminal container
+            const container = document.getElementById('terminalContainer');
+            container.style.display = 'block';
+
+            document.getElementById('termTitle').textContent =
+                `${ip} via ${proto.toUpperCase()}:${port}`;
+            document.getElementById('termInfo').textContent = `${user}@${ip}:${port}`;
+
+            // Cleanup previous terminal
+            if (term) {
+                term.dispose();
+                term = null;
+            }
+            if (termWs) {
+                termWs.close();
+                termWs = null;
+            }
+            document.getElementById('terminalBox').innerHTML = '';
+
+            // Init xterm.js
+            term = new Terminal({
+                cursorBlink: true,
+                fontSize: 14,
+                fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                theme: {
+                    background: '#0d1b2a',
+                    foreground: '#e0e0e0',
+                    cursor: '#4A90E2',
+                    selectionBackground: '#264f78',
+                    black: '#0d1b2a',
+                    red: '#f44336',
+                    green: '#4CAF50',
+                    yellow: '#FF9800',
+                    blue: '#4A90E2',
+                    magenta: '#CE93D8',
+                    cyan: '#4DD0E1',
+                    white: '#e0e0e0',
+                    brightBlack: '#546E7A',
+                    brightRed: '#ef9a9a',
+                    brightGreen: '#81C784',
+                    brightYellow: '#FFB74D',
+                    brightBlue: '#64B5F6',
+                    brightMagenta: '#F48FB1',
+                    brightCyan: '#80DEEA',
+                    brightWhite: '#ffffff',
+                },
+                scrollback: 5000,
+                convertEol: true,
+            });
+
+            fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(document.getElementById('terminalBox'));
+
+            // Slight delay so container is rendered before fitting
+            setTimeout(() => {
+                fitAddon.fit();
+            }, 100);
+
+            // WebSocket connection
+            const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const cols = term.cols;
+            const rows = term.rows;
+            const wsUrl = `${wsProto}//${location.host}/api/terminal?id=${encodeURIComponent(ip)}&proto=${proto}&port=${port}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}&cols=${cols}&rows=${rows}`;
+
+            termWs = new WebSocket(wsUrl);
+            termWs.binaryType = 'arraybuffer';
+
+            termWs.onopen = () => {
+                term.focus();
+            };
+
+            termWs.onmessage = (evt) => {
+                if (evt.data instanceof ArrayBuffer) {
+                    term.write(new Uint8Array(evt.data));
+                } else {
+                    term.write(evt.data);
+                }
+            };
+
+            termWs.onclose = () => {
+                term.write('\r\n\x1b[33m--- Connection closed ---\x1b[0m\r\n');
+            };
+
+            termWs.onerror = () => {
+                term.write('\r\n\x1b[31m--- WebSocket error ---\x1b[0m\r\n');
+            };
+
+            // Forward keypresses to WebSocket
+            term.onData((data) => {
+                if (termWs && termWs.readyState === WebSocket.OPEN) {
+                    termWs.send(data);
+                }
+            });
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                if (fitAddon) {
+                    fitAddon.fit();
+                }
+            });
+
+            // Scroll to terminal
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function disconnectTerminal() {
+            if (termWs) {
+                termWs.close();
+                termWs = null;
+            }
+            if (term) {
+                term.dispose();
+                term = null;
+            }
+            document.getElementById('terminalContainer').style.display = 'none';
+            document.getElementById('terminalBox').innerHTML = '';
+        }
+
+        // ===== Floating Terminal: Drag, Minimize, Maximize =====
+        let isMaximized = false;
+        let savedTermPos = null;
+
+        // Drag by header
+        (function initDrag() {
+            let isDragging = false;
+            let offsetX, offsetY;
+
+            document.addEventListener('mousedown', (e) => {
+                const header = document.getElementById('terminalHeader');
+                if (!header || !header.contains(e.target)) return;
+                // Don't drag on buttons
+                if (e.target.tagName === 'BUTTON') return;
+
+                const container = document.getElementById('terminalContainer');
+                isDragging = true;
+                const rect = container.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const container = document.getElementById('terminalContainer');
+                // Switch from bottom/right to top/left positioning
+                container.style.bottom = 'auto';
+                container.style.right = 'auto';
+                container.style.left = (e.clientX - offsetX) + 'px';
+                container.style.top = (e.clientY - offsetY) + 'px';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+        })();
+
+        function toggleMinimize() {
+            const container = document.getElementById('terminalContainer');
+            container.classList.toggle('minimized');
+            if (!container.classList.contains('minimized') && fitAddon) {
+                setTimeout(() => fitAddon.fit(), 50);
+            }
+        }
+
+        function toggleMaximize() {
+            const container = document.getElementById('terminalContainer');
+
+            if (isMaximized) {
+                // Restore
+                if (savedTermPos) {
+                    container.style.top = savedTermPos.top;
+                    container.style.left = savedTermPos.left;
+                    container.style.bottom = savedTermPos.bottom;
+                    container.style.right = savedTermPos.right;
+                    container.style.width = savedTermPos.width;
+                    container.style.height = savedTermPos.height;
+                }
+                container.style.borderRadius = '12px';
+                isMaximized = false;
+            } else {
+                // Save position
+                savedTermPos = {
+                    top: container.style.top,
+                    left: container.style.left,
+                    bottom: container.style.bottom,
+                    right: container.style.right,
+                    width: container.style.width,
+                    height: container.style.height,
+                };
+                // Maximize
+                container.style.top = '0';
+                container.style.left = '0';
+                container.style.bottom = '0';
+                container.style.right = '0';
+                container.style.width = '100vw';
+                container.style.height = '100vh';
+                container.style.borderRadius = '0';
+                isMaximized = true;
+            }
+
+            container.classList.remove('minimized');
+            if (fitAddon) setTimeout(() => fitAddon.fit(), 100);
+        }
+
+        // Auto-fit terminal on resize
+        if (typeof ResizeObserver !== 'undefined') {
+            const termResizeObs = new ResizeObserver(() => {
+                if (fitAddon && term) {
+                    try { fitAddon.fit(); } catch(e) {}
+                }
+            });
+            // Observe when terminal is shown
+            const origOpenTerminal = openTerminal;
+            openTerminal = function(...args) {
+                origOpenTerminal.apply(this, args);
+                const box = document.getElementById('terminalBox');
+                if (box) termResizeObs.observe(box);
+            };
+        }
+
+        // ============================================================
+        // Phase 14 — Port Events Tab
+        // ============================================================
+
+        function switchTab(tab) {
+            document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            if (tab === 'traffic') {
+                document.getElementById('tabTraffic').classList.add('active');
+                document.getElementById('contentTraffic').classList.add('active');
+            } else {
+                document.getElementById('tabEvents').classList.add('active');
+                document.getElementById('contentEvents').classList.add('active');
+                loadPortEvents();
+            }
+        }
+
+        const eventIcons = {
+            'port_down': '🔴', 'port_up': '🟢', 'host_down': '❌', 'host_up': '✅',
+            'unreachable': '🔴', 'restored': '🟢', 'join': '➕', 'leave': '➖',
+            'anomaly': '⚠️', 'fixed': '✅'
+        };
+
+        async function loadPortEvents() {
+            const ip = document.getElementById('deviceSelect').value;
+            const hours = document.getElementById('timeframeSelect').value;
+            const tbody = document.getElementById('eventTableBody');
+
+            if (!ip) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Select a device first</td></tr>';
+                return;
+            }
+
+            // Get checked event types
+            const types = [];
+            document.querySelectorAll('.event-filter-bar input[type=checkbox]:checked').forEach(cb => {
+                types.push(cb.value);
+            });
+
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="spinner" style="margin:0 auto"></div></td></tr>';
+
+            try {
+                const typeParam = types.length > 0 ? `&type=${types.join(',')}` : '';
+                const resp = await fetch(`/api/port-events?ip=${ip}&hours=${hours}${typeParam}`);
+                const data = await resp.json();
+
+                if (!data.events || data.events.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No events found for this period</td></tr>';
+                    updateEventStats(null);
+                    return;
+                }
+
+                tbody.innerHTML = data.events.map(evt => {
+                    const icon = eventIcons[evt.type] || '❓';
+                    const time = new Date(evt.time).toLocaleString();
+                    const port = evt.port > 0 ? evt.port : '—';
+                    let duration = '—';
+                    if (evt.duration_s !== null && evt.duration_s !== undefined && evt.duration_s > 0) {
+                        if (evt.duration_s < 60) duration = `${evt.duration_s}s`;
+                        else if (evt.duration_s < 3600) duration = `${Math.floor(evt.duration_s/60)}m ${evt.duration_s%60}s`;
+                        else duration = `${Math.floor(evt.duration_s/3600)}h ${Math.floor((evt.duration_s%3600)/60)}m`;
+                    }
+                    return `<tr>
+                        <td style="white-space:nowrap">${time}</td>
+                        <td class="evt-${evt.type}">${icon} ${evt.type}</td>
+                        <td>${port}</td>
+                        <td>${duration}</td>
+                        <td>${evt.message || '—'}</td>
+                    </tr>`;
+                }).join('');
+
+                // Load stats
+                loadEventStats(ip, hours);
+
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#f44336">Error: ${err.message}</td></tr>`;
+            }
+        }
+
+        async function loadEventStats(ip, hours) {
+            try {
+                const resp = await fetch(`/api/port-events/stats?ip=${ip}&hours=${hours}`);
+                const stats = await resp.json();
+                updateEventStats(stats);
+            } catch (e) {
+                updateEventStats(null);
+            }
+        }
+
+        function updateEventStats(stats) {
+            if (!stats) {
+                document.getElementById('esTotalEvents').textContent = '—';
+                document.getElementById('esPortDown').textContent = '—';
+                document.getElementById('esUnreachable').textContent = '—';
+                document.getElementById('esLongestOutage').textContent = '—';
+                return;
+            }
+            document.getElementById('esTotalEvents').textContent = stats.port_down_count + stats.unreachable_count;
+            document.getElementById('esPortDown').textContent = stats.port_down_count;
+            document.getElementById('esUnreachable').textContent = stats.unreachable_count;
+            if (stats.longest_outage_minutes > 0) {
+                const min = stats.longest_outage_minutes;
+                document.getElementById('esLongestOutage').textContent = min < 60 
+                    ? `${min.toFixed(1)}m` 
+                    : `${(min/60).toFixed(1)}h`;
+            } else {
+                document.getElementById('esLongestOutage').textContent = '—';
+            }
+        }
+
+        async function clearAllEvents() {
+            if (!confirm('Are you sure you want to delete ALL network events from InfluxDB?')) return;
+            try {
+                const resp = await fetch('/api/port-events', { method: 'DELETE' });
+                const data = await resp.json();
+                alert(data.message || 'Cleared');
+                loadPortEvents();
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+    </script>
+</body>
+
+</html>

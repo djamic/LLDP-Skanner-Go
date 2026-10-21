@@ -1,0 +1,14 @@
+[Unit]
+Description=Telegram Notification Bot for LLDP Network Scanner
+After=network.target
+
+[Service]
+Type=simple
+User=qosim
+WorkingDirectory=/home/qosim/Desktop/lldp_go/bot
+ExecStart=/bin/bash /home/qosim/Desktop/lldp_go/bot/run_bot.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

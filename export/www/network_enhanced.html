@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Topology - Live Traffic</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            overflow: hidden;
+        }
+
+        #network {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(30, 30, 50, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        .controls h3 {
+            margin: 0 0 10px 0;
+            color: #fff;
+            font-size: 16px;
+        }
+
+        .controls button {
+            margin: 5px;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            background: #0f3460;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            border: 1px solid #e94560;
+        }
+
+        .controls button:hover {
+            background: #e94560;
+        }
+
+        .status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 15px;
+            border-radius: 8px;
+            color: #00ff88;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 1000;
+            border: 1px solid #00ff88;
+        }
+
+        .node {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .node:hover .node-circle {
+            stroke: #fff;
+            stroke-width: 4px;
+        }
+
+        .node-circle {
+            stroke: #fff;
+            stroke-width: 2px;
+            fill: #333;
+        }
+
+        .node-circle.snr {
+            fill: #4CAF50;
+        }
+
+        .node-circle.hpe {
+            fill: #2196F3;
+        }
+
+        .node-circle.unknown {
+            fill: #9E9E9E;
+        }
+
+        /* Central Switch Style */
+        .node-circle.central {
+            fill: #ffd700;
+            /* Gold */
+            stroke: #ff5722;
+            stroke-width: 4px;
+            filter: drop-shadow(0 0 10px #ffd700);
+            animation: pulse-gold 2s infinite;
+        }
+
+        @keyframes pulse-gold {
+            0% {
+                stroke-width: 4px;
+                stroke-opacity: 1;
+            }
+
+            50% {
+                stroke-width: 8px;
+                stroke-opacity: 0.5;
+            }
+
+            100% {
+                stroke-width: 4px;
+                stroke-opacity: 1;
+            }
+        }
+
+        .node-label {
+            font-size: 12px;
+            font-weight: bold;
+            fill: #fff;
+            text-anchor: middle;
+            pointer-events: none;
+            text-shadow: 0 0 3px #000;
+        }
+
+        .node-ip {
+            font-size: 10px;
+            fill: #aaa;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
+        /* --- Link Styles --- */
+        .link {
+            stroke: #555;
+            stroke-width: 2px;
+            stroke-opacity: 0.6;
+            transition: stroke 0.5s, stroke-width 0.5s;
+        }
+
+        .link:hover {
+            stroke-width: 4px;
+            stroke-opacity: 1;
+        }
+
+        /* Fiber - Neon Glow */
+        .link.fiber {
+            stroke: #00f2ff;
+            stroke-width: 2.5px;
+            stroke-opacity: 0.8;
+            filter: drop-shadow(0 0 2px #00f2ff);
+        }
+
+        /* Copper - Solid Orange/Bronze */
+        .link.copper {
+            stroke: #ff9d00;
+            stroke-width: 2.5px;
+            stroke-opacity: 0.8;
+        }
+
+        /* WiFi - Dashed Purple */
+        .link.wifi {
+            stroke: #d500f9;
+            stroke-width: 2px;
+            stroke-dasharray: 5, 5;
+            stroke-opacity: 0.8;
+        }
+
+        .port-label {
+            font-size: 11px;
+            font-weight: bold;
+            fill: #ffd700;
+            text-anchor: middle;
+            pointer-events: none;
+            text-shadow: 0px 0px 3px #000, 0px 0px 5px #000;
+            opacity: 1;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(10, 10, 20, 0.95);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1001;
+            min-width: 200px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: opacity 0.2s;
+        }
+
+        .tooltip h4 {
+            margin: 0 0 10px 0;
+            color: #00f2ff;
+            font-size: 14px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            color: #aaa;
+        }
+
+        /* Device List Sidebar */
+        .device-list {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            max-height: 80vh;
+            background: rgba(30, 30, 50, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .device-list h3 {
+            margin: 0 0 15px 0;
+            color: #fff;
+            font-size: 16px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+
+        .device-item {
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: rgba(15, 52, 96, 0.5);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .device-item:hover {
+            background: rgba(233, 69, 96, 0.3);
+            border-left-color: #e94560;
+        }
+
+        .device-item.active {
+            background: rgba(233, 69, 96, 0.5);
+            border-left-color: #e94560;
+        }
+
+        .device-item .device-ip {
+            font-weight: bold;
+            color: #00ff88;
+            font-size: 12px;
+        }
+
+        .device-item .device-name {
+            font-size: 10px;
+            color: #aaa;
+            margin-top: 2px;
+        }
+
+        .stat-value {
+            color: #0f0;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(30, 30, 50, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 12px;
+            color: #ccc;
+        }
+
+        .legend-line {
+            width: 30px;
+            height: 3px;
+            margin-right: 10px;
+        }
+
+        @keyframes pulse {
+            0% {
+                r: 30;
+                opacity: 1;
+                stroke-width: 2px;
+            }
+
+            50% {
+                r: 40;
+                opacity: 0.5;
+                stroke-width: 0px;
+            }
+
+            100% {
+                r: 30;
+                opacity: 1;
+                stroke-width: 2px;
+            }
+        }
+
+        .new-node circle {
+            animation: pulse 1s ease-in-out 3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="controls">
+        <h3>🔧 Network Controls</h3>
+        <button onclick="resetZoom()">Reset View</button>
+        <button onclick="debugLabels()">Debug Labels</button>
+    </div>
+
+    <div class="status" id="status">
+        waiting for data...
+    </div>
+
+    <div class="device-list">
+        <h3>📡 Devices (<span id="device-count">0</span>)</h3>
+        <div id="device-list-items"></div>
+    </div>
+
+    <div class="legend">
+        <h4>📊 Link Types</h4>
+        <div class="legend-item">
+            <div class="legend-line" style="background: #00f2ff; box-shadow: 0 0 5px #00f2ff;"></div>
+            <span>Fiber (Optical)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-line" style="background: #ff9d00;"></div>
+            <span>Copper (Ethernet)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-line" style="background: #d500f9; border-bottom: 2px dashed #d500f9; height: 0;"></div>
+            <span>WiFi / Wireless</span>
+        </div>
+    </div>
+
+    <svg id="network"></svg>
+
+    <script>
+        // Configuration
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // State tracking
+        let currentNodes = new Map();
+        let currentEdges = new Map();
+        let trafficData = {}; // Stores latest API data
+        let coreSwitchId = null; // Stores core switch ID
+
+        // D3 Setup
+        const svg = d3.select("#network")
+            .attr("width", width)
+            .attr("height", height);
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 5])
+            .on("zoom", (event) => g.attr("transform", event.transform));
+
+        svg.call(zoom);
+
+        const g = svg.append("g");
+
+        // Groups (Order matters for Z-index)
+        const linkGroup = g.append("g").attr("class", "links");
+        const nodeGroup = g.append("g").attr("class", "nodes");
+        const labelGroup = g.append("g").attr("class", "labels"); // Labels on TOP
+
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        const simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(d => d.id).distance(150))
+            .force("charge", d3.forceManyBody().strength(-800))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collide", d3.forceCollide().radius(50));
+
+        // --- Data Fetching ---
+
+        async function fetchTopology() {
+            try {
+                // Fetch Topology and Core Switch info in parallel
+                const [topoRes, coreRes] = await Promise.all([
+                    fetch("json/analysis_graph_enhanced.json?" + Date.now()),
+                    fetch("json/core_switch.json?" + Date.now()).catch(() => null)
+                ]);
+
+                if (coreRes && coreRes.ok) {
+                    const coreData = await coreRes.json();
+                    coreSwitchId = coreData.core_switch;
+                }
+
+                const data = await topoRes.json();
+                updateTopology(data);
+
+                // Build overlay after topology update
+                updateCoreStyling();
+
+            } catch (e) {
+                console.error("Topology Error:", e);
+            }
+        }
+
+        function updateCoreStyling() {
+            // Apply 'central' class and size to the identified core switch
+            const nodes = d3.selectAll('.node-circle');
+
+            nodes.classed('central', d => d.id === coreSwitchId)
+                .transition().duration(500)
+                .attr('r', d => d.id === coreSwitchId ? 50 : 30);
+        }
+
+        async function fetchTraffic() {
+            try {
+                const response = await fetch("/api/traffic");
+                trafficData = await response.json();
+                console.log("Traffic Data Received:", trafficData); // Debug Log
+                updateStyles(); // Update colors/stats without moving nodes
+
+                // Update stats counter
+                document.getElementById('status').textContent =
+                    `⚡ Live: ${Object.keys(trafficData).length} active switches monitored`;
+            } catch (e) {
+                console.error("Traffic API Error:", e);
+            }
+        }
+
+        // --- Graph Logic ---
+
+        function updateTopology(newData) {
+            let changed = false;
+
+            // Add new nodes
+            newData.nodes.forEach(node => {
+                if (!currentNodes.has(node.id)) {
+                    node.x = width / 2 + (Math.random() - 0.5) * 50;
+                    node.y = height / 2 + (Math.random() - 0.5) * 50;
+
+                    // Determine Type
+                    const name = (node.name || '').toLowerCase();
+                    node.type = name.includes('snr') ? 'snr' : (name.includes('hpe') ? 'hpe' : 'unknown');
+
+                    currentNodes.set(node.id, node);
+                    changed = true;
+                }
+            });
+
+            // Add new edges
+            newData.edges.forEach(edge => {
+                const key = `${edge.source}-${edge.target}`;
+                if (!currentEdges.has(key)) {
+                    currentEdges.set(key, edge);
+                    changed = true;
+                }
+            });
+
+            if (changed) {
+                renderGraph();
+                updateDeviceList(); // Update device list when topology changes
+            }
+        }
+
+        // Update device list sidebar
+        function updateDeviceList() {
+            const deviceListContainer = document.getElementById('device-list-items');
+            const deviceCountEl = document.getElementById('device-count');
+
+            if (!deviceListContainer) return;
+
+            const devices = Array.from(currentNodes.values()).sort((a, b) => a.id.localeCompare(b.id));
+            deviceCountEl.textContent = devices.length;
+
+            deviceListContainer.innerHTML = devices.map(device => `
+                <div class="device-item" data-device-id="${device.id}" onclick="focusOnDevice('${device.id}')">
+                    <div class="device-ip">${device.id}</div>
+                    <div class="device-name">${device.name || 'Unknown Device'}</div>
+                </div>
+            `).join('');
+        }
+
+        // Focus on a specific device
+        function focusOnDevice(deviceId) {
+            const node = currentNodes.get(deviceId);
+            if (!node) return;
+
+            // Remove active class from all items
+            document.querySelectorAll('.device-item').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // Add active class to clicked item
+            const clickedItem = document.querySelector(`[data-device-id="${deviceId}"]`);
+            if (clickedItem) {
+                clickedItem.classList.add('active');
+            }
+
+            // Highlight the node temporarily
+            const nodeElement = svg.select(`.node[data-node-id="${deviceId}"] circle`);
+            if (!nodeElement.empty()) {
+                nodeElement.transition()
+                    .duration(300)
+                    .attr('r', 40)
+                    .attr('stroke-width', 6)
+                    .transition()
+                    .duration(300)
+                    .attr('r', 30)
+                    .attr('stroke-width', 2);
+            }
+
+            // Pan to the node
+            const scale = d3.zoomTransform(svg.node()).k;
+            const x = -node.x * scale + width / 2;
+            const y = -node.y * scale + height / 2;
+
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
+        }
+
+        function getEdgeStats(edge) {
+            const srcId = typeof edge.source === 'object' ? edge.source.id : edge.source;
+            const tgtId = typeof edge.target === 'object' ? edge.target.id : edge.target;
+
+            // Try connection from Source side
+            let stats = null;
+
+            // Debugging keys
+            console.log(`Checking edge: ${srcId} [${edge.sourcePort}] -> ${tgtId} [${edge.targetPort}]`);
+
+            if (trafficData[srcId] && trafficData[srcId][edge.sourcePort]) {
+                stats = trafficData[srcId][edge.sourcePort];
+            }
+            // Or Target side (if bidirectional info is better?)
+            else if (trafficData[tgtId] && trafficData[tgtId][edge.targetPort]) {
+                stats = trafficData[tgtId][edge.targetPort];
+            }
+
+            if (stats) {
+                console.log(`✓ ${edge.sourcePort} -> ${edge.targetPort} | Type: ${stats.media} | Cap: ${stats.speed_cap} | In: ${stats.in_rate} (${stats.in_bps} bps) | Out: ${stats.out_rate} (${stats.out_bps} bps)`);
+            } else {
+                console.log(`✗ No data: ${edge.sourcePort} -> ${edge.targetPort}`);
+            }
+            return stats;
+        }
+
+        function updateStyles() {
+            // Update Link Styles and Labels based on trafficData
+            linkGroup.selectAll("line")
+                .attr("class", d => {
+                    const stats = getEdgeStats(d);
+                    const media = stats ? stats.media.toLowerCase() : 'unknown';
+                    return `link ${media}`;
+                })
+                .attr("stroke-width", d => {
+                    const stats = getEdgeStats(d);
+                    if (!stats || !stats.speed_cap || stats.in_bps === 0) return 2.5;
+
+                    // Calculate utilization percentage
+                    const capBps = parseFloat(stats.speed_cap) * (stats.speed_cap.includes('G') ? 1e9 : 1e6);
+                    const utilization = Math.max(stats.in_bps, stats.out_bps) / capBps;
+
+                    // Width: 2px (idle) to 8px (90%+)
+                    return Math.max(2, Math.min(8, 2 + utilization * 10));
+                });
+
+            // Update port labels with traffic info
+            const srcLabels = labelGroup.selectAll(".port-label-src");
+            const tgtLabels = labelGroup.selectAll(".port-label-tgt");
+
+            console.log(`Updating ${srcLabels.size()} source labels, ${tgtLabels.size()} target labels`);
+
+            srcLabels.each(function (d) {
+                const stats = getEdgeStats(d);
+                const baseLabel = d.sourcePort || '';
+                let newText = baseLabel;
+
+                if (stats) {
+                    if (stats.in_bps > 1000) {
+                        // Show traffic if exists
+                        newText = `${baseLabel} ↓${stats.in_rate}`;
+                    } else {
+                        // Show capacity if no traffic
+                        newText = `${baseLabel} [${stats.speed_cap}]`;
+                    }
+                }
+
+                d3.select(this).text(newText);
+                console.log(`SRC Label: "${newText}" at (${d3.select(this).attr('x')}, ${d3.select(this).attr('y')})`);
+            });
+
+            tgtLabels.each(function (d) {
+                const stats = getEdgeStats(d);
+                const baseLabel = d.targetPort || '';
+                let newText = baseLabel;
+
+                if (stats) {
+                    if (stats.out_bps > 1000) {
+                        // Show traffic if exists
+                        newText = `${baseLabel} ↑${stats.out_rate}`;
+                    } else {
+                        // Show capacity if no traffic
+                        newText = `${baseLabel} [${stats.speed_cap}]`;
+                    }
+                }
+
+                d3.select(this).text(newText);
+                console.log(`TGT Label: "${newText}" at (${d3.select(this).attr('x')}, ${d3.select(this).attr('y')})`);
+            });
+        }
+
+        function renderGraph() {
+            const nodes = Array.from(currentNodes.values());
+            const edges = Array.from(currentEdges.values());
+
+            simulation.nodes(nodes).on("tick", ticked);
+            simulation.force("link").links(edges);
+            simulation.alpha(0.3).restart();
+
+            // --- Edges ---
+            const link = linkGroup.selectAll("line")
+                .data(edges, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+
+            const linkEnter = link.enter().append("line")
+                .attr("class", "link")
+                .on("mouseover", (event, d) => showLinkTooltip(event, d))
+                .on("mouseout", hideTooltip);
+
+            link.exit().remove();
+            const allLinks = linkEnter.merge(link);
+
+            // --- Nodes ---
+            const node = nodeGroup.selectAll("g")
+                .data(nodes, d => d.id);
+
+            const nodeEnter = node.enter().append("g")
+                .attr("class", "node new-node")
+                .attr("data-node-id", d => d.id)  // Add identifier for focusing
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended))
+                .on("mouseover", (event, d) => showNodeTooltip(event, d))
+                .on("mouseout", hideTooltip);
+
+            nodeEnter.append("circle")
+                .attr("class", d => {
+                    if (d.is_central) return `node-circle central`;
+                    return `node-circle ${d.type}`;
+                })
+                .attr("r", d => d.is_central ? 50 : 30);
+
+            nodeEnter.append("text")
+                .attr("class", "node-label")
+                .attr("dy", "-0.6em")
+                .text(d => d.name || '?');
+
+            nodeEnter.append("text")
+                .attr("class", "node-ip")
+                .attr("dy", "1.3em")
+                .text(d => d.id);
+
+            node.exit().remove();
+
+            // --- Port Labels ---
+            // Source Ports
+            const sLabels = labelGroup.selectAll(".port-label-src")
+                .data(edges, d => `${d.source.id || d.source}-${d.target.id || d.target}-src`);
+
+            sLabels.exit().remove();
+
+            const sLabelsEnter = sLabels.enter().append("text")
+                .attr("class", "port-label port-label-src")
+                .text(d => d.sourcePort || '');
+
+            const allSLabels = sLabelsEnter.merge(sLabels);
+
+            // Target Ports
+            const tLabels = labelGroup.selectAll(".port-label-tgt")
+                .data(edges, d => `${d.source.id || d.source}-${d.target.id || d.target}-tgt`);
+
+            tLabels.exit().remove();
+
+            const tLabelsEnter = tLabels.enter().append("text")
+                .attr("class", "port-label port-label-tgt")
+                .text(d => d.targetPort || '');
+
+            const allTLabels = tLabelsEnter.merge(tLabels);
+
+            console.log(`Created ${allSLabels.size()} src labels, ${allTLabels.size()} tgt labels`);
+
+            // Initial styling update
+            updateStyles();
+
+            function ticked() {
+                allLinks
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+
+                nodeEnter.merge(node)
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+                allSLabels
+                    .attr("x", d => d.source.x + (d.target.x - d.source.x) * 0.2)
+                    .attr("y", d => d.source.y + (d.target.y - d.source.y) * 0.2);
+
+                allTLabels
+                    .attr("x", d => d.source.x + (d.target.x - d.source.x) * 0.8)
+                    .attr("y", d => d.source.y + (d.target.y - d.source.y) * 0.8);
+            }
+
+            // Update labels with traffic data after positioning
+            setTimeout(() => updateStyles(), 100);
+        }
+
+        // --- Interaction ---
+
+        function showLinkTooltip(event, d) {
+            const stats = getEdgeStats(d);
+
+            let content = `<h4>🔗 Link Details</h4>
+                           <p><span class="stat-label">From:</span> <span class="stat-value">${d.source.id}</span> (Port ${d.sourcePort})</p>
+                           <p><span class="stat-label">To:</span> <span class="stat-value">${d.target.id}</span> (Port ${d.targetPort})</p>`;
+
+            if (stats) {
+                content += `<hr style="border:0; border-top:1px solid #444; margin:8px 0;">
+                            <div class="stat-row"><span class="stat-label">Type:</span> <span class="stat-value" style="color:${getMediaColor(stats.media)}">${stats.media}</span></div>
+                            <div class="stat-row"><span class="stat-label">Capacity:</span> <span class="stat-value">${stats.speed_cap}</span></div>
+                            <div class="stat-row"><span class="stat-label">Current:</span> <span class="stat-value">${stats.speed_curr}</span></div>
+                            <div class="stat-row"><span class="stat-label">In Rate:</span> <span class="stat-value">${stats.in_rate}</span></div>
+                            <div class="stat-row"><span class="stat-label">Out Rate:</span> <span class="stat-value">${stats.out_rate}</span></div>`;
+            } else {
+                content += `<p style="color:#aaa; font-style:italic; margin-top:5px;">No periodic data yet...</p>`;
+            }
+
+            tooltip.html(content)
+                .style("left", (event.pageX + 15) + "px")
+                .style("top", (event.pageY - 15) + "px")
+                .style("opacity", 1);
+
+            // Highlight
+            d3.select(event.currentTarget).style("stroke", "#fff").style("stroke-opacity", 1);
+        }
+
+        function showNodeTooltip(event, d) {
+            tooltip.html(`<h4>📦 ${d.name}</h4>
+                          <div class="stat-row"><span class="stat-label">IP:</span> <span class="stat-value">${d.id}</span></div>
+                          <div class="stat-row"><span class="stat-label">Type:</span> <span class="stat-value">${d.type.toUpperCase()}</span></div>`)
+                .style("left", (event.pageX + 15) + "px")
+                .style("top", (event.pageY - 15) + "px")
+                .style("opacity", 1);
+        }
+
+        function hideTooltip() {
+            tooltip.style("opacity", 0);
+            updateStyles(); // Restore link colors
+        }
+
+        function getMediaColor(media) {
+            if (!media) return "#999";
+            media = media.toLowerCase();
+            if (media.includes('fiber')) return '#00f2ff';
+            if (media.includes('copper')) return '#ff9d00';
+            if (media.includes('wifi')) return '#d500f9';
+            return '#999';
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x; d.fy = d.y;
+        }
+        function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null; d.fy = null;
+        }
+
+        window.resetZoom = () => svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+
+        window.debugLabels = () => {
+            console.log("=== LABEL DEBUG ===");
+            console.log("Source labels:", labelGroup.selectAll(".port-label-src").size());
+            console.log("Target labels:", labelGroup.selectAll(".port-label-tgt").size());
+            labelGroup.selectAll(".port-label").each(function () {
+                const elem = d3.select(this);
+                console.log(`Label: "${elem.text()}" | x:${elem.attr('x')} y:${elem.attr('y')} | opacity:${elem.style('opacity')} | fill:${elem.style('fill')}`);
+            });
+        };
+
+        // --- Loops ---
+
+        // 1. Topology check every 40s (for debugging)
+        setInterval(fetchTopology, 5000);
+        fetchTopology(); // Initial
+
+        // 2. Traffic stats check every 5s (Live)
+        setInterval(fetchTraffic, 5000);
+        fetchTraffic();
+
+    </script>
+</body>
+
+</html>

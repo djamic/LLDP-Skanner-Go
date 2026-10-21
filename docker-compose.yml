@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  influxdb:
+    image: influxdb:2
+    container_name: lldp_influxdb
+    restart: unless-stopped
+    ports: # 8086 portini ishlatamiz, app unga localhost:8086 orqali ulanadi (network_mode: "host" tufayli)
+      - "8086:8086"
+    volumes:
+      - ./influxdb/data:/var/lib/influxdb2
+      - ./influxdb/config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
+      - DOCKER_INFLUXDB_INIT_ORG=net_monitor
+      - DOCKER_INFLUXDB_INIT_BUCKET=traffic_metrics
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=lldp-network-monitor-token
+
+  app:
+    build: .
+    container_name: lldp_scanner_app
+    restart: unless-stopped
+    network_mode: "host"  # Host tarmog'idan foydalanish (influxdb va bot ga ulanishni soddalashtiradi)
+    volumes:
+      # Kesh, natijalar va kerakli fayllarni saqlab qolish
+      - ./swich_ips:/app/swich_ips
+      - ./results:/app/results
+      - ./captures:/app/captures
+      - ./mac_ip_cache.json:/app/mac_ip_cache.json
+      - ./ignored_issues.json:/app/ignored_issues.json
+      - ./oui.txt:/app/oui.txt
+    command: ["--mode=monitor24h", "--duration=24h", "--output=results/24h"]
+    depends_on:
+      - influxdb

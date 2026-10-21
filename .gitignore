@@ -1,0 +1,43 @@
+# Secrets
+bot/.bot_token
+bot/admin_data.json
+
+# Build outputs and binaries
+lldp_scanner
+snmp_scanner
+export/lldp_scanner
+*.tar
+*.tar.gz
+
+# Python environments and caches
+bot/venv/
+__pycache__/
+*.pyc
+
+# Runtime data written by the scanner (large, changes every cycle)
+network_data.json
+mac_ip_cache.json
+scan_results.json
+graphs_data.txt
+debug_*.txt
+debug_edges_analysis.log
+scanner_pid.txt
+zabbix_hosts.json
+zabbix_map.json
+captures/
+influxdb/
+mermaid_images/
+results/*
+!results/*.md
+!results/*.sh
+
+# Logs and editor backups
+*.log
+*.bak
+*.backup
+
+# Generated documents
+*.docx
+
+# Generated diagram images
+instrumens/mermaid_*/
