@@ -17,6 +17,10 @@ __pycache__/
 # Runtime data written by the scanner (large, changes every cycle)
 network_data.json
 mac_ip_cache.json
+mac_ip_cache_seen.json
+# temporary files of the atomic writes (mac_ip_cache.json.tmp holds the
+# network's MAC->IP inventory when the process dies before the rename)
+*.tmp
 scan_results.json
 graphs_data.txt
 debug_*.txt
@@ -41,4 +45,3 @@ results/*
 
 # Generated diagram images
 instrumens/mermaid_*/
-mac_ip_cache_seen.json

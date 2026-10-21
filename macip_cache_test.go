@@ -4,6 +4,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -138,4 +139,48 @@ func TestWriteFileReplacingMountPoint(t *testing.T) {
 		t.Fatal("writeJSONAtomic failed")
 	}
 	check("writeJSONAtomic", "{\n  \"00:1b:21:0a:00:01\": \"10.0.9.1\"\n}")
+}
+
+// gitignored reports whether .gitignore ignores a file of this name in the
+// repository root: the last matching pattern without a slash decides ("!"
+// undoes), as git reads them for root files.
+func gitignored(t *testing.T, name string) bool {
+	t.Helper()
+	data, err := os.ReadFile(".gitignore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ignored := false
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		pattern, negated := strings.CutPrefix(line, "!")
+		if strings.Contains(strings.TrimSuffix(pattern, "/"), "/") {
+			continue // anchored or nested: not about root files
+		}
+		if ok, _ := path.Match(pattern, name); ok {
+			ignored = !negated
+		}
+	}
+	return ignored
+}
+
+// TestGitignoreCoversRuntimeFiles (R7): the files the scanner writes into
+// its working directory, the repository checkout, are ignored, and so are
+// the temporary files of its atomic writes: mac_ip_cache.json.tmp holds
+// the network's MAC->IP inventory when the process dies between the write
+// and the rename, and `git add -A` would have committed it.
+func TestGitignoreCoversRuntimeFiles(t *testing.T) {
+	for _, name := range []string{filepath.Base(macIPCacheFile), filepath.Base(macIPSeenFile()), savedDataFile, filepath.Base(graphDebugFile)} {
+		for _, file := range []string{name, name + ".tmp"} {
+			if !gitignored(t, file) {
+				t.Errorf(".gitignore does not ignore %s", file)
+			}
+		}
+	}
+	if gitignored(t, "analyzer.go") || gitignored(t, "go.mod") {
+		t.Error("gitignored matches source files")
+	}
 }
