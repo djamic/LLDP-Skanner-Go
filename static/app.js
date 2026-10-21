@@ -1071,6 +1071,23 @@ function uiPortKey(label) {
     return label.replace(/\s+(?:\d+[MGmg]\b|[↓↑]).*$/, '').trim();
 }
 
+// uiComparePorts sorts port names naturally: GE1/0/2 < GE1/0/10.
+function uiComparePorts(a, b) {
+    const numA = a.match(/(\d+)/g)?.map(Number) || [];
+    const numB = b.match(/(\d+)/g)?.map(Number) || [];
+    for (let i = 0; i < Math.max(numA.length, numB.length); i++) {
+        const diff = (numA[i] || 0) - (numB[i] || 0);
+        if (diff !== 0) return diff;
+    }
+    return a.localeCompare(b);
+}
+
+// uiNodeName: DNS name, else the first name line, else the node's IP, else its id.
+function uiNodeName(node) {
+    const info = uiParseNodeInfo(node);
+    return info.hostname || info.name || uiNodeIPs(node)[0] || node.id;
+}
+
 function showInfoPanel(node) {
     const panel = document.getElementById('infoPanel');
     if (!panel) return;
@@ -1108,15 +1125,7 @@ function showInfoPanel(node) {
     }
 
     // Sort ports naturally: GE1/0/1 < GE1/0/2 etc.
-    const sortedPorts = Object.keys(portMap).sort((a, b) => {
-        const numA = a.match(/(\d+)/g)?.map(Number) || [];
-        const numB = b.match(/(\d+)/g)?.map(Number) || [];
-        for (let i = 0; i < Math.max(numA.length, numB.length); i++) {
-            const diff = (numA[i] || 0) - (numB[i] || 0);
-            if (diff !== 0) return diff;
-        }
-        return a.localeCompare(b);
-    });
+    const sortedPorts = Object.keys(portMap).sort(uiComparePorts);
 
     const totalConnections = Object.values(portMap).reduce((s, arr) => s + arr.length, 0);
 
@@ -1656,77 +1665,65 @@ function loadExperimentResults() {
 // Shadow IT Detection (Unmanaged Switches)
 // ============================================================
 
+// uiIsConfirmedESXi: an HTTP-confirmed ESXi host. enrichGraphWithIPs puts the
+// '[HYPERVISOR] VMware ESXi' line into its full label (sysName; label loses it
+// when a DNS name exists), and the graph may group it as hypervisor.
+function uiIsConfirmedESXi(node) {
+    return node.group === 'hypervisor' || (node.sysName || '').includes('[HYPERVISOR] VMware ESXi');
+}
+
+// uiShadowITEntries lists the Shadow-IT modal entries. Q14: one per-port rule
+// everywhere, the graph's hub filters plus the ESXi exemption — so the entries
+// are the graph's hubs, minus a hub with a confirmed ESXi host behind it. Each
+// entry carries its switch and port from the switch->hub link ('<port>|Hub'),
+// else from the id 'hub-<switch>-p<bridge port>'. Sorted by switch and port,
+// so the list does not depend on the backend's map order.
+function uiShadowITEntries(data) {
+    const byId = new Map(data.nodes.map(n => [n.id, n]));
+    const entries = [];
+    data.nodes.forEach(hub => {
+        if (hub.group !== 'hub') return;
+        let uplink = null;
+        const members = [];
+        data.links.forEach(l => {
+            const s = l.source.id || l.source, t = l.target.id || l.target;
+            if (t === hub.id && (l.targetLabel === 'Hub' || /\|Hub$/.test(l.label || ''))) uplink = l;
+            else if (s === hub.id || t === hub.id) members.push(byId.get(s === hub.id ? t : s));
+        });
+        if (members.some(m => m && uiIsConfirmedESXi(m))) return;
+
+        const idMatch = /^hub-(.+)-p(\d+)$/.exec(hub.id);
+        const switchId = uplink ? (uplink.source.id || uplink.source) : (idMatch ? idMatch[1] : '');
+        const port = uplink ? uiPortKey(uiLinkPorts(uplink, switchId).own) : (idMatch ? `bridge port ${idMatch[2]}` : '');
+        const sw = byId.get(switchId);
+        let switchName = switchId || 'Unknown';
+        if (sw) {
+            const name = uiNodeName(sw), ip = uiNodeIPs(sw)[0];
+            switchName = ip && ip !== name ? `${name} (${ip})` : name;
+        }
+        entries.push({ hub, switchName, port });
+    });
+    return entries.sort((a, b) => a.switchName.localeCompare(b.switchName) ||
+        uiComparePorts(a.port, b.port) || a.hub.id.localeCompare(b.hub.id));
+}
+
 function showShadowIT() {
     if (!rawData || !rawData.nodes || rawData.nodes.length === 0) {
         alert('❌ No network data available.');
         return;
     }
 
-    // Find shadow IT nodes: hubs, unmanaged switches — but NOT VMware/hypervisor-related
-    const shadowNodes = rawData.nodes.filter(n => {
-        const label = (n.label || '').toLowerCase();
-        const sysName = (n.sysName || '').toLowerCase();
-
-        // EXCLUDE: hypervisors, VMs, ESXi hosts, BMC — these are legitimate
-        if (n.group === 'hypervisor' || n.group === 'vm' || n.group === 'bmc') return false;
-        if (label.includes('[hypervisor]') || label.includes('vmware esxi')) return false;
-        if (label.includes('[vm]') || label.includes('vmware')) return false;
-
-        // Hub nodes — only include if NOT a VM-related hub
-        if (n.group === 'hub' || label.includes('[hub]') || label.includes('unmanaged')) {
-            // Check if this hub's connected nodes are VMs/hypervisors
-            const connectedNodes = rawData.links
-                .filter(l => (l.source.id || l.source) === n.id || (l.target.id || l.target) === n.id)
-                .map(l => {
-                    const otherId = (l.source.id || l.source) === n.id
-                        ? (l.target.id || l.target) : (l.source.id || l.source);
-                    return rawData.nodes.find(nn => nn.id === otherId);
-                })
-                .filter(Boolean);
-
-            // If any connected node is a hypervisor or VM, skip this hub
-            const hasVMConnection = connectedNodes.some(cn => {
-                const cl = (cn.label || '').toLowerCase();
-                return cn.group === 'hypervisor' || cn.group === 'vm' ||
-                    cl.includes('[hypervisor]') || cl.includes('vmware') || cl.includes('[vm]');
-            });
-            if (hasVMConnection) return false;
-
-            return true; // legitimate shadow IT hub
-        }
-
-        // Other shadow-labeled nodes
-        if (label.includes('shadow')) return true;
-
-        return false;
-    });
-
-    // Group by parent switch
-    const bySwitch = {};
-    shadowNodes.forEach(node => {
-        // Find which switch this node connects to
-        const parentLink = rawData.links.find(l => {
-            const tgtId = l.target.id || l.target;
-            const srcId = l.source.id || l.source;
-            return tgtId === node.id || srcId === node.id;
-        });
-        let switchName = 'Unknown';
-        if (parentLink) {
-            const otherId = (parentLink.source.id || parentLink.source) === node.id
-                ? (parentLink.target.id || parentLink.target)
-                : (parentLink.source.id || parentLink.source);
-            const switchNode = rawData.nodes.find(n => n.id === otherId);
-            if (switchNode) {
-                switchName = (switchNode.sysName || switchNode.label || switchNode.id).split('\n')[0];
-            }
-        }
-        if (!bySwitch[switchName]) bySwitch[switchName] = [];
-        bySwitch[switchName].push(node);
+    // Group by parent switch (entries are sorted; a Map keeps that order)
+    const entries = uiShadowITEntries(rawData);
+    const bySwitch = new Map();
+    entries.forEach(e => {
+        if (!bySwitch.has(e.switchName)) bySwitch.set(e.switchName, []);
+        bySwitch.get(e.switchName).push(e);
     });
 
     const list = document.getElementById('shadowITList');
 
-    if (shadowNodes.length === 0) {
+    if (entries.length === 0) {
         list.innerHTML = `<div style="text-align:center; padding:30px; color:#4CAF50;">
             <div style="font-size:48px; margin-bottom:12px;">✅</div>
             <strong>Shadow IT topilmadi!</strong><br>
@@ -1734,22 +1731,15 @@ function showShadowIT() {
         </div>`;
     } else {
         let html = `<div style="color:#E24A4A; margin-bottom:12px; font-weight:bold;">
-            ⚠️ ${shadowNodes.length} ta boshqarilmaydigan qurilma topildi:
+            ⚠️ ${entries.length} ta boshqarilmaydigan qurilma topildi:
         </div>`;
 
-        for (const [switchName, nodes] of Object.entries(bySwitch)) {
+        for (const [switchName, items] of bySwitch) {
             html += `<div class="shadow-switch-group">
                 <div class="shadow-switch-name">📡 ${uiEscapeHTML(switchName)}</div>`;
 
-            nodes.forEach(node => {
+            items.forEach(({ hub: node, port }) => {
                 const label = (node.label || node.id).replace(/\n/g, ' · ');
-                const port = (() => {
-                    const link = rawData.links.find(l =>
-                        (l.target.id || l.target) === node.id ||
-                        (l.source.id || l.source) === node.id
-                    );
-                    return link ? (link.sourcePort || link.targetPort || '') : '';
-                })();
 
                 html += `<div class="shadow-item" data-node-id="${uiEscapeHTML(node.id)}">
                     <span class="shadow-icon">👻</span>
