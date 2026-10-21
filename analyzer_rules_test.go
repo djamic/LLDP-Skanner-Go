@@ -1,8 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -10,7 +15,8 @@ import (
 
 // Tests for the analyzer fixes: one per-port Shadow-IT rule shared with the
 // graph (Q14, F15, F16, F49), the loopback chassis guard (F17), the STP
-// root check (F18) and path depths (F19).
+// root check (F18), path depths (F19), anomalies on graph nodes (F11) and
+// unique total_macs (F13, Q15).
 
 func analyzerIssueIDs(suggestions []OptimizationSuggestion, typ string) []string {
 	var out []string
@@ -352,5 +358,71 @@ func TestAnalyzerPathDepthsFromCore(t *testing.T) {
 		if !slices.Equal(got, c.want) {
 			t.Errorf("%s: path suggestions for %v, want %v", c.name, got, c.want)
 		}
+
+		// The anomalies are keyed by the far nodes' ids (F11).
+		NewAnalyzer(c.data).Analyze()
+		lastReportMutex.RLock()
+		keys := slices.Sorted(maps.Keys(lastAnomalyMap))
+		lastReportMutex.RUnlock()
+		if !slices.Equal(keys, c.want) {
+			t.Errorf("%s: anomaly map keys %v, want the node ids %v", c.name, keys, c.want)
+		}
+	}
+}
+
+// TestAnalyzerAnomaliesOnGraphNodes: every anomaly is keyed by the graph node
+// /api/graph draws: Shadow-IT on the hub node, the others on the switch node
+// (F11).
+func TestAnalyzerAnomaliesOnGraphNodes(t *testing.T) {
+	graph := buildFixtureGraph(t)
+	SetGlobalGraph(graph)
+	report, _ := analyzeFixture(t, graph)
+	graphDebugFile = filepath.Join(t.TempDir(), "graphs_data.txt")
+	rr := httptest.NewRecorder()
+	graphHandler(rr, httptest.NewRequest(http.MethodGet, "/api/graph", nil))
+	var api GraphData
+	if err := json.Unmarshal(rr.Body.Bytes(), &api); err != nil {
+		t.Fatal(err)
+	}
+	shown := 0
+	for _, n := range api.Nodes {
+		for _, a := range n.Anomalies {
+			if a == "stp" { // the fixture's STP root is not a graph node
+				continue
+			}
+			shown++
+			if a == "shadow_it" && !strings.HasPrefix(n.ID, "hub-") {
+				t.Errorf("shadow_it anomaly on %s, want it on the hub node", n.ID)
+			}
+		}
+	}
+	want := 0
+	for _, s := range report.Suggestions {
+		if s.Type != "stp" {
+			want++
+		}
+	}
+	if want == 0 || shown != want {
+		t.Errorf("/api/graph shows %d anomalies on nodes, the analysis has %d (stp not counted)", shown, want)
+	}
+
+	// A loopback and congestion on a switch whose node is its chassis MAC.
+	resetState(t)
+	sw := &DeviceData{
+		IP: "10.0.9.22", SysName: "sw-22", ChassisID: "4c:ae:a3:09:00:22",
+		Interfaces: gigabitPorts(9, nil),
+		Neighbors:  []LLDPNeighbor{{LocalPortNum: 9, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: "4C AE A3 09 00 22"}},
+	}
+	data := FullCaptureData{
+		DevicesData: devicesData(sw),
+		Topology:    buildGraphFromSnapshot(analyzerDeviceMap([]*DeviceData{sw})).GetGraphData(),
+		Metrics:     []TrafficMetrics{{DeviceIP: "10.0.9.22", Interface: "GE1/0/2", InDiscards: 3}},
+	}
+	NewAnalyzer(data).Analyze()
+	lastReportMutex.RLock()
+	got := maps.Clone(lastAnomalyMap)
+	lastReportMutex.RUnlock()
+	if types := got["4c:ae:a3:09:00:22"]; len(got) != 1 || !slices.Contains(types, "loopback") || !slices.Contains(types, "congestion") {
+		t.Errorf("anomaly map %v, want loopback and congestion on node 4c:ae:a3:09:00:22", got)
 	}
 }

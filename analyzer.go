@@ -87,6 +87,37 @@ func (ix *analyzerIndex) switchNode(ip string) string {
 	return ip
 }
 
+// hubNode returns the hub node the graph draws for a port of switch d
+// ("hub-<switch node>-p<port>"), or the switch node when there is none.
+func (ix *analyzerIndex) hubNode(d *DeviceData, port int) string {
+	for _, id := range analyzerSwitchIDs(d) {
+		hub := fmt.Sprintf("hub-%s-p%d", id, port)
+		if _, ok := ix.nodes[hub]; ok {
+			return hub
+		}
+	}
+	return ix.switchNode(d.IP)
+}
+
+// anomalyMap groups the suggestion types by the graph node /api/graph shows
+// them on (F11): the hub node of a Shadow-IT port, the far node of a path
+// suggestion, the switch node when Device is a polled switch's IP, and
+// otherwise Device itself (the STP root bridge MAC).
+func (na *NetworkAnalyzer) anomalyMap(suggestions []OptimizationSuggestion) map[string][]string {
+	ix := na.idx()
+	anomalies := make(map[string][]string)
+	for _, sugg := range suggestions {
+		key := sugg.nodeID
+		if key == "" && sugg.Device != "" {
+			key = ix.switchNode(sugg.Device)
+		}
+		if key != "" {
+			anomalies[key] = append(anomalies[key], sugg.Type)
+		}
+	}
+	return anomalies
+}
+
 // NewAnalyzer creates a new analyzer instance
 func NewAnalyzer(data FullCaptureData) *NetworkAnalyzer {
 	return &NetworkAnalyzer{
@@ -102,6 +133,8 @@ type OptimizationSuggestion struct {
 	Device      string `json:"device"`
 	Description string `json:"description"`
 	Value       string `json:"value"` // e.g., "5 hops", "95% util"
+
+	nodeID string // graph node the anomaly is shown on, when Device does not name it
 }
 
 // Report represents the final analysis report
@@ -166,19 +199,9 @@ func (na *NetworkAnalyzer) Analyze() Report {
 	// B.4: Write anomaly summary to InfluxDB
 	WriteAnomalySummary(&report)
 
-	// E.1/E.2: Store health score + anomaly map for UI enrichment via /api/graph
-	anomalyMap := make(map[string][]string)
-	for _, sugg := range report.Suggestions {
-		if sugg.Device != "" {
-			// Extract IP from Device field (may be "IP (SysName)" format)
-			deviceKey := sugg.Device
-			// Try to extract pure IP if format is "IP (SysName)"
-			if idx := strings.Index(deviceKey, " ("); idx > 0 {
-				deviceKey = deviceKey[:idx]
-			}
-			anomalyMap[deviceKey] = append(anomalyMap[deviceKey], sugg.Type)
-		}
-	}
+	// E.1/E.2: Store health score + anomaly map (by graph node) for UI
+	// enrichment via /api/graph
+	anomalyMap := na.anomalyMap(report.Suggestions)
 	totalMACs := len(analyzerUniqueMACs(na.idx().devices))
 	SetLastReport(report.HealthScore, anomalyMap, totalMACs)
 
@@ -349,6 +372,7 @@ func (na *NetworkAnalyzer) analyzePaths() []OptimizationSuggestion {
 			Device:      getDataLabel(nodeInfo),
 			Description: fmt.Sprintf("Device is too far from Core (%s). Consider moving it to Distribution layer.", coreID),
 			Value:       "4+ hops",
+			nodeID:      nodeID,
 		})
 	}
 
@@ -700,6 +724,7 @@ func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 				Device:      device.IP,
 				Description: fmt.Sprintf("Port %d has %d MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.", p.Port, len(p.MACs)),
 				Value:       fmt.Sprintf("%d MACs on single port", len(p.MACs)),
+				nodeID:      ix.hubNode(device, p.Port),
 			})
 		}
 	}

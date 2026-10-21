@@ -107,7 +107,7 @@
     ],
     "health_score": 96,
     "last_report": {
-      "anomaly_map": {"sw-10.0.9.34": ["path"], "sw-10.0.9.35": ["path"]},
+      "anomaly_map": {"10.0.9.34": ["path"], "10.0.9.35": ["path"]},
       "health_score": 96,
       "total_macs": 0
     },
@@ -131,7 +131,7 @@
     ],
     "health_score": 96,
     "last_report": {
-      "anomaly_map": {"sw-10.0.9.34": ["path"], "sw-10.0.9.35": ["path"]},
+      "anomaly_map": {"10.0.9.34": ["path"], "10.0.9.35": ["path"]},
       "health_score": 96,
       "total_macs": 0
     },
