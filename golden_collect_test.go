@@ -323,9 +323,10 @@ func TestGoldenScenarioSNMPCollect(t *testing.T) {
 }
 
 // TestGoldenScenarioMACIPCache pins the MAC→IP cache and the ESXi queue:
-// ARP collection from a switch (first write wins, new MACs queued), the
-// gateway ARP collector (last write wins, nothing queued), loading the cache
-// file (every new entry queued), saving it, and the confirmed-ESXi skip.
+// ARP collection from a switch and from the gateway (one policy: last write
+// wins, Q11 filter, observed MACs asked for the ESXi check), loading the
+// cache file (canonical keys, Q11 filter, nothing queued), saving it, and
+// the confirmed-ESXi skip.
 func TestGoldenScenarioMACIPCache(t *testing.T) {
 	resetState(t)
 	fakeSNMP.set("10.9.0.1", healthyAgent())

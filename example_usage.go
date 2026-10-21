@@ -2041,21 +2041,19 @@ func collectGatewayARP() {
 		return
 	}
 
-	// Build global lookup
-	globalMACtoIPMutex.Lock()
-	for _, entry := range arpTable {
-		globalMACtoIP[entry.MACAddress] = entry.IPAddress
-	}
-	globalMACtoIPMutex.Unlock()
+	// Build global lookup with the policy of every ARP collector (F70: this
+	// one used to overwrite and skip the ESXi check)
+	collectMergeMACIP(arpTable, time.Now())
 
 	fmt.Printf("✅ Collected %d ARP entries from gateway %s\n", len(arpTable), gatewayIP)
 }
 
-// getGlobalIP looks up IP address from global MAC-IP table
+// getGlobalIP looks up IP address from global MAC-IP table (any MAC text
+// form; the table is keyed by canonical MACs)
 func getGlobalIP(mac string) string {
 	globalMACtoIPMutex.RLock()
 	defer globalMACtoIPMutex.RUnlock()
-	return globalMACtoIP[mac]
+	return globalMACtoIP[collectCanonicalMAC(mac)]
 }
 
 // updateTrafficCounters updates traffic data for a device

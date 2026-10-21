@@ -16,6 +16,9 @@ import (
 )
 
 // ─── ESXi HTTP Fingerprinting ──────────────────────────────────────────────────
+
+// ConfirmedESXiMACs holds the MACs whose IP answered as an ESXi host. The
+// value is that IP (readers only test presence).
 var ConfirmedESXiMACs sync.Map
 var validationQueue = make(chan esxiJob, 2000)
 
@@ -32,19 +35,10 @@ func init() {
 }
 
 func esxiCheckWorker() {
-	client := &http.Client{
-		Timeout: 2 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
-			DisableKeepAlives:     true,
-			ResponseHeaderTimeout: 1 * time.Second,
-		},
-	}
+	client := collectESXiClient()
 	for job := range validationQueue {
-		if esxiProbe(client, job.ip) {
-			fmt.Printf("✅ [Active-Check] Confirmed ESXi via HTTP: %s (MAC: %s)\n", job.ip, job.mac)
-			ConfirmedESXiMACs.Store(job.mac, true)
-		}
+		collectCheckESXi(job, collectESXiReachable, func(ip string) bool { return esxiProbe(client, ip) }, time.Now())
+		collectReleaseESXi(job)
 	}
 }
 
@@ -55,51 +49,224 @@ var (
 	esxiEnqueue = enqueueESXiJob
 )
 
-// probeESXiHost reports whether https://ip/ui/ answers like an ESXi host.
-func probeESXiHost(client *http.Client, ip string) bool {
-	// Fast port 443 check (500ms is plenty for local network)
-	conn, err := net.DialTimeout("tcp", ip+":443", 500*time.Millisecond)
+// collectESXiClient is the HTTP client of the ESXi probe. It follows
+// redirects on the probed host only (collectESXiSameHost).
+func collectESXiClient() *http.Client {
+	return &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+			DisableKeepAlives:     true,
+			ResponseHeaderTimeout: 1 * time.Second,
+		},
+		CheckRedirect: collectESXiSameHost,
+	}
+}
+
+// collectESXiSameHost stops at a redirect to another host: a portal or
+// vCenter page that mentions ESXi is not the probed host's own UI (F66).
+func collectESXiSameHost(req *http.Request, via []*http.Request) error {
+	if len(via) >= 3 || req.URL.Hostname() != via[0].URL.Hostname() {
+		return http.ErrUseLastResponse
+	}
+	return nil
+}
+
+// collectESXiReachable reports whether ip accepts TCP on port 443 (500ms is
+// plenty for the local network).
+func collectESXiReachable(ip string) bool {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "443"), 500*time.Millisecond)
 	if err != nil {
 		return false
 	}
 	conn.Close()
+	return true
+}
 
-	// HTTP GET /ui/ check
-	req, _ := http.NewRequest("GET", "https://"+ip+"/ui/", nil)
-	resp, err := client.Do(req)
+// probeESXiHost reports whether https://ip/ui/ is the ESXi host client: an
+// HTTP 200 page from that host with the host client's app (isESXiResponse).
+// Error pages and other hosts' pages that mention ESXi do not count (F66).
+func probeESXiHost(client *http.Client, ip string) bool {
+	resp, err := client.Get("https://" + ip + "/ui/")
 	if err != nil {
 		return false
 	}
-	bodyBytes, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Request.URL.Hostname() != ip {
+		return false
+	}
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	return isESXiResponse(string(bodyBytes))
 }
 
-// isESXiResponse is the ESXi fingerprint applied to the /ui/ response body.
+// isESXiResponse is the ESXi fingerprint applied to the /ui/ response body:
+// the Angular app of the ESXi host client. The bare phrase "VMware ESXi" is
+// not enough (404 pages, blogs, inventory portals, F66).
 func isESXiResponse(body string) bool {
-	return strings.Contains(body, "esxUiApp") || strings.Contains(body, "VMware ESXi")
+	return strings.Contains(body, "esxUiApp")
 }
 
+// ESXi check bookkeeping (guarded by collectESXiMu; never held together
+// with globalMACtoIPMutex).
+var (
+	collectESXiMu       sync.Mutex
+	collectESXiChecked  = make(map[string]string)              // MAC → IP that answered (ESXi or not)
+	collectESXiRetry    = make(map[string]collectESXiRetryJob) // MAC → check to retry: the host did not answer
+	collectESXiInflight = make(map[string]string)              // MAC → IP queued and not checked yet
+)
+
+// collectESXiRetryJob is a check whose host did not answer on :443.
+type collectESXiRetryJob struct {
+	ip    string
+	due   time.Time
+	tries int
+}
+
+// collectESXiCandidate reports whether mac can be an ESXi host NIC worth a
+// probe: a usable MAC (Q11) that is globally administered. Locally
+// administered MACs (randomized phone and laptop MACs, 24,978 of the 37,110
+// cache entries, and 52:54:00 KVM guests) are never the management NIC of
+// an ESXi host, so they are not probed (F67).
+func collectESXiCandidate(mac string) bool {
+	b, ok := collectTextMAC(mac)
+	return ok && collectUsableMAC(mac) && b[0]&2 == 0
+}
+
+// queueESXiValidation asks the workers whether ip, the MAC's current IP, is
+// an ESXi host. It skips MACs that cannot be one (collectESXiCandidate),
+// MACs confirmed or checked at this IP, and MACs waiting for a retry at this
+// IP (collectRetryESXi queues those). A changed IP is checked again (Q18).
 func queueESXiValidation(mac, ip string) {
-	if _, loaded := ConfirmedESXiMACs.Load(mac); !loaded {
+	mac = collectCanonicalMAC(mac)
+	if ip == "" || !collectESXiCandidate(mac) {
+		return
+	}
+	// true: confirmed by code that did not record the IP
+	if confirmed, ok := ConfirmedESXiMACs.Load(mac); ok && (confirmed == ip || confirmed == true) {
+		return
+	}
+	collectESXiMu.Lock()
+	retry, waiting := collectESXiRetry[mac]
+	skip := collectESXiChecked[mac] == ip || waiting && retry.ip == ip
+	collectESXiMu.Unlock()
+	if !skip {
 		esxiEnqueue(esxiJob{mac: mac, ip: ip})
 	}
 }
 
-// enqueueESXiJob sends a job to the validation workers without blocking.
+// enqueueESXiJob sends a job to the validation workers without blocking. A
+// MAC already queued for the same IP is not queued again, and when the queue
+// is full the job is dropped: the MAC still has no verdict, so a later ARP
+// sweep queues it again. (A goroutine per overflow job used to park about
+// 35k goroutines at startup, F67.)
 func enqueueESXiJob(job esxiJob) {
+	if !collectClaimESXi(job) {
+		return
+	}
 	select {
 	case validationQueue <- job:
 		// sent successfully
 	default:
-		// queue is full, spawn a background goroutine to avoid blocking
-		go func(j esxiJob) {
-			validationQueue <- j
-		}(job)
+		collectReleaseESXi(job)
 	}
 }
 
+// collectClaimESXi marks job as queued; false when it already is.
+func collectClaimESXi(job esxiJob) bool {
+	collectESXiMu.Lock()
+	defer collectESXiMu.Unlock()
+	if collectESXiInflight[job.mac] == job.ip {
+		return false
+	}
+	collectESXiInflight[job.mac] = job.ip
+	return true
+}
+
+// collectReleaseESXi ends the queued mark of job.
+func collectReleaseESXi(job esxiJob) {
+	collectESXiMu.Lock()
+	defer collectESXiMu.Unlock()
+	if collectESXiInflight[job.mac] == job.ip {
+		delete(collectESXiInflight, job.mac)
+	}
+}
+
+// collectCheckESXi checks one queued MAC/IP and records the verdict. A job
+// whose MAC has another IP by now (or none) is dropped. A host that does not
+// accept :443 is retried later with a growing delay (F65: it used to be
+// checked once only). A host that answers gets a verdict for that IP: ESXi
+// (ConfirmedESXiMACs) or not, which also clears a confirmation made at an
+// older IP of the MAC (Q18).
+func collectCheckESXi(job esxiJob, reachable, isESXi func(ip string) bool, now time.Time) {
+	if !collectMACIPCurrent(job.mac, job.ip) {
+		return
+	}
+	if !reachable(job.ip) {
+		collectESXiMu.Lock()
+		retry := collectESXiRetry[job.mac]
+		if retry.ip != job.ip {
+			retry = collectESXiRetryJob{ip: job.ip}
+		}
+		retry.tries++
+		retry.due = now.Add(collectESXiRetryDelay(retry.tries))
+		collectESXiRetry[job.mac] = retry
+		collectESXiMu.Unlock()
+		return
+	}
+	confirmed := isESXi(job.ip)
+	collectESXiMu.Lock()
+	collectESXiChecked[job.mac] = job.ip
+	delete(collectESXiRetry, job.mac)
+	collectESXiMu.Unlock()
+	if !confirmed {
+		ConfirmedESXiMACs.Delete(job.mac)
+		return
+	}
+	if previous, _ := ConfirmedESXiMACs.Swap(job.mac, job.ip); previous != job.ip {
+		fmt.Printf("✅ [Active-Check] Confirmed ESXi via HTTP: %s (MAC: %s)\n", job.ip, job.mac)
+	}
+}
+
+// collectESXiRetryDelay is the wait before retry n of a host that did not
+// answer: 5 minutes, doubled per try, at most 6 hours.
+func collectESXiRetryDelay(tries int) time.Duration {
+	delay := 5 * time.Minute
+	for i := 1; i < tries && delay < 6*time.Hour; i++ {
+		delay *= 2
+	}
+	if delay > 6*time.Hour {
+		delay = 6 * time.Hour
+	}
+	return delay
+}
+
+// collectRetryESXi queues again the checks whose host did not answer, once
+// their retry time has come, and forgets the ones whose MAC has another IP
+// now (or none). Called after every ARP sweep. Returns the jobs queued.
+func collectRetryESXi(now time.Time) int {
+	collectESXiMu.Lock()
+	retries := maps.Clone(collectESXiRetry)
+	collectESXiMu.Unlock()
+
+	queued := 0
+	for _, mac := range slices.Sorted(maps.Keys(retries)) {
+		retry := retries[mac]
+		if !collectMACIPCurrent(mac, retry.ip) {
+			collectESXiMu.Lock()
+			if current, ok := collectESXiRetry[mac]; ok && current.ip == retry.ip {
+				delete(collectESXiRetry, mac)
+			}
+			collectESXiMu.Unlock()
+			continue
+		}
+		if now.Before(retry.due) {
+			continue
+		}
+		esxiEnqueue(esxiJob{mac: mac, ip: retry.ip})
+		queued++
+	}
+	return queued
+}
 
 // ─── MAC-IP Cache ──────────────────────────────────────────────────────────────
 
@@ -111,37 +278,148 @@ var macIPCacheFile = "mac_ip_cache.json"
 var macIPServiceRunning bool
 var macIPServiceMu sync.Mutex
 
-// loadMacIPCache loads mac→ip mappings from JSON file into globalMACtoIP
+// collectMACIPSeen holds when each globalMACtoIP entry was last seen in an
+// ARP table (guarded by globalMACtoIPMutex). An entry without a time (loaded
+// from a cache file written before the TTL, or put there by other code) gets
+// one at the next prune, which starts its TTL.
+var collectMACIPSeen = make(map[string]time.Time)
+
+// collectMACIPTTL: an entry not seen in any ARP table for this long is
+// dropped (Q18), so old IPs stop labelling nodes and feeding the ESXi probe.
+var collectMACIPTTL = 7 * 24 * time.Hour
+
+// collectMACIPRecord is one mac_ip_cache.json entry ({"mac": {"ip", "seen"}},
+// seen in Unix seconds, 0 or absent when unknown). Files written before the
+// TTL hold plain "mac": "ip" strings; they still load.
+type collectMACIPRecord struct {
+	IP   string `json:"ip"`
+	Seen int64  `json:"seen,omitempty"`
+}
+
+// collectMACIPCurrent reports whether globalMACtoIP maps mac to ip.
+func collectMACIPCurrent(mac, ip string) bool {
+	globalMACtoIPMutex.RLock()
+	defer globalMACtoIPMutex.RUnlock()
+	current, ok := globalMACtoIP[mac]
+	return ok && current == ip
+}
+
+// collectMergeMACIP records ARP observations in globalMACtoIP. Every ARP
+// collector uses it (F70): the last observation wins (Q18; it used to be
+// the first, so IPs never changed), only usable MACs and IPv4 addresses are
+// kept (Q11), each observed mapping is marked seen now, and the ESXi check
+// is asked for it (queueESXiValidation skips what was already checked at
+// that IP, so only new and changed IPs reach the probe). It returns the
+// number of new and of changed mappings.
+func collectMergeMACIP(entries []ARPEntry, now time.Time) (added, changed int) {
+	var jobs []esxiJob
+	globalMACtoIPMutex.Lock()
+	for _, e := range entries {
+		mac := collectCanonicalMAC(e.MACAddress)
+		if mac == "" || !collectUsableMAC(mac) || parseIPv4(e.IPAddress) == "" {
+			continue
+		}
+		switch old, exists := globalMACtoIP[mac]; {
+		case !exists:
+			added++
+		case old != e.IPAddress:
+			changed++
+		}
+		globalMACtoIP[mac] = e.IPAddress
+		collectMACIPSeen[mac] = now
+		jobs = append(jobs, esxiJob{mac: mac, ip: e.IPAddress})
+	}
+	globalMACtoIPMutex.Unlock()
+	for _, job := range jobs {
+		queueESXiValidation(job.mac, job.ip)
+	}
+	return added, changed
+}
+
+// collectPruneMACIP drops the globalMACtoIP entries not seen for the TTL,
+// starts the TTL of entries without a time, and forgets times of MACs that
+// have no entry. Returns the number of entries dropped.
+func collectPruneMACIP(now time.Time) int {
+	globalMACtoIPMutex.Lock()
+	defer globalMACtoIPMutex.Unlock()
+	dropped := 0
+	for mac := range globalMACtoIP {
+		seen, known := collectMACIPSeen[mac]
+		switch {
+		case !known:
+			collectMACIPSeen[mac] = now
+		case now.Sub(seen) > collectMACIPTTL:
+			delete(globalMACtoIP, mac)
+			delete(collectMACIPSeen, mac)
+			dropped++
+		}
+	}
+	for mac := range collectMACIPSeen {
+		if _, ok := globalMACtoIP[mac]; !ok {
+			delete(collectMACIPSeen, mac)
+		}
+	}
+	return dropped
+}
+
+// loadMacIPCache loads mac→ip mappings from JSON file into globalMACtoIP.
+// Keys are canonicalized, unusable MACs (Q11), empty IPs and entries older
+// than the TTL are skipped, and entries already in memory are kept (they are
+// at least as fresh). Nothing is queued for the ESXi check: the ARP sweeps
+// queue the MACs they actually see (F67: the whole cache, ~36.8k :443
+// dials, was queued at every start).
 func loadMacIPCache() {
 	data, err := os.ReadFile(macIPCacheFile)
 	if err != nil {
 		// File doesn't exist yet — not an error
 		return
 	}
-	var cache map[string]string
+	var cache map[string]json.RawMessage
 	if err := json.Unmarshal(data, &cache); err != nil {
 		fmt.Printf("⚠️ [MacIPService] Failed to parse %s: %v\n", macIPCacheFile, err)
 		return
 	}
+	now := time.Now()
 	globalMACtoIPMutex.Lock()
 	loaded := 0
-	for mac, ip := range cache {
-		if globalMACtoIP[mac] == "" {
-			globalMACtoIP[mac] = ip
-			queueESXiValidation(mac, ip) // Send to validation queue
-			loaded++
+	for key, raw := range cache {
+		var rec collectMACIPRecord
+		if json.Unmarshal(raw, &rec.IP) != nil && json.Unmarshal(raw, &rec) != nil {
+			continue
 		}
+		mac := collectCanonicalMAC(key)
+		if mac == "" || !collectUsableMAC(mac) || parseIPv4(rec.IP) == "" {
+			continue
+		}
+		if rec.Seen > 0 && now.Sub(time.Unix(rec.Seen, 0)) > collectMACIPTTL {
+			continue
+		}
+		if _, exists := globalMACtoIP[mac]; exists {
+			continue
+		}
+		globalMACtoIP[mac] = rec.IP
+		if rec.Seen > 0 {
+			collectMACIPSeen[mac] = time.Unix(rec.Seen, 0)
+		} else {
+			delete(collectMACIPSeen, mac)
+		}
+		loaded++
 	}
 	globalMACtoIPMutex.Unlock()
 	fmt.Printf("📂 [MacIPService] Loaded %d MAC-IP entries from cache\n", loaded)
 }
 
-// saveMacIPCache saves globalMACtoIP to JSON file atomically
+// saveMacIPCache saves globalMACtoIP to JSON file atomically, with the time
+// each entry was last seen (collectMACIPRecord)
 func saveMacIPCache() {
 	globalMACtoIPMutex.RLock()
-	snapshot := make(map[string]string, len(globalMACtoIP))
-	for k, v := range globalMACtoIP {
-		snapshot[k] = v
+	snapshot := make(map[string]collectMACIPRecord, len(globalMACtoIP))
+	for mac, ip := range globalMACtoIP {
+		rec := collectMACIPRecord{IP: ip}
+		if seen, ok := collectMACIPSeen[mac]; ok {
+			rec.Seen = seen.Unix()
+		}
+		snapshot[mac] = rec
 	}
 	globalMACtoIPMutex.RUnlock()
 
@@ -160,28 +438,21 @@ func saveMacIPCache() {
 // ─── ARP Collection from all switches ─────────────────────────────────────────
 
 // collectARPFromSwitch collects ARP table from a single switch IP and
-// merges results into globalMACtoIP. Returns number of new entries added.
+// merges results into globalMACtoIP. Returns number of new or changed entries.
 func collectARPFromSwitch(snmpObj *SNMPObject, ip string) int {
+	updated, _ := collectARPMerge(snmpObj, ip)
+	return updated
+}
+
+// collectARPMerge merges the ARP table of ip into globalMACtoIP and returns
+// the number of new or changed mappings and of ARP rows read.
+func collectARPMerge(snmpObj *SNMPObject, ip string) (updated, rows int) {
 	entries, err := snmpObj.collectARPTable(ip)
 	if err != nil {
-		return 0
+		return 0, 0
 	}
-
-	newEntries := 0
-	globalMACtoIPMutex.Lock()
-	for _, e := range entries {
-		mac := normalizeMAC(e.MACAddress)
-		if mac == "" {
-			continue
-		}
-		if globalMACtoIP[mac] == "" {
-			globalMACtoIP[mac] = e.IPAddress
-			newEntries++
-			queueESXiValidation(mac, e.IPAddress) // Check new IP for ESXi
-		}
-	}
-	globalMACtoIPMutex.Unlock()
-	return newEntries
+	added, changed := collectMergeMACIP(entries, time.Now())
+	return added + changed, len(entries)
 }
 
 // collectARPFromAllSwitches collects ARP from gateway (all SVI IPs) + all discovered switches
@@ -194,11 +465,13 @@ func collectARPFromAllSwitches() {
 	}
 
 	totalNew := 0
+	totalRows := 0
 
 	// 1. Gateway — collect from its own IP first
-	n := collectARPFromSwitch(snmpObj, gatewayIP)
+	n, rows := collectARPMerge(snmpObj, gatewayIP)
+	totalRows += rows
 	if n > 0 {
-		fmt.Printf("🌐 [MacIPService] Gateway %s: +%d new MAC-IP entries\n", gatewayIP, n)
+		fmt.Printf("🌐 [MacIPService] Gateway %s: +%d new/changed MAC-IP entries\n", gatewayIP, n)
 		totalNew += n
 	}
 
@@ -209,9 +482,10 @@ func collectARPFromAllSwitches() {
 		if svi == gatewayIP {
 			continue // already done above
 		}
-		n := collectARPFromSwitch(snmpObj, svi)
+		n, rows := collectARPMerge(snmpObj, svi)
+		totalRows += rows
 		if n > 0 {
-			fmt.Printf("🌐 [MacIPService] Gateway SVI %s: +%d new MAC-IP entries\n", svi, n)
+			fmt.Printf("🌐 [MacIPService] Gateway SVI %s: +%d new/changed MAC-IP entries\n", svi, n)
 			totalNew += n
 		}
 	}
@@ -227,18 +501,28 @@ func collectARPFromAllSwitches() {
 	collectedDataMutex.RUnlock()
 
 	for _, ip := range switchIPs {
-		n := collectARPFromSwitch(snmpObj, ip)
+		n, rows := collectARPMerge(snmpObj, ip)
+		totalRows += rows
 		if n > 0 {
-			fmt.Printf("🔗 [MacIPService] Switch %s: +%d new MAC-IP entries\n", ip, n)
+			fmt.Printf("🔗 [MacIPService] Switch %s: +%d new/changed MAC-IP entries\n", ip, n)
 			totalNew += n
 		}
 	}
 
-	if totalNew > 0 {
-		fmt.Printf("✅ [MacIPService] Total new: %d entries. Saving cache...\n", totalNew)
+	// Drop entries not seen for the TTL (Q18). The cache is saved after every
+	// sweep that read ARP rows, so the last-seen times survive a restart.
+	now := time.Now()
+	dropped := collectPruneMACIP(now)
+	if totalNew > 0 || dropped > 0 {
+		fmt.Printf("✅ [MacIPService] New/changed: %d, expired: %d entries. Saving cache...\n", totalNew, dropped)
+	}
+	if totalRows > 0 || dropped > 0 {
 		saveMacIPCache()
 		// Note: IP enrichment happens automatically during rebuildGraph()
 	}
+
+	// Retry the ESXi checks whose host did not answer (F65)
+	collectRetryESXi(now)
 }
 
 // collectGatewaySVIIPs returns all IP addresses configured on the gateway device.

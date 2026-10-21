@@ -39,9 +39,9 @@
   ],
   "esxi_fingerprint": [
     {"body": "<html><body ng-app=\"esxUiApp\"></body></html>", "isESXiResponse": true},
-    {"body": "<title>VMware ESXi</title>", "isESXiResponse": true},
+    {"body": "<title>VMware ESXi</title>", "isESXiResponse": false},
     {"body": "<title>VMware vCenter Server</title>", "isESXiResponse": false},
-    {"body": "Blog post: how to install VMware ESXi at home", "isESXiResponse": true},
+    {"body": "Blog post: how to install VMware ESXi at home", "isESXiResponse": false},
     {"body": "", "isESXiResponse": false}
   ],
   "null_interfaces": [
