@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"image"
 	"image/color"
 	"image/draw"
@@ -139,7 +140,7 @@ func GenerateTopologySVG(graph *DJGraph) string {
 			mx := (src.X + tgt.X) / 2
 			my := (src.Y + tgt.Y) / 2
 			sb.WriteString(fmt.Sprintf(`<text x="%.1f" y="%.1f" fill="#555" font-size="7" text-anchor="middle">%s</text>`,
-				mx, my-3, truncateLabel(e.Label, 20)))
+				mx, my-3, svgText(truncateLabel(e.Label, 20))))
 		}
 	}
 
@@ -154,19 +155,30 @@ func GenerateTopologySVG(graph *DJGraph) string {
 		sb.WriteString(fmt.Sprintf(`<circle cx="%.1f" cy="%.1f" r="%.0f" fill="%s" stroke="#fff" stroke-width="1.5"/>`,
 			nd.X, nd.Y, r, fillColor))
 		sb.WriteString(fmt.Sprintf(`<text x="%.1f" y="%.1f" fill="#ccc" font-size="8" text-anchor="middle">%s</text>`,
-			nd.X, nd.Y+r+10, truncateLabel(nd.Label, 18)))
+			nd.X, nd.Y+r+10, svgText(truncateLabel(nd.Label, 18))))
 	}
 
 	sb.WriteString("</svg>")
 	return sb.String()
 }
 
-// truncateLabel shortens a label to maxLen chars
+// truncateLabel shortens a label to maxLen characters, ".." included. It
+// counts runes, so a multi-byte character (a Cyrillic name) is never cut in
+// half (R4).
 func truncateLabel(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen-2] + ".."
+	return string(runes[:maxLen-2]) + ".."
+}
+
+// svgText escapes device text (polled sysNames, LLDP names, port labels)
+// for an SVG <text> element: the switch "TTJ-3&4" made the topology SVG
+// malformed XML, which browsers show as a parse error (R4, like F86 in the
+// UI).
+func svgText(s string) string {
+	return html.EscapeString(s)
 }
 
 // GenerateTopologyPNG creates a PNG image of switch/router topology and returns base64 <img> tag

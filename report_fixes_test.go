@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // Tests for the report and export fixes (F71-F76, Q16). Except for
@@ -714,5 +717,48 @@ func TestAuditPickerOffersEveryReportGroup(t *testing.T) {
 		if !offered[group] {
 			t.Errorf("the audit picker does not offer group %q", group)
 		}
+	}
+}
+
+// svgWellFormed decodes svg as XML to the end and returns the first error.
+func svgWellFormed(svg string) error {
+	dec := xml.NewDecoder(strings.NewReader(svg))
+	for {
+		if _, err := dec.Token(); err == io.EOF {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("at byte %d: %w", dec.InputOffset(), err)
+		}
+	}
+}
+
+// TestTopologySVGWellFormed (R4): /api/report/topology-svg writes device
+// names and port labels as escaped XML text, and shortens them by
+// characters, so the document stays well-formed: the fixture switch
+// "TTJ-3&4" made browsers show an XML parse error instead of the
+// topology, and a byte cut could split a UTF-8 character.
+func TestTopologySVGWellFormed(t *testing.T) {
+	svg := GenerateTopologySVG(buildFixtureGraph(t))
+	if err := svgWellFormed(svg); err != nil {
+		t.Errorf("fixture topology SVG is not well-formed XML: %v", err)
+	}
+	if !strings.Contains(svg, "TTJ-3&amp;4") {
+		t.Error("precondition: the fixture SVG has no escaped TTJ-3&4 label")
+	}
+
+	resetState(t)
+	g := NewDJGraph()
+	addInfoNode(g, "4c:ae:a3:09:84:01", "<script>alert(1)</script>\n10.0.9.84")
+	addInfoNode(g, "4c:ae:a3:09:84:02", "Коммутатор-корпус-2\n10.0.9.85")
+	g.AddEdge("4c:ae:a3:09:84:01", "4c:ae:a3:09:84:02", `GE1/0/1 "uplink" & <b>|GE1/0/48`)
+	svg = GenerateTopologySVG(g)
+	if err := svgWellFormed(svg); err != nil {
+		t.Errorf("SVG with markup and Cyrillic labels is not well-formed XML: %v\n%s", err, svg)
+	}
+	if !utf8.ValidString(svg) || strings.Contains(svg, "<script") || !strings.Contains(svg, "Коммутатор-корпу..") {
+		t.Errorf("labels not escaped or not cut by characters:\n%s", svg)
+	}
+	if got, want := truncateLabel("Коммутатор-корпус-2", 18), "Коммутатор-корпу.."; got != want { // 16 characters and ".."
+		t.Errorf("truncateLabel = %q, want %q", got, want)
 	}
 }
