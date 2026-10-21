@@ -477,3 +477,61 @@ func TestReportZabbixExportUsesDeviceIPs(t *testing.T) {
 		t.Errorf("Zabbix map elements = %v, want %v", mapHosts, wantHosts)
 	}
 }
+
+// reportBFSCore runs ExportBFSDepths and returns core_switch_ip.
+func reportBFSCore(t *testing.T, g *DJGraph) string {
+	t.Helper()
+	dir := t.TempDir()
+	exportsDir = dir
+	ExportBFSDepths(g)
+	var out BFSDepthExport
+	reportReadJSON(t, filepath.Join(dir, "bfs_depths.json"), &out)
+	return out.CoreSwitchIP
+}
+
+// TestReportBFSRoot (F76): the BFS root is the gateway's switch node, never a
+// VM or endpoint whose label merely contains the gateway IP, and without a
+// gateway node it is the same busiest switch on every run.
+func TestReportBFSRoot(t *testing.T) {
+	resetState(t)
+	gw := "aa:bb:cc:76:00:01"
+	g := NewDJGraph()
+	addInfoNode(g, gw, "GW\n"+gatewayIP)
+	addInfoNode(g, "00:0c:29:76:00:02", "[VM] 🐧 Linux VMware\n"+gatewayIP)
+	addInfoNode(g, "aa:bb:cc:76:00:03", "sw-3\n10.0.76.3")
+	addInfoNode(g, "00:1b:21:76:00:04", "[ENDPOINT] Intel\n10.0.76.4")
+	g.AddEdge(gw, "aa:bb:cc:76:00:03", "GE1/0/1|GE1/0/24")
+	g.AddEdge("aa:bb:cc:76:00:03", "00:0c:29:76:00:02", "GE1/0/2 [T]")
+	g.AddEdge("aa:bb:cc:76:00:03", "00:1b:21:76:00:04", "GE1/0/3|")
+	reportSetDevices(&DeviceData{IP: gatewayIP, SysName: "GW", ChassisID: gw})
+	for i := 0; i < 40; i++ {
+		if core := reportBFSCore(t, g); core != gw {
+			t.Fatalf("run %d: BFS root = %s, want the gateway switch %s", i, core, gw)
+		}
+	}
+	// Not polled: the switch whose label has the gateway IP as a line.
+	reportSetDevices()
+	for i := 0; i < 40; i++ {
+		if core := reportBFSCore(t, g); core != gw {
+			t.Fatalf("run %d without the polled gateway: BFS root = %s, want %s", i, core, gw)
+		}
+	}
+
+	// The gateway is neither a node nor polled: the busiest switch, with ties
+	// broken the same way on every run. The endpoint's label contains the
+	// gateway IP as a substring only.
+	reportSetDevices()
+	gatewayIP = "10.0.76.1"
+	h := NewDJGraph()
+	addInfoNode(h, "aa:bb:cc:76:00:11", "sw-11\n10.0.76.11")
+	addInfoNode(h, "aa:bb:cc:76:00:12", "sw-12\n10.0.76.12")
+	addInfoNode(h, "00:1b:21:76:00:13", "[ENDPOINT] Intel\n10.0.76.13")
+	addInfoNode(h, "00:1b:21:76:00:14", "[ENDPOINT] Intel\n10.0.76.14")
+	h.AddEdge("aa:bb:cc:76:00:11", "00:1b:21:76:00:13", "GE1/0/3|")
+	h.AddEdge("aa:bb:cc:76:00:12", "00:1b:21:76:00:14", "GE1/0/3|")
+	for i := 0; i < 40; i++ {
+		if core := reportBFSCore(t, h); core != "aa:bb:cc:76:00:11" {
+			t.Fatalf("run %d: BFS root = %s, want aa:bb:cc:76:00:11", i, core)
+		}
+	}
+}

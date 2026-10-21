@@ -1,10 +1,13 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -160,46 +163,7 @@ func ExportBFSDepths(graph *DJGraph) {
 		return
 	}
 
-	// Find core switch - try multiple strategies
-	coreID := gatewayIP
-	if !graph.Nodes[coreID] {
-		// Strategy 1: Search SwitchInfo for node containing gateway IP
-		for nodeID, info := range graph.SwitchInfo {
-			if strings.Contains(info, gatewayIP) {
-				coreID = nodeID
-				break
-			}
-		}
-	}
-	if !graph.Nodes[coreID] {
-		// Strategy 1.5: Resolve gateway IP → ChassisID via collectedData
-		collectedDataMutex.RLock()
-		if devData, ok := collectedData[gatewayIP]; ok && devData.ChassisID != "" {
-			resolved := normalizeID(devData.ChassisID, 0)
-			if graph.Nodes[resolved] {
-				coreID = resolved
-			}
-		}
-		collectedDataMutex.RUnlock()
-	}
-	if !graph.Nodes[coreID] {
-		// Strategy 2: Find node with most edges (likely core switch)
-		maxEdges := 0
-		for nodeID := range graph.Nodes {
-			// Count both outgoing and incoming edges
-			edgeCount := len(graph.Edges[nodeID])
-			for _, targets := range graph.Edges {
-				if _, ok := targets[nodeID]; ok {
-					edgeCount++
-				}
-			}
-			if edgeCount > maxEdges {
-				maxEdges = edgeCount
-				coreID = nodeID
-			}
-		}
-	}
-
+	coreID := reportBFSRoot(graph)
 	depths := graph.CalculateDepths(coreID)
 
 	// Build depth distribution
@@ -227,6 +191,11 @@ func ExportBFSDepths(graph *DJGraph) {
 		}
 	}
 
+	// Deepest first, then by node id (depths is a map)
+	slices.SortFunc(deepDevices, func(a, b DeepDeviceInfo) int {
+		return cmp.Or(cmp.Compare(b.Depth, a.Depth), strings.Compare(a.NodeID, b.NodeID))
+	})
+
 	avgDepth := 0.0
 	if len(depths) > 0 {
 		avgDepth = float64(totalDepth) / float64(len(depths))
@@ -246,6 +215,59 @@ func ExportBFSDepths(graph *DJGraph) {
 	jsonData, _ := json.MarshalIndent(export, "", "  ")
 	os.WriteFile(filepath.Join(exportsDir, "bfs_depths.json"), jsonData, 0644)
 	fmt.Println("✅ BFS depth ma'lumotlari saqlandi: results/bfs_depths.json")
+}
+
+// reportBFSRoot picks the BFS root: the gateway's node (gatewayIP is a node
+// id, or the gateway is a polled switch), else a switch or router node with
+// the gateway IP as a whole label line, else the switch or router with the
+// most links. Nodes are visited in id order and ties go to the smallest id,
+// so a graph always gives the same root, and a VM or endpoint whose label
+// merely contains the gateway IP is never chosen.
+func reportBFSRoot(graph *DJGraph) string {
+	if graph.Nodes[gatewayIP] {
+		return gatewayIP
+	}
+	gatewayNode := ""
+	collectedDataMutex.RLock()
+	if gw, ok := collectedData[gatewayIP]; ok {
+		gatewayNode = reportDeviceNode(graph, gw)
+	}
+	collectedDataMutex.RUnlock()
+	if gatewayNode != "" {
+		return gatewayNode
+	}
+
+	ids := slices.Sorted(maps.Keys(graph.Nodes))
+	var switches []string
+	for _, id := range ids {
+		if group := graph.determineDeviceGroup(id, graph.SwitchInfo[id]); group == "switch" || group == "router" {
+			switches = append(switches, id)
+		}
+	}
+	for _, id := range switches {
+		if slices.Contains(strings.Split(graph.SwitchInfo[id], "\n"), gatewayIP) {
+			return id
+		}
+	}
+
+	candidates := switches
+	if len(candidates) == 0 {
+		candidates = ids
+	}
+	links := make(map[string]int)
+	for src, targets := range graph.Edges {
+		links[src] += len(targets)
+		for tgt := range targets {
+			links[tgt]++
+		}
+	}
+	root := candidates[0]
+	for _, id := range candidates {
+		if links[id] > links[root] {
+			root = id
+		}
+	}
+	return root
 }
 
 // ============================================================
