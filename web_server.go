@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"log"
@@ -703,30 +704,16 @@ func reportGenerateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In a real app, we would load the specific file.
-	// For now, let's assume we load it from disk using simple file read
-	// duplicating logic from analyzer or capture manager would be better
-	
-	// Create Analyzer
-	filename := fmt.Sprintf("captures/%s_full_data.json", sessionID)
-	// assuming capture manager initializes "captures/" dir relative to cwd
-	
-	file, err := os.Open(filename)
-	if err != nil {
-		http.Error(w, "Session file not found: "+err.Error(), http.StatusNotFound)
-		return
-	}
-	defer file.Close()
-
-	var fullData FullCaptureData
-	if err := json.NewDecoder(file).Decode(&fullData); err != nil {
-		http.Error(w, "Failed to decode session data: "+err.Error(), http.StatusInternalServerError)
+	fullData, ok := analyzerLoadCapture(w, sessionID)
+	if !ok {
 		return
 	}
 
+	// A capture report must not overwrite the live health score, anomaly map
+	// and total_macs, send Telegram alerts or write InfluxDB (F14)
 	analyzer := NewAnalyzer(fullData)
-	report := analyzer.Analyze()
-	
+	report := analyzer.BuildReport()
+
 	// Generate text report
 	textReport := report.GenerateTextReport()
 
@@ -734,6 +721,27 @@ func reportGenerateHandler(w http.ResponseWriter, r *http.Request) {
 		"report":      report,
 		"text_summary": textReport,
 	})
+}
+
+// analyzerLoadCapture loads a saved capture for the report endpoints from the
+// capture manager's directory, or writes the HTTP error.
+func analyzerLoadCapture(w http.ResponseWriter, sessionID string) (FullCaptureData, bool) {
+	if globalCaptureManager == nil {
+		http.Error(w, "Capture manager not initialized", http.StatusInternalServerError)
+		return FullCaptureData{}, false
+	}
+	fullData, err := globalCaptureManager.LoadCapture(sessionID)
+	switch {
+	case errors.Is(err, errAnalyzerCaptureID):
+		http.Error(w, "Invalid 'id' parameter", http.StatusBadRequest)
+	case errors.Is(err, errAnalyzerCaptureNotFound):
+		http.Error(w, "Session file not found", http.StatusNotFound)
+	case err != nil:
+		http.Error(w, "Failed to decode session data: "+err.Error(), http.StatusInternalServerError)
+	default:
+		return fullData, true
+	}
+	return FullCaptureData{}, false
 }
 
 // reportDownloadHandler downloads the report as a Word document (.doc)
@@ -745,22 +753,13 @@ func reportDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := fmt.Sprintf("captures/%s_full_data.json", sessionID)
-	file, err := os.Open(filename)
-	if err != nil {
-		http.Error(w, "Session file not found", http.StatusNotFound)
-		return
-	}
-	defer file.Close()
-
-	var fullData FullCaptureData
-	if err := json.NewDecoder(file).Decode(&fullData); err != nil {
-		http.Error(w, "Failed to decode session data", http.StatusInternalServerError)
+	fullData, ok := analyzerLoadCapture(w, sessionID)
+	if !ok {
 		return
 	}
 
 	analyzer := NewAnalyzer(fullData)
-	report := analyzer.Analyze()
+	report := analyzer.BuildReport() // no live-state side effects (F14)
 	htmlContent := report.GenerateHTMLReport()
 
 	// Set headers for Word download

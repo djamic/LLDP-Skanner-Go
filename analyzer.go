@@ -147,8 +147,31 @@ type Report struct {
 	HealthScore int                      `json:"health_score"`
 }
 
-// Analyze performs all analysis checks
+// Analyze runs every check (BuildReport) and publishes the result as the
+// live network state: Telegram alerts, the InfluxDB anomaly summary, and the
+// health score, anomalies and MAC count behind /api/graph and the reports.
+// Capture reports call BuildReport instead, so they never touch that state.
 func (na *NetworkAnalyzer) Analyze() Report {
+	report := na.BuildReport()
+
+	// Trigger Telegram notification if there are critical issues or health score is low
+	na.notifyTelegramIfCritical(&report)
+
+	// B.4: Write anomaly summary to InfluxDB
+	WriteAnomalySummary(&report)
+
+	// E.1/E.2: Store health score + anomaly map (by graph node) for UI
+	// enrichment via /api/graph, and the suggestions for the reports
+	anomalyMap := na.anomalyMap(report.Suggestions)
+	totalMACs := len(analyzerUniqueMACs(na.idx().devices))
+	SetLastReport(report.HealthScore, anomalyMap, totalMACs, report.Suggestions...)
+
+	return report
+}
+
+// BuildReport performs all analysis checks and computes the health score.
+// It has no side effects.
+func (na *NetworkAnalyzer) BuildReport() Report {
 	report := Report{
 		SessionID:   na.Data.Session.ID,
 		GeneratedAt: time.Now(),
@@ -192,18 +215,6 @@ func (na *NetworkAnalyzer) Analyze() Report {
 
 	// Calculate Health Score
 	report.HealthScore = na.CalculateHealthScore(&report)
-
-	// Trigger Telegram notification if there are critical issues or health score is low
-	na.notifyTelegramIfCritical(&report)
-
-	// B.4: Write anomaly summary to InfluxDB
-	WriteAnomalySummary(&report)
-
-	// E.1/E.2: Store health score + anomaly map (by graph node) for UI
-	// enrichment via /api/graph, and the suggestions for the reports
-	anomalyMap := na.anomalyMap(report.Suggestions)
-	totalMACs := len(analyzerUniqueMACs(na.idx().devices))
-	SetLastReport(report.HealthScore, anomalyMap, totalMACs, report.Suggestions...)
 
 	return report
 }

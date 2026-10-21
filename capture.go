@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -182,6 +183,34 @@ func (cm *CaptureManager) ListCaptures() ([]CaptureSession, error) {
 		file.Close()
 	}
 	return sessions, nil
+}
+
+// LoadCapture errors: the id is not a plain name, or no session has it.
+var (
+	errAnalyzerCaptureID       = errors.New("invalid session id")
+	errAnalyzerCaptureNotFound = errors.New("session file not found")
+)
+
+// LoadCapture reads the saved data of a capture session. The id must be a
+// plain file name part, so a request cannot read outside the capture
+// directory.
+func (cm *CaptureManager) LoadCapture(sessionID string) (FullCaptureData, error) {
+	var data FullCaptureData
+	if sessionID == "" || filepath.Base(sessionID) != sessionID {
+		return data, fmt.Errorf("%w %q", errAnalyzerCaptureID, sessionID)
+	}
+	file, err := os.Open(filepath.Join(cm.paramDir, sessionID+"_full_data.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return data, fmt.Errorf("%w: %v", errAnalyzerCaptureNotFound, err)
+	}
+	if err != nil {
+		return data, err
+	}
+	defer file.Close()
+	if err := json.NewDecoder(file).Decode(&data); err != nil {
+		return data, fmt.Errorf("failed to decode session data: %v", err)
+	}
+	return data, nil
 }
 
 // ActiveSession returns the current running session (or nil)

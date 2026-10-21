@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -15,8 +16,9 @@ import (
 
 // Tests for the analyzer fixes: one per-port Shadow-IT rule shared with the
 // graph (Q14, F15, F16, F49), the loopback chassis guard (F17), the STP
-// root check (F18), path depths (F19), anomalies on graph nodes (F11) and
-// unique total_macs (F13, Q15).
+// root check (F18), path depths (F19), anomalies on graph nodes (F11), the
+// report anomaly sections (F12), unique total_macs (F13, Q15) and capture
+// reports without side effects (F14).
 
 func analyzerIssueIDs(suggestions []OptimizationSuggestion, typ string) []string {
 	var out []string
@@ -274,6 +276,72 @@ func TestAnalyzerSTPRootBridges(t *testing.T) {
 		got := NewAnalyzer(FullCaptureData{DevicesData: values, Topology: topology}).analyzeSTP()
 		if len(got) != 1 || got[0].Device != "00:16:e0:5a:5c:e0" || got[0].Value != "2 non-core roots" {
 			t.Fatalf("run %d: got %+v, want one suggestion for root 00:16:e0:5a:5c:e0 with 2 non-core roots", run, got)
+		}
+	}
+}
+
+// TestAnalyzerCaptureReportKeepsLiveState: generating or downloading a
+// capture report analyses the capture but leaves the live health score,
+// anomaly map and total_macs alone, sends nothing to the bot and writes
+// nothing to InfluxDB (F14).
+func TestAnalyzerCaptureReportKeepsLiveState(t *testing.T) {
+	resetState(t)
+	live := &DeviceData{IP: "10.0.9.73", ChassisID: "4c:ae:a3:09:00:73", MACTable: macEntries(2, "00:1b:21:09:73:01", "00:1b:21:09:73:02")}
+	NewAnalyzer(FullCaptureData{DevicesData: devicesData(live)}).Analyze()
+	before := fmt.Sprint(lastReportRecord())
+	resetBot()
+
+	saved := globalCaptureManager
+	globalCaptureManager = &CaptureManager{paramDir: t.TempDir()}
+	t.Cleanup(func() { globalCaptureManager = saved })
+	capture := FullCaptureData{
+		Session:  CaptureSession{ID: "cap-1", Name: "cap-1", StartTime: fixedTime, Status: "completed"},
+		Topology: GraphData{Nodes: []GraphNode{{ID: "10.0.9.40", NodeType: "switch", Group: "switch"}}},
+		Metrics:  []TrafficMetrics{{DeviceIP: "10.0.9.40", Interface: "GE1/0/2", InDiscards: 4}},
+	}
+	raw, err := json.Marshal(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(globalCaptureManager.paramDir, "cap-1_full_data.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	influxRec.start("anomaly_summary")
+	rr := httptest.NewRecorder()
+	reportGenerateHandler(rr, httptest.NewRequest(http.MethodPost, "/api/report/generate?id=cap-1", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("generate: status %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Report Report `json:"report"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Report.Summary["congestion_issues"] != 1 || resp.Report.HealthScore != 98 {
+		t.Errorf("capture report: summary %v health %d, want the capture's congestion issue and health 98", resp.Report.Summary, resp.Report.HealthScore)
+	}
+	rr = httptest.NewRecorder()
+	reportDownloadHandler(rr, httptest.NewRequest(http.MethodGet, "/api/report/download?id=cap-1", nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Network Health Score: 98 / 100") {
+		t.Errorf("download: status %d, body without the capture's health score", rr.Code)
+	}
+	if points := influxRec.stop(); len(points) != 0 {
+		t.Errorf("capture reports wrote %d anomaly_summary point(s) to InfluxDB", len(points))
+	}
+	if msgs := bot.taken(); len(msgs) != 0 {
+		t.Errorf("capture reports sent %d bot message(s)", len(msgs))
+	}
+	if after := fmt.Sprint(lastReportRecord()); after != before {
+		t.Errorf("capture reports changed the live state:\nbefore %s\nafter  %s", before, after)
+	}
+
+	for id, want := range map[string]int{"missing": http.StatusNotFound, "../cap-1": http.StatusBadRequest} {
+		rr = httptest.NewRecorder()
+		reportGenerateHandler(rr, httptest.NewRequest(http.MethodPost, "/api/report/generate?id="+id, nil))
+		if rr.Code != want {
+			t.Errorf("generate id=%q: status %d, want %d", id, rr.Code, want)
 		}
 	}
 }
