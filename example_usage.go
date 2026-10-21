@@ -2864,56 +2864,103 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	return newGraph
 }
 
-// detectHypervisors scans the graph for switch ports where 2+ VM MACs are seen.
-// Such ports indicate a connected hypervisor server (ESXi, Hyper-V, QEMU, Xen, VirtualBox).
-// A virtual hypervisor node is inserted between the switch port and its VM endpoints.
-func detectHypervisors(graph *DJGraph) {
-	// VM OUI prefixes (first 3 bytes, lowercase colon-separated)
-	vmOUIPrefixes := map[string]string{
-		"00:0c:29": "VMware ESXi",
-		"00:50:56": "VMware vSphere",
-		"00:15:5d": "Hyper-V",
-		"08:00:27": "VirtualBox",
-		"52:54:00": "QEMU/KVM",
-		"00:16:3e": "Xen",
-	}
+// graphHypervisorTypes maps virtual-NIC OUIs (first 3 bytes, lowercase
+// colon-separated) to the platform shown on hyp- nodes.
+var graphHypervisorTypes = map[string]string{
+	"00:0c:29": "VMware ESXi",
+	"00:50:56": "VMware ESXi",
+	"00:05:69": "VMware ESXi",
+	"00:1c:14": "VMware ESXi",
+	"bc:24:11": "Proxmox VE",
+	"00:15:5d": "Hyper-V",
+	"08:00:27": "VirtualBox",
+	"52:54:00": "QEMU/KVM",
+	"00:16:3e": "Xen",
+}
 
-	// portVMs: switchNodeID → portLabel → []vmMAC
-	// Edges are visited in sorted order, so each port's VM list (and with it
-	// the hypervisor type taken from its first MAC) is the same on every build.
+// graphHypervisorType returns the platform of a virtual-NIC MAC.
+func graphHypervisorType(mac string) (string, bool) {
+	mac = normalizeMAC(mac)
+	if len(mac) < 8 {
+		return "", false
+	}
+	t, ok := graphHypervisorTypes[mac[:8]]
+	return t, ok
+}
+
+// graphDominantHypervisorType is the most common platform among the VM MACs
+// of one port; a tie goes to the alphabetically first platform.
+func graphDominantHypervisorType(vmMACs []string) string {
+	counts := map[string]int{}
+	for _, mac := range vmMACs {
+		if t, ok := graphHypervisorType(mac); ok {
+			counts[t]++
+		}
+	}
+	best := ""
+	for _, t := range slices.Sorted(maps.Keys(counts)) {
+		if counts[t] > counts[best] {
+			best = t
+		}
+	}
+	return best
+}
+
+// graphEdgePort is the port name at the start of an edge label: the first
+// field before '|' ("GE1/0/26 [T]|" and "GE1/0/9 1G ↓5M ↑3M|eth0" give
+// GE1/0/26 and GE1/0/9), or "" for an empty label.
+func graphEdgePort(label string) string {
+	src, _, _ := strings.Cut(label, "|")
+	if fields := strings.Fields(src); len(fields) > 0 {
+		return fields[0]
+	}
+	return ""
+}
+
+// graphHubUplinkPort is the switch port of a hub node (from its "port|Hub"
+// uplink edge), or "".
+func graphHubUplinkPort(graph *DJGraph, hubID string) string {
+	for _, src := range slices.Sorted(maps.Keys(graph.Edges)) {
+		if label, ok := graph.Edges[src][hubID]; ok {
+			return graphEdgePort(label)
+		}
+	}
+	return ""
+}
+
+// detectHypervisors scans the graph for switch ports where 2+ VM MACs are seen.
+// Such ports indicate a connected hypervisor server (ESXi, Proxmox, Hyper-V, QEMU, Xen, VirtualBox).
+// A virtual hypervisor node is inserted between the switch port and its VM endpoints;
+// VMs behind a hub get it between the hub and the VMs, keyed by the hub's switch port.
+func detectHypervisors(graph *DJGraph) {
+	// portVMs: switchNodeID (or hub node ID) → port key → []vmMAC
+	// Edges are visited in sorted order, so each port's VM list is the same
+	// on every build.
 	portVMs := map[string]map[string][]string{}
 
 	for _, src := range slices.Sorted(maps.Keys(graph.Edges)) {
 		targets := graph.Edges[src]
 		for _, tgt := range slices.Sorted(maps.Keys(targets)) {
-			edgeLabel := targets[tgt]
 			// Check if tgt MAC is a VM OUI
-			mac := normalizeMAC(tgt)
-			if len(mac) < 8 {
+			if _, isVM := graphHypervisorType(tgt); !isVM {
 				continue
 			}
-			prefix := mac[:8]
-			if _, isVM := vmOUIPrefixes[prefix]; isVM {
-				// Extract port from edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26")
-				port := edgeLabel
-				if idx := strings.Index(port, " ["); idx > 0 {
-					port = port[:idx]
-				}
-				if idx := strings.Index(port, "|"); idx > 0 {
-					port = port[:idx]
-				}
-				port = strings.TrimSpace(port)
-				if port == "" {
-					port = "port"
-				}
-				// Normalize port name: GigabitEthernet1/0/26 → GE1/0/26
-				// GigabitF1/0/26 → GE1/0/26, Ten-GE1/0/49 → TE1/0/49
-				portKey := normalizePortForHypervisor(port)
-				if portVMs[src] == nil {
-					portVMs[src] = map[string][]string{}
-				}
-				portVMs[src][portKey] = append(portVMs[src][portKey], tgt)
+			// Port from the edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26"); a
+			// hub member's edge has no label, so the hub's uplink port is used
+			port := graphEdgePort(targets[tgt])
+			if port == "" && strings.HasPrefix(src, "hub-") {
+				port = graphHubUplinkPort(graph, src)
 			}
+			if port == "" {
+				port = "port"
+			}
+			// Normalize port name: GigabitEthernet1/0/26 → GE1/0/26
+			// GigabitF1/0/26 → GE1/0/26, Ten-GE1/0/49 → TE1/0/49
+			portKey := normalizePortForHypervisor(port)
+			if portVMs[src] == nil {
+				portVMs[src] = map[string][]string{}
+			}
+			portVMs[src][portKey] = append(portVMs[src][portKey], tgt)
 		}
 	}
 
@@ -2926,15 +2973,8 @@ func detectHypervisors(graph *DJGraph) {
 				continue // single VM MAC — could be real NIC, skip
 			}
 
-			// Detect dominant hypervisor type
-			hypervisorType := "Hypervisor"
-			for _, mac := range vmMACs {
-				prefix := normalizeMAC(mac)[:8]
-				if ht, ok := vmOUIPrefixes[prefix]; ok {
-					hypervisorType = ht
-					break
-				}
-			}
+			// Dominant hypervisor type (majority, fixed tie-break)
+			hypervisorType := graphDominantHypervisorType(vmMACs)
 
 			// Build unique hypervisor node ID
 			safePort := strings.NewReplacer("/", "_", " ", "_", ":", "_").Replace(port)
@@ -2949,34 +2989,20 @@ func detectHypervisors(graph *DJGraph) {
 			graph.AddNode(hypID)
 			graph.SwitchInfo[hypID] = fmt.Sprintf("[HYPERVISOR] %s\n%d VMs on %s", hypervisorType, len(vmMACs), port)
 
-			// Replace switch→VM edges with switch→hypervisor→VM
+			// Replace switch→VM edges with switch→hypervisor→VM (the VM
+			// nodes exist: AddEdge only links existing nodes)
 			for _, vmMAC := range vmMACs {
-				// Get original edge label
-				origLabel := ""
-				if graph.Edges[switchID] != nil {
-					origLabel = graph.Edges[switchID][vmMAC]
-					// Remove switch→VM edge
-					delete(graph.Edges[switchID], vmMAC)
-				}
-				// AddEdge requires both nodes to exist — ensure VM MAC is in Nodes
-				if !graph.Nodes[vmMAC] {
-					graph.AddNode(vmMAC)
-					if graph.SwitchInfo[vmMAC] == "" {
-						vendor := getMACVendor(vmMAC)
-						if vendor != "" {
-							graph.SwitchInfo[vmMAC] = fmt.Sprintf("[VM] %s", vendor)
-						} else {
-							graph.SwitchInfo[vmMAC] = "[VM]"
-						}
-					}
-				}
-				// Add hypervisor→VM edge
+				delete(graph.Edges[switchID], vmMAC)
 				graph.AddEdge(hypID, vmMAC, "vNIC")
-				_ = origLabel
 			}
 
-			// Add switch→hypervisor edge
-			graph.AddEdge(switchID, hypID, port)
+			// Add switch→hypervisor edge (unlabelled from a hub, like the
+			// hub's other members)
+			parentLabel := port
+			if strings.HasPrefix(switchID, "hub-") {
+				parentLabel = ""
+			}
+			graph.AddEdge(switchID, hypID, parentLabel)
 			fmt.Printf("🖥️  Hypervisor detected: %s on %s port %s (%d VMs: %s)\n",
 				hypervisorType, switchID[:min(len(switchID), 20)], port, len(vmMACs), vmMACs[0])
 		}

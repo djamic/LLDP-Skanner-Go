@@ -41,8 +41,8 @@
       "f4:b5:20:19:12:5e": "endpoint | [LLDP-EP]\nprinter-7\nHP LaserJet",
       "hub-4c:ae:a3:09:00:02-p11": "hub | [HUB] Unmanaged\n7 devices",
       "hub-4c:ae:a3:09:00:02-p24": "hub | [HUB] Unmanaged\n2 devices",
-      "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware vSphere\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43"
+      "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43"
     },
     "edges": [
       "10.0.9.5 -> 00:1b:21:09:51:01 : \"GE1/0/1|\"",
@@ -131,8 +131,8 @@
       "f4:b5:20:19:12:5e": "endpoint | [LLDP-EP]\nprinter-7\nHP LaserJet",
       "hub-4c:ae:a3:09:00:02-p11": "hub | [HUB] Unmanaged\n7 devices",
       "hub-4c:ae:a3:09:00:02-p24": "hub | [HUB] Unmanaged\n2 devices",
-      "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware vSphere\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43"
+      "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43"
     },
     "edges": [
       "10.0.9.5 -> 00:1b:21:09:51:01 : \"GE1/0/1|\"",
@@ -186,14 +186,14 @@
       "00:1b:21:00:07:03": "endpoint | [ENDPOINT] ",
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
       "hub-4c:ae:a3:00:01:01-p7": "hub | [HUB] Unmanaged\n3 devices",
-      "hyp-hub-4c:ae:a3:00:01:01-p7-port": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on port"
+      "hyp-hub-4c:ae:a3:00:01:01-p7-ge1_0_7": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/7"
     },
     "edges": [
       "4c:ae:a3:00:01:01 -> hub-4c:ae:a3:00:01:01-p7 : \"GE1/0/7|Hub\"",
       "hub-4c:ae:a3:00:01:01-p7 -> 00:1b:21:00:07:03 : \"\"",
-      "hub-4c:ae:a3:00:01:01-p7 -> hyp-hub-4c:ae:a3:00:01:01-p7-port : \"port\"",
-      "hyp-hub-4c:ae:a3:00:01:01-p7-port -> 00:0c:29:00:07:01 : \"vNIC\"",
-      "hyp-hub-4c:ae:a3:00:01:01-p7-port -> 00:0c:29:00:07:02 : \"vNIC\""
+      "hub-4c:ae:a3:00:01:01-p7 -> hyp-hub-4c:ae:a3:00:01:01-p7-ge1_0_7 : \"\"",
+      "hyp-hub-4c:ae:a3:00:01:01-p7-ge1_0_7 -> 00:0c:29:00:07:01 : \"vNIC\"",
+      "hyp-hub-4c:ae:a3:00:01:01-p7-ge1_0_7 -> 00:0c:29:00:07:02 : \"vNIC\""
     ]
   },
   "hyp_kvm_52_54_00": {
@@ -228,11 +228,13 @@
     "nodes": {
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
       "bc:24:11:00:05:01": "vm | [VM] 💻 VMware VM ",
-      "bc:24:11:00:05:02": "vm | [VM] 💻 VMware VM "
+      "bc:24:11:00:05:02": "vm | [VM] 💻 VMware VM ",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_5": "hypervisor | [HYPERVISOR] Proxmox VE\n2 VMs on ge1/0/5"
     },
     "edges": [
-      "4c:ae:a3:00:01:01 -> bc:24:11:00:05:01 : \"GE1/0/5 [T]\"",
-      "4c:ae:a3:00:01:01 -> bc:24:11:00:05:02 : \"GE1/0/5 [T]\""
+      "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_5 : \"ge1/0/5\"",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_5 -> bc:24:11:00:05:01 : \"vNIC\"",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_5 -> bc:24:11:00:05:02 : \"vNIC\""
     ]
   },
   "hyp_server_nic_phase2": {
@@ -270,12 +272,12 @@
       "00:50:56:00:09:01": "vm | [VM] 💻 VMware VM VMware",
       "00:50:56:00:09:02": "vm | [VM] 💻 VMware VM VMware",
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_91g↓5m↑3m": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/91g↓5m↑3m"
+      "hyp-4c:ae:a3:00:01:01-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/9"
     },
     "edges": [
-      "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_91g↓5m↑3m : \"ge1/0/91g↓5m↑3m\"",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_91g↓5m↑3m -> 00:50:56:00:09:01 : \"vNIC\"",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_91g↓5m↑3m -> 00:50:56:00:09:02 : \"vNIC\""
+      "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_9 : \"ge1/0/9\"",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_9 -> 00:50:56:00:09:01 : \"vNIC\"",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_9 -> 00:50:56:00:09:02 : \"vNIC\""
     ]
   },
   "hyp_vm_on_two_switches": {
@@ -285,8 +287,8 @@
       "00:50:56:00:0a:03": "vm | [VM] 💻 VMware VM VMware",
       "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
       "4c:ae:a3:00:01:02": "switch | SNR-S2985G\n172.20.0.12",
-      "hyp-4c:ae:a3:00:01:01-ge1_0_3": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/3",
-      "hyp-4c:ae:a3:00:01:02-ge1_0_4": "hypervisor | [HYPERVISOR] VMware vSphere\n2 VMs on ge1/0/4"
+      "hyp-4c:ae:a3:00:01:01-ge1_0_3": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/3",
+      "hyp-4c:ae:a3:00:01:02-ge1_0_4": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/4"
     },
     "edges": [
       "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_3 : \"ge1/0/3\"",
@@ -301,11 +303,13 @@
     "nodes": {
       "00:05:69:00:06:01": "vm | [VM] 💻 VMware VM ",
       "00:05:69:00:06:02": "vm | [VM] 💻 VMware VM ",
-      "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11"
+      "4c:ae:a3:00:01:01": "switch | SNR-S2985G\n172.20.0.11",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_6": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/6"
     },
     "edges": [
-      "4c:ae:a3:00:01:01 -> 00:05:69:00:06:01 : \"GE1/0/6 [T]\"",
-      "4c:ae:a3:00:01:01 -> 00:05:69:00:06:02 : \"GE1/0/6 [T]\""
+      "4c:ae:a3:00:01:01 -> hyp-4c:ae:a3:00:01:01-ge1_0_6 : \"ge1/0/6\"",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_6 -> 00:05:69:00:06:01 : \"vNIC\"",
+      "hyp-4c:ae:a3:00:01:01-ge1_0_6 -> 00:05:69:00:06:02 : \"vNIC\""
     ]
   }
 }

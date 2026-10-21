@@ -4,6 +4,7 @@ package main
 // FDB endpoint classification, hypervisor detection, groups and labels).
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -339,5 +340,98 @@ func TestGraphLLDPBuild(t *testing.T) {
 	}
 	if got := g.SwitchInfo["172.16.1.15"]; got != "[LLDP-EP]\nphone-4" {
 		t.Errorf("network-address neighbor label = %q", got)
+	}
+}
+
+// graphVMPortGraph is a switch with one VM port: every MAC gets a [VM] node
+// and an edge with the given label.
+func graphVMPortGraph(label string, macs ...string) *DJGraph {
+	g := NewDJGraph()
+	addInfoNode(g, "4c:ae:a3:00:05:00", "sw\n10.0.5.1")
+	for _, mac := range macs {
+		addInfoNode(g, mac, "[VM] 💻 VM")
+		g.AddEdge("4c:ae:a3:00:05:00", mac, label)
+	}
+	return g
+}
+
+// TestGraphHypervisorTypes covers F21/Q8/Q9 (every VMware OUI is 'VMware
+// ESXi', bc:24:11 is 'Proxmox VE') and F22 (majority, fixed tie-break).
+func TestGraphHypervisorTypes(t *testing.T) {
+	const sw = "4c:ae:a3:00:05:00"
+	cases := []struct {
+		macs []string
+		want string
+	}{
+		{[]string{"00:50:56:00:00:01", "00:0c:29:00:00:02", "00:50:56:00:00:03"}, "VMware ESXi"},
+		{[]string{"00:05:69:00:00:01", "00:05:69:00:00:02"}, "VMware ESXi"},
+		{[]string{"00:1c:14:00:00:01", "00:1c:14:00:00:02"}, "VMware ESXi"},
+		{[]string{"bc:24:11:00:00:01", "bc:24:11:00:00:02"}, "Proxmox VE"},
+		{[]string{"52:54:00:00:00:01", "00:15:5d:00:00:02", "52:54:00:00:00:03"}, "QEMU/KVM"},
+		{[]string{"52:54:00:00:00:01", "00:15:5d:00:00:02"}, "Hyper-V"},
+		{[]string{"00:16:3e:00:00:01", "08:00:27:00:00:02", "00:50:56:00:00:03"}, "VMware ESXi"},
+	}
+	for _, c := range cases {
+		for i := 0; i < 20; i++ { // map order must not matter
+			g := graphVMPortGraph("GE1/0/5 [T]|", c.macs...)
+			detectHypervisors(g)
+			hyp := "hyp-" + sw + "-ge1_0_5"
+			want := fmt.Sprintf("[HYPERVISOR] %s\n%d VMs on ge1/0/5", c.want, len(c.macs))
+			if got := g.SwitchInfo[hyp]; got != want {
+				t.Fatalf("%v: hyp label = %q, want %q", c.macs, got, want)
+			}
+			for _, mac := range c.macs {
+				if g.GetEdgeLabel(hyp, mac) != "vNIC" || g.GetEdge(sw, mac) {
+					t.Fatalf("%v: %s is not moved under %s: %v", c.macs, mac, hyp, g.Edges)
+				}
+				if g.SwitchInfo[mac] != "[VM] 💻 VM" {
+					t.Fatalf("VM label changed: %q", g.SwitchInfo[mac])
+				}
+			}
+		}
+	}
+}
+
+// TestGraphHypervisorPortKey covers F23 (speed and traffic text never enter
+// the port key) and F24 (VMs behind a hub are keyed by the hub's port).
+func TestGraphHypervisorPortKey(t *testing.T) {
+	const sw = "4c:ae:a3:00:05:00"
+	for _, label := range []string{"GigabitEthernet1/0/9 1G ↓5M ↑3M|eth0", "GE1/0/9 1G|vmnic0", "GE1/0/9 [V100]|", "GE1/0/9|"} {
+		g := graphVMPortGraph(label, "00:50:56:00:09:01", "00:50:56:00:09:02")
+		detectHypervisors(g)
+		hyp := "hyp-" + sw + "-ge1_0_9"
+		if got := g.SwitchInfo[hyp]; got != "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/9" {
+			t.Errorf("label %q: hyp %s = %q (nodes %v)", label, hyp, got, g.Nodes)
+		}
+		if got := g.GetEdgeLabel(sw, hyp); got != "ge1/0/9" {
+			t.Errorf("label %q: switch→hyp edge = %q", label, got)
+		}
+	}
+
+	g := NewDJGraph()
+	hub := "hub-" + sw + "-p7"
+	addInfoNode(g, sw, "sw\n10.0.5.1")
+	addInfoNode(g, hub, "[HUB] Unmanaged\n3 devices")
+	g.AddEdge(sw, hub, "GE1/0/7|Hub")
+	for _, mac := range []string{"00:0c:29:00:07:01", "00:0c:29:00:07:02", "00:1b:21:00:07:03"} {
+		addInfoNode(g, mac, "[ENDPOINT]")
+		g.AddEdge(hub, mac, "")
+	}
+	detectHypervisors(g)
+	hyp := "hyp-" + hub + "-ge1_0_7"
+	if got := g.SwitchInfo[hyp]; got != "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/7" {
+		t.Fatalf("hub hypervisor %s = %q (nodes %v)", hyp, got, g.Nodes)
+	}
+	if label, ok := g.Edges[hub][hyp]; !ok || label != "" {
+		t.Errorf("hub→hyp edge = %q, %v", label, ok)
+	}
+	if g.GetEdgeLabel(hyp, "00:0c:29:00:07:01") != "vNIC" || g.Edges[hub]["00:0c:29:00:07:01"] == "" && len(g.Edges[hub]) != 2 {
+		t.Errorf("hub VMs not moved: %v", g.Edges)
+	}
+	if _, still := g.Edges[hub]["00:0c:29:00:07:02"]; still {
+		t.Errorf("hub still links the VM directly: %v", g.Edges[hub])
+	}
+	if _, ok := g.Edges[hub]["00:1b:21:00:07:03"]; !ok {
+		t.Errorf("non-VM hub member lost its edge: %v", g.Edges[hub])
 	}
 }
