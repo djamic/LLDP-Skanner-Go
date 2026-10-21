@@ -791,6 +791,8 @@ func TestParseMACOctets(t *testing.T) {
 		{"\"pM{?WA\"", "70:4d:7b:3f:57:41"},
 		{"STRING: \"pM{?WA\"", "70:4d:7b:3f:57:41"},
 		{"pM{?WA", "70:4d:7b:3f:57:41"},
+		{"\"a\\\"b(cd\"", "61:22:62:28:63:64"}, // net-snmp escapes '"' and '\' in quotes
+		{"\"\\\\BCDEF\"", "5c:42:43:44:45:46"},
 		{"\"eth0\"", ""},
 		{"\"GigabitEthernet1/0/47\"", ""},
 		{"", ""},

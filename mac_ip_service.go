@@ -137,8 +137,8 @@ type collectESXiRetryJob struct {
 // cache entries, and 52:54:00 KVM guests) are never the management NIC of
 // an ESXi host, so they are not probed (F67).
 func collectESXiCandidate(mac string) bool {
-	b, ok := collectTextMAC(mac)
-	return ok && collectUsableMAC(mac) && b[0]&2 == 0
+	m, ok := parseMAC(mac)
+	return ok && !m.IsSpecial() && !m.IsLocal()
 }
 
 // queueESXiValidation asks the workers whether ip, the MAC's current IP, is
@@ -146,7 +146,7 @@ func collectESXiCandidate(mac string) bool {
 // MACs confirmed or checked at this IP, and MACs waiting for a retry at this
 // IP (collectRetryESXi queues those). A changed IP is checked again (Q18).
 func queueESXiValidation(mac, ip string) {
-	mac = collectCanonicalMAC(mac)
+	mac = canonicalMAC(mac)
 	if collectESXiWanted(mac, ip) {
 		esxiEnqueue(esxiJob{mac: mac, ip: ip})
 	}
@@ -185,7 +185,7 @@ func collectWarmupESXi() int {
 	active := make(map[string]bool)
 	for _, d := range collectedData {
 		for _, e := range d.MACTable {
-			active[collectCanonicalMAC(e.MACAddress)] = true
+			active[canonicalMAC(e.MACAddress)] = true
 		}
 	}
 	collectedDataMutex.RUnlock()
@@ -382,8 +382,8 @@ func collectMergeMACIP(entries []ARPEntry, now time.Time) (added, changed int) {
 	var jobs []esxiJob
 	globalMACtoIPMutex.Lock()
 	for _, e := range entries {
-		mac := collectCanonicalMAC(e.MACAddress)
-		if mac == "" || !collectUsableMAC(mac) || parseIPv4(e.IPAddress) == "" {
+		mac := usableMAC(e.MACAddress)
+		if mac == "" || parseIPv4(e.IPAddress) == "" {
 			continue
 		}
 		switch old, exists := globalMACtoIP[mac]; {
@@ -454,8 +454,8 @@ func loadMacIPCache() {
 		if json.Unmarshal(raw, &rec.IP) != nil && json.Unmarshal(raw, &rec) != nil {
 			continue
 		}
-		mac := collectCanonicalMAC(key)
-		if mac == "" || !collectUsableMAC(mac) || parseIPv4(rec.IP) == "" {
+		mac := usableMAC(key)
+		if mac == "" || parseIPv4(rec.IP) == "" {
 			continue
 		}
 		if rec.Seen > 0 && now.Sub(time.Unix(rec.Seen, 0)) > collectMACIPTTL {

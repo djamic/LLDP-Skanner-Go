@@ -764,24 +764,6 @@ const (
 	collectARPPhysOID = ".1.3.6.1.2.1.4.22.1.2"   // ipNetToMediaPhysAddress.<ifIndex>.<4 IP octets> = MAC
 )
 
-// collectUsableMAC applies the Q11 MAC filter: false for anything that is
-// not a 6-octet MAC, and for null, broadcast, multicast (I/G bit set) and
-// zero-OUI (00:00:00) addresses.
-func collectUsableMAC(mac string) bool {
-	b, ok := collectTextMAC(mac)
-	return ok && b[0]&1 == 0 && (b[0]|b[1]|b[2]) != 0
-}
-
-// collectCanonicalMAC returns a text MAC as "aa:bb:cc:dd:ee:ff", or "" when
-// it is not one.
-func collectCanonicalMAC(mac string) string {
-	b, ok := collectTextMAC(mac)
-	if !ok {
-		return ""
-	}
-	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5])
-}
-
 // collectSNMPValue splits one snmpbulkwalk -On line into the OID, the value
 // type ("Hex-STRING", "STRING", "INTEGER"...; "" when there is none, as for
 // exception text) and the value.
@@ -800,86 +782,25 @@ func collectSNMPValue(line string) (oid, typ, val string, ok bool) {
 // collectPhysAddress decodes an ipNetToMediaPhysAddress value into canonical
 // MAC text. net-snmp prints the 6 octets as "Hex-STRING: 00 0C 29 6F E0 BC",
 // or as a quoted STRING when every byte is printable ("P(J3:L" is
-// 50:28:4a:33:3a:4c, with \" and \\ escaped), or with the PhysAddress
-// DISPLAY-HINT when MIBs are loaded ("STRING: 0:c:29:aa:bb:cd"). Text MACs
-// with dashes ("f8-f0-82-7a-d9-69") are accepted as before.
+// 50:28:4a:33:3a:4c, with \" and \\ escaped: parseMACOctets), or with the
+// PhysAddress DISPLAY-HINT when MIBs are loaded ("STRING: 0:c:29:aa:bb:cd",
+// the unpadded form parseMAC reads). Text MACs with dashes
+// ("f8-f0-82-7a-d9-69") are accepted as before.
 func collectPhysAddress(typ, val string) (string, bool) {
-	var b [6]byte
 	switch typ {
 	case "Hex-STRING":
-		fields := strings.Fields(val)
-		if len(fields) != 6 {
+		if len(strings.Fields(val)) != 6 {
 			return "", false
 		}
-		for i, f := range fields {
-			n, err := strconv.ParseUint(f, 16, 8)
-			if err != nil || len(f) != 2 {
-				return "", false
-			}
-			b[i] = byte(n)
-		}
 	case "STRING", "":
-		text := val
-		if raw, quoted := collectUnquote(val); quoted {
-			if len(raw) == 6 {
-				copy(b[:], raw)
-				break
-			}
-			text = raw
+		if m, ok := parseMACOctets(val); ok && strings.HasPrefix(val, "\"") {
+			return m.String(), true
 		}
-		mac := collectCanonicalMAC(text)
-		return mac, mac != ""
 	default:
 		return "", false
 	}
-	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5]), true
-}
-
-// collectUnquote removes the quotes net-snmp puts around a printable STRING
-// and undoes its \" and \\ escapes. quoted is false when s is not quoted.
-func collectUnquote(s string) (raw string, quoted bool) {
-	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
-		return "", false
-	}
-	s = s[1 : len(s)-1]
-	var sb strings.Builder
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\\' && i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\\') {
-			i++
-		}
-		sb.WriteByte(s[i])
-	}
-	return sb.String(), true
-}
-
-// collectTextMAC parses a MAC written as text: six groups of one or two hex
-// digits separated by ':' or '-' (the unpadded net-snmp form included), or
-// six two-digit groups separated by spaces.
-func collectTextMAC(s string) ([6]byte, bool) {
-	var b [6]byte
-	s = strings.TrimSpace(s)
-	sep := ":"
-	switch {
-	case strings.Count(s, "-") == 5:
-		sep = "-"
-	case strings.Count(s, " ") == 5:
-		sep = " "
-	}
-	groups := strings.Split(s, sep)
-	if len(groups) != 6 {
-		return b, false
-	}
-	for i, g := range groups {
-		if len(g) == 0 || len(g) > 2 || sep == " " && len(g) != 2 {
-			return b, false
-		}
-		n, err := strconv.ParseUint(g, 16, 8)
-		if err != nil {
-			return b, false
-		}
-		b[i] = byte(n)
-	}
-	return b, true
+	mac := canonicalMAC(val)
+	return mac, mac != ""
 }
 
 // collectOIDIndex returns the index components after base in a numeric OID
@@ -923,11 +844,6 @@ func parseSNMPLine(line string) (oid string, value string, err error) {
 		// Sometimes just "10" if -Oqv? No we didn't use -Oqv.
 	}
 	return oid, strings.TrimSpace(value), nil
-}
-
-// normalizeChassisID cleans up Hex-STRING output
-func normalizeChassisID(val string) string {
-	return normalizeMAC(val)
 }
 
 // collectMACTable collects MAC address table (FDB) from BRIDGE-MIB
@@ -1023,7 +939,7 @@ func (s *SNMPObject) collectARPTable(ip string) ([]ARPEntry, error) {
 		}
 
 		// Skip null, broadcast, multicast and zero-OUI MACs (Q11)
-		if !collectUsableMAC(macAddr) {
+		if usableMAC(macAddr) == "" {
 			continue
 		}
 

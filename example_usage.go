@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -647,12 +648,13 @@ func normalizeID(id string, subtype int) string {
 	switch subtype {
 	case 4: // MAC Address (6 bytes)
 		// Input could be "4C AE A3 8E 42 11", any other MAC spelling or raw bytes
-		if mac := graphCanonicalMAC(id); mac != "" {
+		if mac := canonicalMAC(id); mac != "" {
 			return mac
 		}
 		if len(id) == 6 {
-			// Raw 6 bytes - convert to hex
-			return formatAsHex(id)
+			// Raw 6 bytes (STRING octets)
+			m, _ := parseMACOctets(id)
+			return m.String()
 		}
 		// Already formatted — normalize
 		return normalizeMAC(id)
@@ -671,7 +673,7 @@ func normalizeID(id string, subtype int) string {
 	case 7: // Locally Assigned (string identifier)
 		// Sometimes devices send a MAC like "f4-b5-20-19-12-5e" or
 		// "FA EF EF EF AA 4F": normalize anything that spells a MAC
-		if mac := graphCanonicalMAC(id); mac != "" {
+		if mac := canonicalMAC(id); mac != "" {
 			return mac
 		}
 		if isPrintableString(id) {
@@ -704,56 +706,6 @@ func normalizeID(id string, subtype int) string {
 	}
 }
 
-// graphCanonicalMAC returns s as "aa:bb:cc:dd:ee:ff" when it spells a MAC
-// address, else "". Accepted: an optional "Hex-STRING: "/"STRING: " prefix,
-// quotes and spaces around; six groups split by ':' (1-2 hex digits) or by
-// '-' or spaces (2 digits); Cisco "xxxx.xxxx.xxxx"; 12 bare hex digits.
-// It stands in for the shared MAC parser until that one is merged.
-func graphCanonicalMAC(s string) string {
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "Hex-STRING: ")
-	s = strings.TrimPrefix(s, "STRING: ")
-	s = strings.ToLower(strings.TrimSpace(strings.Trim(strings.TrimSpace(s), "\"")))
-	var groups []string
-	switch {
-	case strings.Count(s, ":") == 5:
-		groups = strings.Split(s, ":")
-	case strings.Count(s, "-") == 5:
-		groups = strings.Split(s, "-")
-	case strings.Count(s, ".") == 2 && len(s) == 14:
-		for _, g := range strings.Split(s, ".") {
-			if len(g) != 4 {
-				return ""
-			}
-			groups = append(groups, g[:2], g[2:])
-		}
-	case len(s) == 12:
-		for i := 0; i < 12; i += 2 {
-			groups = append(groups, s[i:i+2])
-		}
-	default:
-		groups = strings.Fields(s)
-	}
-	if len(groups) != 6 {
-		return ""
-	}
-	for i, g := range groups {
-		if len(g) == 1 && strings.Count(s, ":") == 5 {
-			g = "0" + g
-		}
-		if len(g) != 2 || !graphIsHexDigit(g[0]) || !graphIsHexDigit(g[1]) {
-			return ""
-		}
-		groups[i] = g
-	}
-	return strings.Join(groups, ":")
-}
-
-// graphIsHexDigit reports whether c is a lowercase hex digit.
-func graphIsHexDigit(c byte) bool {
-	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
-}
-
 // graphIsSNMPException reports whether a value is net-snmp exception text
 // ("No Such Object available on this agent at this OID", "No Such Instance
 // …", "No more variables …"), raw or as normalizeMAC left it in saved data.
@@ -766,33 +718,32 @@ func graphIsSNMPException(s string) bool {
 
 // graphLocalChassisID normalizes a switch's own lldpLocChassisId value (SNMP
 // exception text must be rejected before): any MAC spelling becomes
-// canonical, a 6-byte STRING is the MAC's raw octets (the form neighbors and
-// the FDB see), other STRING text stays as written, and any other value keeps
-// the normalizeMAC form.
+// canonical, a 6-byte STRING is the MAC's raw octets (parseMACOctets, the
+// form neighbors and the FDB see), other STRING text stays as written, and
+// any other value keeps the normalizeMAC form.
 func graphLocalChassisID(val string) string {
-	if mac := graphCanonicalMAC(val); mac != "" {
+	if mac := canonicalMAC(val); mac != "" {
 		return mac
 	}
 	v := strings.TrimSpace(val)
 	if len(v) < 2 || v[0] != '"' || v[len(v)-1] != '"' {
 		return normalizeMAC(v)
 	}
-	s := v[1 : len(v)-1]
-	if len(s) == 6 {
-		return formatAsHex(s)
+	if m, ok := parseMACOctets(v); ok {
+		return m.String()
 	}
-	return strings.TrimSpace(s)
+	return strings.TrimSpace(v[1 : len(v)-1])
 }
 
 // graphChassisKey is a switch's own-MAC key: its chassis id as a canonical
 // MAC, or "" when the chassis id is not a MAC (exception text, a name) or is
 // the null or broadcast address.
 func graphChassisKey(chassisID string) string {
-	mac := graphCanonicalMAC(chassisID)
-	if mac == "00:00:00:00:00:00" || mac == "ff:ff:ff:ff:ff:ff" {
+	m, ok := parseMAC(chassisID)
+	if !ok || m.IsNull() || m.IsBroadcast() {
 		return ""
 	}
-	return mac
+	return m.String()
 }
 
 // graphDeviceNodeID is the graph node id of a polled device: the chassis MAC
@@ -803,7 +754,7 @@ func graphDeviceNodeID(d *DeviceData) string {
 	if key := graphChassisKey(d.ChassisID); key != "" {
 		return key
 	}
-	if graphIsSNMPException(d.ChassisID) || graphCanonicalMAC(d.ChassisID) != "" {
+	if graphIsSNMPException(d.ChassisID) || canonicalMAC(d.ChassisID) != "" {
 		return d.IP
 	}
 	if id := normalizeID(d.ChassisID, 0); id != "" {
@@ -816,18 +767,13 @@ func graphDeviceNodeID(d *DeviceData) string {
 // port subtype 4): an IANA address family byte and the address, printed as
 // hex ("01 AC 10 01 0F" is IPv4 172.16.1.15). Anything else gives "".
 func graphNetworkAddress(id string) string {
-	nibble := func(c byte) byte {
-		if c <= '9' {
-			return c - '0'
-		}
-		return c - 'a' + 10
-	}
 	var b []byte
-	for _, f := range strings.FieldsFunc(strings.ToLower(id), func(r rune) bool { return r == ' ' || r == ':' }) {
-		if len(f) != 2 || !graphIsHexDigit(f[0]) || !graphIsHexDigit(f[1]) {
+	for _, f := range strings.FieldsFunc(id, func(r rune) bool { return r == ' ' || r == ':' }) {
+		octet, err := hex.DecodeString(f)
+		if err != nil || len(octet) != 1 {
 			return ""
 		}
-		b = append(b, nibble(f[0])<<4|nibble(f[1]))
+		b = append(b, octet[0])
 	}
 	switch {
 	case len(b) == 5 && b[0] == 1:
@@ -857,22 +803,13 @@ func graphNormalizePortID(id string, subtype int) string {
 	}
 }
 
-// graphUsableMAC returns id as a canonical MAC when it is one that may be a
-// node id (isInvalidID rejects null, broadcast and multicast MACs), else "".
-func graphUsableMAC(id string) string {
-	if mac := graphCanonicalMAC(id); mac != "" && !isInvalidID(mac) {
-		return mac
-	}
-	return ""
-}
-
-// graphUsableTargetID reports whether an LLDP target may be a node id: a MAC
-// that isInvalidID accepts, or a printable name or IP of 5 or more characters
-// that is not all zeros. Names get no MAC bit tests ('B-318/1', 'E109-9' and
-// '173.16.1.15' are kept).
+// graphUsableTargetID reports whether an LLDP target may be a node id: a
+// station MAC (usableMAC: not null, broadcast, multicast or zero-OUI), or a
+// printable name or IP of 5 or more characters that is not all zeros. Names
+// get no MAC bit tests ('B-318/1', 'E109-9' and '173.16.1.15' are kept).
 func graphUsableTargetID(id string) bool {
-	if graphCanonicalMAC(id) != "" {
-		return graphUsableMAC(id) != ""
+	if canonicalMAC(id) != "" {
+		return usableMAC(id) != ""
 	}
 	return isPrintableString(id) && len(id) >= 5 && strings.Trim(id, "0.:- ") != ""
 }
@@ -886,9 +823,9 @@ func graphUsableTargetID(id string) bool {
 func resolveLLDPTarget(neighbor LLDPNeighbor) (targetID, displayName string) {
 	chassisID := lldpChassisID(neighbor)
 	portID := lldpPortID(neighbor)
-	chassisMAC := graphUsableMAC(chassisID)
-	portMAC := graphUsableMAC(portID)
-	chassisIsName := graphCanonicalMAC(chassisID) == ""
+	chassisMAC := usableMAC(chassisID)
+	portMAC := usableMAC(portID)
+	chassisIsName := canonicalMAC(chassisID) == ""
 
 	if chassisMAC != "" && (neighbor.RemChassisIdSubtype != 7 || portMAC == "") {
 		// ChassisID is MAC - use it
@@ -981,11 +918,8 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		if !graph.Nodes[targetID] {
 			graph.AddNode(targetID)
 
-			// Get vendor from MAC if targetID is a MAC
-			vendor := ""
-			if graphCanonicalMAC(targetID) != "" {
-				vendor = getMACVendor(targetID)
-			}
+			// Get vendor from MAC if targetID is a MAC ("" for a name or IP)
+			vendor := getMACVendor(targetID)
 
 			// Build info from LLDP neighbor data with [LLDP-EP] marker
 			var info string
@@ -1202,7 +1136,7 @@ func fdbPorts(data *DeviceData, switchChassisMACs map[string]string) []fdbPort {
 	ownMAC := graphChassisKey(data.ChassisID)
 	for _, macEntry := range data.MACTable {
 		// The canonical MAC is both the node id and the key of every check
-		normMAC := graphCanonicalMAC(macEntry.MACAddress)
+		normMAC := canonicalMAC(macEntry.MACAddress)
 		if normMAC == "" {
 			continue // not a MAC
 		}
@@ -2012,7 +1946,7 @@ func collectGatewayARP() {
 func getGlobalIP(mac string) string {
 	globalMACtoIPMutex.RLock()
 	defer globalMACtoIPMutex.RUnlock()
-	return globalMACtoIP[collectCanonicalMAC(mac)]
+	return globalMACtoIP[canonicalMAC(mac)]
 }
 
 // updateTrafficCounters updates traffic data for a device

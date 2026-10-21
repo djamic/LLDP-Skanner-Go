@@ -11,6 +11,9 @@ import (
 	"testing"
 )
 
+// TestGraphCanonicalMAC pins the MAC spellings the graph reads as MACs (node
+// ids, LLDP ids, FDB entries): canonicalMAC of mac_identity.go, which
+// replaced the graph's own parser with the same answers (H3).
 func TestGraphCanonicalMAC(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"4c:ae:a3:8e:42:11", "4c:ae:a3:8e:42:11"},
@@ -45,8 +48,8 @@ func TestGraphCanonicalMAC(t *testing.T) {
 		{"5894.8000.f7a", ""},
 	}
 	for _, c := range cases {
-		if got := graphCanonicalMAC(c.in); got != c.want {
-			t.Errorf("graphCanonicalMAC(%q) = %q, want %q", c.in, got, c.want)
+		if got := canonicalMAC(c.in); got != c.want {
+			t.Errorf("canonicalMAC(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }

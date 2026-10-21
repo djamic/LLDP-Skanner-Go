@@ -215,13 +215,15 @@ func TestCollectARPTable(t *testing.T) {
 	}
 }
 
-// TestCollectUsableMAC pins the Q11 MAC filter.
+// TestCollectUsableMAC pins the Q11 MAC filter of the collectors, the cache
+// and the ESXi queue: usableMAC of mac_identity.go (H3).
 func TestCollectUsableMAC(t *testing.T) {
 	for mac, want := range map[string]bool{
 		"00:0c:29:6f:e0:bc":  true,
 		"da:a1:19:09:23:03":  true, // locally administered: kept (not special)
 		"52:54:00:12:34:56":  true,
 		"AA:BB:CC:00:00:01":  true, // normalized first
+		"0:c:29:aa:bb:cd":    true, // unpadded (net-snmp DISPLAY-HINT)
 		"00:00:00:00:00:00":  false,
 		"ff:ff:ff:ff:ff:ff":  false,
 		"01:00:5e:00:00:16":  false,
@@ -233,8 +235,8 @@ func TestCollectUsableMAC(t *testing.T) {
 		"desktop-v380chd":    false,
 		"":                   false,
 	} {
-		if got := collectUsableMAC(mac); got != want {
-			t.Errorf("collectUsableMAC(%q) = %v, want %v", mac, got, want)
+		if got := usableMAC(mac) != ""; got != want {
+			t.Errorf("usableMAC(%q) = %q, want usable %v", mac, usableMAC(mac), want)
 		}
 	}
 }

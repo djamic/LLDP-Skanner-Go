@@ -106,16 +106,18 @@ func macJoinGroups(groups []string, minDigits int) string {
 
 // parseMACOctets reads a 6-byte OCTET STRING that net-snmp printed as text
 // (STRING: "pM{?WA") as the raw address bytes, after an optional "STRING:"
-// prefix and the quotes. Any six characters pass, so use it only where the
-// OID or the LLDP subtype says the value is a MAC (chassis subtype 4, port
-// subtype 3, ARP physical address), and only after parseMAC failed.
+// prefix and the quotes; inside quotes net-snmp escapes '"' and '\' with a
+// backslash ("P(J3:L" and "a\"b(cd" are six bytes). Any six characters
+// pass, so use it only where the OID or the LLDP subtype says the value is a
+// MAC (chassis subtype 4, port subtype 3, ARP physical address), and only
+// after parseMAC failed.
 func parseMACOctets(raw string) (macAddr, bool) {
 	s := strings.TrimSpace(raw)
 	if rest, ok := strings.CutPrefix(s, "STRING:"); ok {
 		s = strings.TrimLeft(rest, " ")
 	}
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		s = s[1 : len(s)-1]
+	if inner, quoted := macUnquote(s); quoted {
+		s = inner
 	}
 	var m macAddr
 	if len(s) != len(m) {
@@ -125,10 +127,39 @@ func parseMACOctets(raw string) (macAddr, bool) {
 	return m, true
 }
 
+// macUnquote removes the quotes net-snmp puts around a printable STRING and
+// undoes its \" and \\ escapes; quoted is false when s is not quoted.
+func macUnquote(s string) (inner string, quoted bool) {
+	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
+		return "", false
+	}
+	s = s[1 : len(s)-1]
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\\') {
+			i++
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String(), true
+}
+
 // canonicalMAC gives "aa:bb:cc:dd:ee:ff" for any text parseMAC reads, or "".
 func canonicalMAC(s string) string {
 	m, ok := parseMAC(s)
 	if !ok {
+		return ""
+	}
+	return m.String()
+}
+
+// usableMAC gives "aa:bb:cc:dd:ee:ff" for a station MAC, or "": text parseMAC
+// reads that is not a null, broadcast, multicast or zero-OUI address. It is
+// the one MAC filter (Q11) of the ARP collector, the MAC-IP cache, the ESXi
+// queue, the snapshots and the graph's node ids.
+func usableMAC(s string) string {
+	m, ok := parseMAC(s)
+	if !ok || m.IsSpecial() {
 		return ""
 	}
 	return m.String()

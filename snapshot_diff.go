@@ -326,7 +326,7 @@ func collectSightMACs(sightings map[string]collectMACSighting, dev *DeviceData) 
 	macs := make([]string, len(dev.MACTable))
 	perPort := make(map[int]int)
 	for i, entry := range dev.MACTable {
-		if mac := collectCanonicalMAC(entry.MACAddress); mac != "" && collectUsableMAC(mac) {
+		if mac := usableMAC(entry.MACAddress); mac != "" {
 			macs[i] = mac
 			perPort[entry.PortNumber]++
 		}
@@ -386,14 +386,14 @@ func collectSuggestionHosts(devices []*DeviceData, suggestions []OptimizationSug
 			nodeID = d.IP
 		}
 		addKey(nodeID, d.IP)
-		addKey(collectCanonicalMAC(d.ChassisID), d.IP)
+		addKey(canonicalMAC(d.ChassisID), d.IP)
 	}
 
 	lookup := func(word string) (string, bool) {
 		if host, ok := byKey[word]; ok {
 			return host, true
 		}
-		host, ok := byKey[collectCanonicalMAC(word)]
+		host, ok := byKey[canonicalMAC(word)]
 		return host, ok
 	}
 	hosts := make([]string, len(suggestions))
