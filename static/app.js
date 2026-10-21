@@ -13,10 +13,13 @@ let filterState = {
     mode: 'ALL', // 'ALL' or 'CONNECTED'
     selectedNodeId: null,
     allowedGroups: new Set(), // populated from checkboxes
+    checkboxGroups: new Set(), // groups that have a checkbox at all
     contextShowEndpoints: true
 };
 
-// Color scheme for different device groups
+// Color scheme for the device groups the backend emits (dj_graph.go
+// determineDeviceGroup); index.html has one filter checkbox with the same dot
+// colour per group.
 const groupColors = {
     'switch': '#4A90E2',
     'router': '#E24A4A',
@@ -28,7 +31,7 @@ const groupColors = {
     'bmc':        '#FF6F00',  // amber — server management
     'server': '#FF5722',
     'camera': '#E91E63',
-    'access_point': '#FF9800',
+    'access_point': '#00BCD4',  // legend and report colour; not hub orange
     'printer': '#795548',
     'phone': '#3F51B5',
     'iot': '#607D8B',
@@ -142,18 +145,27 @@ function updateTopology(newData) {
 function updateFilterState() {
     // Read all checkbox filters
     const allowed = new Set();
+    const withCheckbox = new Set();
     document.querySelectorAll('.filter-cb input[data-group]').forEach(cb => {
+        withCheckbox.add(cb.dataset.group);
         if (cb.checked) allowed.add(cb.dataset.group);
     });
     filterState.allowedGroups = allowed;
+    filterState.checkboxGroups = withCheckbox;
 
     // Context menu checkbox
     filterState.contextShowEndpoints = document.getElementById('contextShowEndpoints')?.checked ?? true;
 }
 
+// uiGroupShown: a node is hidden only by an unchecked checkbox of its group;
+// a group without a checkbox is always drawn instead of vanishing silently.
+function uiGroupShown(n) {
+    const group = n.group || 'endpoint';
+    return filterState.allowedGroups.has(group) || !filterState.checkboxGroups.has(group);
+}
+
 function getFilteredData(data) {
     updateFilterState();
-    const allowed = filterState.allowedGroups;
     let filteredNodes = data.nodes;
 
     if (filterState.mode === 'CONNECTED' && filterState.selectedNodeId) {
@@ -166,14 +178,14 @@ function getFilteredData(data) {
         });
 
         filteredNodes = filteredNodes.filter(n => {
-            if (!allowed.has(n.group || 'endpoint')) return false;
+            if (!uiGroupShown(n)) return false;
             if (connectedToSelected.has(n.id)) {
                 if (!filterState.contextShowEndpoints && (n.group === 'endpoint' || n.group === 'wifi_random')) return false;
             }
             return true;
         });
     } else {
-        filteredNodes = filteredNodes.filter(n => allowed.has(n.group || 'endpoint'));
+        filteredNodes = filteredNodes.filter(uiGroupShown);
     }
 
     const nodeIds = new Set(filteredNodes.map(n => n.id));
@@ -509,8 +521,8 @@ function updateFilterCounts(data) {
         const g = n.group || 'unknown';
         counts[g] = (counts[g] || 0) + 1;
     });
-    const groups = ['switch','router','hub','endpoint','access_point','vm','hypervisor','bmc','camera','phone','iot','wifi_random'];
-    groups.forEach(g => {
+    // every group the backend emits, printer/server/unknown included
+    Object.keys(groupColors).forEach(g => {
         const el = document.getElementById('fc-' + g);
         if (el) el.textContent = counts[g] || 0;
     });
@@ -1035,18 +1047,19 @@ function showInfoPanel(node) {
 
     const totalConnections = Object.values(portMap).reduce((s, arr) => s + arr.length, 0);
 
-    // Format type for display
+    // Format type for display ('Wi-Fi AP' is access_point everywhere; the
+    // randomised-MAC group is 'Random MAC', as in the filter bar and the report)
     const typeNames = {
         'switch': '🔀 Switch', 'router': '🌐 Router', 'hub': '🔌 Hub',
-        'endpoint': '💻 Endpoint', 'wifi_random': '📶 Wi-Fi',
+        'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC',
         'vm': '🖥️ VM', 'hypervisor': '🏗️ Hypervisor', 'bmc': '🔧 BMC',
         'server': '🖲️ Server', 'camera': '📹 Camera',
-        'access_point': '📡 AP', 'printer': '🖨️ Printer',
+        'access_point': '📡 Wi-Fi AP', 'printer': '🖨️ Printer',
         'phone': '📱 Phone', 'iot': '🔌 IoT', 'unknown': '❓ Unknown'
     };
     const groupIcons = { 'switch':'🔀','router':'🌐','hub':'🔌','endpoint':'💻',
-        'wifi_random':'📶','vm':'🖥️','hypervisor':'🏗️','bmc':'🔧',
-        'access_point':'📡','camera':'📹','phone':'📱','iot':'🔌' };
+        'wifi_random':'🎲','vm':'🖥️','hypervisor':'🏗️','bmc':'🔧','server':'🖲️',
+        'access_point':'📡','camera':'📹','printer':'🖨️','phone':'📱','iot':'🔌','unknown':'❓' };
 
     // Update panel content
     document.getElementById('infoPanelTitle').textContent = sysName || node.id;
@@ -1957,7 +1970,7 @@ function downloadAuditReport() {
         { id: 'router', label: '🌐 Router', checked: false },
         { id: 'hub', label: '⚠️ Hub (Shadow IT)', checked: true },
         { id: 'endpoint', label: '💻 Endpoint', checked: false },
-        { id: 'access_point', label: '📶 Wi-Fi AP', checked: false },
+        { id: 'access_point', label: '📡 Wi-Fi AP', checked: false },
         { id: 'vm', label: '🖥️ VM', checked: false },
         { id: 'hypervisor', label: '☁️ Hypervisor', checked: false },
         { id: 'bmc', label: '🔧 BMC/iLO', checked: false },
