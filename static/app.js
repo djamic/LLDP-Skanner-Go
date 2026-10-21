@@ -168,21 +168,22 @@ function getFilteredData(data) {
     updateFilterState();
     let filteredNodes = data.nodes;
 
-    if (filterState.mode === 'CONNECTED' && filterState.selectedNodeId) {
+    const selected = filterState.selectedNodeId;
+    if (filterState.mode === 'CONNECTED' && selected && data.nodes.some(n => n.id === selected)) {
+        // Only the selected node and its direct neighbours; 'Show Endpoints'
+        // off also drops endpoint and random-MAC neighbours.
         const connectedToSelected = new Set();
         data.links.forEach(l => {
             const s = l.source.id || l.source;
             const t = l.target.id || l.target;
-            if (s === filterState.selectedNodeId) connectedToSelected.add(t);
-            if (t === filterState.selectedNodeId) connectedToSelected.add(s);
+            if (s === selected) connectedToSelected.add(t);
+            if (t === selected) connectedToSelected.add(s);
         });
 
         filteredNodes = filteredNodes.filter(n => {
-            if (!uiGroupShown(n)) return false;
-            if (connectedToSelected.has(n.id)) {
-                if (!filterState.contextShowEndpoints && (n.group === 'endpoint' || n.group === 'wifi_random')) return false;
-            }
-            return true;
+            if (n.id === selected) return true;
+            if (!connectedToSelected.has(n.id) || !uiGroupShown(n)) return false;
+            return filterState.contextShowEndpoints || (n.group !== 'endpoint' && n.group !== 'wifi_random');
         });
     } else {
         filteredNodes = filteredNodes.filter(uiGroupShown);
