@@ -997,66 +997,113 @@ if (typeof ResizeObserver !== 'undefined') {
         if (fitAddon && term) try { fitAddon.fit(); } catch(e) {}
     }).observe(document.getElementById('terminalBox') || document.body);
 }
+
+// Tag lines whose text after the tag is the vendor (label contract).
+const uiVendorTags = ['[ENDPOINT]', '[LLDP-EP]', '[WiFi]'];
+// "[VM] <os>[ <vendor>]": the OS label is an emoji plus one word or "<word> VM"
+// ('🐧 Linux', '💻 VMware VM'); "[VM] <vendor>" has no OS label.
+const uiVMOSPattern = /^([^\x00-\x7F]\S*\s+(?:\S+\s+VM(?=\s|$)|\S+))\s*(.*)$/u;
+
+// uiParseNodeInfo reads the backend label lines for the info panel: vendor,
+// detail (BMC type, VM OS, hypervisor/hub text), the DNS name and the first
+// name line. It reads sysName, the full label: label drops the tag lines when
+// a DNS name exists. IP lines (uiNodeIPs) and "VMs:" lines are not names.
+function uiParseNodeInfo(node) {
+    const out = { vendor: '', detail: '', name: '', hostname: node.hostname || '' };
+    let typeText = '';    // [HYPERVISOR] text, e.g. 'VMware ESXi' or 'HPE ProLiant Server'
+    let brand = '';       // vendor named by a BMC type, e.g. 'Fujitsu' in 'Fujitsu iRMC'
+    let ownTag = false;   // a device tag line ([ENDPOINT], [VM], [BMC], ...) was seen
+    (node.sysName || node.label || '').split('\n').forEach(raw => {
+        const line = raw.trim();
+        const tag = uiVendorTags.find(t => line.startsWith(t));
+        if (tag) {
+            ownTag = true;
+            if (!out.vendor) out.vendor = line.slice(tag.length).trim();
+        } else if (line.startsWith('[VM]')) {
+            ownTag = true;
+            const rest = line.slice('[VM]'.length).trim();
+            const m = rest.match(uiVMOSPattern);
+            if (!out.detail && m) out.detail = m[1];
+            if (!out.vendor) out.vendor = m ? m[2] : rest;
+        } else if (line.startsWith('[BMC]')) {
+            ownTag = true;
+            // "[BMC] <type>[ <vendor>]"; the type is 'BMC', 'IPMI' or '<brand> <product>'
+            const words = line.slice('[BMC]'.length).trim().split(/\s+/).filter(Boolean);
+            const typeLen = (words[0] === 'BMC' || words[0] === 'IPMI') ? 1 : Math.min(2, words.length);
+            if (!out.detail) out.detail = words.slice(0, typeLen).join(' ');
+            if (!out.vendor) out.vendor = words.slice(typeLen).join(' ');
+            if (typeLen === 2 && !brand) brand = words[0];
+        } else if (line.startsWith('[HYPERVISOR]') || line.startsWith('[HUB]')) {
+            const text = line.slice(line.indexOf(']') + 1).trim();
+            if (!out.detail) out.detail = text;
+            if (line.startsWith('[HYPERVISOR]') && !typeText) typeText = text;
+        } else if (line.startsWith('[DNS]')) {
+            if (!out.hostname) out.hostname = line.slice('[DNS]'.length).trim();
+        } else if (line && !line.startsWith('[') && !uiIsIPv4(line) && !line.startsWith('VMs:')) {
+            if (!out.name) out.name = line;
+        }
+    });
+    // No vendor text: fall back to what a type names — the brand of a BMC
+    // type, the server vendor of '[HYPERVISOR] HPE ProLiant Server', or the
+    // platform of a synthetic hypervisor node that has no tag line of its own
+    // ('VMware ESXi'); a physical ESXi host keeps its unknown hardware vendor.
+    if (!out.vendor) {
+        if (brand) out.vendor = brand;
+        else if (/\sServer$/.test(typeText)) out.vendor = typeText.replace(/\s+Server$/, '');
+        else if (!ownTag) out.vendor = typeText;
+    }
+    return out;
+}
+
+// uiLinkPorts gives the clicked node's own port and the peer's port on one
+// link. GetGraphData splits "<srcPort>|<dstPort>" into sourceLabel and
+// targetLabel; 'Hub' (switch->hub links) is a placeholder, not a port.
+function uiLinkPorts(link, nodeId) {
+    const port = s => (s || '').split('[MAC-REF]')[0].trim();
+    const src = port(link.sourceLabel);
+    const dst = link.targetLabel === 'Hub' ? '' : port(link.targetLabel);
+    return (link.source.id || link.source) === nodeId ? { own: src, peer: dst } : { own: dst, peer: src };
+}
+
+// uiPortKey drops the speed and traffic suffix so that links on one port
+// group together: 'TGE1/0/52 [T] 10G ↓13M ↑29M' -> 'TGE1/0/52 [T]'.
+function uiPortKey(label) {
+    return label.replace(/\s+(?:\d+[MGmg]\b|[↓↑]).*$/, '').trim();
+}
+
 function showInfoPanel(node) {
     const panel = document.getElementById('infoPanel');
     if (!panel) return;
 
-    // Parse node info
-    const info = node.sysName || node.label || '';
-    const lines = info.split('\n');
-
-    // Extract data from label/info
-    let type = node.group || 'unknown';
-    let vendor = '';
-    let sysName = '';
+    // Parse node info (vendor, detail, DNS name, name line)
+    const type = node.group || 'unknown';
+    const info = uiParseNodeInfo(node);
+    const sysName = info.hostname || info.name;
     // Same address as Connect and History; further IP lines are listed after it
     const ips = uiNodeIPs(node);
 
-    // Parse info lines
-    lines.forEach(line => {
-        if (line.includes('[ENDPOINT]') || line.includes('[LLDP-EP]') || line.includes('[HUB]')) {
-            // Extract vendor from type line: "[ENDPOINT] Realtek"
-            const parts = line.split(' ');
-            if (parts.length > 1) {
-                vendor = parts.slice(1).join(' ');
-            }
-        } else if (uiIsIPv4(line.trim())) {
-            // IP address (see ips)
-        } else if (line && !line.startsWith('[')) {
-            // System name or description
-            if (!sysName) sysName = line;
-        }
-    });
-
-    // Get connected devices — grouped by port
+    // Get connected devices — grouped by this node's own port on each link
     const portMap = {}; // portKey → [{id, name, group}]
     if (rawData && rawData.links) {
         rawData.links.forEach(link => {
             const srcId = link.source.id || link.source;
             const tgtId = link.target.id || link.target;
-            let peerId = null, portLabel = null;
+            if (srcId !== node.id && tgtId !== node.id) return;
+            const peerId = srcId === node.id ? tgtId : srcId;
 
-            if (srcId === node.id) {
-                peerId = tgtId;
-                // sourceLabel: "GE1/0/5 [T]|GE1/0/2" — take first part
-                portLabel = (link.sourceLabel || '').split('|')[0].split('[MAC-REF]')[0].trim() || '—';
-            } else if (tgtId === node.id) {
-                peerId = srcId;
-                // Use targetLabel if available, else sourceLabel second part
-                const sl = (link.sourceLabel || '');
-                portLabel = sl.includes('|') ? sl.split('|')[1].trim() : sl.split('[MAC-REF]')[0].trim() || '—';
-            }
-            if (!peerId) return;
+            // On the target side the own port is targetLabel, not the peer's
+            // sourceLabel. A node without a port of its own on the link
+            // (endpoint, hub) is grouped under the peer's port, marked as such.
+            const ports = uiLinkPorts(link, node.id);
+            const own = uiPortKey(ports.own), peer = uiPortKey(ports.peer);
+            const portKey = own || (peer ? `${peer} (peer)` : '—');
 
             const peerNode = rawData.nodes.find(n => n.id === peerId);
             const peerLabel = peerNode ? (peerNode.label?.split('\n')[0] || peerId.substring(0, 22)) : peerId.substring(0, 22);
             const peerGroup = peerNode?.group || 'endpoint';
 
-            // Clean port label: remove speed suffix for grouping key
-            const portKey = portLabel.replace(/\s+\d+[MGmg]\b.*$/, '').trim() || '—';
-
             if (!portMap[portKey]) portMap[portKey] = [];
-            portMap[portKey].push({ id: peerId, name: peerLabel, group: peerGroup, port: portLabel });
+            portMap[portKey].push({ id: peerId, name: peerLabel, group: peerGroup });
         });
     }
 
@@ -1089,9 +1136,9 @@ function showInfoPanel(node) {
 
     // Update panel content
     document.getElementById('infoPanelTitle').textContent = sysName || node.id;
-    document.getElementById('infoType').textContent = typeNames[type] || type;
+    document.getElementById('infoType').textContent = (typeNames[type] || type) + (info.detail ? ` · ${info.detail}` : '');
     document.getElementById('infoMAC').textContent = node.id;
-    document.getElementById('infoVendor').textContent = vendor || 'Unknown';
+    document.getElementById('infoVendor').textContent = info.vendor || 'Unknown';
     document.getElementById('infoIP').textContent = ips.length === 0 ? 'Not available'
         : ips[0] + (ips.length > 1 ? ` (also ${ips.slice(1).join(', ')})` : '');
     document.getElementById('infoSysName').textContent = sysName || node.id;
