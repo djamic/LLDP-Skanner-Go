@@ -262,6 +262,20 @@ func canNotifyIssue(issueID string) bool {
 	return false
 }
 
+// canSendSummary reports whether the hourly health summary may go out now
+// and marks it sent. Analyze runs concurrently (a live analysis per stored
+// switch during the first scan, the periodic loop), so the check and the
+// mark happen under notifiedMu.
+func canSendSummary() bool {
+	notifiedMu.Lock()
+	defer notifiedMu.Unlock()
+	if time.Since(lastSummarySent) < notifyCooldown {
+		return false
+	}
+	lastSummarySent = time.Now()
+	return true
+}
+
 // notifyTelegramIfCritical sends separate messages per Shadow IT issue to the python bot
 func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 	if report.HealthScore >= 90 && len(report.Suggestions) == 0 {
@@ -269,8 +283,7 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 	}
 
 	// Send a brief health summary (max once per hour)
-	if time.Since(lastSummarySent) >= notifyCooldown {
-		lastSummarySent = time.Now()
+	if canSendSummary() {
 		botDispatch(func() {
 			tDetect := time.Now()
 			summaryText := fmt.Sprintf("📊 <b>Tarmoq holati:</b> %d/100 (%s)\n🔎 Jami topilgan muammolar: %d ta",
@@ -582,7 +595,8 @@ func (r *Report) GenerateTextReport() string {
 		return sb.String()
 	}
 
-	sort.Slice(r.Suggestions, func(i, j int) bool {
+	// Stable: suggestions of one severity keep the analysis order (Q16)
+	sort.SliceStable(r.Suggestions, func(i, j int) bool {
 		return r.Suggestions[i].Severity < r.Suggestions[j].Severity // crude sort, high should be first ideally
 	})
 
@@ -669,8 +683,8 @@ func (r *Report) GenerateHTMLReport() string {
 		sb.WriteString("<thead><tr><th>Severity</th><th>Type</th><th>Device</th><th>Issue</th><th>Metric</th></tr></thead>")
 		sb.WriteString("<tbody>")
 
-		// Sort: High first
-		sort.Slice(r.Suggestions, func(i, j int) bool {
+		// Sort: High first (stable: one severity keeps the analysis order)
+		sort.SliceStable(r.Suggestions, func(i, j int) bool {
 			return r.Suggestions[i].Severity < r.Suggestions[j].Severity
 		})
 

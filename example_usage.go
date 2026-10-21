@@ -1951,10 +1951,22 @@ func resolveHostname(ip string) string {
 // countEdges counts total edges in graph
 func countEdges(graph *DJGraph) int {
 	count := 0
+	if graph == nil {
+		return 0
+	}
 	for _, targets := range graph.Edges {
 		count += len(targets)
 	}
 	return count
+}
+
+// graphNodeCount is the number of nodes of graph, 0 without a graph (a scan
+// that collected no switch publishes none).
+func graphNodeCount(graph *DJGraph) int {
+	if graph == nil {
+		return 0
+	}
+	return len(graph.Nodes)
 }
 
 // saveResults saves collected data to JSON file
@@ -3088,7 +3100,7 @@ func generateExperimentReport(devices []*DeviceData, scanDuration, collectionDur
 		"shadow_it_raw":        shadowITRaw,
 		"shadow_it_filtered":   shadowITFiltered,
 		"vm_ports_filtered":    vmPortCount,
-		"graph_nodes":          len(graph.Nodes),
+		"graph_nodes":          graphNodeCount(graph),
 		"graph_edges":          countEdges(graph),
 	}
 

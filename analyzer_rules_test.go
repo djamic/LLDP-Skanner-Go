@@ -11,7 +11,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // Tests for the analyzer fixes: one per-port Shadow-IT rule shared with the
@@ -661,5 +663,80 @@ func TestReportAnomalyRowsFixedOrder(t *testing.T) {
 	}
 	if !slices.Equal(wantIDs, want) {
 		t.Errorf("anomaly order =\n%v\nwant\n%v", wantIDs, want)
+	}
+}
+
+// TestTelegramSummaryOnceConcurrently (analyzer risk list): Analyze runs
+// concurrently (one live analysis per stored switch during the first scan,
+// plus the periodic loop), and the hourly health summary's cooldown was
+// read and written without a lock: two analyses could both send it (and
+// -race reports the race). Exactly one summary goes out.
+func TestTelegramSummaryOnceConcurrently(t *testing.T) {
+	resetState(t)
+	report := Report{HealthScore: 60, Suggestions: []OptimizationSuggestion{{Type: "stp", Device: "00:16:e0:5a:5c:e0"}}}
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r := report
+			NewAnalyzer(FullCaptureData{}).notifyTelegramIfCritical(&r)
+		}()
+	}
+	wg.Wait()
+	summaries := 0
+	for _, m := range bot.taken() {
+		if strings.Contains(m.Text, "Tarmoq holati") {
+			summaries++
+		}
+	}
+	if summaries != 1 {
+		t.Errorf("%d health summaries sent, want 1", summaries)
+	}
+}
+
+// TestTextReportKeepsOrderWithinSeverity (analyzer risk list, Q16): the text
+// and HTML reports put high-severity suggestions first with a stable sort,
+// so suggestions of one severity keep their (deterministic) analysis order.
+func TestTextReportKeepsOrderWithinSeverity(t *testing.T) {
+	var suggestions []OptimizationSuggestion
+	for i := 0; i < 60; i++ {
+		severity := []string{"high", "medium", "low"}[i%3]
+		suggestions = append(suggestions, OptimizationSuggestion{Type: "shadow_it", Severity: severity, Device: fmt.Sprintf("10.0.%d.%d", i/250, i%250)})
+	}
+	for _, render := range []func(Report) string{
+		func(r Report) string { return r.GenerateTextReport() },
+		func(r Report) string { return r.GenerateHTMLReport() },
+	} {
+		r := Report{Summary: map[string]int{}, Suggestions: slices.Clone(suggestions)}
+		out := render(r)
+		last := map[string]int{}
+		for i, s := range suggestions {
+			pos := strings.Index(out, s.Device+"\n")
+			if pos < 0 {
+				pos = strings.Index(out, ">"+s.Device+"<")
+			}
+			if pos < 0 {
+				t.Fatalf("device %s not in the report", s.Device)
+			}
+			if prev, ok := last[s.Severity]; ok && pos < prev {
+				t.Fatalf("suggestion %d (%s) comes before an earlier %s suggestion", i, s.Device, s.Severity)
+			}
+			last[s.Severity] = pos
+		}
+	}
+}
+
+// TestExperimentReportWithoutGraph (analyzer risk list): a scan that
+// collected no switch has no published graph; the experiment report still
+// writes its files (0 graph nodes) instead of panicking.
+func TestExperimentReportWithoutGraph(t *testing.T) {
+	resetState(t)
+	exportsDir = t.TempDir()
+	generateExperimentReport(nil, time.Second, time.Second, 2*time.Second, nil)
+	var metrics map[string]any
+	reportReadJSON(t, filepath.Join(exportsDir, "experiment_metrics.json"), &metrics)
+	if metrics["graph_nodes"] != 0.0 || metrics["graph_edges"] != 0.0 {
+		t.Errorf("graph counts without a graph: %v, %v", metrics["graph_nodes"], metrics["graph_edges"])
 	}
 }
