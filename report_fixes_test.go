@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -599,6 +600,71 @@ func TestDocxLegendNamesReportColours(t *testing.T) {
 		for group, colors := range reportGroupColors {
 			if labels[strings.ToUpper(colors[0])] == "" {
 				t.Errorf("%s: group_label_map has no label for %s (%s)", script, colors[0], group)
+			}
+		}
+	}
+}
+
+// docxRootCheck runs the DOCX converter's mermaid_to_graphviz (taken out of
+// the script with ast, so python-docx and pypandoc are not needed) on every
+// Mermaid block of a Markdown file and prints, per block, the BFS root's
+// DOT line (the node with penwidth=3.5, or the old #FF9800 root line) and
+// the root's fill in the Mermaid styles.
+const docxRootCheck = `
+import ast, json, re, sys
+script, md = sys.argv[1], sys.argv[2]
+tree = ast.parse(open(script, encoding='utf-8').read())
+funcs = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ('parse_mermaid_nodes_edges', 'mermaid_to_graphviz')]
+ns = {'re': re}
+exec(compile(ast.Module(body=funcs, type_ignores=[]), script, 'exec'), ns)
+out = []
+for block in re.findall(r'` + "```" + `mermaid\n(.*?)\n` + "```" + `', open(md, encoding='utf-8').read(), re.DOTALL):
+    dot = ns['mermaid_to_graphviz'](block)
+    lines = [l.strip() for l in dot.split('\n') if 'penwidth=3.5' in l or 'fillcolor="#FF9800", fontcolor="white", color="#E65100", penwidth=2.5' in l]
+    if not lines:
+        continue
+    root = lines[0].split('"')[1]
+    style = re.search(r'^\s*style\s+' + re.escape(root) + r'\s+fill:(#\w+)', block, re.MULTILINE)
+    out.append({'root': root, 'line': lines[0], 'style_fill': style.group(1) if style else ''})
+print(json.dumps(out))
+`
+
+// TestDocxRootKeepsGroupColour (R3): the DOCX converters draw the BFS root
+// (the core) in its own group colour, marked by a thick dark border, not
+// filled #FF9800, which their legend names "Hub": the core switch looked
+// like a Shadow-IT hub in the section-3 topology and in
+// /api/report/audit-svg. Checked on the golden audit's diagrams. Skipped
+// without python3.
+func TestDocxRootKeepsGroupColour(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 is not installed, so the DOCX converters are not checked")
+	}
+	md := filepath.Join("testdata", "golden", "audit_default.md")
+	for _, script := range []string{"md2docx_gost_linux.py", "md2docx_gost_cyrillic_linux.py"} {
+		cmd := exec.Command(python, "-I", "-c", docxRootCheck, filepath.Join("instrumens", script), md)
+		cmd.Env = []string{}
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("%s: %v", script, err)
+		}
+		var roots []struct {
+			Root, Line string
+			StyleFill  string `json:"style_fill"`
+		}
+		if err := json.Unmarshal(out, &roots); err != nil {
+			t.Fatalf("%s: %v\n%s", script, err, out)
+		}
+		if len(roots) == 0 {
+			t.Fatalf("%s: no diagram root found in %s", script, md)
+		}
+		for _, r := range roots {
+			want := `fillcolor="` + r.StyleFill + `"`
+			if r.StyleFill == "" {
+				want = `color="#212121", penwidth=3.5`
+			}
+			if !strings.Contains(r.Line, want) || (r.StyleFill != "#FF9800" && strings.Contains(r.Line, "#FF9800")) {
+				t.Errorf("%s: root %s is drawn as %q, want its own fill %q and a dark border", script, r.Root, r.Line, r.StyleFill)
 			}
 		}
 	}

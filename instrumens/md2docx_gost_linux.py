@@ -340,10 +340,6 @@ def mermaid_to_graphviz(mermaid_code):
         '',
     ]
     
-    if root in nodes:
-        label = nodes[root].replace('\n', '\\n').replace('"', '\\"')
-        dot_lines.append(f'    "{root}" [label="{label}", fillcolor="#FF9800", fontcolor="white", color="#E65100", penwidth=2.5, fontsize=12];')
-    
     # Parse style directives from mermaid for colored nodes
     mermaid_lines = mermaid_code.strip().split('\n')
     styled_nodes = {}
@@ -360,6 +356,18 @@ def mermaid_to_graphviz(mermaid_code):
         m = re.match(r'^(\w+)\(\((.+?)\)\)$', stripped)
         if m:
             hub_nodes.add(m.group(1))
+    
+    # The BFS root (the core) keeps the fill of its group: it used to be
+    # filled #FF9800, the colour the legend names 'Hub', so the core switch
+    # looked like a Shadow-IT hub. A thick dark border marks it instead.
+    if root in nodes:
+        label = nodes[root].replace('\n', '\\n').replace('"', '\\"')
+        fill = styled_nodes.get(root)
+        if fill:
+            shape = 'ellipse' if root in hub_nodes else 'box'
+            dot_lines.append(f'    "{root}" [label="{label}", fillcolor="{fill}", fontcolor="white", color="#212121", penwidth=3.5, fontsize=12, shape={shape}];')
+        else:
+            dot_lines.append(f'    "{root}" [label="{label}", color="#212121", penwidth=3.5, fontsize=12];')
     
     for nid in all_node_ids:
         if nid == root:
