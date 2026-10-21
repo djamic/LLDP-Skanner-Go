@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -568,17 +570,42 @@ func saveMacIPCache() {
 }
 
 // writeJSONAtomic writes v as indented JSON to path through a temporary
-// file and a rename; false when it could not be written.
+// file and a rename (writeFileReplacing); false when it could not be
+// written.
 func writeJSONAtomic(path string, v any) bool {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return false
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := writeFileReplacing(path, data, os.Rename); err != nil {
+		fmt.Printf("⚠️ [MacIPService] Cannot write %s: %v\n", path, err)
 		return false
 	}
-	return os.Rename(tmp, path) == nil
+	return true
+}
+
+// writeFileReplacing writes data to path through path+".tmp" and rename, so
+// a reader never sees a half-written file. When path is a mount point the
+// rename fails with EBUSY (EXDEV across file systems): docker-compose.yml
+// bind-mounts mac_ip_cache.json as a single file, and the cache was never
+// updated in the container. The file is then rewritten in place, which is
+// not atomic but keeps it current (RC-5). The temporary file never stays
+// behind. rename is os.Rename; tests pass a failing one.
+func writeFileReplacing(path string, data []byte, rename func(oldpath, newpath string) error) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	err := rename(tmp, path)
+	if err == nil {
+		return nil
+	}
+	os.Remove(tmp)
+	if errors.Is(err, syscall.EBUSY) || errors.Is(err, syscall.EXDEV) {
+		return os.WriteFile(path, data, 0644)
+	}
+	return err
 }
 
 // ─── ARP Collection from all switches ─────────────────────────────────────────

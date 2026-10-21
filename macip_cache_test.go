@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -88,4 +89,53 @@ func TestMACIPCacheGatewayExpiry(t *testing.T) {
 	if len(seen) != 3 || seen["00:1b:21:0b:00:04"] != testClock.Now().Unix() {
 		t.Errorf("saved sidecar = %v", seen)
 	}
+}
+
+// TestWriteFileReplacingMountPoint (RC-5): when the rename onto the target
+// fails with EBUSY (the target is a mount point: docker-compose.yml
+// bind-mounts mac_ip_cache.json as a single file) or EXDEV, the file is
+// rewritten in place instead of never being updated; another rename error
+// leaves the old file. The temporary file never stays behind, and the
+// plain case still replaces the file through the rename.
+func TestWriteFileReplacingMountPoint(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mac_ip_cache.json")
+	failing := func(errno syscall.Errno) func(string, string) error {
+		return func(oldpath, newpath string) error {
+			return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: errno}
+		}
+	}
+	check := func(name, want string) {
+		t.Helper()
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Errorf("%s: file holds %q (%v), want %q", name, got, err, want)
+		}
+		if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+			t.Errorf("%s: %s.tmp was left behind", name, path)
+		}
+	}
+
+	if err := writeFileReplacing(path, []byte("v1"), os.Rename); err != nil {
+		t.Fatal(err)
+	}
+	check("rename", "v1")
+	if err := writeFileReplacing(path, []byte("v2"), failing(syscall.EBUSY)); err != nil {
+		t.Errorf("EBUSY: %v, want the file rewritten in place", err)
+	}
+	check("EBUSY", "v2")
+	if err := writeFileReplacing(path, []byte("v3"), failing(syscall.EXDEV)); err != nil {
+		t.Errorf("EXDEV: %v, want the file rewritten in place", err)
+	}
+	check("EXDEV", "v3")
+	if err := writeFileReplacing(path, []byte("v4"), failing(syscall.EACCES)); err == nil {
+		t.Error("EACCES: no error, want the rename error")
+	}
+	check("EACCES", "v3")
+
+	// The cache itself goes through it (writeJSONAtomic).
+	if !writeJSONAtomic(path, map[string]string{"00:1b:21:0a:00:01": "10.0.9.1"}) {
+		t.Fatal("writeJSONAtomic failed")
+	}
+	check("writeJSONAtomic", "{\n  \"00:1b:21:0a:00:01\": \"10.0.9.1\"\n}")
 }
