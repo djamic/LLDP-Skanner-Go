@@ -51,12 +51,12 @@ func TestGraphCanonicalMAC(t *testing.T) {
 
 func TestGraphIsSNMPException(t *testing.T) {
 	for in, want := range map[string]bool{
-		"No Such Object available on this agent at this OID":                         true,
-		"No Such Instance currently exists at this OID":                              true,
+		"No Such Object available on this agent at this OID":                           true,
+		"No Such Instance currently exists at this OID":                                true,
 		"No more variables left in this MIB View (It is past the end of the MIB tree)": true,
-		"no:such:object:available:on:this:agent:at:this:oid":                         true,
-		"no:such:instance:currently:exists:at:this:oid":                              true,
-		"\"No Such Object available on this agent at this OID\"":                     true,
+		"no:such:object:available:on:this:agent:at:this:oid":                           true,
+		"no:such:instance:currently:exists:at:this:oid":                                true,
+		"\"No Such Object available on this agent at this OID\"":                       true,
 		"4c:ae:a3:8e:42:11": false,
 		"No-Name switch":    false,
 		"":                  false,
@@ -317,10 +317,10 @@ func TestGraphLLDPBuild(t *testing.T) {
 	}
 	src := "4c:ae:a3:06:01:00"
 	checks := []struct{ id, label string }{
-		{"00:1b:21:06:07:01", "GE1/0/7|"},    // F48: the rejected neighbor does not hide it
+		{"00:1b:21:06:07:01", "GE1/0/7|"},                // F48: the rejected neighbor does not hide it
 		{"00:1b:21:06:02:01", "GE1/0/2 1G|001B21060201"}, // LLDP edge; not a hub member on port 5 (F46)
-		{"00:1b:21:06:05:02", "GE1/0/5|"},    // port 5 is left with one MAC: direct endpoint
-		{"00:50:56:aa:bb:cc", "GE1/0/6|"},    // F47: canonical node id
+		{"00:1b:21:06:05:02", "GE1/0/5|"},                // port 5 is left with one MAC: direct endpoint
+		{"00:50:56:aa:bb:cc", "GE1/0/6|"},                // F47: canonical node id
 		{"B-318/1", "GE1/0/3 1G|28"},
 		{"172.16.1.15", "GE1/0/4 1G|eth0"},
 	}
@@ -454,6 +454,35 @@ func graphMACRange(prefix string, from, n int) []string {
 func TestGraphFDBEndpoints(t *testing.T) {
 	resetState(t)
 	const src = "4c:ae:a3:05:01:00"
+	devices := graphFDBTestDevices()
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP = map[string]string{"00:1b:21:05:09:08": "10.0.9.13", "00:1b:21:05:0b:01": "172.20.0.48", "00:1b:21:05:0c:01": "172.16.25.231"}
+	globalMACtoIPMutex.Unlock()
+	ConfirmedESXiMACs.Store("00:1b:21:05:0a:01", true)
+
+	// The per-port rule on its own (what Shadow-IT counting can share, Q14)
+	var rule []string
+	for _, p := range graphFDBPorts(devices["10.9.5.1"], buildSwitchChassisMACs(devices)) {
+		rule = append(rule, fmt.Sprintf("%d:%d:%v", p.Port, len(p.MACs), p.Hub))
+	}
+	if got, want := strings.Join(rule, " "), "5:3:false 6:1:false 7:1:false 8:1:false 9:8:true 10:3:false 11:1:false 18:5:false 19:22:false"; got != want {
+		t.Errorf("graphFDBPorts = %s, want %s", got, want)
+	}
+
+	g := buildGraphFromSnapshot(devices)
+	for port, n := range map[string]int{"ge1_0_18": 4, "ge1_0_19": 21, "ge1_0_5": 2} {
+		hyp := "hyp-" + src + "-" + port
+		if !strings.Contains(g.SwitchInfo[hyp], fmt.Sprintf("\n%d VMs on ", n)) || len(g.Edges[hyp]) != n {
+			t.Errorf("%s = %q with %d vNICs, want %d VMs", hyp, g.SwitchInfo[hyp], len(g.Edges[hyp]), n)
+		}
+	}
+	graphCheckFDBEndpoints(t, g)
+}
+
+// graphFDBTestDevices is a switch with every kind of FDB port, and a second
+// polled switch whose MAC is learned on port 20.
+func graphFDBTestDevices() map[string]*DeviceData {
+	const src = "4c:ae:a3:05:01:00"
 	var fdb []MACEntry
 	fdb = append(fdb, macEntries(18, append(graphMACRange("00:0c:29:05:12", 1, 4), "00:1b:21:05:12:05")...)...)
 	fdb = append(fdb, macEntries(19, append(graphMACRange("00:50:56:05:13", 1, 21), "00:1b:21:05:13:99")...)...)
@@ -476,18 +505,12 @@ func TestGraphFDBEndpoints(t *testing.T) {
 		},
 		"10.9.5.2": {IP: "10.9.5.2", SysName: "sw2", ChassisID: "4c:ae:a3:05:02:00", Interfaces: gigabitPorts(4, nil)},
 	}
-	globalMACtoIPMutex.Lock()
-	globalMACtoIP = map[string]string{"00:1b:21:05:09:08": "10.0.9.13", "00:1b:21:05:0b:01": "172.20.0.48", "00:1b:21:05:0c:01": "172.16.25.231"}
-	globalMACtoIPMutex.Unlock()
-	ConfirmedESXiMACs.Store("00:1b:21:05:0a:01", true)
+	return devices
+}
 
-	g := buildGraphFromSnapshot(devices)
-	for port, n := range map[string]int{"ge1_0_18": 4, "ge1_0_19": 21, "ge1_0_5": 2} {
-		hyp := "hyp-" + src + "-" + port
-		if !strings.Contains(g.SwitchInfo[hyp], fmt.Sprintf("\n%d VMs on ", n)) || len(g.Edges[hyp]) != n {
-			t.Errorf("%s = %q with %d vNICs, want %d VMs", hyp, g.SwitchInfo[hyp], len(g.Edges[hyp]), n)
-		}
-	}
+func graphCheckFDBEndpoints(t *testing.T, g *DJGraph) {
+	t.Helper()
+	const src = "4c:ae:a3:05:01:00"
 	for id := range g.Nodes {
 		if strings.HasPrefix(id, "00:0c:29:05:14:") || strings.HasPrefix(id, "hyp-"+src+"-ge1_0_20") {
 			t.Errorf("switch link port 20 produced node %s", id)
