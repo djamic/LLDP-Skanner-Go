@@ -617,3 +617,29 @@ func TestCalculateDepthsFollowsLinksBothWays(t *testing.T) {
 		t.Errorf("CalculateDepths of a missing root = %v", got)
 	}
 }
+
+// TestAuditPickerOffersEveryReportGroup (reports and UI handoffs, F74, F77):
+// the audit export dialog of static/app.js offers every node group the
+// report can draw and colour (reportGroupColors), so printers, servers and
+// unknown nodes can be put into the topology diagram too.
+func TestAuditPickerOffersEveryReportGroup(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("static", "app.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(src)
+	start := strings.Index(js, "function downloadAuditReport()")
+	end := strings.Index(js[max(start, 0):], "let checkboxesHTML")
+	if start < 0 || end < 0 {
+		t.Fatal("app.js: no audit group picker (downloadAuditReport groupOptions)")
+	}
+	offered := map[string]bool{}
+	for _, m := range regexp.MustCompile(`\{ id: '([a-z_]+)'`).FindAllStringSubmatch(js[start:start+end], -1) {
+		offered[m[1]] = true
+	}
+	for group := range reportGroupColors {
+		if !offered[group] {
+			t.Errorf("the audit picker does not offer group %q", group)
+		}
+	}
+}

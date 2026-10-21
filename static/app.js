@@ -2042,6 +2042,9 @@ function downloadAuditReport() {
         { id: 'phone', label: '📞 Phone', checked: false },
         { id: 'iot', label: '🌡️ IoT', checked: false },
         { id: 'wifi_random', label: '🎲 Random MAC', checked: false },
+        { id: 'printer', label: '🖨️ Printer', checked: false },
+        { id: 'server', label: '🖲️ Server', checked: false },
+        { id: 'unknown', label: '❓ Unknown', checked: false },
     ];
 
     let checkboxesHTML = groupOptions.map(g => 
