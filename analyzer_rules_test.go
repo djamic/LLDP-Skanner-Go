@@ -603,3 +603,63 @@ func TestExportHealthScoresKeepsLiveState(t *testing.T) {
 		t.Errorf("health_scores.json devices = %+v, want the hub port's shadow_it anomaly", health.Devices)
 	}
 }
+
+// TestReportAnomalyRowsFixedOrder (H12, Q16): the reports' anomaly and
+// penalty rows come out in one order whatever order the analysis produced
+// its suggestions in (it builds them from devices in map order): by type,
+// then device in IP order, then issue id, description and value with
+// numbers compared by value (port 2 before port 11).
+func TestReportAnomalyRowsFixedOrder(t *testing.T) {
+	resetState(t)
+	suggestions := []OptimizationSuggestion{
+		{IssueID: "shadow_10_0_9_7_11", Type: "shadow_it", Device: "10.0.9.7", Description: "Port 11 has 3 MAC addresses."},
+		{IssueID: "shadow_10_0_9_7_2", Type: "shadow_it", Device: "10.0.9.7", Description: "Port 2 has 2 MAC addresses."},
+		{IssueID: "shadow_10_0_9_10_1", Type: "shadow_it", Device: "10.0.9.10", Description: "Port 1 has 2 MAC addresses."},
+		{IssueID: "loop_mac_10_0_9_7_3", Type: "loopback", Device: "10.0.9.7", Description: "Port 3"},
+		{IssueID: "loop_lldp_10_0_9_7_3", Type: "loopback", Device: "10.0.9.7", Description: "Port 3"},
+		{Type: "congestion", Device: "10.0.9.7", Description: "GE1/0/10 discards", Value: "10"},
+		{Type: "congestion", Device: "10.0.9.7", Description: "GE1/0/2 discards", Value: "2"},
+		{Type: "path", Device: "4c:ae:a3:09:00:02", Description: "4 hops"},
+		{Type: "path", Device: "4c:ae:a3:09:00:01", Description: "5 hops"},
+	}
+	order := func(list []OptimizationSuggestion) (ids []string, rows []string) {
+		SetLastReport(90, map[string][]string{}, 0, list...)
+		anomalies, _, _ := analyzerReportAnomalies()
+		for _, a := range anomalies {
+			ids = append(ids, a.Type+" "+a.Device+" "+a.IssueID+" "+a.Description)
+		}
+		for _, line := range strings.Split(generateAuditMD([]string{"switch"}), "\n") {
+			for _, typ := range []string{"| shadow_it |", "| loopback |", "| congestion |", "| path |"} {
+				if strings.HasPrefix(line, typ) {
+					rows = append(rows, line)
+				}
+			}
+		}
+		return ids, rows
+	}
+	wantIDs, wantRows := order(suggestions)
+	reversed := slices.Clone(suggestions)
+	slices.Reverse(reversed)
+	shuffled := slices.Clone(suggestions)
+	rand.New(rand.NewSource(7)).Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
+	for name, list := range map[string][]OptimizationSuggestion{"reversed": reversed, "shuffled": shuffled} {
+		ids, rows := order(list)
+		if !slices.Equal(ids, wantIDs) || !slices.Equal(rows, wantRows) {
+			t.Errorf("%s input changes the report order:\n%v\nwant\n%v\nrows %v\nwant %v", name, ids, wantIDs, rows, wantRows)
+		}
+	}
+	want := []string{
+		"congestion 10.0.9.7  GE1/0/2 discards",
+		"congestion 10.0.9.7  GE1/0/10 discards",
+		"loopback 10.0.9.7 loop_lldp_10_0_9_7_3 Port 3",
+		"loopback 10.0.9.7 loop_mac_10_0_9_7_3 Port 3",
+		"path 4c:ae:a3:09:00:01  5 hops",
+		"path 4c:ae:a3:09:00:02  4 hops",
+		"shadow_it 10.0.9.7 shadow_10_0_9_7_2 Port 2 has 2 MAC addresses.",
+		"shadow_it 10.0.9.7 shadow_10_0_9_7_11 Port 11 has 3 MAC addresses.",
+		"shadow_it 10.0.9.10 shadow_10_0_9_10_1 Port 1 has 2 MAC addresses.",
+	}
+	if !slices.Equal(wantIDs, want) {
+		t.Errorf("anomaly order =\n%v\nwant\n%v", wantIDs, want)
+	}
+}

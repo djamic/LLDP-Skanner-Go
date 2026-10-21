@@ -77,21 +77,55 @@ func SetLastReport(healthScore int, anomalyMap map[string][]string, totalMACs in
 }
 
 // analyzerReportAnomalies returns the suggestions of the last live analysis
-// ordered by type and then device (IP order), the types in order, and the
-// count per type: the anomaly sections of /api/report/summary and the audit
-// reports (F12).
+// ordered by type, device (IP order), issue id, description and value
+// (numbers in them by value: port 2 before port 11), the types in order,
+// and the count per type: the anomaly and penalty rows of
+// /api/report/summary, the full report and the audit report (F12). The
+// order does not depend on the order the analysis produced them in (Q16).
 func analyzerReportAnomalies() (anomalies []OptimizationSuggestion, types []string, counts map[string]int) {
 	lastReportMutex.RLock()
 	anomalies = slices.Clone(analyzerLastSuggestions)
 	lastReportMutex.RUnlock()
 	slices.SortStableFunc(anomalies, func(a, b OptimizationSuggestion) int {
-		return cmp.Or(strings.Compare(a.Type, b.Type), compareIPs(a.Device, b.Device))
+		return cmp.Or(strings.Compare(a.Type, b.Type), compareIPs(a.Device, b.Device),
+			compareNatural(a.IssueID, b.IssueID), compareNatural(a.Description, b.Description),
+			compareNatural(a.Value, b.Value))
 	})
 	counts = make(map[string]int)
 	for _, a := range anomalies {
 		counts[a.Type]++
 	}
 	return anomalies, slices.Sorted(maps.Keys(counts)), counts
+}
+
+// compareNatural compares two texts with each run of digits taken as a
+// number ("Port 2" < "Port 11", "shadow_10_0_9_7_2" < "shadow_10_0_9_7_11").
+func compareNatural(a, b string) int {
+	origA, origB := a, b
+	isDigit := func(c byte) bool { return c >= '0' && c <= '9' }
+	for a != "" && b != "" {
+		if isDigit(a[0]) && isDigit(b[0]) {
+			i, j := 0, 0
+			for i < len(a) && isDigit(a[i]) {
+				i++
+			}
+			for j < len(b) && isDigit(b[j]) {
+				j++
+			}
+			na, nb := strings.TrimLeft(a[:i], "0"), strings.TrimLeft(b[:j], "0")
+			if c := cmp.Or(cmp.Compare(len(na), len(nb)), strings.Compare(na, nb)); c != 0 {
+				return c
+			}
+			a, b = a[i:], b[j:]
+			continue
+		}
+		if a[0] != b[0] {
+			return cmp.Compare(a[0], b[0])
+		}
+		a, b = a[1:], b[1:]
+	}
+	// equal but for leading zeros: the plain text decides
+	return cmp.Or(cmp.Compare(len(a), len(b)), strings.Compare(origA, origB))
 }
 
 // analyzerMDCell puts report text on one line for a Markdown table cell.
