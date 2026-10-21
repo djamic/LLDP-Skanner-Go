@@ -201,7 +201,7 @@ func reportShadowHubs(g *DJGraph, md string) []string {
 // TestReportShadowSectionSkipsESXiPorts (F72, Q14): section 7 lists the graph's
 // hub nodes, except hubs whose port carries an HTTP-confirmed ESXi host,
 // also when the host is confirmed after the graph was built and when it is
-// not one of the (at most 5) member nodes the graph draws.
+// a member beyond the fifth (the graph drew only five before F29).
 func TestReportShadowSectionSkipsESXiPorts(t *testing.T) {
 	resetState(t)
 	var macs []MACEntry

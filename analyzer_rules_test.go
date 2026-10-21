@@ -605,10 +605,10 @@ func TestExportHealthScoresKeepsLiveState(t *testing.T) {
 }
 
 // TestReportAnomalyRowsFixedOrder (H12, Q16): the reports' anomaly and
-// penalty rows come out in one order whatever order the analysis produced
-// its suggestions in (it builds them from devices in map order): by type,
-// then device in IP order, then issue id, description and value with
-// numbers compared by value (port 2 before port 11).
+// penalty rows come out in one order whatever order the suggestions of the
+// last analysis come in: by type, then device in IP order, then issue id,
+// description and value with numbers compared by value (port 2 before
+// port 11).
 func TestReportAnomalyRowsFixedOrder(t *testing.T) {
 	resetState(t)
 	suggestions := []OptimizationSuggestion{

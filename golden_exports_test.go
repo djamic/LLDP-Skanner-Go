@@ -252,17 +252,14 @@ func TestGoldenReports(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &api); err != nil {
 		t.Fatal(err)
 	}
-	// The stp root is chosen by map order (F18) and is a graph node only in
-	// some runs, so it is checked here and left out of the golden.
+	// The stp root is the same on every run since F18 (the root seen by the
+	// most devices); when it is a graph node it must carry the anomaly.
 	nodeAnomalies := map[string][]string{}
 	for _, n := range api.Nodes {
-		if len(n.Anomalies) == 0 {
-			continue
+		if n.ID == stpDevice && !slices.Contains(n.Anomalies, "stp") {
+			t.Errorf("stp root node %s has anomalies %v", n.ID, n.Anomalies)
 		}
-		if n.ID == stpDevice {
-			if !slices.Contains(n.Anomalies, "stp") {
-				t.Errorf("stp root node %s has anomalies %v", n.ID, n.Anomalies)
-			}
+		if len(n.Anomalies) == 0 {
 			continue
 		}
 		nodeAnomalies[n.ID] = slices.Sorted(slices.Values(n.Anomalies))

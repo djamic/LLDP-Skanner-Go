@@ -114,9 +114,9 @@ func TestCollectSnapshotAnomalies(t *testing.T) {
 }
 
 // TestCollectSTPAnomalyNoFlap checks that the stp anomaly does not follow the
-// root bridge the analyzer names (one of many, chosen by map order, F18):
-// the snapshot is the same whichever root is named, so there are events only
-// when stp appears or goes away.
+// root bridge the analyzer names (one of many; F18 picks the one most
+// devices see): the snapshot is the same whichever root is named, so there
+// are events only when stp appears or goes away.
 func TestCollectSTPAnomalyNoFlap(t *testing.T) {
 	resetState(t)
 	snap := func(sugg ...OptimizationSuggestion) *NetworkSnapshot {
