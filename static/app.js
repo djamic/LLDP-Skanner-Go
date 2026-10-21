@@ -35,6 +35,14 @@ const groupColors = {
     'unknown': '#9E9E9E'
 };
 
+// uiEscapeHTML makes a value safe inside innerHTML, as text or in a quoted
+// attribute. Labels carry text that remote devices control (LLDP names, SNMP
+// port names), so every server-provided string goes through it.
+const uiHTMLEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function uiEscapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => uiHTMLEntities[ch]);
+}
+
 // Fetch and render network data
 async function loadNetworkData() {
     try {
@@ -640,8 +648,8 @@ function loadEvents() {
                 return `<div class="event-item ${typeClass}">
                     <span class="event-icon">${icon}</span>
                     <div class="event-content">
-                        <div class="event-msg">${evt.message}</div>
-                        <div class="event-time">${evt.time}</div>
+                        <div class="event-msg">${uiEscapeHTML(evt.message)}</div>
+                        <div class="event-time">${uiEscapeHTML(evt.time)}</div>
                     </div>
                 </div>`;
             }).join('');
@@ -795,7 +803,7 @@ async function scanDevicePorts(ip) {
         protocols.forEach(p => {
             const item = document.createElement('div');
             item.className = `port-scan-item ${p.open ? 'open' : 'closed'}`;
-            item.innerHTML = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
+            item.textContent = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
             item.onclick = () => {
                 document.getElementById('connProto').value = p.key;
                 document.getElementById('connPort').value = p.port;
@@ -1058,7 +1066,7 @@ function showInfoPanel(node) {
                 const diff = Math.round((Date.now() - new Date(node.lastSeen).getTime()) / 60000);
                 lastSeenText = diff < 60 ? `${diff} min ago` : `${Math.round(diff/60)}h ago`;
             }
-            statusEl.innerHTML = `<span style="color:#ff4444;font-weight:bold">🔴 UNREACHABLE</span> <span style="color:#888;font-size:11px">Last seen: ${lastSeenText}</span>`;
+            statusEl.innerHTML = `<span style="color:#ff4444;font-weight:bold">🔴 UNREACHABLE</span> <span style="color:#888;font-size:11px">Last seen: ${uiEscapeHTML(lastSeenText)}</span>`;
             statusEl.style.display = 'block';
         } else {
             statusEl.innerHTML = '<span style="color:#4CAF50;font-weight:bold">🟢 Online</span>';
@@ -1076,12 +1084,11 @@ function showInfoPanel(node) {
             const peersHTML = peers.map(peer => {
                 const icon = groupIcons[peer.group] || '❓';
                 const shortName = peer.name.length > 28 ? peer.name.substring(0, 26) + '…' : peer.name;
-                return `<div class="info-list-item info-peer-item" 
-                    onclick="highlightNodeFromPanel('${peer.id.replace(/'/g,"\\'")}'); event.stopPropagation();"
-                    title="${peer.id}\nClick to highlight"
+                return `<div class="info-list-item info-peer-item" data-node-id="${uiEscapeHTML(peer.id)}"
+                    title="${uiEscapeHTML(peer.id)}\nClick to highlight"
                     style="cursor:pointer; padding-left:20px; font-size:12px; background:rgba(255,255,255,0.03); margin:2px 0; border-radius:4px; border-left:2px solid rgba(74,144,226,0.3);">
-                    <span>${icon} ${shortName}</span>
-                    <span style="color:#6c8ab0;font-size:10px">${peer.group}</span>
+                    <span>${icon} ${uiEscapeHTML(shortName)}</span>
+                    <span style="color:#6c8ab0;font-size:10px">${uiEscapeHTML(peer.group)}</span>
                 </div>`;
             }).join('');
             return `
@@ -1089,7 +1096,7 @@ function showInfoPanel(node) {
                     <div style="font-size:11px; font-weight:600; color:#4A90E2; padding:3px 0 2px; 
                         border-bottom:1px solid rgba(74,144,226,0.2); display:flex; 
                         justify-content:space-between; align-items:center;">
-                        <span>🔌 ${portKey}</span>
+                        <span>🔌 ${uiEscapeHTML(portKey)}</span>
                         <span style="color:#6c8ab0">${peers.length} device${peers.length>1?'s':''}</span>
                     </div>
                     ${peersHTML}
@@ -1141,6 +1148,21 @@ function handleBackdropClick(event) {
         closeInfoPanel();
     }
 }
+
+// Rows built with innerHTML carry the node id in an escaped data-node-id
+// attribute instead of an inline onclick; one listener per list hands the id
+// to the action.
+function uiOnNodeClick(listId, action, stopPropagation) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    list.addEventListener('click', event => {
+        const row = event.target.closest?.('[data-node-id]');
+        if (!row) return;
+        if (stopPropagation) event.stopPropagation();
+        action(row.getAttribute('data-node-id'));
+    });
+}
+uiOnNodeClick('infoNeighbors', id => highlightNodeFromPanel(id), true);
 
 // ==================== Settings Management ====================
 
@@ -1533,8 +1555,8 @@ function loadExperimentResults() {
             }
             listDiv.innerHTML = data.files.map(f => `
             <div style="padding: 6px 10px; border-bottom: 1px solid #1a2a3a; display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #e0e0e0; font-size: 13px;">📄 ${f.name}</span>
-                <span style="color: #666; font-size: 11px;">${(f.size / 1024).toFixed(1)} KB · ${f.modified}</span>
+                <span style="color: #e0e0e0; font-size: 13px;">📄 ${uiEscapeHTML(f.name)}</span>
+                <span style="color: #666; font-size: 11px;">${uiEscapeHTML((f.size / 1024).toFixed(1))} KB · ${uiEscapeHTML(f.modified)}</span>
             </div>
         `).join('');
         })
@@ -1630,7 +1652,7 @@ function showShadowIT() {
 
         for (const [switchName, nodes] of Object.entries(bySwitch)) {
             html += `<div class="shadow-switch-group">
-                <div class="shadow-switch-name">📡 ${switchName}</div>`;
+                <div class="shadow-switch-name">📡 ${uiEscapeHTML(switchName)}</div>`;
 
             nodes.forEach(node => {
                 const label = (node.label || node.id).replace(/\n/g, ' · ');
@@ -1642,11 +1664,11 @@ function showShadowIT() {
                     return link ? (link.sourcePort || link.targetPort || '') : '';
                 })();
 
-                html += `<div class="shadow-item" onclick="focusShadowNode('${node.id}')">
+                html += `<div class="shadow-item" data-node-id="${uiEscapeHTML(node.id)}">
                     <span class="shadow-icon">👻</span>
                     <div class="shadow-info">
-                        <div class="shadow-label">${label}</div>
-                        ${port ? `<div class="shadow-port">Port: ${port}</div>` : ''}
+                        <div class="shadow-label">${uiEscapeHTML(label)}</div>
+                        ${port ? `<div class="shadow-port">Port: ${uiEscapeHTML(port)}</div>` : ''}
                     </div>
                     <span class="shadow-goto">→</span>
                 </div>`;
@@ -1677,6 +1699,8 @@ function focusShadowNode(nodeId) {
             .transition().duration(500).attr('r', d => d.group === 'switch' ? 10 : 6).style('stroke', null);
     }
 }
+
+uiOnNodeClick('shadowITList', id => focusShadowNode(id));
 
 function closeShadowIT() {
     document.getElementById('shadowITModal').style.display = 'none';
@@ -1789,11 +1813,12 @@ async function exportMermaid() {
 
         const renderId = 'mermaidGraph_' + Date.now();
         const { svg } = await mermaid.render(renderId, mermaidCode);
+        // Safe as markup: mermaidCode holds only node names reduced to [A-Za-z0-9_] above.
         diagramArea.innerHTML = svg;
     } catch (err) {
         console.error('Mermaid render error:', err);
         diagramArea.innerHTML = `<div style="color: #E24A4A; padding: 20px;">
-            ⚠️ Render error: ${err.message || 'Unknown error'}
+            ⚠️ Render error: ${uiEscapeHTML(err.message || 'Unknown error')}
             <br><br>
             <small style="color: #888;">Raw code is available below.</small>
         </div>`;
@@ -1905,8 +1930,8 @@ function renderEvents(events) {
         return `<div class="event-item ${cls}">
             <span class="event-icon">${icon}</span>
             <div class="event-content">
-                <div class="event-msg">${msg}</div>
-                <div class="event-time">${time}</div>
+                <div class="event-msg">${uiEscapeHTML(msg)}</div>
+                <div class="event-time">${uiEscapeHTML(time)}</div>
             </div>
         </div>`;
     }).join('');

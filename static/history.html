@@ -1058,6 +1058,13 @@
         let trafficChart = null;
         let historyData = [];
 
+        // uiEscapeHTML makes a value safe inside innerHTML, as text or in a quoted
+        // attribute. Port names and event texts come from the devices.
+        const uiHTMLEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        function uiEscapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => uiHTMLEntities[ch]);
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', async () => {
             await loadDevices();
@@ -1327,9 +1334,9 @@
                 const lineColor = ds.borderColor;
                 const statusDot = _statusDots[status] || '';
                 const opacity = hidden ? '0.3' : '1';
-                return `<span class="cleg-item" style="opacity:${opacity}" onclick="toggleDataset(${i})" title="${ds.label} (${status})">
+                return `<span class="cleg-item" style="opacity:${opacity}" onclick="toggleDataset(${i})" title="${uiEscapeHTML(ds.label)} (${uiEscapeHTML(status)})">
                     <span class="cleg-box" style="background:${lineColor}"></span>
-                    ${statusDot} ${ds.label}</span>`;
+                    ${statusDot} ${uiEscapeHTML(ds.label)}</span>`;
             }).join('');
         }
         function toggleDataset(index) {
@@ -1420,10 +1427,10 @@
 
             tbody.innerHTML = changes.slice(-50).reverse().map(c => `
                 <tr>
-                    <td>${formatTime(c.time)}</td>
-                    <td>${c.port}</td>
-                    <td>${c.type}</td>
-                    <td><span class="status-down">${c.old}</span> → <span class="status-up">${c.new}</span></td>
+                    <td>${uiEscapeHTML(formatTime(c.time))}</td>
+                    <td>${uiEscapeHTML(c.port)}</td>
+                    <td>${uiEscapeHTML(c.type)}</td>
+                    <td><span class="status-down">${uiEscapeHTML(c.old)}</span> → <span class="status-up">${uiEscapeHTML(c.new)}</span></td>
                 </tr>
             `).join('');
         }
@@ -1634,8 +1641,8 @@
             }
 
             el.innerHTML = `
-                <span class="port-num">${numLabel}</span>
-                ${tagText ? `<span class="port-tag" style="color:#000">${tagText}</span>` : ''}
+                <span class="port-num">${uiEscapeHTML(numLabel)}</span>
+                ${tagText ? `<span class="port-tag" style="color:#000">${uiEscapeHTML(tagText)}</span>` : ''}
             `;
 
             // Tooltip
@@ -1823,7 +1830,7 @@
                 protocols.forEach(p => {
                     const item = document.createElement('div');
                     item.className = `port-scan-item ${p.open ? 'open' : 'closed'}`;
-                    item.innerHTML = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
+                    item.textContent = `${p.open ? '✅' : '❌'} ${p.name} (:${p.port})`;
                     item.onclick = () => {
                         document.getElementById('connProto').value = p.key;
                         document.getElementById('connPort').value = p.port;
@@ -2176,11 +2183,11 @@
                         else duration = `${Math.floor(evt.duration_s/3600)}h ${Math.floor((evt.duration_s%3600)/60)}m`;
                     }
                     return `<tr>
-                        <td style="white-space:nowrap">${time}</td>
-                        <td class="evt-${evt.type}">${icon} ${evt.type}</td>
-                        <td>${port}</td>
-                        <td>${duration}</td>
-                        <td>${evt.message || '—'}</td>
+                        <td style="white-space:nowrap">${uiEscapeHTML(time)}</td>
+                        <td class="evt-${uiEscapeHTML(evt.type)}">${icon} ${uiEscapeHTML(evt.type)}</td>
+                        <td>${uiEscapeHTML(port)}</td>
+                        <td>${uiEscapeHTML(duration)}</td>
+                        <td>${uiEscapeHTML(evt.message || '—')}</td>
                     </tr>`;
                 }).join('');
 
@@ -2188,7 +2195,7 @@
                 loadEventStats(ip, hours);
 
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#f44336">Error: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:#f44336">Error: ${uiEscapeHTML(err.message)}</td></tr>`;
             }
         }
 
