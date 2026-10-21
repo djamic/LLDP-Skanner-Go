@@ -412,12 +412,12 @@ func TestGoldenScenarioMACIPCache(t *testing.T) {
 }
 
 // cacheAging runs the cache through 30 days on the test clock: load three
-// entries, see one of them again with a new IP plus a new MAC an hour later,
-// see the same ARP table 30 days later, and save. The cache keeps no times
-// today, so every entry stays and keeps its first IP, and the changed IP is
-// not probed. An entry TTL must read the time through a seam that
-// installSeams points at testClock (as eventClock does); its expiry then
-// shows up here.
+// entries (the file has no sidecar, so they count as just seen), see one of
+// them again with a new IP plus a new MAC an hour later, see the same ARP
+// table 30 days later, run a sweep while the gateway does not answer (no
+// entry expires), then a sweep where the gateway answers with one MAC
+// (entries unseen for more than the TTL expire, H8), and save: the cache in
+// the "mac": "ip" form, the last-seen times in the sidecar.
 func cacheAging(t *testing.T, path string) []map[string]any {
 	t.Helper()
 	macIPCacheFile = path
@@ -431,6 +431,8 @@ func cacheAging(t *testing.T, path string) []map[string]any {
 	}})
 	globalMACtoIPMutex.Lock()
 	globalMACtoIP = map[string]string{}
+	collectMACIPSeen = map[string]time.Time{}
+	macIPGatewayOK = time.Time{} // no gateway answer yet in this run
 	globalMACtoIPMutex.Unlock()
 	esxiJobs.reset()
 	obj := &SNMPObject{Community: "public", Port: 161, Timeout: 10 * time.Second, Retries: 1}
@@ -447,13 +449,21 @@ func cacheAging(t *testing.T, path string) []map[string]any {
 	steps = append(steps, state("ARP: 00:1b:21:0a:00:01 now 10.0.1.11, new 00:1b:21:0a:00:04"))
 	testClock.advance(30 * 24 * time.Hour)
 	collectARPFromSwitch(obj, "10.9.0.7")
+	steps = append(steps, state("same ARP table 30 days later"))
+	collectARPFromAllSwitches()
+	steps = append(steps, state("sweep, the gateway does not answer"))
+	fakeSNMP.set(fixedGatewayIP, map[string][]string{oidARP: {oidARP + ".5.10.0.1.11 = Hex-STRING: 00 1B 21 0A 00 01 "}})
+	collectARPFromAllSwitches()
+	fakeSNMP.set(fixedGatewayIP, nil)
 	saveMacIPCache()
-	saved, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	last := state("sweep, the gateway answers with 00:1b:21:0a:00:01, then save")
+	for name, file := range map[string]string{"saved": path, "saved_sidecar": macIPSeenFile()} {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last[name] = string(data)
 	}
-	last := state("same ARP table 30 days later, then save")
-	last["saved"] = string(saved)
 	return append(steps, last)
 }
 

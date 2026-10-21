@@ -41,3 +41,4 @@ results/*
 
 # Generated diagram images
 instrumens/mermaid_*/
+mac_ip_cache_seen.json

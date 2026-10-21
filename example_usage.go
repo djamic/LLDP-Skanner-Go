@@ -1938,14 +1938,15 @@ func collectGatewayARP() {
 	}
 
 	arpTable, err := snmpObj.collectARPTable(gatewayIP)
+	now := macIPClock()
+	recordGatewayARP(gatewayIP, len(arpTable), err, now) // warns once when it fails
 	if err != nil {
-		fmt.Printf("⚠️ Failed to collect ARP from gateway %s: %v\n", gatewayIP, err)
 		return
 	}
 
 	// Build global lookup with the policy of every ARP collector (F70: this
 	// one used to overwrite and skip the ESXi check)
-	collectMergeMACIP(arpTable, macIPClock())
+	collectMergeMACIP(arpTable, now)
 
 	fmt.Printf("✅ Collected %d ARP entries from gateway %s\n", len(arpTable), gatewayIP)
 }

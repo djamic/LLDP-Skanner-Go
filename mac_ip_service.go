@@ -9,9 +9,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -342,25 +344,65 @@ var macIPServiceRunning bool
 var macIPServiceMu sync.Mutex
 
 // collectMACIPSeen holds when each globalMACtoIP entry was last seen in an
-// ARP table (guarded by globalMACtoIPMutex). An entry without a time (loaded
-// from a cache file written before the TTL, or put there by other code) gets
-// one at the next prune, which starts its TTL.
+// ARP table (guarded by globalMACtoIPMutex). It is saved in a sidecar file
+// next to the cache (macIPSeenFile). An entry without a time (no sidecar, or
+// put there by other code) counts as just seen.
 var collectMACIPSeen = make(map[string]time.Time)
+
+// macIPGatewayOK is when an ARP walk of the gateway last returned rows in
+// this run (guarded by globalMACtoIPMutex); zero while the gateway has not
+// answered. Cache entries expire only against it (collectPruneMACIP).
+var macIPGatewayOK time.Time
+
+// macIPGatewayWarned is set once the gateway ARP warning was printed: one
+// warning per start, not one per sweep.
+var macIPGatewayWarned atomic.Bool
 
 // macIPClock is the time source of the MAC-IP cache (last-seen times, TTL)
 // and of the ESXi check retries. Tests replace it with a clock they control.
 var macIPClock = time.Now
 
-// collectMACIPTTL: an entry not seen in any ARP table for this long is
-// dropped (Q18), so old IPs stop labelling nodes and feeding the ESXi probe.
+// collectMACIPTTL: an entry the gateway's ARP table has not shown for this
+// long is dropped (Q18), so old IPs stop labelling nodes and feeding the
+// ESXi probe.
 var collectMACIPTTL = 7 * 24 * time.Hour
 
-// collectMACIPRecord is one mac_ip_cache.json entry ({"mac": {"ip", "seen"}},
-// seen in Unix seconds, 0 or absent when unknown). Files written before the
-// TTL hold plain "mac": "ip" strings; they still load.
+// collectMACIPRecord is a cache entry in the {"ip", "seen"} form a
+// development build wrote; it still loads. mac_ip_cache.json itself keeps
+// the "mac": "ip" form older binaries read, and the last-seen times go to
+// the sidecar file (macIPSeenFile).
 type collectMACIPRecord struct {
 	IP   string `json:"ip"`
 	Seen int64  `json:"seen,omitempty"`
+}
+
+// macIPSeenFile is the sidecar of the cache file: the last-seen time of
+// each MAC in Unix seconds ("mac_ip_cache_seen.json" next to
+// "mac_ip_cache.json").
+func macIPSeenFile() string {
+	return strings.TrimSuffix(macIPCacheFile, filepath.Ext(macIPCacheFile)) + "_seen.json"
+}
+
+// recordGatewayARP notes an ARP walk of the gateway ip at time now: rows
+// mean it answered (cache entries may expire against this walk); no rows,
+// from an error or an empty table, print the one warning of this run.
+func recordGatewayARP(ip string, rows int, err error, now time.Time) {
+	if rows > 0 {
+		globalMACtoIPMutex.Lock()
+		if now.After(macIPGatewayOK) {
+			macIPGatewayOK = now
+		}
+		globalMACtoIPMutex.Unlock()
+		return
+	}
+	if !macIPGatewayWarned.CompareAndSwap(false, true) {
+		return
+	}
+	reason := "empty ARP table"
+	if err != nil {
+		reason = err.Error()
+	}
+	fmt.Printf("⚠️ [MacIPService] Gateway %s did not answer the SNMP ARP walk (%s). IPs only the gateway knows are not refreshed, and no MAC-IP cache entry expires until %s answers (SNMP read access to ipNetToMediaPhysAddress and ipAddrTable).\n", ip, reason, ip)
 }
 
 // collectMACIPCurrent reports whether globalMACtoIP maps mac to ip.
@@ -403,9 +445,14 @@ func collectMergeMACIP(entries []ARPEntry, now time.Time) (added, changed int) {
 	return added, changed
 }
 
-// collectPruneMACIP drops the globalMACtoIP entries not seen for the TTL,
-// starts the TTL of entries without a time, and forgets times of MACs that
-// have no entry. Returns the number of entries dropped.
+// collectPruneMACIP drops the globalMACtoIP entries whose last sighting is
+// more than the TTL before the last successful gateway ARP walk
+// (macIPGatewayOK): the gateway's table holds the ARP entry of every host,
+// so only a gateway walk that has not shown a MAC for the whole TTL says it
+// is gone, while switch ARP tables cover few hosts. Without a successful
+// gateway walk in this run nothing expires. Entries without a time count as
+// seen now, and times of MACs without an entry are forgotten. Returns the
+// number of entries dropped.
 func collectPruneMACIP(now time.Time) int {
 	globalMACtoIPMutex.Lock()
 	defer globalMACtoIPMutex.Unlock()
@@ -415,7 +462,7 @@ func collectPruneMACIP(now time.Time) int {
 		switch {
 		case !known:
 			collectMACIPSeen[mac] = now
-		case now.Sub(seen) > collectMACIPTTL:
+		case !macIPGatewayOK.IsZero() && macIPGatewayOK.After(seen.Add(collectMACIPTTL)):
 			delete(globalMACtoIP, mac)
 			delete(collectMACIPSeen, mac)
 			dropped++
@@ -429,12 +476,14 @@ func collectPruneMACIP(now time.Time) int {
 	return dropped
 }
 
-// loadMacIPCache loads mac→ip mappings from JSON file into globalMACtoIP.
-// Keys are canonicalized, unusable MACs (Q11), empty IPs and entries older
-// than the TTL are skipped, and entries already in memory are kept (they are
-// at least as fresh). Nothing is queued for the ESXi check: the ARP sweeps
-// queue the MACs they actually see (F67: the whole cache, ~36.8k :443
-// dials, was queued at every start).
+// loadMacIPCache loads mac→ip mappings from JSON file into globalMACtoIP,
+// with their last-seen times from the sidecar file; when the sidecar is
+// missing or unreadable, or has no time for a MAC, the entry counts as just
+// seen. Keys are canonicalized, unusable MACs (Q11) and empty IPs are
+// skipped, and entries already in memory are kept (they are at least as
+// fresh). Nothing expires here (collectPruneMACIP). Nothing is queued for
+// the ESXi check: the ARP sweeps queue the MACs they actually see (F67: the
+// whole cache, ~36.8k :443 dials, was queued at every start).
 func loadMacIPCache() {
 	data, err := os.ReadFile(macIPCacheFile)
 	if err != nil {
@@ -446,6 +495,7 @@ func loadMacIPCache() {
 		fmt.Printf("⚠️ [MacIPService] Failed to parse %s: %v\n", macIPCacheFile, err)
 		return
 	}
+	seenTimes := loadMacIPSeen()
 	now := macIPClock()
 	globalMACtoIPMutex.Lock()
 	loaded := 0
@@ -458,17 +508,17 @@ func loadMacIPCache() {
 		if mac == "" || parseIPv4(rec.IP) == "" {
 			continue
 		}
-		if rec.Seen > 0 && now.Sub(time.Unix(rec.Seen, 0)) > collectMACIPTTL {
-			continue
-		}
 		if _, exists := globalMACtoIP[mac]; exists {
 			continue
 		}
 		globalMACtoIP[mac] = rec.IP
-		if rec.Seen > 0 {
+		switch seen, ok := seenTimes[mac]; {
+		case ok:
+			collectMACIPSeen[mac] = seen
+		case rec.Seen > 0:
 			collectMACIPSeen[mac] = time.Unix(rec.Seen, 0)
-		} else {
-			delete(collectMACIPSeen, mac)
+		default:
+			collectMACIPSeen[mac] = now
 		}
 		loaded++
 	}
@@ -476,30 +526,58 @@ func loadMacIPCache() {
 	fmt.Printf("📂 [MacIPService] Loaded %d MAC-IP entries from cache\n", loaded)
 }
 
-// saveMacIPCache saves globalMACtoIP to JSON file atomically, with the time
-// each entry was last seen (collectMACIPRecord)
+// loadMacIPSeen reads the sidecar file's last-seen times by canonical MAC;
+// nil when it is missing or unreadable.
+func loadMacIPSeen() map[string]time.Time {
+	data, err := os.ReadFile(macIPSeenFile())
+	if err != nil {
+		return nil
+	}
+	var raw map[string]int64
+	if err := json.Unmarshal(data, &raw); err != nil {
+		fmt.Printf("⚠️ [MacIPService] Ignoring %s (%v): every cached entry counts as just seen\n", macIPSeenFile(), err)
+		return nil
+	}
+	seen := make(map[string]time.Time, len(raw))
+	for key, unix := range raw {
+		if mac := canonicalMAC(key); mac != "" && unix > 0 {
+			seen[mac] = time.Unix(unix, 0)
+		}
+	}
+	return seen
+}
+
+// saveMacIPCache saves globalMACtoIP to JSON file atomically, as the plain
+// "mac": "ip" map older binaries read too, and the last-seen times to the
+// sidecar file (macIPSeenFile).
 func saveMacIPCache() {
 	globalMACtoIPMutex.RLock()
-	snapshot := make(map[string]collectMACIPRecord, len(globalMACtoIP))
-	for mac, ip := range globalMACtoIP {
-		rec := collectMACIPRecord{IP: ip}
-		if seen, ok := collectMACIPSeen[mac]; ok {
-			rec.Seen = seen.Unix()
+	snapshot := maps.Clone(globalMACtoIP)
+	seen := make(map[string]int64, len(snapshot))
+	for mac := range snapshot {
+		if t, ok := collectMACIPSeen[mac]; ok {
+			seen[mac] = t.Unix()
 		}
-		snapshot[mac] = rec
 	}
 	globalMACtoIPMutex.RUnlock()
 
-	data, err := json.MarshalIndent(snapshot, "", "  ")
+	if writeJSONAtomic(macIPCacheFile, snapshot) {
+		writeJSONAtomic(macIPSeenFile(), seen)
+	}
+}
+
+// writeJSONAtomic writes v as indented JSON to path through a temporary
+// file and a rename; false when it could not be written.
+func writeJSONAtomic(path string, v any) bool {
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return
+		return false
 	}
-	// Write to temp file then rename — atomic write
-	tmp := macIPCacheFile + ".tmp"
+	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return
+		return false
 	}
-	os.Rename(tmp, macIPCacheFile)
+	return os.Rename(tmp, path) == nil
 }
 
 // ─── ARP Collection from all switches ─────────────────────────────────────────
@@ -507,19 +585,20 @@ func saveMacIPCache() {
 // collectARPFromSwitch collects ARP table from a single switch IP and
 // merges results into globalMACtoIP. Returns number of new or changed entries.
 func collectARPFromSwitch(snmpObj *SNMPObject, ip string) int {
-	updated, _ := collectARPMerge(snmpObj, ip)
+	updated, _, _ := collectARPMerge(snmpObj, ip)
 	return updated
 }
 
 // collectARPMerge merges the ARP table of ip into globalMACtoIP and returns
-// the number of new or changed mappings and of ARP rows read.
-func collectARPMerge(snmpObj *SNMPObject, ip string) (updated, rows int) {
+// the number of new or changed mappings and of ARP rows read, and the walk
+// error.
+func collectARPMerge(snmpObj *SNMPObject, ip string) (updated, rows int, err error) {
 	entries, err := snmpObj.collectARPTable(ip)
 	if err != nil {
-		return 0, 0
+		return 0, 0, err
 	}
 	added, changed := collectMergeMACIP(entries, macIPClock())
-	return added + changed, len(entries)
+	return added + changed, len(entries), nil
 }
 
 // collectARPFromAllSwitches collects ARP from gateway (all SVI IPs) + all discovered switches
@@ -534,8 +613,10 @@ func collectARPFromAllSwitches() {
 	totalNew := 0
 	totalRows := 0
 
-	// 1. Gateway — collect from its own IP first
-	n, rows := collectARPMerge(snmpObj, gatewayIP)
+	// 1. Gateway — collect from its own IP first. Only its answer lets
+	// cache entries expire (collectPruneMACIP).
+	n, rows, err := collectARPMerge(snmpObj, gatewayIP)
+	recordGatewayARP(gatewayIP, rows, err, macIPClock())
 	totalRows += rows
 	if n > 0 {
 		fmt.Printf("🌐 [MacIPService] Gateway %s: +%d new/changed MAC-IP entries\n", gatewayIP, n)
@@ -549,7 +630,7 @@ func collectARPFromAllSwitches() {
 		if svi == gatewayIP {
 			continue // already done above
 		}
-		n, rows := collectARPMerge(snmpObj, svi)
+		n, rows, _ := collectARPMerge(snmpObj, svi)
 		totalRows += rows
 		if n > 0 {
 			fmt.Printf("🌐 [MacIPService] Gateway SVI %s: +%d new/changed MAC-IP entries\n", svi, n)
@@ -568,7 +649,7 @@ func collectARPFromAllSwitches() {
 	collectedDataMutex.RUnlock()
 
 	for _, ip := range switchIPs {
-		n, rows := collectARPMerge(snmpObj, ip)
+		n, rows, _ := collectARPMerge(snmpObj, ip)
 		totalRows += rows
 		if n > 0 {
 			fmt.Printf("🔗 [MacIPService] Switch %s: +%d new/changed MAC-IP entries\n", ip, n)
@@ -576,8 +657,9 @@ func collectARPFromAllSwitches() {
 		}
 	}
 
-	// Drop entries not seen for the TTL (Q18). The cache is saved after every
-	// sweep that read ARP rows, so the last-seen times survive a restart.
+	// Drop entries the gateway has not shown for the TTL (Q18). The cache is
+	// saved after every sweep that read ARP rows, so the last-seen times
+	// survive a restart.
 	now := macIPClock()
 	dropped := collectPruneMACIP(now)
 	if totalNew > 0 || dropped > 0 {

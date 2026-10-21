@@ -25,7 +25,9 @@ func collectResetCache(t *testing.T) {
 		globalMACtoIPMutex.Lock()
 		globalMACtoIP = make(map[string]string)
 		collectMACIPSeen = make(map[string]time.Time)
+		macIPGatewayOK = time.Time{}
 		globalMACtoIPMutex.Unlock()
+		macIPGatewayWarned.Store(false)
 		collectESXiMu.Lock()
 		collectESXiChecked = make(map[string]string)
 		collectESXiRetry = make(map[string]collectESXiRetryJob)
@@ -124,8 +126,10 @@ func TestCollectGatewayARPPolicy(t *testing.T) {
 	}
 }
 
-// TestCollectMACIPTTL checks Q18: entries not seen in an ARP table for the
-// TTL are dropped; entries of unknown age start their TTL at the prune.
+// TestCollectMACIPTTL checks Q18 with the gateway rule (H8): an entry expires
+// only when a successful gateway ARP walk came more than the TTL after its
+// last sighting; while the gateway has not answered in this run nothing
+// expires, however old. Entries of unknown age count as seen at the prune.
 func TestCollectMACIPTTL(t *testing.T) {
 	resetState(t)
 	collectResetCache(t)
@@ -141,10 +145,11 @@ func TestCollectMACIPTTL(t *testing.T) {
 	collectMACIPSeen["00:50:56:07:02:99"] = now // no entry
 	globalMACtoIPMutex.Unlock()
 
-	if dropped := collectPruneMACIP(now); dropped != 1 {
-		t.Errorf("dropped %d, want 1", dropped)
+	// The gateway never answered: nothing expires.
+	if dropped := collectPruneMACIP(now); dropped != 0 {
+		t.Errorf("dropped %d without a gateway walk, want 0", dropped)
 	}
-	if got := collectCacheMap(); len(got) != 2 || got["00:50:56:07:02:01"] != "" {
+	if got := collectCacheMap(); len(got) != 3 {
 		t.Errorf("cache after prune = %v", got)
 	}
 	globalMACtoIPMutex.RLock()
@@ -154,67 +159,95 @@ func TestCollectMACIPTTL(t *testing.T) {
 	if !started.Equal(now) || orphan {
 		t.Errorf("unknown age not started (%v) or orphan time kept (%v)", started, orphan)
 	}
-	// Seven days after its clock started, the unknown-age entry expires too.
-	if dropped := collectPruneMACIP(now.Add(7*24*time.Hour + time.Minute)); dropped != 2 {
-		t.Errorf("second prune dropped %d, want 2", dropped)
+
+	// A gateway walk now: the entry last seen 8 days ago expires.
+	recordGatewayARP("10.7.2.254", 5, nil, now)
+	if dropped := collectPruneMACIP(now); dropped != 1 {
+		t.Errorf("dropped %d after a gateway walk, want 1", dropped)
+	}
+	if got := collectCacheMap(); len(got) != 2 || got["00:50:56:07:02:01"] != "" {
+		t.Errorf("cache after the gateway walk = %v", got)
+	}
+	// A week later the gateway fails: the others stay; once it answers
+	// again they expire as well.
+	later := now.Add(7*24*time.Hour + time.Minute)
+	recordGatewayARP("10.7.2.254", 0, errors.New("timeout"), later)
+	if dropped := collectPruneMACIP(later); dropped != 0 {
+		t.Errorf("dropped %d after a failed gateway walk, want 0", dropped)
+	}
+	recordGatewayARP("10.7.2.254", 5, nil, later)
+	if dropped := collectPruneMACIP(later); dropped != 2 {
+		t.Errorf("dropped %d once the gateway answered again, want 2", dropped)
 	}
 }
 
-// TestCollectCacheFile checks the cache file: saved with last-seen times,
-// loaded back (expired entries skipped), old "mac": "ip" files still load
-// (unknown age, keys canonicalized, Q11 filter), and loading queues nothing
-// for the ESXi check (F67).
+// TestCollectCacheFile checks the cache files (H8): mac_ip_cache.json keeps
+// the plain "mac": "ip" map the previous binary reads, and the last-seen
+// times go to the sidecar mac_ip_cache_seen.json; loading takes the times
+// from the sidecar, and a missing or unreadable sidecar makes every entry
+// just seen. Keys are canonicalized, the Q11 filter applies, the {ip, seen}
+// records of development builds load, and loading queues nothing for the
+// ESXi check (F67).
 func TestCollectCacheFile(t *testing.T) {
 	resetState(t)
 	collectResetCache(t)
 	dir := t.TempDir()
 	macIPCacheFile = filepath.Join(dir, "cache.json")
-	now := macIPClock() // the clock loadMacIPCache judges the TTL with
+	sidecar := filepath.Join(dir, "cache_seen.json")
+	if got := macIPSeenFile(); got != sidecar {
+		t.Fatalf("macIPSeenFile() = %q, want %q", got, sidecar)
+	}
+	now := macIPClock() // the clock loadMacIPCache marks unknown entries with
+	hourAgo := now.Add(-time.Hour)
 
 	globalMACtoIPMutex.Lock()
 	globalMACtoIP = map[string]string{"00:50:56:07:03:01": "10.7.3.1", "00:50:56:07:03:02": "10.7.3.2"}
-	collectMACIPSeen["00:50:56:07:03:01"] = now.Add(-time.Hour)
+	collectMACIPSeen["00:50:56:07:03:01"] = hourAgo
 	globalMACtoIPMutex.Unlock()
 	saveMacIPCache()
-	data, err := os.ReadFile(macIPCacheFile)
-	if err != nil {
-		t.Fatal(err)
+	var saved map[string]string // what the previous binary decodes
+	decodeJSONFile(t, macIPCacheFile, &saved)
+	if want := map[string]string{"00:50:56:07:03:01": "10.7.3.1", "00:50:56:07:03:02": "10.7.3.2"}; !maps.Equal(saved, want) {
+		t.Errorf("saved cache %v, want %v", saved, want)
 	}
-	var saved map[string]collectMACIPRecord
-	if err := json.Unmarshal(data, &saved); err != nil {
-		t.Fatalf("saved file: %v\n%s", err, data)
-	}
-	want := map[string]collectMACIPRecord{
-		"00:50:56:07:03:01": {IP: "10.7.3.1", Seen: now.Add(-time.Hour).Unix()},
-		"00:50:56:07:03:02": {IP: "10.7.3.2"},
-	}
-	if !maps.Equal(saved, want) {
-		t.Errorf("saved %v, want %v", saved, want)
+	var seen map[string]int64
+	decodeJSONFile(t, sidecar, &seen)
+	if want := map[string]int64{"00:50:56:07:03:01": hourAgo.Unix()}; !maps.Equal(seen, want) {
+		t.Errorf("saved sidecar %v, want %v", seen, want)
 	}
 
-	// New format, with one entry older than the TTL.
-	file := fmt.Sprintf(`{"00:50:56:07:03:01": {"ip": "10.7.3.1", "seen": %d},
-		"00:50:56:07:03:03": {"ip": "10.7.3.3", "seen": %d},
-		"00:50:56:07:03:04": {"ip": "10.7.3.4"}}`, now.Add(-time.Hour).Unix(), now.Add(-8*24*time.Hour).Unix())
+	// Loaded back: the sidecar time, and "just seen" for the entry without one
 	collectResetCache(t)
-	if err := os.WriteFile(macIPCacheFile, []byte(file), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	loadMacIPCache()
-	if got := collectCacheMap(); !maps.Equal(got, map[string]string{"00:50:56:07:03:01": "10.7.3.1", "00:50:56:07:03:04": "10.7.3.4"}) {
-		t.Errorf("loaded %v", got)
+	if got := collectCacheMap(); !maps.Equal(got, saved) {
+		t.Errorf("loaded %v, want %v", got, saved)
 	}
-	globalMACtoIPMutex.RLock()
-	seen1 := collectMACIPSeen["00:50:56:07:03:01"]
-	_, known4 := collectMACIPSeen["00:50:56:07:03:04"]
-	globalMACtoIPMutex.RUnlock()
-	if seen1.Unix() != now.Add(-time.Hour).Unix() || known4 {
-		t.Errorf("loaded seen times: %v, unknown entry known=%v", seen1, known4)
+	loadedSeen := func(mac string) time.Time {
+		globalMACtoIPMutex.RLock()
+		defer globalMACtoIPMutex.RUnlock()
+		return collectMACIPSeen[mac]
+	}
+	if loadedSeen("00:50:56:07:03:01").Unix() != hourAgo.Unix() || !loadedSeen("00:50:56:07:03:02").Equal(now) {
+		t.Errorf("loaded seen times %v, %v", loadedSeen("00:50:56:07:03:01"), loadedSeen("00:50:56:07:03:02"))
 	}
 
-	// Old format (written before the TTL).
-	old := `{"AA:BB:CC:07:03:05": "10.7.3.5", "01:00:5e:00:00:fb": "10.7.3.6", "00:00:00:12:34:56": "10.7.3.7",
-		"00:50:56:07:03:08": "", "not-a-mac": "10.7.3.9", "00:50:56:07:03:0a": "10.7.3.10"}`
+	// Unreadable or missing sidecar: every entry is just seen
+	for name, write := range map[string]func(){
+		"unreadable": func() { os.WriteFile(sidecar, []byte("{not json"), 0o644) },
+		"missing":    func() { os.Remove(sidecar) },
+	} {
+		write()
+		collectResetCache(t)
+		loadMacIPCache()
+		if !loadedSeen("00:50:56:07:03:01").Equal(now) || len(collectCacheMap()) != 2 {
+			t.Errorf("%s sidecar: seen %v, cache %v", name, loadedSeen("00:50:56:07:03:01"), collectCacheMap())
+		}
+	}
+
+	// Old and development-build forms, keys canonicalized, Q11 filter
+	old := fmt.Sprintf(`{"AA:BB:CC:07:03:05": "10.7.3.5", "01:00:5e:00:00:fb": "10.7.3.6", "00:00:00:12:34:56": "10.7.3.7",
+		"00:50:56:07:03:08": "", "not-a-mac": "10.7.3.9", "00:50:56:07:03:0a": "10.7.3.10",
+		"00:50:56:07:03:0b": {"ip": "10.7.3.11", "seen": %d}}`, hourAgo.Unix())
 	collectResetCache(t)
 	globalMACtoIPMutex.Lock()
 	globalMACtoIP["00:50:56:07:03:0a"] = "10.7.3.110" // seen in memory: kept
@@ -223,11 +256,26 @@ func TestCollectCacheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	loadMacIPCache()
-	if got := collectCacheMap(); !maps.Equal(got, map[string]string{"aa:bb:cc:07:03:05": "10.7.3.5", "00:50:56:07:03:0a": "10.7.3.110"}) {
+	if got := collectCacheMap(); !maps.Equal(got, map[string]string{"aa:bb:cc:07:03:05": "10.7.3.5", "00:50:56:07:03:0a": "10.7.3.110", "00:50:56:07:03:0b": "10.7.3.11"}) {
 		t.Errorf("loaded old format %v", got)
+	}
+	if loadedSeen("00:50:56:07:03:0b").Unix() != hourAgo.Unix() {
+		t.Errorf("record seen time not kept: %v", loadedSeen("00:50:56:07:03:0b"))
 	}
 	if got := esxiJobs.taken(); len(got) != 0 {
 		t.Errorf("loading the cache queued %d ESXi checks: %v", len(got), got)
+	}
+}
+
+// decodeJSONFile decodes the JSON file at path into v.
+func decodeJSONFile(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, v); err != nil {
+		t.Fatalf("%s: %v\n%s", path, err, data)
 	}
 }
 
