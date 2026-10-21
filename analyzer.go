@@ -785,11 +785,20 @@ func analyzerHubCandidates(d *DeviceData, switchChassisMACs map[string]string) [
 		lldpPorts[neighbor.LocalPortNum] = true
 	}
 	ownMAC := normalizeMAC(d.ChassisID)
+	nullPorts := make(map[int]bool) // NULL0/InLoopBack ports, looked up once per port
+	isNullPort := func(port int) bool {
+		null, seen := nullPorts[port]
+		if !seen {
+			null = isNullInterface(getLocalPortName(d, port))
+			nullPorts[port] = null
+		}
+		return null
+	}
 
 	portMACs := make(map[int][]string)
 	for _, macEntry := range d.MACTable {
 		mac := normalizeMAC(macEntry.MACAddress)
-		if isNullInterface(getLocalPortName(d, macEntry.PortNumber)) || knownMACs[mac] || mac == ownMAC {
+		if isNullPort(macEntry.PortNumber) || knownMACs[mac] || mac == ownMAC {
 			continue
 		}
 		if _, isSwitch := switchChassisMACs[mac]; isSwitch || isInvalidID(macEntry.MACAddress) {
