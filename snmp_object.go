@@ -274,9 +274,18 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 	}
 }
 
+// snmpWalk runs one SNMP walk for runSNMPWalk. Tests replace it with a fake
+// agent so no SNMP request is sent.
+var snmpWalk = snmpBulkWalk
+
 // runSNMPWalk executes snmpbulkwalk command with 30s timeout and returns lines
 func (s *SNMPObject) runSNMPWalk(ip, oid string) ([]string, error) {
-	cmd := exec.Command("snmpbulkwalk", "-v2c", "-c", s.Community, "-On", "-Cr25", "-t", "5", "-r", "1", ip, oid)
+	return snmpWalk(s.Community, ip, oid)
+}
+
+// snmpBulkWalk runs snmpbulkwalk (killed after 30s) and returns its lines.
+func snmpBulkWalk(community, ip, oid string) ([]string, error) {
+	cmd := exec.Command("snmpbulkwalk", "-v2c", "-c", community, "-On", "-Cr25", "-t", "5", "-r", "1", ip, oid)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var out bytes.Buffer
 	cmd.Stdout = &out

@@ -279,6 +279,10 @@ var (
 	}
 )
 
+// ouiOpenHTTP downloads the IEEE database when oui.txt cannot be opened.
+// Tests replace it so nothing is downloaded.
+var ouiOpenHTTP = oui.OpenStaticHttp
+
 // initOUIDatabase tries to load the IEEE OUI database
 func initOUIDatabase() {
 	ouiDBOnce.Do(func() {
@@ -294,7 +298,7 @@ func initOUIDatabase() {
 
 		// Try downloading from IEEE
 		fmt.Println("⏳ Downloading IEEE OUI database...")
-		db2, err := oui.OpenStaticHttp("http://standards-oui.ieee.org/oui.txt")
+		db2, err := ouiOpenHTTP("http://standards-oui.ieee.org/oui.txt")
 		if err == nil {
 			ouiDB = db2
 			ouiDBOk = true

@@ -1,0 +1,128 @@
+# Frozen vendor-name list for categorizeVendor in TestGoldenMACPredicates:
+# every extendedVendorDB value at commit 6d8855f plus IEEE registry names.
+# One name per line; the line "<empty>" stands for the empty string.
+<empty>
+Apple
+Apple, Inc.
+Aruba
+Aruba, a Hewlett Packard Enterprise Company
+ASRock Incorporation
+ASUS
+ASUSTek
+AzureWave
+Biostar
+BIZLINK TECHNOLOGY
+Brother
+Brother industries, LTD.
+Canon
+Canon Inc.
+CHONGQING FUGUI
+Cisco
+Cisco Systems, Inc
+COMPAL
+COMPAL INFORMATION (KUNSHAN)
+D-Link
+D-Link International
+Dahua
+Dell
+Dell Inc.
+EliteGroup
+Elitegroup Computer Systems
+ELSA
+Eltex Enterprise Ltd.
+Emerson Network Power, Avocent Division
+Epson
+ESP (Espressif)
+Espressif Inc.
+Fortinet
+Fortinet, Inc.
+Fujitsu Technology Solutions GmbH
+GIGA-BYTE
+GIGA-BYTE TECHNOLOGY
+GIGA-BYTE TECHNOLOGY CO.,LTD.
+GIGA-TMS
+Gigabyte
+Guangzhou Shiyuan
+Hangzhou H3C Technologies Co., Limited
+Hangzhou Hikvision Digital Technology Co.,Ltd.
+Hewlett Packard
+Hewlett Packard Enterprise
+Hikvision
+HMD Global (Nokia)
+Hon Hai Precision
+HP
+HP Aruba
+HP Inc.
+HPE
+HUAWEI
+Huawei
+HUAWEI TECHNOLOGIES
+HUAWEI TECHNOLOGIES CO.,LTD
+Hyper-V
+IANA (VRRP)
+IBM
+IBM Corp
+ICANN, IANA Department
+IEEE Registration Authority
+Inspire Tech
+Intel
+Intel Corporate
+INVENTEC
+Iskratel d.o.o.
+Kyocera
+LCFC(Hefei)
+LCFC(Hefei) Electronics
+Lengda Technology(Xiamen)
+Microsoft Corporation
+MikroTik
+MSI
+Murata Manufacturing
+NAGTECH LLC
+New H3C Technologies Co., Ltd
+OPPO
+Oracle
+PCS Systemtechnik GmbH
+Phicomm
+Private
+Proxmox Server Solutions GmbH
+QEMU/KVM
+Quanta Computer
+Realtek
+Realtek Semiconductor Corp.
+Routerboard.com
+Samsung
+Samsung Electronics Co.,Ltd
+Seiko Epson Corporation
+Shenzhen Lianrui
+Shenzhen Reecam
+Shenzhen Reecam Tech.Ltd.
+Shenzhen Videopark
+SNR
+Super Micro Computer, Inc.
+Supermicro
+Technicolor
+TP-Link
+TP-Link Systems Inc
+TP-LINK TECHNOLOGIES CO.,LTD.
+Tyan
+Tyan Computer Corp
+Ubiquiti
+Ubiquiti Inc
+Unknown
+Unknown (OUI 00:e2:69)
+Unknown (OUI 64:6e:ea)
+VirtualBox
+vivo
+VIVOTEK INC.
+VMware
+VMware, Inc.
+Wistron Infocomm (Zhongshan)
+Wistron InfoComm(Kunshan)
+Xen
+Xensource, Inc.
+Xiaomi
+Xiaomi Communications
+Xiaomi Communications Co Ltd
+Zhejiang Dahua Technology Co., Ltd.
+ZTE
+ZTE Corporation

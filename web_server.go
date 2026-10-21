@@ -44,6 +44,10 @@ var (
 	lastReportMutex sync.RWMutex
 )
 
+// graphDebugFile receives a copy of every /api/graph response (debug
+// snapshot). Tests point it at a temporary file.
+var graphDebugFile = "graphs_data.txt"
+
 func init() {
 	rescanTrigger = make(chan bool, 1)
 	lastAnomalyMap = make(map[string][]string)
@@ -174,7 +178,7 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 
 	// DEBUG: Save snapshot
 	if jsonData, err := json.MarshalIndent(data, "", "  "); err == nil {
-		os.WriteFile("graphs_data.txt", jsonData, 0644)
+		os.WriteFile(graphDebugFile, jsonData, 0644)
 	}
 
 	json.NewEncoder(w).Encode(data)

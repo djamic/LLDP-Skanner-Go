@@ -7,11 +7,15 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -303,47 +307,11 @@ func main() {
 				fmt.Printf("[📊] %s (%s) - %d interfaces, %d neighbors, ChassisID: %s\n",
 					data.IP, data.SysName, len(data.Interfaces), len(data.Neighbors), data.ChassisID)
 
-				// REACTIVE: Rebuild graph from current collected data
-				collectedDataMutex.RLock()
-				newGraph := NewDJGraph()
-
-				// 0. Build switchChassisMACs map
-				switchChassisMACs := buildSwitchChassisMACs(collectedData)
-
-				// 1. Add all Nodes
-				for _, d := range collectedData {
-					id := normalizeID(d.ChassisID, 0)
-					if id == "" {
-						id = d.IP
-					}
-					newGraph.AddNode(id)
-					info := d.SysName
-					if id != d.IP {
-						info = fmt.Sprintf("%s\n%s", d.SysName, d.IP)
-					}
-					newGraph.SwitchInfo[id] = info
-
-					// Phase 8: Transfer unreachable status to graph
-					if d.Unreachable {
-						newGraph.NodeStatus[id] = "unreachable"
-					}
-				}
-
-				// 2. Build Edges (with switch MAC exclusion)
-				for _, d := range collectedData {
-					buildGraphEdges(newGraph, d, switchChassisMACs)
-				}
-
-				// 3. MAC cross-reference edges (for LLDP-disabled switches)
-				addMACCrossRefEdges(newGraph, collectedData, switchChassisMACs)
-				collectedDataMutex.RUnlock()
-
-				// 4. Update global
-				SetGlobalGraph(newGraph)
-				// 5. Detect hypervisors on fresh graph
-				detectHypervisors(newGraph)
-				// 6. Enrich VM/hyp nodes with IPs from MAC-IP cache
-				enrichGraphWithIPs(newGraph)
+				// REACTIVE: Rebuild graph from current collected data.
+				// rebuildGraph finishes the whole graph (hypervisors and IP
+				// labels included) before it publishes it, like the periodic
+				// rescans, so HTTP handlers never see a half-built graph.
+				newGraph := rebuildGraph()
 				fmt.Printf("  [GRAPH STATE] Nodes: %d, Edges: %d\n", len(newGraph.Nodes), countEdges(newGraph))
 
 				// 7. Run Analyze() immediately so health_score is available in /api/graph
@@ -672,6 +640,34 @@ func normalizeID(id string, subtype int) string {
 	}
 }
 
+// resolveLLDPTarget picks the graph node id and display name for one LLDP
+// neighbor: the chassis id when it is a MAC; otherwise the port id when that
+// is a MAC (the chassis id or RemSysName becomes the display name); otherwise
+// the chassis id itself (could be a hostname).
+func resolveLLDPTarget(neighbor LLDPNeighbor) (targetID, displayName string) {
+	chassisID := normalizeID(neighbor.RemChassisId, neighbor.RemChassisIdSubtype)
+	portID := normalizeID(neighbor.RemPortId, neighbor.RemPortIdSubtype)
+
+	// Check if ChassisID looks like a MAC (contains colons and correct length)
+	chassisIsMAC := strings.Count(chassisID, ":") == 5 && len(chassisID) == 17
+	portIsMAC := strings.Count(portID, ":") == 5 && len(portID) == 17
+
+	if chassisIsMAC {
+		// ChassisID is MAC - use it
+		return chassisID, neighbor.RemSysName
+	}
+	if portIsMAC {
+		// ChassisID is hostname, but PortID is MAC - use PortID as node ID
+		displayName = chassisID // Use hostname from ChassisID for display
+		if neighbor.RemSysName != "" && neighbor.RemSysName != chassisID {
+			displayName = neighbor.RemSysName
+		}
+		return portID, displayName
+	}
+	// No MAC found - use ChassisID as fallback (could be hostname)
+	return chassisID, neighbor.RemSysName
+}
+
 // buildGraphEdges builds graph edges using ChassisID as the primary key
 // switchChassisMACs maps normalized MAC -> switch node ID (to exclude switch MACs from endpoint creation)
 func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[string]string) {
@@ -699,32 +695,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 	logDebug("  Found %d LLDP neighbors", len(data.Neighbors))
 	for _, neighbor := range data.Neighbors {
 		// Determine Target ID - prefer MAC address for uniqueness
-		var targetID string
-		var displayName string
-
-		chassisID := normalizeID(neighbor.RemChassisId, neighbor.RemChassisIdSubtype)
-		portID := normalizeID(neighbor.RemPortId, neighbor.RemPortIdSubtype)
-
-		// Check if ChassisID looks like a MAC (contains colons and correct length)
-		chassisIsMAC := strings.Count(chassisID, ":") == 5 && len(chassisID) == 17
-		portIsMAC := strings.Count(portID, ":") == 5 && len(portID) == 17
-
-		if chassisIsMAC {
-			// ChassisID is MAC - use it
-			targetID = chassisID
-			displayName = neighbor.RemSysName
-		} else if portIsMAC {
-			// ChassisID is hostname, but PortID is MAC - use PortID as node ID
-			targetID = portID
-			displayName = chassisID // Use hostname from ChassisID for display
-			if neighbor.RemSysName != "" && neighbor.RemSysName != chassisID {
-				displayName = neighbor.RemSysName
-			}
-		} else {
-			// No MAC found - use ChassisID as fallback (could be hostname)
-			targetID = chassisID
-			displayName = neighbor.RemSysName
-		}
+		targetID, displayName := resolveLLDPTarget(neighbor)
 
 		if targetID == "" {
 			logDebug("    -> SKIPPED: Resolved Empty TargetID for neighbor on port %d", neighbor.LocalPortNum)
@@ -907,8 +878,11 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], macEntry.MACAddress)
 	}
 
-	// Create endpoint nodes for MAC-discovered devices
-	for portNum, macs := range portMACs {
+	// Create endpoint nodes for MAC-discovered devices.
+	// Ports are visited in ascending order, so when a MAC is seen on two ports
+	// the node is created (first creator wins) by the same port on every build.
+	for _, portNum := range slices.Sorted(maps.Keys(portMACs)) {
+		macs := portMACs[portNum]
 		// Skip if this port already has LLDP neighbors
 		hasLLDPNeighbor := false
 		for _, neighbor := range data.Neighbors {
@@ -1246,36 +1220,48 @@ func startPeriodicAnalysis() {
 
 		previousSnapshotMutex.Lock()
 		if previousSnapshot != nil {
-			diff := CompareSnapshots(previousSnapshot, currentSnapshot)
-			diff.LogChanges()
-
-			// B.2: Write JOIN/LEAVE events to InfluxDB
-			for _, joined := range diff.JoinedMACs {
-				WriteDeviceEvent("join", joined.MAC, joined.IP, joined.SwitchIP, joined.Vendor)
-			}
-			for _, left := range diff.LeftMACs {
-				WriteDeviceEvent("leave", left.MAC, left.IP, left.SwitchIP, left.Vendor)
-			}
-
-			// B.3: Write network summary to InfluxDB
-			// Count random MACs
-			randomMACCount := 0
-			for mac := range currentSnapshot.ActiveMACs {
-				if isRandomMAC(mac) {
-					randomMACCount++
-				}
-			}
-			WriteNetworkSummary(
-				len(currentSnapshot.ActiveHosts),
-				len(currentSnapshot.ActiveMACs),
-				report.Summary["shadow_it_issues"],
-				currentSnapshot.HealthScore,
-				randomMACCount,
-			)
+			recordSnapshotDiff(previousSnapshot, currentSnapshot, &report)
 		}
 		previousSnapshot = currentSnapshot
 		previousSnapshotMutex.Unlock()
 	}
+}
+
+// recordSnapshotDiff compares two snapshots, logs the changes (UI event log)
+// and writes the JOIN/LEAVE events and the network summary to InfluxDB.
+// Shared by startPeriodicAnalysis and runMonitor24h.
+func recordSnapshotDiff(prev, curr *NetworkSnapshot, report *Report) {
+	diff := CompareSnapshots(prev, curr)
+	diff.LogChanges()
+
+	// B.2: Write JOIN/LEAVE events to InfluxDB
+	for _, joined := range diff.JoinedMACs {
+		WriteDeviceEvent("join", joined.MAC, joined.IP, joined.SwitchIP, joined.Vendor)
+	}
+	for _, left := range diff.LeftMACs {
+		WriteDeviceEvent("leave", left.MAC, left.IP, left.SwitchIP, left.Vendor)
+	}
+
+	// B.3: Write network summary to InfluxDB
+	WriteNetworkSummary(
+		len(curr.ActiveHosts),
+		len(curr.ActiveMACs),
+		report.Summary["shadow_it_issues"],
+		curr.HealthScore,
+		countRandomMACs(curr),
+	)
+}
+
+// countRandomMACs counts the snapshot MACs that isRandomMAC flags (the
+// random_macs field of the InfluxDB network summary).
+func countRandomMACs(snapshot *NetworkSnapshot) int {
+	randomMACCount := 0
+	for mac := range snapshot.ActiveMACs {
+		if isRandomMAC(mac) {
+			randomMACCount++
+		}
+	}
+	return randomMACCount
 }
 
 // ============================================================
@@ -1454,30 +1440,8 @@ func runMonitor24h() {
 			len(currentSnapshot.ActiveMACs), len(currentSnapshot.ActiveHosts), currentSnapshot.HealthScore)
 
 		if prevSnapshot != nil {
-			diff := CompareSnapshots(prevSnapshot, currentSnapshot)
-			diff.LogChanges()
-
-			// Write to InfluxDB
-			for _, joined := range diff.JoinedMACs {
-				WriteDeviceEvent("join", joined.MAC, joined.IP, joined.SwitchIP, joined.Vendor)
-			}
-			for _, left := range diff.LeftMACs {
-				WriteDeviceEvent("leave", left.MAC, left.IP, left.SwitchIP, left.Vendor)
-			}
-
-			randomMACCount := 0
-			for mac := range currentSnapshot.ActiveMACs {
-				if isRandomMAC(mac) {
-					randomMACCount++
-				}
-			}
-			WriteNetworkSummary(
-				len(currentSnapshot.ActiveHosts),
-				len(currentSnapshot.ActiveMACs),
-				report.Summary["shadow_it_issues"],
-				currentSnapshot.HealthScore,
-				randomMACCount,
-			)
+			// Log the diff and write it to InfluxDB
+			recordSnapshotDiff(prevSnapshot, currentSnapshot, &report)
 		}
 		prevSnapshot = currentSnapshot
 
@@ -1677,15 +1641,19 @@ func detectOSFromMAC(mac string, macToIP map[string]string, data *DeviceData) st
 	return "❓ Unknown VM"
 }
 
-// detectOSByTTL pings an IP once and checks TTL to determine OS
-func detectOSByTTL(ip string) string {
+// runPing sends the single ping used by detectOSByTTL and returns its output.
+// Tests replace it so no packets are sent.
+var runPing = pingOnce
+
+// pingOnce runs "ping -c 1 -W 1 ip" (killed after 3s) and returns its stdout.
+func pingOnce(ip string) (string, error) {
 	cmd := exec.Command("ping", "-c", "1", "-W", "1", ip)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var outBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = nil
 	if err := cmd.Start(); err != nil {
-		return ""
+		return "", err
 	}
 	done := make(chan error, 1)
 	timer := time.AfterFunc(3*time.Second, func() {
@@ -1695,10 +1663,18 @@ func detectOSByTTL(ip string) string {
 	err := <-done
 	timer.Stop()
 	if err != nil {
+		return "", err
+	}
+	return outBuf.String(), nil
+}
+
+// detectOSByTTL pings an IP once and checks TTL to determine OS
+func detectOSByTTL(ip string) string {
+	outputStr, err := runPing(ip)
+	if err != nil {
 		return ""
 	}
-	
-	outputStr := outBuf.String()
+
 	// Parse TTL from ping output like "ttl=64" or "ttl=128"
 	ttlIdx := strings.Index(strings.ToLower(outputStr), "ttl=")
 	if ttlIdx == -1 {
@@ -1880,6 +1856,16 @@ var (
 	dnsCacheMutex sync.RWMutex
 )
 
+// lookupAddr does the reverse DNS query for resolveHostname. Tests replace it
+// so no DNS traffic is sent.
+var lookupAddr = reverseLookup
+
+// reverseLookup asks the system resolver for the PTR names of ip.
+func reverseLookup(ctx context.Context, ip string) ([]string, error) {
+	resolver := &net.Resolver{}
+	return resolver.LookupAddr(ctx, ip)
+}
+
 // resolveHostname performs DNS reverse lookup with 2s timeout and caching
 // "PC-JAMIL.tuit.local." → "PC-JAMIL"
 func resolveHostname(ip string) string {
@@ -1895,8 +1881,7 @@ func resolveHostname(ip string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	resolver := &net.Resolver{}
-	names, err := resolver.LookupAddr(ctx, ip)
+	names, err := lookupAddr(ctx, ip)
 	if err != nil || len(names) == 0 {
 		// Cache empty result to avoid retrying
 		dnsCacheMutex.Lock()
@@ -2199,9 +2184,12 @@ func refreshGraphEdgeLabels() {
 	// to maintain lock ordering: collectedData (#1) → globalGraph (#2)
 	// Previous code acquired globalGraph.Lock first, then collectedData.RLock
 	// which is reverse ordering and can deadlock with rebuildGraph().
+	// Devices are visited in IP order: when two switches share a node id the
+	// same one (the last, as in buildGraphFromSnapshot) owns the traffic labels.
 	nodeToIP := make(map[string]string)
 	collectedDataMutex.RLock()
-	for _, dev := range collectedData {
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		dev := collectedData[ip]
 		id := normalizeID(dev.ChassisID, 0)
 		if id == "" {
 			id = dev.IP
@@ -2502,7 +2490,8 @@ func discoverFromLLDP(snmpObject *SNMPObject) {
 // Used to identify switch-to-switch connections via MAC table cross-reference
 func buildSwitchChassisMACs(devices map[string]*DeviceData) map[string]string {
 	switchMACs := make(map[string]string)
-	for _, d := range devices {
+	for _, ip := range sortedDeviceIPs(devices) {
+		d := devices[ip]
 		nodeID := normalizeID(d.ChassisID, 0)
 		if nodeID == "" {
 			nodeID = d.IP
@@ -2521,7 +2510,11 @@ func buildSwitchChassisMACs(devices map[string]*DeviceData) map[string]string {
 // Key filter: only creates edges for ports with EXACTLY 1 switch MAC (direct connection).
 // Ports with 2+ switch MACs are transit/uplink — those MACs arrived via routing.
 func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, switchChassisMACs map[string]string) {
-	for _, srcDevice := range allDevices {
+	// Devices and ports are visited in order, so which side of a switch pair
+	// creates the edge (and with which port label) is the same on every build.
+	deviceIPs := sortedDeviceIPs(allDevices)
+	for _, srcIP := range deviceIPs {
+		srcDevice := allDevices[srcIP]
 		srcID := normalizeID(srcDevice.ChassisID, 0)
 		if srcID == "" {
 			srcID = srcDevice.IP
@@ -2543,7 +2536,8 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 		}
 
 		// Phase 2: Only create edges for ports with exactly 1 switch MAC (direct connection)
-		for portNum, targetIDs := range portSwitchMACs {
+		for _, portNum := range slices.Sorted(maps.Keys(portSwitchMACs)) {
+			targetIDs := portSwitchMACs[portNum]
 			if len(targetIDs) != 1 {
 				// 2+ switch MACs on same port = transit/uplink, skip
 				continue
@@ -2577,7 +2571,8 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 			// Ensure target node exists in graph
 			if !graph.Nodes[targetID] {
 				graph.AddNode(targetID)
-				for _, td := range allDevices {
+				for _, tdIP := range deviceIPs {
+					td := allDevices[tdIP]
 					tid := normalizeID(td.ChassisID, 0)
 					if tid == "" {
 						tid = td.IP
@@ -2595,27 +2590,81 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 	}
 }
 
-// rebuildGraph rebuilds the graph from collectedData
-func rebuildGraph() {
+// rebuildGraph rebuilds the graph from collectedData and publishes it.
+// It is the only build path: the reactive scan callback, the periodic and
+// rescue rescans, LLDP discovery and UI rescans all call it.
+func rebuildGraph() *DJGraph {
 	// DEADLOCK FIX: Take a snapshot of collectedData under a SHORT RLock,
 	// then release it BEFORE doing any graph work.
 	// This prevents nested lock deadlock when rebuildGraph() is called from
 	// contexts where collectedDataMutex is already held (e.g., OnSuccess
 	// callback in startPeriodicRescan/startRescueScanner/discoverFromLLDP).
+	snapshot := snapshotCollectedData()
+
+	newGraph := buildGraphFromSnapshot(snapshot)
+
+	// Update global — AFTER all modifications are done.
+	// This is the atomic swap point: HTTP handlers will see the fully built graph
+	SetGlobalGraph(newGraph)
+	return newGraph
+}
+
+// snapshotCollectedData copies collectedData under a short read lock. Each
+// DeviceData is copied by value, so a graph build never races with the
+// Unreachable flag that the SNMP failure callbacks set under the lock.
+func snapshotCollectedData() map[string]*DeviceData {
 	collectedDataMutex.RLock()
+	defer collectedDataMutex.RUnlock()
 	snapshot := make(map[string]*DeviceData, len(collectedData))
 	for k, v := range collectedData {
-		snapshot[k] = v
+		d := *v
+		snapshot[k] = &d
 	}
-	collectedDataMutex.RUnlock()
+	return snapshot
+}
 
+// sortedDeviceIPs returns the keys of devices in IP order. Graph rules that
+// depend on visiting order (first creator wins, labels of merged nodes) then
+// give the same graph on every build.
+func sortedDeviceIPs(devices map[string]*DeviceData) []string {
+	ips := slices.Collect(maps.Keys(devices))
+	slices.SortFunc(ips, compareIPs)
+	return ips
+}
+
+// compareIPs orders IP strings numerically; keys that are not IPs sort after
+// all IPs, by text.
+func compareIPs(a, b string) int {
+	ipA, errA := netip.ParseAddr(a)
+	ipB, errB := netip.ParseAddr(b)
+	switch {
+	case errA == nil && errB == nil:
+		if c := ipA.Compare(ipB); c != 0 {
+			return c
+		}
+	case errA == nil:
+		return -1
+	case errB == nil:
+		return 1
+	}
+	return strings.Compare(a, b)
+}
+
+// buildGraphFromSnapshot builds the complete graph from a device snapshot:
+// switch nodes, LLDP and FDB edges, MAC cross-reference edges, hypervisor
+// nodes and IP labels. Devices are visited in IP order. The graph is not
+// published here; rebuildGraph does that once it is complete.
+func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	newGraph := NewDJGraph()
+	deviceIPs := sortedDeviceIPs(snapshot)
 
 	// 0. Build switchChassisMACs map
 	switchChassisMACs := buildSwitchChassisMACs(snapshot)
 
-	// 1. Add all Nodes
-	for _, d := range snapshot {
+	// 1. Add all Nodes (two switches with the same node id: the last one in
+	// IP order sets the label)
+	for _, ip := range deviceIPs {
+		d := snapshot[ip]
 		id := normalizeID(d.ChassisID, 0)
 		if id == "" {
 			id = d.IP
@@ -2633,9 +2682,10 @@ func rebuildGraph() {
 		}
 	}
 
-	// 2. Build Edges (with switch MAC exclusion)
-	for _, d := range snapshot {
-		buildGraphEdges(newGraph, d, switchChassisMACs)
+	// 2. Build Edges (with switch MAC exclusion); a node seen by several
+	// switches gets its label from the first one in IP order
+	for _, ip := range deviceIPs {
+		buildGraphEdges(newGraph, snapshot[ip], switchChassisMACs)
 	}
 
 	// 3. MAC cross-reference edges (for LLDP-disabled switches)
@@ -2646,9 +2696,7 @@ func rebuildGraph() {
 	// 5. Enrich with IPs from MAC-IP cache — BEFORE making graph global
 	enrichGraphWithIPs(newGraph)
 
-	// 6. Update global — AFTER all modifications are done
-	// This is the atomic swap point: HTTP handlers will see the fully built graph
-	SetGlobalGraph(newGraph)
+	return newGraph
 }
 
 // detectHypervisors scans the graph for switch ports where 2+ VM MACs are seen.
@@ -2666,10 +2714,14 @@ func detectHypervisors(graph *DJGraph) {
 	}
 
 	// portVMs: switchNodeID → portLabel → []vmMAC
+	// Edges are visited in sorted order, so each port's VM list (and with it
+	// the hypervisor type taken from its first MAC) is the same on every build.
 	portVMs := map[string]map[string][]string{}
 
-	for src, targets := range graph.Edges {
-		for tgt, edgeLabel := range targets {
+	for _, src := range slices.Sorted(maps.Keys(graph.Edges)) {
+		targets := graph.Edges[src]
+		for _, tgt := range slices.Sorted(maps.Keys(targets)) {
+			edgeLabel := targets[tgt]
 			// Check if tgt MAC is a VM OUI
 			mac := normalizeMAC(tgt)
 			if len(mac) < 8 {
@@ -2701,8 +2753,10 @@ func detectHypervisors(graph *DJGraph) {
 	}
 
 	// For each switch port with 2+ VM MACs → insert hypervisor node
-	for switchID, ports := range portVMs {
-		for port, vmMACs := range ports {
+	for _, switchID := range slices.Sorted(maps.Keys(portVMs)) {
+		ports := portVMs[switchID]
+		for _, port := range slices.Sorted(maps.Keys(ports)) {
+			vmMACs := ports[port]
 			if len(vmMACs) < 2 {
 				continue // single VM MAC — could be real NIC, skip
 			}
@@ -3074,9 +3128,9 @@ func generateExperimentReport(devices []*DeviceData, scanDuration, collectionDur
 		"graph_edges":          countEdges(graph),
 	}
 
-	os.MkdirAll("results", 0755)
+	os.MkdirAll(exportsDir, 0755)
 	jsonData, _ := json.MarshalIndent(report, "", "  ")
-	os.WriteFile("results/experiment_metrics.json", jsonData, 0644)
+	os.WriteFile(filepath.Join(exportsDir, "experiment_metrics.json"), jsonData, 0644)
 
 	fmt.Printf("\n✅ Eksperiment hisoboti saqlandi: results/experiment_metrics.json\n")
 

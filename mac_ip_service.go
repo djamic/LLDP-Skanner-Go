@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -39,49 +41,71 @@ func esxiCheckWorker() {
 		},
 	}
 	for job := range validationQueue {
-		// Fast port 443 check (500ms is plenty for local network)
-		conn, err := net.DialTimeout("tcp", job.ip+":443", 500*time.Millisecond)
-		if err != nil {
-			continue
-		}
-		conn.Close()
-
-		// HTTP GET /ui/ check
-		req, _ := http.NewRequest("GET", "https://"+job.ip+"/ui/", nil)
-		resp, err := client.Do(req)
-		if err != nil {
-			continue
-		}
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		bodyStr := string(bodyBytes)
-		if strings.Contains(bodyStr, "esxUiApp") || strings.Contains(bodyStr, "VMware ESXi") {
+		if esxiProbe(client, job.ip) {
 			fmt.Printf("✅ [Active-Check] Confirmed ESXi via HTTP: %s (MAC: %s)\n", job.ip, job.mac)
 			ConfirmedESXiMACs.Store(job.mac, true)
 		}
 	}
 }
 
+// Test seams: esxiProbe checks one IP over HTTPS and esxiEnqueue hands a job
+// to the workers. Tests replace both so nothing is queued or probed.
+var (
+	esxiProbe   = probeESXiHost
+	esxiEnqueue = enqueueESXiJob
+)
+
+// probeESXiHost reports whether https://ip/ui/ answers like an ESXi host.
+func probeESXiHost(client *http.Client, ip string) bool {
+	// Fast port 443 check (500ms is plenty for local network)
+	conn, err := net.DialTimeout("tcp", ip+":443", 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+
+	// HTTP GET /ui/ check
+	req, _ := http.NewRequest("GET", "https://"+ip+"/ui/", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	return isESXiResponse(string(bodyBytes))
+}
+
+// isESXiResponse is the ESXi fingerprint applied to the /ui/ response body.
+func isESXiResponse(body string) bool {
+	return strings.Contains(body, "esxUiApp") || strings.Contains(body, "VMware ESXi")
+}
+
 func queueESXiValidation(mac, ip string) {
 	if _, loaded := ConfirmedESXiMACs.Load(mac); !loaded {
-		select {
-		case validationQueue <- esxiJob{mac: mac, ip: ip}:
-			// sent successfully
-		default:
-			// queue is full, spawn a background goroutine to avoid blocking
-			go func(m, i string) {
-				validationQueue <- esxiJob{mac: m, ip: i}
-			}(mac, ip)
-		}
+		esxiEnqueue(esxiJob{mac: mac, ip: ip})
+	}
+}
+
+// enqueueESXiJob sends a job to the validation workers without blocking.
+func enqueueESXiJob(job esxiJob) {
+	select {
+	case validationQueue <- job:
+		// sent successfully
+	default:
+		// queue is full, spawn a background goroutine to avoid blocking
+		go func(j esxiJob) {
+			validationQueue <- j
+		}(job)
 	}
 }
 
 
 // ─── MAC-IP Cache ──────────────────────────────────────────────────────────────
 
-// macIPCacheFile is the persistent JSON cache path
-const macIPCacheFile = "mac_ip_cache.json"
+// macIPCacheFile is the persistent JSON cache path (a variable so tests can
+// use a temporary file)
+var macIPCacheFile = "mac_ip_cache.json"
 
 // macIPServiceMu protects macIPServiceRunning flag
 var macIPServiceRunning bool
@@ -540,10 +564,12 @@ func enrichGraphWithIPs(graph *DJGraph) {
 		if !strings.HasPrefix(nodeID, "hyp-") {
 			continue
 		}
-		// Find VM MACs connected to this hypervisor
+		// Find VM MACs connected to this hypervisor (in MAC order, so the
+		// "VMs:" line is the same on every build)
 		vmIPs := []string{}
-		for vmMAC, edgeLabel := range graph.Edges[nodeID] {
-			if edgeLabel == "vNIC" {
+		vmEdges := graph.Edges[nodeID]
+		for _, vmMAC := range slices.Sorted(maps.Keys(vmEdges)) {
+			if edgeLabel := vmEdges[vmMAC]; edgeLabel == "vNIC" {
 				if ip, ok := ipMap[vmMAC]; ok && ip != "" {
 					vmIPs = append(vmIPs, ip)
 				}

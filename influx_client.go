@@ -8,6 +8,7 @@ import (
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
+	"github.com/influxdata/influxdb-client-go/v2/api/write"
 )
 
 // InfluxDB configuration
@@ -24,6 +25,23 @@ var (
 	influxMutex    sync.Mutex
 	influxEnabled  bool
 )
+
+// Test seams: influxReady reports whether points can be written and
+// influxWritePoint queues one point. Tests replace both to record points.
+var (
+	influxReady      = influxWritable
+	influxWritePoint = queueInfluxPoint
+)
+
+// influxWritable reports whether the client is connected and has a write API.
+func influxWritable() bool {
+	return influxEnabled && influxWriteAPI != nil
+}
+
+// queueInfluxPoint hands one point to the non-blocking write API.
+func queueInfluxPoint(p *write.Point) {
+	influxWriteAPI.WritePoint(p)
+}
 
 // InitInfluxClient initializes the InfluxDB client
 func InitInfluxClient() error {
@@ -83,7 +101,7 @@ func WriteInterfaceMetric(deviceIP, ifName, ifDescr string,
 	inBps, outBps, inOctets, outOctets uint64,
 	inErrors, outErrors, inDiscards, outDiscards uint64,
 	operStatus int) {
-	if !influxEnabled || influxWriteAPI == nil {
+	if !influxReady() {
 		return
 	}
 
@@ -115,12 +133,12 @@ func WriteInterfaceMetric(deviceIP, ifName, ifDescr string,
 		SetTime(time.Now())
 
 	// Write asynchronously
-	influxWriteAPI.WritePoint(p)
+	influxWritePoint(p)
 }
 
 // WriteDeviceMetric writes device-level metric
 func WriteDeviceMetric(deviceIP, sysName string, interfaceCount, neighborCount int) {
-	if !influxEnabled || influxWriteAPI == nil {
+	if !influxReady() {
 		return
 	}
 
@@ -131,7 +149,7 @@ func WriteDeviceMetric(deviceIP, sysName string, interfaceCount, neighborCount i
 		AddField("neighbor_count", neighborCount).
 		SetTime(time.Now())
 
-	influxWriteAPI.WritePoint(p)
+	influxWritePoint(p)
 }
 
 // ClearInfluxData deletes all data from the InfluxDB bucket
@@ -317,7 +335,7 @@ func QueryRangeMetrics(start, end time.Time) ([]TrafficMetrics, []StatusEvent, e
 
 // WriteDeviceEvent writes a device join or leave event to InfluxDB
 func WriteDeviceEvent(eventType, mac, ip, switchIP, vendor string) {
-	if !influxEnabled || influxWriteAPI == nil {
+	if !influxReady() {
 		return
 	}
 
@@ -329,7 +347,7 @@ func WriteDeviceEvent(eventType, mac, ip, switchIP, vendor string) {
 		AddField("switch_ip", switchIP).
 		SetTime(time.Now())
 
-	influxWriteAPI.WritePoint(p)
+	influxWritePoint(p)
 }
 
 // ============================================================
@@ -338,7 +356,7 @@ func WriteDeviceEvent(eventType, mac, ip, switchIP, vendor string) {
 
 // WriteNetworkSummary writes overall network state to InfluxDB
 func WriteNetworkSummary(activeHosts, uniqueMACs, shadowITPorts, healthScore, randomMACs int) {
-	if !influxEnabled || influxWriteAPI == nil {
+	if !influxReady() {
 		return
 	}
 
@@ -350,7 +368,7 @@ func WriteNetworkSummary(activeHosts, uniqueMACs, shadowITPorts, healthScore, ra
 		AddField("random_macs", randomMACs). // Populated in Phase 3 (isRandomMAC)
 		SetTime(time.Now())
 
-	influxWriteAPI.WritePoint(p)
+	influxWritePoint(p)
 }
 
 // ============================================================
@@ -359,7 +377,7 @@ func WriteNetworkSummary(activeHosts, uniqueMACs, shadowITPorts, healthScore, ra
 
 // WriteAnomalySummary writes anomaly counts per type to InfluxDB
 func WriteAnomalySummary(report *Report) {
-	if !influxEnabled || influxWriteAPI == nil {
+	if !influxReady() {
 		return
 	}
 	if report == nil {
@@ -375,7 +393,7 @@ func WriteAnomalySummary(report *Report) {
 		AddField("path_count", report.Summary["path_issues"]).
 		SetTime(time.Now())
 
-	influxWriteAPI.WritePoint(p)
+	influxWritePoint(p)
 }
 
 // ============================================================
@@ -413,7 +431,7 @@ type PortEventSummary struct {
 
 // WriteNetworkEventToInflux writes a single network event to InfluxDB
 func WriteNetworkEventToInflux(evt NetworkEvent, durationS int) {
-	if !influxEnabled || influxWriteAPI == nil {
+	if !influxReady() {
 		return
 	}
 
@@ -445,7 +463,7 @@ func WriteNetworkEventToInflux(evt NetworkEvent, durationS int) {
 	}
 
 	p.SetTime(time.Now())
-	influxWriteAPI.WritePoint(p)
+	influxWritePoint(p)
 }
 
 // QueryNetworkEvents queries InfluxDB for network events with filters

@@ -1,0 +1,44 @@
+{
+  "confirmed_macs": [
+    "08:35:71:ec:46:12",
+    "56:8b:ca:d3:33:cd",
+    "00:0e:c8:9f:f5:c0",
+    "90:1b:0e:f8:44:46",
+    "5c:ed:8c:ba:a4:7c",
+    "4c:ae:a3:27:7e:ca",
+    "00:0c:29:20:d6:60",
+    "5c:62:8b:b8:b3:11",
+    "c8:d9:d2:8c:99:40"
+  ],
+  "node_changes": [
+    {"id": "00:0c:29:20:d6:60", "before": {"group": "vm", "sysName": "[VM] 🐧 Linux VMware\n10.10.10.25"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\n[VM] 🐧 Linux VMware\n10.10.10.25"}},
+    {"id": "00:0e:c8:9f:f5:c0", "before": {"group": "endpoint", "sysName": "[LLDP-EP]\nWIN-PV5G8BJ7CAO\n172.16.3.57"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[LLDP-EP]\nWIN-PV5G8BJ7CAO\n172.16.3.57"}},
+    {"id": "08:35:71:ec:46:12", "before": {"group": "endpoint", "sysName": "[ENDPOINT]\n195.158.2.202\n[DNS] PC-JAMIL"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[ENDPOINT]\n195.158.2.202\n[DNS] PC-JAMIL"}},
+    {"id": "4c:ae:a3:27:7e:ca", "before": {"group": "switch", "sysName": "HPE\n172.20.254.10"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\nHPE\n172.20.254.10"}},
+    {"id": "56:8b:ca:d3:33:cd", "before": {"group": "wifi_random", "sysName": "[WiFi]\n172.16.16.223\n[DNS] nas01"}, "after": {"group": "wifi_random", "sysName": "[HYPERVISOR] VMware ESXi\n[WiFi]\n172.16.16.223\n[DNS] nas01"}},
+    {"id": "5c:62:8b:b8:b3:11", "before": {"group": "endpoint", "sysName": "[ENDPOINT]\n172.16.0.121"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[ENDPOINT]\n172.16.0.121"}},
+    {"id": "90:1b:0e:f8:44:46", "before": {"group": "bmc", "sysName": "[BMC] Fujitsu iRMC\n172.16.25.231"}, "after": {"group": "bmc", "sysName": "[HYPERVISOR] VMware ESXi\n[BMC] Fujitsu iRMC\n172.16.25.231"}}
+  ],
+  "links_added": null,
+  "links_removed": null,
+  "analyzer": {
+    "health_after": 70,
+    "health_before": 70,
+    "shadow_it_added": null,
+    "shadow_it_after": 119,
+    "shadow_it_before": 141,
+    "shadow_it_removed": ["shadow_172_20_230_11_11", "shadow_172_20_230_14_17", "shadow_172_20_230_24_28", "shadow_172_20_230_25_28", "shadow_172_20_230_27_28", "shadow_172_20_230_28_1", "shadow_172_20_230_29_28", "shadow_172_20_230_32_24", "shadow_172_20_230_34_1", "shadow_172_20_230_46_7", "shadow_172_20_230_47_25", "shadow_172_20_230_51_28", "shadow_172_20_230_83_2", "shadow_172_20_240_10_28", "shadow_172_20_240_11_24", "shadow_172_20_240_13_28", "shadow_172_20_240_2_24", "shadow_172_20_240_6_28", "shadow_172_20_240_7_24", "shadow_172_20_240_8_28", "shadow_172_20_240_9_24", "shadow_172_20_254_249_19"]
+  },
+  "experiment": {
+    "shadow_it_filtered_after": 120,
+    "shadow_it_filtered_before": 142,
+    "shadow_it_raw_after": 146,
+    "shadow_it_raw_before": 146,
+    "unique_macs_after": 4569,
+    "unique_macs_before": 4569,
+    "vm_macs_after": 110,
+    "vm_macs_before": 110,
+    "vm_ports_filtered_after": 26,
+    "vm_ports_filtered_before": 4
+  }
+}

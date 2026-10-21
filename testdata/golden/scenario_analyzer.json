@@ -1,0 +1,225 @@
+{
+  "capture_without_devices": {
+    "bot_messages": null,
+    "health_score": 100,
+    "last_report": {
+      "anomaly_map": {},
+      "health_score": 100,
+      "total_macs": 0
+    },
+    "stp_device": "",
+    "suggestions": null,
+    "summary": {
+      "congestion_issues": 0,
+      "loopback_issues": 0,
+      "path_issues": 0,
+      "shadow_it_issues": 0,
+      "stability_issues": 0,
+      "stp_issues": 0
+    }
+  },
+  "health_caps_and_traffic": {
+    "bot_messages": [
+      {"text": "📊 <b>Tarmoq holati:</b> 68/100 (Fair)\n🔎 Jami topilgan muammolar: 10 ta"},
+      {"issue_id": "shadow_10_0_9_36_1", "callbacks": ["ignore|shadow_10_0_9_36_1", "verify|shadow_10_0_9_36_1"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.36\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 1 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."},
+      {"issue_id": "shadow_10_0_9_36_2", "callbacks": ["ignore|shadow_10_0_9_36_2", "verify|shadow_10_0_9_36_2"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.36\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."},
+      {"issue_id": "shadow_10_0_9_36_3", "callbacks": ["ignore|shadow_10_0_9_36_3", "verify|shadow_10_0_9_36_3"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.36\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 3 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."},
+      {"issue_id": "shadow_10_0_9_36_4", "callbacks": ["ignore|shadow_10_0_9_36_4", "verify|shadow_10_0_9_36_4"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.36\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 4 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."},
+      {"issue_id": "shadow_10_0_9_36_5", "callbacks": ["ignore|shadow_10_0_9_36_5", "verify|shadow_10_0_9_36_5"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.36\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 5 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."},
+      {"issue_id": "shadow_10_0_9_36_6", "callbacks": ["ignore|shadow_10_0_9_36_6", "verify|shadow_10_0_9_36_6"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.36\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 6 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."}
+    ],
+    "health_score": 68,
+    "last_report": {
+      "anomaly_map": {"10.0.9.36": ["congestion", "congestion", "physical", "shadow_it", "shadow_it", "shadow_it", "shadow_it", "shadow_it", "shadow_it", "stability"]},
+      "health_score": 68,
+      "total_macs": 12
+    },
+    "stp_device": "",
+    "suggestions": [
+      {"type": "congestion", "severity": "medium", "device": "10.0.9.36", "value": "7 drops", "description": "Packet Loss: GE1/0/2 is dropping packets. Network is congested."},
+      {"type": "congestion", "severity": "high", "device": "10.0.9.36", "value": "900.00 Mbps", "description": "CRITICAL: Traffic on GE1/0/1 exceeds 800Mbps (Approaching 1G limit). Upgrade link or balance traffic."},
+      {"type": "physical", "severity": "high", "device": "10.0.9.36", "value": "9 errors", "description": "Physical Faults: GE1/0/3 has CRC/Frame errors. Check cable/SFP immediately."},
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.36", "issue_id": "shadow_10_0_9_36_1", "value": "2 MACs on single port", "description": "Port 1 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.36", "issue_id": "shadow_10_0_9_36_2", "value": "2 MACs on single port", "description": "Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.36", "issue_id": "shadow_10_0_9_36_3", "value": "2 MACs on single port", "description": "Port 3 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.36", "issue_id": "shadow_10_0_9_36_4", "value": "2 MACs on single port", "description": "Port 4 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.36", "issue_id": "shadow_10_0_9_36_5", "value": "2 MACs on single port", "description": "Port 5 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.36", "issue_id": "shadow_10_0_9_36_6", "value": "2 MACs on single port", "description": "Port 6 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
+      {"type": "stability", "severity": "high", "device": "10.0.9.36", "value": "2 outages", "description": "Network Interruption: Interface GE1/0/4 went DOWN 2 times."}
+    ],
+    "summary": {
+      "congestion_issues": 3,
+      "loopback_issues": 0,
+      "path_issues": 0,
+      "shadow_it_issues": 6,
+      "stability_issues": 1,
+      "stp_issues": 0
+    }
+  },
+  "loopback_empty_chassis": {
+    "bot_messages": [
+      {"text": "📊 <b>Tarmoq holati:</b> 80/100 (Good)\n🔎 Jami topilgan muammolar: 1 ta"},
+      {"issue_id": "loop_lldp_10_0_9_21_3", "callbacks": ["ignore|loop_lldp_10_0_9_21_3", "verify|loop_lldp_10_0_9_21_3"], "text": "🔄 <b>LOOPBACK aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.21\n🔌 <b>Port:</b> GigabitEthernet1/0/3\n📊 <b>Holat:</b> 🔄 LOOPBACK: Port GigabitEthernet1/0/3 switch o'ziga qaytib ulangan! Kabel to'g'ri ulanganligini tekshiring.\n\n🚨 Bu port tarmoqda uzilishlarga sabab bo'lishi mumkin!"}
+    ],
+    "health_score": 80,
+    "last_report": {
+      "anomaly_map": {"10.0.9.21": ["loopback"]},
+      "health_score": 80,
+      "total_macs": 0
+    },
+    "stp_device": "",
+    "suggestions": [
+      {"type": "loopback", "severity": "high", "device": "10.0.9.21", "issue_id": "loop_lldp_10_0_9_21_3", "value": "GigabitEthernet1/0/3", "description": "🔄 LOOPBACK: Port GigabitEthernet1/0/3 switch o'ziga qaytib ulangan! Kabel to'g'ri ulanganligini tekshiring."}
+    ],
+    "summary": {
+      "congestion_issues": 0,
+      "loopback_issues": 1,
+      "path_issues": 0,
+      "shadow_it_issues": 0,
+      "stability_issues": 0,
+      "stp_issues": 0
+    }
+  },
+  "loopback_self_mac": {
+    "bot_messages": [
+      {"text": "📊 <b>Tarmoq holati:</b> 60/100 (Fair)\n🔎 Jami topilgan muammolar: 2 ta"},
+      {"issue_id": "loop_lldp_10_0_9_22_9", "callbacks": ["ignore|loop_lldp_10_0_9_22_9", "verify|loop_lldp_10_0_9_22_9"], "text": "🔄 <b>LOOPBACK aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.22\n🔌 <b>Port:</b> \"GigabitEthernet1/0/9\"\n📊 <b>Holat:</b> 🔄 LOOPBACK: Port \"GigabitEthernet1/0/9\" switch o'ziga qaytib ulangan! Kabel to'g'ri ulanganligini tekshiring.\n\n🚨 Bu port tarmoqda uzilishlarga sabab bo'lishi mumkin!"},
+      {"issue_id": "loop_mac_10_0_9_22_7", "callbacks": ["ignore|loop_mac_10_0_9_22_7", "verify|loop_mac_10_0_9_22_7"], "text": "🔄 <b>LOOPBACK aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.22\n🔌 <b>Port:</b> Port 7\n📊 <b>Holat:</b> 🔄 LOOPBACK: Port 7 da switch o'zining MAC manzilini ko'ryapti. Portda loop bo'lishi mumkin.\n\n🚨 Bu port tarmoqda uzilishlarga sabab bo'lishi mumkin!"}
+    ],
+    "health_score": 60,
+    "last_report": {
+      "anomaly_map": {"10.0.9.22": ["loopback", "loopback"]},
+      "health_score": 60,
+      "total_macs": 2
+    },
+    "stp_device": "",
+    "suggestions": [
+      {"type": "loopback", "severity": "high", "device": "10.0.9.22", "issue_id": "loop_lldp_10_0_9_22_9", "value": "\"GigabitEthernet1/0/9\"", "description": "🔄 LOOPBACK: Port \"GigabitEthernet1/0/9\" switch o'ziga qaytib ulangan! Kabel to'g'ri ulanganligini tekshiring."},
+      {"type": "loopback", "severity": "high", "device": "10.0.9.22", "issue_id": "loop_mac_10_0_9_22_7", "value": "Port 7", "description": "🔄 LOOPBACK: Port 7 da switch o'zining MAC manzilini ko'ryapti. Portda loop bo'lishi mumkin."}
+    ],
+    "summary": {
+      "congestion_issues": 0,
+      "loopback_issues": 2,
+      "path_issues": 0,
+      "shadow_it_issues": 0,
+      "stability_issues": 0,
+      "stp_issues": 0
+    }
+  },
+  "path_from_gateway": {
+    "bot_messages": [
+      {"text": "📊 <b>Tarmoq holati:</b> 96/100 (Excellent)\n🔎 Jami topilgan muammolar: 2 ta"}
+    ],
+    "health_score": 96,
+    "last_report": {
+      "anomaly_map": {"sw-10.0.9.34": ["path"], "sw-10.0.9.35": ["path"]},
+      "health_score": 96,
+      "total_macs": 0
+    },
+    "stp_device": "",
+    "suggestions": [
+      {"type": "path", "severity": "medium", "device": "sw-10.0.9.34 (10.0.9.34)", "value": "4+ hops", "description": "Device is too far from Core (172.20.1.254). Consider moving it to Distribution layer."},
+      {"type": "path", "severity": "medium", "device": "sw-10.0.9.35 (10.0.9.35)", "value": "4+ hops", "description": "Device is too far from Core (172.20.1.254). Consider moving it to Distribution layer."}
+    ],
+    "summary": {
+      "congestion_issues": 0,
+      "loopback_issues": 0,
+      "path_issues": 2,
+      "shadow_it_issues": 0,
+      "stability_issues": 0,
+      "stp_issues": 0
+    }
+  },
+  "path_from_router": {
+    "bot_messages": [
+      {"text": "📊 <b>Tarmoq holati:</b> 96/100 (Excellent)\n🔎 Jami topilgan muammolar: 2 ta"}
+    ],
+    "health_score": 96,
+    "last_report": {
+      "anomaly_map": {"sw-10.0.9.34": ["path"], "sw-10.0.9.35": ["path"]},
+      "health_score": 96,
+      "total_macs": 0
+    },
+    "stp_device": "",
+    "suggestions": [
+      {"type": "path", "severity": "medium", "device": "sw-10.0.9.34 (10.0.9.34)", "value": "4+ hops", "description": "Device is too far from Core (10.0.9.30). Consider moving it to Distribution layer."},
+      {"type": "path", "severity": "medium", "device": "sw-10.0.9.35 (10.0.9.35)", "value": "4+ hops", "description": "Device is too far from Core (10.0.9.30). Consider moving it to Distribution layer."}
+    ],
+    "summary": {
+      "congestion_issues": 0,
+      "loopback_issues": 0,
+      "path_issues": 2,
+      "shadow_it_issues": 0,
+      "stability_issues": 0,
+      "stp_issues": 0
+    }
+  },
+  "shadow_it_rules": {
+    "bot_messages": [
+      {"text": "📊 <b>Tarmoq holati:</b> 90/100 (Excellent)\n🔎 Jami topilgan muammolar: 2 ta"},
+      {"issue_id": "shadow_10_0_9_23_1", "callbacks": ["ignore|shadow_10_0_9_23_1", "verify|shadow_10_0_9_23_1"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.23\n🔌 <b>Port:</b> 5 MACs on single port\n📊 <b>Holat:</b> Port 1 has 5 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."},
+      {"issue_id": "shadow_10_0_9_23_2", "callbacks": ["ignore|shadow_10_0_9_23_2", "verify|shadow_10_0_9_23_2"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.23\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."}
+    ],
+    "health_score": 90,
+    "last_report": {
+      "anomaly_map": {"10.0.9.23": ["shadow_it", "shadow_it"]},
+      "health_score": 90,
+      "total_macs": 23
+    },
+    "stp_device": "",
+    "suggestions": [
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.23", "issue_id": "shadow_10_0_9_23_1", "value": "5 MACs on single port", "description": "Port 1 has 5 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.23", "issue_id": "shadow_10_0_9_23_2", "value": "2 MACs on single port", "description": "Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."}
+    ],
+    "summary": {
+      "congestion_issues": 0,
+      "loopback_issues": 0,
+      "path_issues": 0,
+      "shadow_it_issues": 2,
+      "stability_issues": 0,
+      "stp_issues": 0
+    }
+  },
+  "stp_root_on_core": {
+    "bot_messages": null,
+    "health_score": 100,
+    "last_report": {
+      "anomaly_map": {},
+      "health_score": 100,
+      "total_macs": 0
+    },
+    "stp_device": "",
+    "suggestions": null,
+    "summary": {
+      "congestion_issues": 0,
+      "loopback_issues": 0,
+      "path_issues": 0,
+      "shadow_it_issues": 0,
+      "stability_issues": 0,
+      "stp_issues": 0
+    }
+  },
+  "stp_single_root": {
+    "bot_messages": [
+      {"text": "📊 <b>Tarmoq holati:</b> 90/100 (Excellent)\n🔎 Jami topilgan muammolar: 1 ta"}
+    ],
+    "health_score": 90,
+    "last_report": {
+      "anomaly_map": {"00:16:e0:5a:5c:e0": ["stp"]},
+      "health_score": 90,
+      "total_macs": 0
+    },
+    "stp_device": "00:16:e0:5a:5c:e0",
+    "suggestions": [
+      {"type": "stp", "severity": "medium", "device": "<stp root bridge chosen by map order>", "value": "1 non-core roots", "description": "STP: 1 ta Root Bridge core switchda emas (PVST+ normal). Core switchda priority sozlang."}
+    ],
+    "summary": {
+      "congestion_issues": 0,
+      "loopback_issues": 0,
+      "path_issues": 0,
+      "shadow_it_issues": 0,
+      "stability_issues": 0,
+      "stp_issues": 1
+    }
+  }
+}

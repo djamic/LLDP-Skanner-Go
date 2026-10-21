@@ -1,0 +1,148 @@
+{
+  "all_walks_fail_10.9.0.4": {
+    "callback": "failure: all 7 SNMP walks failed for 10.9.0.4",
+    "mac_table_nil": false,
+    "stp": {
+      "Enabled": false,
+      "Protocol": "",
+      "RootBridgeID": "",
+      "RootCost": 0,
+      "RootPort": 0,
+      "BridgeID": ""
+    }
+  },
+  "dotted_chassis_10.9.0.6": {
+    "callback": "success",
+    "chassis_id": "5894.8000.f7a3",
+    "sys_name": "cisco",
+    "interfaces": [
+      {"IfIndex": 1, "IfDescr": "\"Gi0/1\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0}
+    ],
+    "mac_table_nil": true,
+    "stp": {
+      "Enabled": false,
+      "Protocol": "",
+      "RootBridgeID": "",
+      "RootCost": 0,
+      "RootPort": 0,
+      "BridgeID": ""
+    }
+  },
+  "exception_chassis_10.9.0.2": {
+    "callback": "success",
+    "chassis_id": "no:such:object:available:on:this:agent:at:this:oid",
+    "sys_name": "sw-x",
+    "interfaces": [
+      {"IfIndex": 1, "IfDescr": "\"GigabitEthernet0/1\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0}
+    ],
+    "mac_table_nil": true,
+    "stp": {
+      "Enabled": false,
+      "Protocol": "",
+      "RootBridgeID": "",
+      "RootCost": 0,
+      "RootPort": 0,
+      "BridgeID": ""
+    }
+  },
+  "fdb_walk_fails_10.9.0.5": {
+    "callback": "success",
+    "chassis_id": "f8:f0:82:d8:7e:81",
+    "sys_name": "sw-partial",
+    "interfaces": [
+      {"IfIndex": 1, "IfDescr": "\"GigabitEthernet1/0/1\"", "IfAlias": "to-printer", "IfType": 0, "IfMtu": 0, "IfSpeed": 1000000000, "IfPhysAddress": "", "IfAdminStatus": 1, "IfOperStatus": 1, "IfInOctets": 99999999999, "IfOutOctets": 0, "IfInErrors": 3, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 2, "IfDescr": "\"GigabitEthernet1/0/2\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 4294967295, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 2, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 25, "IfDescr": "\"GigabitEthernet1/0/25\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 28, "IfDescr": "\"GigabitEthernet1/0/28\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 10000000000, "IfPhysAddress": "", "IfAdminStatus": 1, "IfOperStatus": 1, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 50, "IfDescr": "\"NULL0\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0}
+    ],
+    "neighbors": [
+      {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 7, "RemChassisIdSubtype": 0, "RemChassisId": "00 00 00 00 00 00", "RemPortIdSubtype": 0, "RemPortId": "", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
+      {"TimeMarker": 0, "LocalPortNum": 25, "RemIndex": 2, "RemChassisIdSubtype": 7, "RemChassisId": "\"DESKTOP-V380CHD\"", "RemPortIdSubtype": 3, "RemPortId": "10 7C 61 C0 9E AA", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
+      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
+    ],
+    "mac_table_nil": true,
+    "arp_table": [
+      {"IPAddress": "172.20.1.105", "MACAddress": "00:0c:29:6f:e0:bc", "Interface": 5},
+      {"IPAddress": "172.20.1.107", "MACAddress": "01:00:5e:00:00:fb", "Interface": 5},
+      {"IPAddress": "172.20.1.108", "MACAddress": "00:00:00:12:34:56", "Interface": 5},
+      {"IPAddress": "172.20.1.111", "MACAddress": "00:50:56:01:02:04", "Interface": 5},
+      {"IPAddress": "172.20.1.112", "MACAddress": "00:50:56:01:02:05", "Interface": 2},
+      {"IPAddress": "172.20.1.113", "MACAddress": "f8:f0:82:7a:d9:69", "Interface": 5}
+    ],
+    "port_vlans": [
+      {"PortIndex": 1, "PVID": 100, "IsTrunk": false, "VLANs": null},
+      {"PortIndex": 2, "PVID": 1, "IsTrunk": false, "VLANs": null},
+      {"PortIndex": 25, "PVID": 1, "IsTrunk": false, "VLANs": null},
+      {"PortIndex": 28, "PVID": 1, "IsTrunk": true, "VLANs": null}
+    ],
+    "stp": {
+      "Enabled": true,
+      "Protocol": "stp",
+      "RootBridgeID": "00:16:e0:5a:5c:e0",
+      "RootCost": 4,
+      "RootPort": 28,
+      "BridgeID": ""
+    }
+  },
+  "healthy_10.9.0.1": {
+    "callback": "success",
+    "chassis_id": "f8:f0:82:d8:7e:81",
+    "sys_name": "sw-a",
+    "interfaces": [
+      {"IfIndex": 1, "IfDescr": "\"GigabitEthernet1/0/1\"", "IfAlias": "to-printer", "IfType": 0, "IfMtu": 0, "IfSpeed": 1000000000, "IfPhysAddress": "", "IfAdminStatus": 1, "IfOperStatus": 1, "IfInOctets": 99999999999, "IfOutOctets": 0, "IfInErrors": 3, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 2, "IfDescr": "\"GigabitEthernet1/0/2\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 4294967295, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 2, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 25, "IfDescr": "\"GigabitEthernet1/0/25\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 28, "IfDescr": "\"GigabitEthernet1/0/28\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 10000000000, "IfPhysAddress": "", "IfAdminStatus": 1, "IfOperStatus": 1, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 50, "IfDescr": "\"NULL0\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0}
+    ],
+    "neighbors": [
+      {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 7, "RemChassisIdSubtype": 0, "RemChassisId": "00 00 00 00 00 00", "RemPortIdSubtype": 0, "RemPortId": "", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
+      {"TimeMarker": 0, "LocalPortNum": 25, "RemIndex": 2, "RemChassisIdSubtype": 7, "RemChassisId": "\"DESKTOP-V380CHD\"", "RemPortIdSubtype": 3, "RemPortId": "10 7C 61 C0 9E AA", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
+      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
+    ],
+    "mac_table_nil": false,
+    "mac_table": [
+      {"MACAddress": "00:50:56:01:02:03", "PortNumber": 5, "VlanID": 0, "Status": "learned"},
+      {"MACAddress": "f8:f0:82:d1:67:5e", "PortNumber": 28, "VlanID": 0, "Status": "learned"},
+      {"MACAddress": "10:7c:61:c0:9e:aa", "PortNumber": 25, "VlanID": 0, "Status": "learned"},
+      {"MACAddress": "00:1b:21:09:3e7:01", "PortNumber": 7, "VlanID": 0, "Status": "learned"},
+      {"MACAddress": "01:00:5e:00:00:fb", "PortNumber": 2, "VlanID": 0, "Status": "learned"}
+    ],
+    "arp_table": [
+      {"IPAddress": "172.20.1.105", "MACAddress": "00:0c:29:6f:e0:bc", "Interface": 5},
+      {"IPAddress": "172.20.1.107", "MACAddress": "01:00:5e:00:00:fb", "Interface": 5},
+      {"IPAddress": "172.20.1.108", "MACAddress": "00:00:00:12:34:56", "Interface": 5},
+      {"IPAddress": "172.20.1.111", "MACAddress": "00:50:56:01:02:04", "Interface": 5},
+      {"IPAddress": "172.20.1.112", "MACAddress": "00:50:56:01:02:05", "Interface": 2},
+      {"IPAddress": "172.20.1.113", "MACAddress": "f8:f0:82:7a:d9:69", "Interface": 5}
+    ],
+    "port_vlans": [
+      {"PortIndex": 1, "PVID": 100, "IsTrunk": false, "VLANs": null},
+      {"PortIndex": 2, "PVID": 1, "IsTrunk": false, "VLANs": null},
+      {"PortIndex": 25, "PVID": 1, "IsTrunk": false, "VLANs": null},
+      {"PortIndex": 28, "PVID": 1, "IsTrunk": true, "VLANs": null}
+    ],
+    "stp": {
+      "Enabled": true,
+      "Protocol": "stp",
+      "RootBridgeID": "00:16:e0:5a:5c:e0",
+      "RootCost": 4,
+      "RootPort": 28,
+      "BridgeID": ""
+    }
+  },
+  "string_chassis_10.9.0.3": {
+    "callback": "success",
+    "chassis_id": "pm{?wa",
+    "mac_table_nil": true,
+    "stp": {
+      "Enabled": false,
+      "Protocol": "",
+      "RootBridgeID": "",
+      "RootCost": 0,
+      "RootPort": 0,
+      "BridgeID": ""
+    }
+  }
+}

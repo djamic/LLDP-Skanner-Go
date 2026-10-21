@@ -4,10 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 )
+
+// exportsDir is the directory the experiment JSON exports are written to.
+// Tests point it at a temporary directory.
+var exportsDir = "results"
 
 // ============================================================
 // A.3 — Individual HealthScore Export
@@ -139,9 +144,9 @@ func ExportHealthScores(devices []*DeviceData, graph *DJGraph) {
 		TotalDevices:   len(devices),
 	}
 
-	os.MkdirAll("results", 0755)
+	os.MkdirAll(exportsDir, 0755)
 	jsonData, _ := json.MarshalIndent(export, "", "  ")
-	os.WriteFile("results/health_scores.json", jsonData, 0644)
+	os.WriteFile(filepath.Join(exportsDir, "health_scores.json"), jsonData, 0644)
 	fmt.Println("✅ Health scores saqlandi: results/health_scores.json")
 }
 
@@ -255,9 +260,9 @@ func ExportBFSDepths(graph *DJGraph) {
 		TotalNodes:        len(depths),
 	}
 
-	os.MkdirAll("results", 0755)
+	os.MkdirAll(exportsDir, 0755)
 	jsonData, _ := json.MarshalIndent(export, "", "  ")
-	os.WriteFile("results/bfs_depths.json", jsonData, 0644)
+	os.WriteFile(filepath.Join(exportsDir, "bfs_depths.json"), jsonData, 0644)
 	fmt.Println("✅ BFS depth ma'lumotlari saqlandi: results/bfs_depths.json")
 }
 
@@ -353,9 +358,9 @@ func ExportVendorStats(devices []*DeviceData) {
 		TotalVendors: len(vendors),
 	}
 
-	os.MkdirAll("results", 0755)
+	os.MkdirAll(exportsDir, 0755)
 	jsonData, _ := json.MarshalIndent(export, "", "  ")
-	os.WriteFile("results/vendor_stats.json", jsonData, 0644)
+	os.WriteFile(filepath.Join(exportsDir, "vendor_stats.json"), jsonData, 0644)
 	fmt.Println("✅ Vendor statistikasi saqlandi: results/vendor_stats.json")
 }
 
@@ -417,9 +422,9 @@ func ExportTelegramTiming() {
 			MaxLatency:     0,
 			TotalMessages:  0,
 		}
-		os.MkdirAll("results", 0755)
+		os.MkdirAll(exportsDir, 0755)
 		jsonData, _ := json.MarshalIndent(export, "", "  ")
-		os.WriteFile("results/telegram_timing.json", jsonData, 0644)
+		os.WriteFile(filepath.Join(exportsDir, "telegram_timing.json"), jsonData, 0644)
 		fmt.Println("✅ Telegram timing saqlandi: results/telegram_timing.json (bo'sh)")
 		return
 	}
@@ -441,9 +446,9 @@ func ExportTelegramTiming() {
 		TotalMessages:  len(entries),
 	}
 
-	os.MkdirAll("results", 0755)
+	os.MkdirAll(exportsDir, 0755)
 	jsonData, _ := json.MarshalIndent(export, "", "  ")
-	os.WriteFile("results/telegram_timing.json", jsonData, 0644)
+	os.WriteFile(filepath.Join(exportsDir, "telegram_timing.json"), jsonData, 0644)
 	fmt.Printf("✅ Telegram timing saqlandi: results/telegram_timing.json (%d ta xabar)\n", len(entries))
 }
 
@@ -474,8 +479,8 @@ func ExportBenchmarkResults(results []BenchmarkResult) {
 		Results:    results,
 	}
 
-	os.MkdirAll("results", 0755)
+	os.MkdirAll(exportsDir, 0755)
 	jsonData, _ := json.MarshalIndent(export, "", "  ")
-	os.WriteFile("results/benchmark_results.json", jsonData, 0644)
+	os.WriteFile(filepath.Join(exportsDir, "benchmark_results.json"), jsonData, 0644)
 	fmt.Println("✅ Benchmark natijalari saqlandi: results/benchmark_results.json")
 }

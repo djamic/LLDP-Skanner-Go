@@ -1,0 +1,22 @@
+{
+  "average_latency_ms": 250,
+  "entries": [
+    {
+      "detect_time": "18:35:34.000",
+      "issue_id": "summary",
+      "issue_type": "summary",
+      "latency_ms": 120,
+      "notify_time": "18:35:34.120"
+    },
+    {
+      "detect_time": "18:35:34.000",
+      "issue_id": "shadow_172_20_230_4_12",
+      "issue_type": "shadow_it",
+      "latency_ms": 380,
+      "notify_time": "18:35:34.380"
+    }
+  ],
+  "export_time": "<time>",
+  "max_latency_ms": 380,
+  "total_messages": 2
+}

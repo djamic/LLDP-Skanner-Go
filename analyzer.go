@@ -125,6 +125,20 @@ var (
 	lastSummarySent  time.Time
 )
 
+// Analyserbot relay. Tests replace postBotNotify to record the messages
+// instead of posting them, set botFloodDelay to 0 and make botDispatch run
+// each send synchronously.
+var (
+	postBotNotify = postToBot
+	botFloodDelay = 500 * time.Millisecond
+	botDispatch   = func(send func()) { go send() }
+)
+
+// postToBot posts one JSON payload to the analyserbot /notify endpoint.
+func postToBot(body []byte) (*http.Response, error) {
+	return http.Post("http://127.0.0.1:5005/notify", "application/json", bytes.NewBuffer(body))
+}
+
 // ResetIssueCooldown removes cooldown for an issue (called when "Fixed" button is pressed)
 func ResetIssueCooldown(issueID string) {
 	notifiedMu.Lock()
@@ -155,13 +169,13 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 	// Send a brief health summary (max once per hour)
 	if time.Since(lastSummarySent) >= notifyCooldown {
 		lastSummarySent = time.Now()
-		go func() {
+		botDispatch(func() {
 			tDetect := time.Now()
 			summaryText := fmt.Sprintf("📊 <b>Tarmoq holati:</b> %d/100 (%s)\n🔎 Jami topilgan muammolar: %d ta",
 				report.HealthScore, GetHealthLabel(report.HealthScore), len(report.Suggestions))
 			payload := map[string]interface{}{"message": summaryText}
 			jsonPayload, _ := json.Marshal(payload)
-			resp, err := http.Post("http://127.0.0.1:5005/notify", "application/json", bytes.NewBuffer(jsonPayload))
+			resp, err := postBotNotify(jsonPayload)
 			tNotify := time.Now()
 			if err != nil {
 				fmt.Printf("[Telegram Bot] Umumiy xabar yuborishda xatolik: %v\n", err)
@@ -169,7 +183,7 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 			}
 			resp.Body.Close()
 			AddTelegramTiming("summary", "summary", tDetect, tNotify)
-		}()
+		})
 	}
 
 	// Send each Shadow IT and Loopback issue as a separate message with buttons (max once per hour per issue)
@@ -181,9 +195,10 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 				continue
 			}
 
-			go func(s OptimizationSuggestion) {
+			s := sugg
+			botDispatch(func() {
 				// Wait a bit to avoid flooding
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(botFloodDelay)
 				tDetect := time.Now()
 
 				var msgText string
@@ -222,7 +237,7 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 				}
 
 				jsonPayload, _ := json.Marshal(payload)
-				resp, err := http.Post("http://127.0.0.1:5005/notify", "application/json", bytes.NewBuffer(jsonPayload))
+				resp, err := postBotNotify(jsonPayload)
 				tNotify := time.Now()
 				if err != nil {
 					fmt.Printf("[Telegram Bot] %s xabar yuborishda xatolik (%s): %v\n", s.Type, s.IssueID, err)
@@ -235,7 +250,7 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 					fmt.Printf("[Telegram Bot] ❌ Xabar qabul qilinmadi (%s): %d\n", s.IssueID, resp.StatusCode)
 				}
 				AddTelegramTiming(s.IssueID, s.Type, tDetect, tNotify)
-			}(sugg)
+			})
 		}
 	}
 }
