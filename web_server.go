@@ -40,7 +40,7 @@ var (
 	// E.1/E.2 — last analysis results for UI enrichment
 	lastHealthScore int
 	lastAnomalyMap  map[string][]string // nodeID → anomaly types
-	lastTotalMACs   int
+	lastTotalMACs   int                 // unique MAC addresses in the FDB tables (total_macs)
 	lastReportMutex sync.RWMutex
 )
 

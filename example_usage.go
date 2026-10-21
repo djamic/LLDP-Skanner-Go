@@ -2990,7 +2990,7 @@ func generateExperimentReport(devices []*DeviceData, scanDuration, collectionDur
 	totalMACs := 0
 	totalARPs := 0
 	stpEnabled := 0
-	uniqueMACs := make(map[string]bool)
+	uniqueMACs := analyzerUniqueMACs(devices) // the total_macs of /api/graph
 
 	// Shadow IT with the graph's per-port rule (Q14): raw = hub candidates,
 	// filtered = the hubs, vmPortCount = candidates exempt as VM/ESXi ports
@@ -3006,9 +3006,6 @@ func generateExperimentReport(devices []*DeviceData, scanDuration, collectionDur
 		totalARPs += len(d.ARPTable)
 		if d.STPInfo.Enabled {
 			stpEnabled++
-		}
-		for _, m := range d.MACTable {
-			uniqueMACs[m.MACAddress] = true
 		}
 	}
 

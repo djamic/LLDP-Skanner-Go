@@ -43,7 +43,7 @@
   "last_report": {
     "anomaly_map": {"00:16:e0:5a:5c:e0": ["stp"], "172.20.230.1": ["shadow_it"], "172.20.230.11": ["shadow_it"], "172.20.230.15": ["shadow_it"], "172.20.230.22": ["shadow_it", "shadow_it"], "172.20.230.23": ["shadow_it"], "172.20.230.24": ["shadow_it"], "172.20.230.32": ["shadow_it"], "172.20.230.33": ["shadow_it", "shadow_it"], "172.20.230.35": ["shadow_it"], "172.20.230.48": ["shadow_it"], "172.20.230.5": ["shadow_it", "shadow_it"], "172.20.230.51": ["shadow_it"], "172.20.230.7": ["shadow_it"], "172.20.230.76": ["shadow_it", "shadow_it"], "172.20.230.9": ["shadow_it", "shadow_it"], "172.20.240.1": ["shadow_it"], "172.20.240.10": ["shadow_it"], "172.20.240.12": ["shadow_it"], "172.20.240.13": ["shadow_it", "shadow_it"], "172.20.240.4": ["shadow_it"], "172.20.240.5": ["shadow_it"], "172.20.240.6": ["shadow_it"], "172.20.240.8": ["shadow_it"], "172.20.253.11": ["shadow_it"], "172.20.254.10": ["shadow_it"], "172.20.254.202": ["shadow_it"], "172.20.254.204": ["shadow_it"]},
     "health_score": 70,
-    "total_macs": 107756
+    "total_macs": 4569
   },
   "report_nodes": 928,
   "stp_roots": [

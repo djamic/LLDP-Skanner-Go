@@ -4,12 +4,12 @@
     "links": 927,
     "node_anomalies": {},
     "nodes": 928,
-    "total_macs": 107756
+    "total_macs": 4569
   },
   "report_summary": {
     "health_score": 70,
     "total_switches": 73,
-    "total_macs": 107756,
+    "total_macs": 4569,
     "total_nodes": 928,
     "total_edges": 927,
     "anomalies": {},

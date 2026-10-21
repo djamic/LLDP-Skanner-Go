@@ -59,6 +59,21 @@ func analyzerSwitchIDs(d *DeviceData) []string {
 	return []string{d.IP}
 }
 
+// analyzerUniqueMACs returns the distinct MAC addresses (normalizeMAC) in the
+// FDB tables of devices. Its size is total_macs (Q15): an address learned by
+// several switches, or on several ports, counts once.
+func analyzerUniqueMACs(devices []*DeviceData) map[string]bool {
+	macs := make(map[string]bool)
+	for _, d := range devices {
+		for _, macEntry := range d.MACTable {
+			if mac := normalizeMAC(macEntry.MACAddress); mac != "" {
+				macs[mac] = true
+			}
+		}
+	}
+	return macs
+}
+
 // switchNode returns the topology node of the polled switch with this IP, or
 // the IP itself when the topology has no node for it.
 func (ix *analyzerIndex) switchNode(ip string) string {
@@ -164,10 +179,7 @@ func (na *NetworkAnalyzer) Analyze() Report {
 			anomalyMap[deviceKey] = append(anomalyMap[deviceKey], sugg.Type)
 		}
 	}
-	totalMACs := 0
-	for _, dev := range na.Data.DevicesData {
-		totalMACs += len(dev.MACTable)
-	}
+	totalMACs := len(analyzerUniqueMACs(na.idx().devices))
 	SetLastReport(report.HealthScore, anomalyMap, totalMACs)
 
 	return report

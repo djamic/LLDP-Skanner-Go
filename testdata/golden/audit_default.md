@@ -10,7 +10,7 @@ Tizim: LLDP Network Scanner v2.0
 |---|---|
 | Skanerlash vaqti | <time> |
 | Topilgan qurilmalar (SNMP) | 75 |
-| Noyob MAC manzillar | 107756 |
+| Noyob MAC manzillar | 4569 |
 
 ## 2. Tarmoq Sog'ligi
 

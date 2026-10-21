@@ -85,7 +85,7 @@
     "last_report": {
       "anomaly_map": {"10.0.9.22": ["loopback", "loopback"]},
       "health_score": 60,
-      "total_macs": 2
+      "total_macs": 1
     },
     "stp_device": "",
     "suggestions": [

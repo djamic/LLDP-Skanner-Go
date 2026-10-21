@@ -272,6 +272,32 @@ func TestAnalyzerSTPRootBridges(t *testing.T) {
 	}
 }
 
+// TestAnalyzerTotalMACsCountsUniqueAddresses: total_macs is the number of
+// distinct MAC addresses, not the number of FDB rows (F13, Q15).
+func TestAnalyzerTotalMACsCountsUniqueAddresses(t *testing.T) {
+	resetState(t)
+	a := &DeviceData{IP: "10.0.9.71", ChassisID: "4c:ae:a3:09:00:71",
+		MACTable: append(macEntries(1, "00:1b:21:09:71:01", "00:1b:21:09:71:02"), macEntries(24, "00:1b:21:09:72:01")...)}
+	b := &DeviceData{IP: "10.0.9.72", ChassisID: "4c:ae:a3:09:00:72",
+		MACTable: append(macEntries(1, "00:1b:21:09:72:01"), macEntries(24, "00:1B:21:09:71:01", "00:1b:21:09:71:02")...)}
+	NewAnalyzer(FullCaptureData{DevicesData: devicesData(a, b)}).Analyze()
+	lastReportMutex.RLock()
+	got := lastTotalMACs
+	lastReportMutex.RUnlock()
+	if got != 3 {
+		t.Errorf("total_macs = %d for 6 FDB rows of 3 addresses, want 3", got)
+	}
+
+	graph := buildFixtureGraph(t)
+	analyzeFixture(t, graph)
+	lastReportMutex.RLock()
+	got = lastTotalMACs
+	lastReportMutex.RUnlock()
+	if got != 4569 {
+		t.Errorf("fixture total_macs = %d, want the 4569 unique MACs", got)
+	}
+}
+
 // analyzerPathChain is a chain of six switches from ids[0] (the core) with
 // a hub and an endpoint below the last one. Every link points toward the
 // core, as when the access switches were polled first.
