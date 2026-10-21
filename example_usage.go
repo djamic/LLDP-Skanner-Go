@@ -1029,7 +1029,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 	// Ports come in ascending order, so when a MAC is seen on two ports the
 	// node is created (first creator wins) by the same port on every build.
 	for _, p := range fdbPorts(data, switchChassisMACs) {
-		portName := getLocalPortName(data, p.Port)
+		portName := getFDBPortName(data, p.Port)
 		if p.Kind == fdbHub {
 			// Non-VM hub: create aggregated hub node; every member gets a
 			// node (a hub has at most 20 MACs)
@@ -1123,7 +1123,7 @@ func fdbPorts(data *DeviceData, switchChassisMACs map[string]string) []fdbPort {
 	isNullPort := func(port int) bool {
 		null, seen := nullPorts[port]
 		if !seen {
-			null = isNullInterface(getLocalPortName(data, port))
+			null = isNullInterface(getFDBPortName(data, port))
 			nullPorts[port] = null
 		}
 		return null
@@ -1315,6 +1315,15 @@ func getLocalPortName(data *DeviceData, portNum int) string {
 	}
 	// Fallback if not found
 	return fmt.Sprintf("Port %d", portNum)
+}
+
+// getFDBPortName names an FDB port. MACEntry.PortNumber is a dot1d bridge
+// port, which dot1dBasePortIfIndex maps to the ifIndex the interface table
+// names (collectFDBIfIndex; without a mapping the bridge port is taken as
+// the ifIndex, F60). Hub ids, issue ids and the VLAN table keep the bridge
+// port.
+func getFDBPortName(data *DeviceData, bridgePort int) string {
+	return getLocalPortName(data, collectFDBIfIndex(data, bridgePort))
 }
 
 // isNullInterface returns true if the interface name is NULL0 or similar
@@ -2481,7 +2490,7 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 		portSwitchMACs := make(map[int][]string) // portNum -> list of switch node IDs
 		for _, macEntry := range srcDevice.MACTable {
 			// Skip NULL0 interface — virtual discard port, not a real connection
-			if isNullInterface(getLocalPortName(srcDevice, macEntry.PortNumber)) {
+			if isNullInterface(getFDBPortName(srcDevice, macEntry.PortNumber)) {
 				continue
 			}
 			normMAC := normalizeMAC(macEntry.MACAddress)
@@ -2510,8 +2519,8 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 				continue
 			}
 
-			// Find the port name and MAC
-			portName := getLocalPortName(srcDevice, portNum)
+			// Find the port name and MAC (portNum is a bridge port)
+			portName := getFDBPortName(srcDevice, portNum)
 
 			// Double-check: skip NULL0 (may pass first filter if Interfaces was empty during scan)
 			if isNullInterface(portName) {

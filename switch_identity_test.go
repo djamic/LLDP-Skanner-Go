@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -87,5 +88,79 @@ func TestSwitchIdentitySites(t *testing.T) {
 	anomalies := na.anomalyMap(report.Suggestions)
 	if !slices.Contains(anomalies[dottedNode], "loopback") || !slices.Contains(anomalies["hub-"+dottedNode+"-p4"], "shadow_it") {
 		t.Errorf("anomalies are not on the dotted switch's graph nodes: %v", anomalies)
+	}
+}
+
+// bridgePortDevices is a switch numbered like Huawei 172.20.254.249:
+// ifIndex 1 InLoopBack0, 2 NULL0, 6.. GigabitEthernet0/0/1.., and bridge
+// port N is ifIndex N+5 (dot1dBasePortIfIndex). Bridge ports 1 and 2 hold
+// one endpoint each, bridge port 19 two MACs (a hub), bridge port 3 the
+// chassis MAC of a second polled switch; the VLAN table is indexed by bridge
+// port, and bridge port 4 is a trunk with two MACs.
+func bridgePortDevices() map[string]*DeviceData {
+	var ifaces []InterfaceData
+	ifaces = append(ifaces, InterfaceData{IfIndex: 1, IfDescr: "\"InLoopBack0\""}, InterfaceData{IfIndex: 2, IfDescr: "\"NULL0\""})
+	for i := 1; i <= 24; i++ {
+		ifaces = append(ifaces, InterfaceData{IfIndex: i + 5, IfDescr: fmt.Sprintf("\"GigabitEthernet0/0/%d\"", i), IfSpeed: 1000000000, IfOperStatus: 1})
+	}
+	bridge := map[int]int{}
+	for p := 1; p <= 24; p++ {
+		bridge[p] = p + 5
+	}
+	var fdb []MACEntry
+	fdb = append(fdb, macEntries(1, "00:1b:21:95:01:01")...)
+	fdb = append(fdb, macEntries(2, "00:1b:21:95:02:01")...)
+	fdb = append(fdb, macEntries(3, "4c:ae:a3:95:00:02")...)
+	fdb = append(fdb, macEntries(4, "00:1b:21:95:04:01", "00:1b:21:95:04:02")...)
+	fdb = append(fdb, macEntries(19, "00:1b:21:95:13:01", "00:1b:21:95:13:02")...)
+	huawei := &DeviceData{
+		IP: "10.0.9.95", SysName: "huawei-95", ChassisID: "4c:ae:a3:95:00:01",
+		Interfaces: ifaces, BridgePortIfIndex: bridge, MACTable: fdb,
+		PortVLANs: []PortVLAN{{PortIndex: 4, PVID: 1, IsTrunk: true}, {PortIndex: 19, PVID: 30}},
+	}
+	other := &DeviceData{IP: "10.0.9.96", SysName: "sw-96", ChassisID: "4c:ae:a3:95:00:02", Interfaces: gigabitPorts(2, nil)}
+	return map[string]*DeviceData{huawei.IP: huawei, other.IP: other}
+}
+
+// TestFDBPortNames (H5, F60): FDB ports are bridge ports, so the graph names
+// them through dot1dBasePortIfIndex (getFDBPortName): bridge ports 1 and 2
+// are GE0/0/1 and GE0/0/2, not the InLoopBack0/NULL0 interfaces with those
+// ifIndexes, and the hub on bridge port 19 is GE0/0/19. Hub ids, Shadow-IT
+// issue ids and the bridge-port indexed VLAN and trunk lookups keep the
+// bridge port.
+func TestFDBPortNames(t *testing.T) {
+	resetState(t)
+	devices := bridgePortDevices()
+	collectedDataMutex.Lock()
+	collectedData = devices
+	collectedDataMutex.Unlock()
+	const src = "4c:ae:a3:95:00:01"
+	g := buildGraphFromSnapshot(snapshotCollectedData())
+
+	for mac, want := range map[string]string{"00:1b:21:95:01:01": "GE0/0/1|", "00:1b:21:95:02:01": "GE0/0/2|"} {
+		if got, ok := g.Edges[src][mac]; !ok || got != want {
+			t.Errorf("edge to %s = %q (present %v), want %q", mac, got, ok, want)
+		}
+	}
+	hub := "hub-" + src + "-p19"
+	if got := g.GetEdgeLabel(src, hub); got != "GE0/0/19|Hub" {
+		t.Errorf("hub edge %s = %q, want GE0/0/19|Hub", hub, got)
+	}
+	if got := g.GetEdgeLabel(src, "4c:ae:a3:95:00:02"); got != "GE0/0/3 [MAC-REF]|" {
+		t.Errorf("MAC-REF edge = %q, want GE0/0/3 [MAC-REF]|", got)
+	}
+	if g.Nodes["hub-"+src+"-p4"] {
+		t.Error("the trunk on bridge port 4 became a hub")
+	}
+
+	report := NewAnalyzer(captureData("ports", sortedDevices(devices), g)).BuildReport()
+	var shadow []string
+	for _, s := range report.Suggestions {
+		if s.Type == "shadow_it" {
+			shadow = append(shadow, s.IssueID)
+		}
+	}
+	if want := []string{"shadow_10_0_9_95_19"}; !slices.Equal(shadow, want) {
+		t.Errorf("Shadow-IT issues = %v, want %v", shadow, want)
 	}
 }
