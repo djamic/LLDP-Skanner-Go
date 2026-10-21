@@ -5,6 +5,8 @@ package main
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -389,6 +391,33 @@ func TestGraphHypervisorTypes(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestGraphHypervisorTypesFromRegistry (H2): detectHypervisors takes the
+// platform of a VM NIC from the MAC registry (hypervisorTypeOf), so every
+// virtual-NIC OUI there, and one added to it, names its hyp- node.
+func TestGraphHypervisorTypesFromRegistry(t *testing.T) {
+	const sw = "4c:ae:a3:00:05:00"
+	const added = "02:00:42" // a test-only virtual-NIC OUI
+	ouiRegistry[added] = ouiRole{VirtNIC: "TestHV", HypType: "Test Hypervisor"}
+	t.Cleanup(func() { delete(ouiRegistry, added) })
+	checked := 0
+	for _, prefix := range slices.Sorted(maps.Keys(ouiRegistry)) {
+		hypType := ouiRegistry[prefix].HypType
+		if hypType == "" {
+			continue
+		}
+		g := graphVMPortGraph("GE1/0/5|", prefix+":00:00:01", prefix+":00:00:02")
+		detectHypervisors(g)
+		want := fmt.Sprintf("[HYPERVISOR] %s\n2 VMs on ge1/0/5", hypType)
+		if got := g.SwitchInfo["hyp-"+sw+"-ge1_0_5"]; got != want {
+			t.Errorf("%s: hyp label = %q, want %q", prefix, got, want)
+		}
+		checked++
+	}
+	if checked < 10 {
+		t.Errorf("only %d virtual-NIC OUIs checked", checked)
 	}
 }
 

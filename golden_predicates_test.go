@@ -232,6 +232,9 @@ func TestGoldenMACPredicates(t *testing.T) {
 		if isHypervisorMAC(v) {
 			r["hypervisorMAC"] = true
 		}
+		if hypType, ok := hypervisorTypeOf(v); ok {
+			r["hypervisorType"] = hypType
+		}
 		if ok, vendor := isServerNIC(v); ok {
 			r["serverNIC"] = vendor
 		}
@@ -292,19 +295,20 @@ func TestGoldenMACPredicates(t *testing.T) {
 	rec := map[string]any{
 		"oui_database": ouiInfo,
 		"omitted_defaults": map[string]string{
-			"normalizeMAC":  "equal to the value",
-			"lookupVendor":  "Unknown",
-			"getMACVendor":  "lookupVendor, with Unknown as \"\"",
-			"category":      "endpoint (categorizeVendor of lookupVendor)",
-			"hypervisorMAC": "false",
-			"serverNIC":     "not a server NIC",
-			"bmc":           "isBMC(value, \"\") is false",
-			"bmcWithNames":  "isBMC(value, name) equals bmc_name_baseline for every name",
-			"detectOS":      "❓ Unknown VM (no ping, empty macToIP, no neighbors)",
-			"special":       "false",
-			"random":        "false",
-			"invalid":       "false",
-			"normalizeID":   "only for LLDP values, local chassis ids (subtype 0) and edge values",
+			"normalizeMAC":   "equal to the value",
+			"lookupVendor":   "Unknown",
+			"getMACVendor":   "lookupVendor, with Unknown as \"\"",
+			"category":       "endpoint (categorizeVendor of lookupVendor)",
+			"hypervisorMAC":  "false",
+			"hypervisorType": "none (hypervisorTypeOf: no virtual-NIC OUI)",
+			"serverNIC":      "not a server NIC",
+			"bmc":            "isBMC(value, \"\") is false",
+			"bmcWithNames":   "isBMC(value, name) equals bmc_name_baseline for every name",
+			"detectOS":       "❓ Unknown VM (no ping, empty macToIP, no neighbors)",
+			"special":        "false",
+			"random":         "false",
+			"invalid":        "false",
+			"normalizeID":    "only for LLDP values, local chassis ids (subtype 0) and edge values",
 		},
 		"bmc_name_baseline": baseline,
 		"vendor_categories": categories,

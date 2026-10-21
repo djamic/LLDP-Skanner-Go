@@ -2721,36 +2721,13 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	return newGraph
 }
 
-// graphHypervisorTypes maps virtual-NIC OUIs (first 3 bytes, lowercase
-// colon-separated) to the platform shown on hyp- nodes.
-var graphHypervisorTypes = map[string]string{
-	"00:0c:29": "VMware ESXi",
-	"00:50:56": "VMware ESXi",
-	"00:05:69": "VMware ESXi",
-	"00:1c:14": "VMware ESXi",
-	"bc:24:11": "Proxmox VE",
-	"00:15:5d": "Hyper-V",
-	"08:00:27": "VirtualBox",
-	"52:54:00": "QEMU/KVM",
-	"00:16:3e": "Xen",
-}
-
-// graphHypervisorType returns the platform of a virtual-NIC MAC.
-func graphHypervisorType(mac string) (string, bool) {
-	mac = normalizeMAC(mac)
-	if len(mac) < 8 {
-		return "", false
-	}
-	t, ok := graphHypervisorTypes[mac[:8]]
-	return t, ok
-}
-
 // graphDominantHypervisorType is the most common platform among the VM MACs
-// of one port; a tie goes to the alphabetically first platform.
+// of one port (hypervisorTypeOf, the MAC registry's type of each VM NIC); a
+// tie goes to the alphabetically first platform.
 func graphDominantHypervisorType(vmMACs []string) string {
 	counts := map[string]int{}
 	for _, mac := range vmMACs {
-		if t, ok := graphHypervisorType(mac); ok {
+		if t, ok := hypervisorTypeOf(mac); ok {
 			counts[t]++
 		}
 	}
@@ -2799,7 +2776,7 @@ func detectHypervisors(graph *DJGraph) {
 		targets := graph.Edges[src]
 		for _, tgt := range slices.Sorted(maps.Keys(targets)) {
 			// Check if tgt MAC is a VM OUI
-			if _, isVM := graphHypervisorType(tgt); !isVM {
+			if _, isVM := hypervisorTypeOf(tgt); !isVM {
 				continue
 			}
 			// Port from the edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26"); a
