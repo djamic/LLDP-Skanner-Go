@@ -238,3 +238,118 @@ func TestCollectUsableMAC(t *testing.T) {
 		}
 	}
 }
+
+// collectHuaweiAgent is a switch numbered like Huawei 172.20.254.249:
+// ifIndex 1 InLoopBack0, 2 NULL0, 6..29 GigabitEthernet0/0/1..24, while the
+// FDB reports bridge ports 1, 2 and 19 (dot1dBasePortIfIndex: port N is
+// ifIndex N+5).
+func collectHuaweiAgent(withBasePorts bool) map[string][]string {
+	walks := map[string][]string{
+		oidIfDescr: {
+			oidIfDescr + ".1 = STRING: \"InLoopBack0\"",
+			oidIfDescr + ".2 = STRING: \"NULL0\"",
+			oidIfDescr + ".6 = STRING: \"GigabitEthernet0/0/1\"",
+			oidIfDescr + ".7 = STRING: \"GigabitEthernet0/0/2\"",
+			oidIfDescr + ".19 = STRING: \"GigabitEthernet0/0/14\"",
+			oidIfDescr + ".24 = STRING: \"GigabitEthernet0/0/19\"",
+		},
+		oidFDBPort: {
+			oidFDBPort + ".0.80.86.1.2.1 = INTEGER: 1",
+			oidFDBPort + ".0.80.86.1.2.2 = INTEGER: 2",
+			oidFDBPort + ".76.174.163.162.1.172 = INTEGER: 19",
+		},
+	}
+	if withBasePorts {
+		walks[collectBasePortIfIndexOID] = []string{
+			collectBasePortIfIndexOID + ".1 = INTEGER: 6",
+			collectBasePortIfIndexOID + ".2 = INTEGER: 7",
+			collectBasePortIfIndexOID + ".19 = INTEGER: 24",
+			collectBasePortIfIndexOID + ".20 = INTEGER: 0", // bridge port without an interface
+			collectBasePortIfIndexOID + ".x = INTEGER: 25",
+			"garbage line without separator",
+		}
+	}
+	return walks
+}
+
+// TestCollectBridgePortIfIndex checks F60: the FDB reports dot1dBasePort
+// numbers, and dot1dBasePortIfIndex maps them to the ifIndex that names the
+// port. PortNumber stays the bridge port (ids and the bridge-port indexed
+// VLAN table use it); without the mapping the bridge port is used as the
+// ifIndex, as before.
+func TestCollectBridgePortIfIndex(t *testing.T) {
+	resetState(t)
+	fakeSNMP.set("10.9.1.5", collectHuaweiAgent(true))
+	fakeSNMP.set("10.9.1.6", collectHuaweiAgent(false))
+	var got []*DeviceData
+	obj := NewSNMPObject(func(d *DeviceData) { got = append(got, d) }, nil)
+	obj.CollectData("10.9.1.5", "huawei")
+	obj.CollectData("10.9.1.6", "huawei-no-base-ports")
+	if len(got) != 2 {
+		t.Fatalf("got %d devices, want 2", len(got))
+	}
+	mapped, unmapped := got[0], got[1]
+
+	wantMap := map[int]int{1: 6, 2: 7, 19: 24}
+	if len(mapped.BridgePortIfIndex) != len(wantMap) {
+		t.Errorf("BridgePortIfIndex = %v, want %v", mapped.BridgePortIfIndex, wantMap)
+	}
+	for port, ifIndex := range wantMap {
+		if mapped.BridgePortIfIndex[port] != ifIndex {
+			t.Errorf("BridgePortIfIndex[%d] = %d, want %d", port, mapped.BridgePortIfIndex[port], ifIndex)
+		}
+	}
+	if unmapped.BridgePortIfIndex != nil {
+		t.Errorf("no dot1dBasePortIfIndex: BridgePortIfIndex = %v, want nil", unmapped.BridgePortIfIndex)
+	}
+	for _, e := range mapped.MACTable {
+		if e.PortNumber != 1 && e.PortNumber != 2 && e.PortNumber != 19 {
+			t.Errorf("PortNumber %d is not the bridge port", e.PortNumber)
+		}
+	}
+
+	for _, c := range []struct {
+		data       *DeviceData
+		bridgePort int
+		ifIndex    int
+		name       string
+	}{
+		{mapped, 19, 24, "\"GigabitEthernet0/0/19\""},
+		{mapped, 1, 6, "\"GigabitEthernet0/0/1\""},
+		{mapped, 2, 7, "\"GigabitEthernet0/0/2\""},
+		{mapped, 5, 5, "Port 5"}, // not in the mapping: bridge port used as ifIndex
+		{unmapped, 19, 19, "\"GigabitEthernet0/0/14\""},
+		{unmapped, 1, 1, "\"InLoopBack0\""},
+		{&DeviceData{}, 3, 3, "Port 3"},
+	} {
+		ifIndex := collectFDBIfIndex(c.data, c.bridgePort)
+		if ifIndex != c.ifIndex {
+			t.Errorf("%s: collectFDBIfIndex(%d) = %d, want %d", c.data.SysName, c.bridgePort, ifIndex, c.ifIndex)
+		}
+		if name := getLocalPortName(c.data, ifIndex); name != c.name {
+			t.Errorf("%s: port name of bridge port %d = %q, want %q", c.data.SysName, c.bridgePort, name, c.name)
+		}
+	}
+}
+
+// TestCollectNullInterface checks F61: IfDescr is stored quoted, and a
+// quoted "NULL0" is still the discard interface.
+func TestCollectNullInterface(t *testing.T) {
+	for name, want := range map[string]bool{
+		"NULL0":                    true,
+		"\"NULL0\"":                true,
+		"\"Null0\"":                true,
+		" \"NULL0\" ":              true,
+		"\"InLoopBack0\"":          true,
+		"\"\"":                     true,
+		"Port 0":                   true,
+		"\"GigabitEthernet0/0/1\"": false,
+		"\"Vlanif1\"":              false,
+		"GigabitEthernet1/0/1":     false,
+		"Port 7":                   false,
+	} {
+		if got := isNullInterface(name); got != want {
+			t.Errorf("isNullInterface(%q) = %v, want %v", name, got, want)
+		}
+	}
+}

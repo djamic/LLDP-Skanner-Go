@@ -89,6 +89,49 @@ type DeviceData struct {
 	Timestamp   time.Time
 	Unreachable bool      `json:"unreachable,omitempty"` // Phase 8: true = SNMP timeout, device is down
 	LastSeen    time.Time `json:"lastSeen,omitempty"`    // Phase 8: last successful SNMP poll time
+	// MACEntry.PortNumber is a dot1dBasePort; this maps it to the ifIndex
+	// (dot1dBasePortIfIndex). Nil when the switch did not report it.
+	BridgePortIfIndex map[int]int `json:"bridgePortIfIndex,omitempty"`
+}
+
+// collectBasePortIfIndexOID is dot1dBasePortIfIndex.<bridge port> = ifIndex.
+const collectBasePortIfIndexOID = ".1.3.6.1.2.1.17.1.4.1.2"
+
+// collectFDBIfIndex returns the ifIndex of FDB bridge port bridgePort, for
+// port names (getLocalPortName). When the switch did not report the mapping
+// the bridge port number is used as the ifIndex, the old assumption (true on
+// switches that number both alike, such as the HPE and SNR ones here).
+func collectFDBIfIndex(data *DeviceData, bridgePort int) int {
+	if ifIndex, ok := data.BridgePortIfIndex[bridgePort]; ok && ifIndex > 0 {
+		return ifIndex
+	}
+	return bridgePort
+}
+
+// collectBridgePortIfIndex walks dot1dBasePortIfIndex (bridge port → ifIndex).
+// It returns nil when the walk fails or reports nothing.
+func (s *SNMPObject) collectBridgePortIfIndex(ip string) (map[int]int, error) {
+	lines, err := s.runSNMPWalk(ip, collectBasePortIfIndexOID)
+	if err != nil {
+		return nil, err
+	}
+	var ports map[int]int
+	for _, line := range lines {
+		oid, val, err := parseSNMPLine(line)
+		if err != nil {
+			continue
+		}
+		idx, ok := collectOIDIndex(oid, collectBasePortIfIndexOID)
+		ifIndex, convErr := strconv.Atoi(val)
+		if !ok || len(idx) != 1 || convErr != nil || ifIndex <= 0 {
+			continue
+		}
+		if ports == nil {
+			ports = make(map[int]int)
+		}
+		ports[idx[0]] = ifIndex
+	}
+	return ports, nil
 }
 
 // STPData holds Spanning Tree Protocol information
@@ -193,8 +236,12 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 			errs = append(errs, fmt.Errorf("mac table err: %v", err))
 			mu.Unlock()
 		} else {
+			// The FDB reports bridge ports; their ifIndex names the port (F60).
+			// Optional: without it the bridge port is used as the ifIndex.
+			bridgePorts, _ := s.collectBridgePortIfIndex(ip)
 			mu.Lock()
 			data.MACTable = macTable
+			data.BridgePortIfIndex = bridgePorts
 			mu.Unlock()
 		}
 	}()

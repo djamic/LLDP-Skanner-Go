@@ -46,7 +46,7 @@
   ],
   "null_interfaces": [
     {"name": "NULL0", "null": true},
-    {"name": "\"NULL0\"", "null": false},
+    {"name": "\"NULL0\"", "null": true},
     {"name": "Null0", "null": true},
     {"name": "null 0", "null": true},
     {"name": "InLoopBack0", "null": true},

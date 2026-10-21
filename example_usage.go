@@ -1031,8 +1031,9 @@ func getLocalPortName(data *DeviceData, portNum int) string {
 
 // isNullInterface returns true if the interface name is NULL0 or similar
 // virtual discard interface that should be excluded from the topology graph.
+// IfDescr is stored quoted ("\"NULL0\""), so quotes are ignored (F61).
 func isNullInterface(name string) bool {
-	low := strings.ToLower(strings.TrimSpace(name))
+	low := strings.ToLower(strings.Trim(name, "\" \t"))
 	return low == "null0" || low == "null 0" ||
 		strings.HasPrefix(low, "null") ||
 		strings.Contains(low, "inloopback") ||
