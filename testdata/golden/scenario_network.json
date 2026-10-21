@@ -3,12 +3,12 @@
     "bot_messages": null,
     "download": {
       "content_type": "application/msword",
-      "live_after": {"anomaly_map": {}, "health_score": 100, "total_macs": 0},
+      "live_after": {"anomaly_map": {"172.20.230.4": ["shadow_it"]}, "health_score": 70, "total_macs": 107756},
       "status": 200
     },
     "generate": {
       "content_type": "application/json",
-      "live_after": {"anomaly_map": {}, "health_score": 100, "total_macs": 0},
+      "live_after": {"anomaly_map": {"172.20.230.4": ["shadow_it"]}, "health_score": 70, "total_macs": 107756},
       "report_health": 100,
       "report_summary": {"congestion_issues": 0, "loopback_issues": 0, "path_issues": 0, "shadow_it_issues": 0, "stability_issues": 0, "stp_issues": 0},
       "status": 200
@@ -30,16 +30,16 @@
       "requests": ["GET https://10.9.9.1/ui/"]
     },
     "10.9.9.2": {
-      "confirmed": true,
+      "confirmed": false,
       "requests": ["GET https://10.9.9.2/ui/"]
     },
     "10.9.9.3": {
-      "confirmed": true,
+      "confirmed": false,
       "requests": ["GET https://10.9.9.3/ui/", "GET https://10.9.9.3/ui/login"]
     },
     "10.9.9.4": {
-      "confirmed": true,
-      "requests": ["GET https://10.9.9.4/ui/", "GET https://sso.example.test/login"]
+      "confirmed": false,
+      "requests": ["GET https://10.9.9.4/ui/"]
     },
     "10.9.9.5": {
       "confirmed": false,
@@ -52,27 +52,27 @@
   },
   "esxi_worker": {
     "confirmed": [
-      "00:0c:29:99:00:01",
-      "00:0c:29:99:00:02"
+      "00:0c:29:99:00:01"
     ],
     "probes": {
       "10.9.9.1": 1,
       "10.9.9.2": 1,
-      "10.9.9.5": 1,
       "10.9.9.6": 1
+    },
+    "retry": {
+      "00:0c:29:99:00:05": {"ip": "10.9.9.5", "tries": 1}
     }
   },
   "oui_fallback": {
     "download_fails": {
       "downloaded_urls": ["http://standards-oui.ieee.org/oui.txt"],
       "loaded": false,
-      "lookupVendor": {"00:00:0c:07:ac:01": "Unknown", "4c:ae:a3:8e:42:11": "SNR", "52:54:00:12:34:56": "QEMU/KVM", "aa:bb:cc:dd:ee:ff": "Unknown"}
+      "lookupVendor": {"00:00:0c:07:ac:01": "Unknown", "4c:ae:a3:8e:42:11": "HPE", "52:54:00:12:34:56": "QEMU/KVM", "aa:bb:cc:dd:ee:ff": "Unknown"}
     },
     "download_returns_error_page": {
       "downloaded_urls": ["http://standards-oui.ieee.org/oui.txt"],
-      "entries": 0,
-      "loaded": true,
-      "lookupVendor": {"00:00:0c:07:ac:01": "Unknown", "4c:ae:a3:8e:42:11": "SNR", "52:54:00:12:34:56": "QEMU/KVM", "aa:bb:cc:dd:ee:ff": "Unknown"}
+      "loaded": false,
+      "lookupVendor": {"00:00:0c:07:ac:01": "Unknown", "4c:ae:a3:8e:42:11": "HPE", "52:54:00:12:34:56": "QEMU/KVM", "aa:bb:cc:dd:ee:ff": "Unknown"}
     }
   }
 }
