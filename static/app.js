@@ -68,6 +68,31 @@ async function loadNetworkData() {
     }
 }
 
+// Fields d3 keeps on a node object (layout and drag); the rest is /api/graph data.
+const uiSimFields = new Set(['x', 'y', 'vx', 'vy', 'fx', 'fy', 'index']);
+
+// uiNodeText is the text drawn under a node.
+// E.4: hostname priority — hostname > sysName > label > id
+function uiNodeText(d) {
+    return d.hostname || d.sysName || d.label || d.id;
+}
+
+// uiRenderNodeLabel (re)builds the tspans of one node label when its text
+// changed, so later IP/DNS/ESXi enrichment shows up on the canvas.
+function uiRenderNodeLabel(el, d) {
+    const displayText = uiNodeText(d);
+    if (el.__uiText === displayText) return;
+    el.__uiText = displayText;
+    const textEl = d3.select(el);
+    textEl.selectAll('tspan').remove();
+    displayText.split('\n').forEach((line, i) => {
+        textEl.append('tspan')
+            .attr('x', 0)
+            .attr('dy', i === 0 ? '1.5em' : '1.1em')
+            .text(line);
+    });
+}
+
 // Incremental topology update (based on reference implementation)
 function updateTopology(newData) {
     const filteredData = getFilteredData(newData);
@@ -87,11 +112,17 @@ function updateTopology(newData) {
         } else {
             // Update existing node data (but preserve x, y)
             const existing = currentNodes.get(node.id);
-            // Detect property changes that require re-render
+            // Detect property changes that require re-render (canvas text included)
             if (existing.unreachable !== node.unreachable ||
                 existing.group !== node.group ||
+                uiNodeText(existing) !== uiNodeText(node) ||
                 JSON.stringify(existing.anomalies) !== JSON.stringify(node.anomalies)) {
                 changed = true;
+            }
+            // Fields the server now omits (omitempty: hostname, anomalies, ...)
+            // must not stay behind; only the simulation's own fields are kept.
+            for (const key of Object.keys(existing)) {
+                if (!(key in node) && !uiSimFields.has(key)) delete existing[key];
             }
             Object.assign(existing, node, { x: existing.x, y: existing.y });
         }
@@ -299,10 +330,11 @@ function renderGraph() {
         .attr('class', 'link-label source-label')
         .attr('font-size', '11px')
         .attr('fill', '#2196F3')
-        .attr('font-weight', 'bold')
-        .text(d => d.sourceLabel || '');
+        .attr('font-weight', 'bold');
 
-    const sourceLabelUpdate = sourceLabelEnter.merge(sourceLinkLabel);
+    // Text on enter and update: the backend rewrites traffic labels every 30 s
+    const sourceLabelUpdate = sourceLabelEnter.merge(sourceLinkLabel)
+        .text(d => d.sourceLabel || '');
 
     // UPDATE TARGET LABELS
     const targetLinkLabel = g.selectAll('text.target-label')
@@ -315,10 +347,10 @@ function renderGraph() {
         .attr('class', 'link-label target-label')
         .attr('font-size', '11px')
         .attr('fill', '#F44336')
-        .attr('font-weight', 'bold')
-        .text(d => d.targetLabel || '');
+        .attr('font-weight', 'bold');
 
-    const targetLabelUpdate = targetLabelEnter.merge(targetLinkLabel);
+    const targetLabelUpdate = targetLabelEnter.merge(targetLinkLabel)
+        .text(d => d.targetLabel || '');
 
     // UPDATE NODES
     const node = g.selectAll('circle.node')
@@ -362,21 +394,9 @@ function renderGraph() {
         .attr('font-weight', 'bold')
         .attr('fill', '#333');
 
-    // Handle multi-line labels
-    nodeLabelEnter.each(function (d) {
-        // E.4: hostname priority — hostname > sysName > label > id
-        const displayText = d.hostname || d.sysName || d.label || d.id;
-        const lines = displayText.split('\n');
-        const textEl = d3.select(this);
-        lines.forEach((line, i) => {
-            textEl.append("tspan")
-                .attr("x", 0)
-                .attr("dy", i === 0 ? "1.5em" : "1.1em")
-                .text(line);
-        });
-    });
-
-    const nodeLabelUpdate = nodeLabelEnter.merge(nodeLabel);
+    // Multi-line labels on enter and update (rebuilt only when the text changed)
+    const nodeLabelUpdate = nodeLabelEnter.merge(nodeLabel)
+        .each(function (d) { uiRenderNodeLabel(this, d); });
 
     // E.2 + Phase 8: Apply anomaly/unreachable glow classes
     nodeUpdate
