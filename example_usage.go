@@ -184,13 +184,16 @@ func main() {
 	go StartWebServer("8088")
 	fmt.Println("🌐 Web server started on http://localhost:8088")
 
-	// First graph from the saved hosts, with the cache's IP and DNS lines
-	buildStartupGraph(savedHosts)
+	// First graph from the saved hosts, with the cache's IP and DNS lines,
+	// built in the background so the monitoring loops below start at once
+	// (RC-1)
+	startupGraphDone := startStartupGraph(savedHosts)
 
 	// ============================================================
 	// Mode dispatch: benchmark and monitor24h exit early
 	// ============================================================
 	if *modeFlag == "benchmark" {
+		<-startupGraphDone // measure without a build running alongside
 		runBenchmark()
 		os.Exit(0)
 	}
@@ -222,9 +225,10 @@ func main() {
 		startPeriodicRescan(snmpObject)
 		startRescueScanner(snmpObject) // Phase 15: Dead Node Recovery
 
-		// E.1 fix: Run Analyze() immediately after loading saved data
+		// E.1 fix: Run Analyze() as soon as the startup graph is built
 		// so Health Score widget is populated on first page load (not after 10 min)
 		go func() {
+			<-startupGraphDone
 			collectedDataMutex.RLock()
 			devicesPtrSlice := make([]*DeviceData, 0, len(collectedData))
 			for _, d := range collectedData {
@@ -487,6 +491,22 @@ func loadStartupData(savedHosts map[string]*DeviceData) {
 	// Collect ARP table from gateway first (legacy - also done by MacIPService)
 	fmt.Printf("🔍 Collecting ARP table from gateway %s...\n", gatewayIP)
 	collectGatewayARP()
+}
+
+// startStartupGraph builds the first graph (buildStartupGraph) in the
+// background and returns a channel that is closed once it is published.
+// main() starts the monitoring loops meanwhile, which cope with the empty
+// graph the web server shows until then: the build looks up DNS names and
+// pings VMs, and run on main()'s goroutine it held up traffic polling,
+// rescans, the rescue scanner and runMonitor24h for as long as that took
+// (about 27 minutes with a DNS server that does not answer, RC-1).
+func startStartupGraph(savedHosts map[string]*DeviceData) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		buildStartupGraph(savedHosts)
+	}()
+	return done
 }
 
 // buildStartupGraph builds and publishes the first graph from the saved
@@ -946,7 +966,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 			// DNS name of the neighbor (when its IP is known), for the BMC check
 			dnsName := ""
 			if ip := macToIP[targetID]; ip != "" {
-				dnsName = resolveHostname(ip)
+				dnsName, _ = cachedHostname(ip) // looked up before the build
 			}
 
 			// Check BMC/management interface FIRST (LLDP name, DNS name)
@@ -1278,7 +1298,7 @@ func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceDa
 	ip := macToIP[mac]
 	hostname := ""
 	if ip != "" {
-		hostname = resolveHostname(ip)
+		hostname, _ = cachedHostname(ip) // looked up before the build
 	}
 	info := "[ENDPOINT]"
 	if isHypervisorMAC(mac) {
@@ -1893,15 +1913,45 @@ func pingOSByTTL(ip string) string {
 	return ""
 }
 
-// DNS hostname cache to avoid repeated lookups
+// Reverse DNS names for the graph labels (RC-1). Lookups run on at most
+// dnsLookupWorkers goroutines, one at a time per IP. A graph build asks for
+// all the names it will use first (graphResolveHostnames) and waits at most
+// graphDNSWait for them; a name that arrives later is in the cache for the
+// next build. A name is kept for the life of the process, a failed lookup
+// for dnsNegativeTTL. The first build after a restart used to look up its
+// ~800 names one after another on main()'s goroutine: with a DNS server
+// that does not answer, 2 s each, about 27 minutes before any monitoring
+// loop started, and every failure stayed cached for the day.
 var (
-	dnsCache      = make(map[string]string)
-	dnsCacheMutex sync.RWMutex
+	dnsCache      = make(map[string]dnsEntry)
+	dnsInflight   = make(map[string]chan struct{}) // IP → closed when its lookup is done
+	dnsCacheMutex sync.RWMutex                     // guards dnsCache and dnsInflight
+	dnsSlots      = make(chan struct{}, dnsLookupWorkers)
 )
+
+// dnsEntry is one cached reverse lookup: the short host name, or "" with
+// the time of the failed lookup.
+type dnsEntry struct {
+	name     string
+	failedAt time.Time
+}
+
+const (
+	dnsLookupWorkers = 16               // reverse lookups at the same time
+	dnsLookupTimeout = 2 * time.Second  // one lookup
+	dnsNegativeTTL   = 10 * time.Minute // a failed lookup is tried again after this
+)
+
+// graphDNSWait is how long a graph build waits for the reverse lookups it
+// needs (graphResolveHostnames). Tests shorten it.
+var graphDNSWait = 5 * time.Second
 
 // lookupAddr does the reverse DNS query for resolveHostname. Tests replace it
 // so no DNS traffic is sent.
 var lookupAddr = reverseLookup
+
+// dnsClock is the time source of the failed-lookup TTL. Tests replace it.
+var dnsClock = time.Now
 
 // reverseLookup asks the system resolver for the PTR names of ip.
 func reverseLookup(ctx context.Context, ip string) ([]string, error) {
@@ -1910,42 +1960,147 @@ func reverseLookup(ctx context.Context, ip string) ([]string, error) {
 }
 
 // resolveHostname performs DNS reverse lookup with 2s timeout and caching
-// "PC-JAMIL.tuit.local." → "PC-JAMIL"
+// "PC-JAMIL.tuit.local." → "PC-JAMIL"; an IP being looked up already is
+// not looked up twice.
 func resolveHostname(ip string) string {
-	// Check cache first
-	dnsCacheMutex.RLock()
-	if cached, ok := dnsCache[ip]; ok {
-		dnsCacheMutex.RUnlock()
-		return cached
+	if name, ok := cachedHostname(ip); ok {
+		return name
 	}
-	dnsCacheMutex.RUnlock()
+	<-dnsStartLookup(ip)
+	name, _ := cachedHostname(ip)
+	return name
+}
 
-	// Lookup with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+// cachedHostname returns the cached name of ip; ok is false when the cache
+// has no answer (never looked up, or a failure older than dnsNegativeTTL).
+func cachedHostname(ip string) (name string, ok bool) {
+	dnsCacheMutex.RLock()
+	defer dnsCacheMutex.RUnlock()
+	entry, found := dnsCache[ip]
+	if !found || (entry.name == "" && dnsClock().Sub(entry.failedAt) >= dnsNegativeTTL) {
+		return "", false
+	}
+	return entry.name, true
+}
+
+// resolveHostnames looks up the names of the IPs the cache has no answer
+// for, at most dnsLookupWorkers at a time, and waits until they are done
+// or wait has passed. Lookups still running then fill the cache later.
+func resolveHostnames(ips []string, wait time.Duration) {
+	var pending []<-chan struct{}
+	for _, ip := range ips {
+		if _, ok := cachedHostname(ip); !ok {
+			pending = append(pending, dnsStartLookup(ip))
+		}
+	}
+	if len(pending) == 0 {
+		return
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	for _, done := range pending {
+		select {
+		case <-done:
+		case <-timer.C:
+			return
+		}
+	}
+}
+
+// dnsStartLookup starts the reverse lookup of ip unless one is running and
+// returns a channel that is closed when it is done.
+func dnsStartLookup(ip string) <-chan struct{} {
+	dnsCacheMutex.Lock()
+	if done, ok := dnsInflight[ip]; ok {
+		dnsCacheMutex.Unlock()
+		return done
+	}
+	done := make(chan struct{})
+	dnsInflight[ip] = done
+	dnsCacheMutex.Unlock()
+
+	go func() {
+		dnsSlots <- struct{}{}
+		name := dnsLookupName(ip)
+		<-dnsSlots
+		dnsCacheMutex.Lock()
+		if name != "" {
+			dnsCache[ip] = dnsEntry{name: name}
+		} else {
+			dnsCache[ip] = dnsEntry{failedAt: dnsClock()}
+		}
+		if dnsInflight[ip] == done {
+			delete(dnsInflight, ip)
+		}
+		dnsCacheMutex.Unlock()
+		close(done)
+	}()
+	return done
+}
+
+// dnsLookupName does one reverse lookup of ip and returns the short host
+// name ("PC-JAMIL.tuit.local." → "PC-JAMIL"), or "" when there is none.
+func dnsLookupName(ip string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), dnsLookupTimeout)
 	defer cancel()
-
 	names, err := lookupAddr(ctx, ip)
 	if err != nil || len(names) == 0 {
-		// Cache empty result to avoid retrying
-		dnsCacheMutex.Lock()
-		dnsCache[ip] = ""
-		dnsCacheMutex.Unlock()
 		return ""
 	}
-
 	// Take first result, remove trailing dot
 	name := strings.TrimSuffix(names[0], ".")
 	// Remove domain part (keep only hostname)
 	if idx := strings.Index(name, "."); idx > 0 {
 		name = name[:idx]
 	}
-
-	// Cache result
-	dnsCacheMutex.Lock()
-	dnsCache[ip] = name
-	dnsCacheMutex.Unlock()
-
 	return name
+}
+
+// graphHostnameIPs lists the IPs whose reverse DNS names a build of
+// snapshot uses: the IPs (the switch's ARP table first, then the MAC-IP
+// cache, as buildGraphEdges looks them up) of the LLDP neighbors and of the
+// FDB MACs that get nodes (fdbPorts), in IP order of the devices.
+func graphHostnameIPs(snapshot map[string]*DeviceData, switchChassisMACs map[string]string) []string {
+	globalMACtoIPMutex.RLock()
+	defer globalMACtoIPMutex.RUnlock()
+	seen := make(map[string]bool)
+	var ips []string
+	for _, devIP := range sortedDeviceIPs(snapshot) {
+		data := snapshot[devIP]
+		local := make(map[string]string, len(data.ARPTable))
+		for _, arpEntry := range data.ARPTable {
+			local[normalizeMAC(arpEntry.MACAddress)] = arpEntry.IPAddress
+		}
+		add := func(mac string) {
+			ip, ok := local[mac]
+			if !ok {
+				ip = globalMACtoIP[mac]
+			}
+			if ip != "" && !seen[ip] {
+				seen[ip] = true
+				ips = append(ips, ip)
+			}
+		}
+		for _, n := range data.Neighbors {
+			if targetID, _, ok := graphLLDPNeighborTarget(data, n); ok {
+				add(targetID)
+			}
+		}
+		for _, p := range fdbPorts(data, switchChassisMACs) {
+			for _, mac := range p.MACs {
+				add(mac)
+			}
+		}
+	}
+	return ips
+}
+
+// graphResolveHostnames looks up, before a build, the names the build of
+// snapshot will use, waiting at most graphDNSWait: the build itself only
+// reads the cache, so a slow DNS server delays a build by graphDNSWait at
+// most instead of 2 s per name.
+func graphResolveHostnames(snapshot map[string]*DeviceData, switchChassisMACs map[string]string) {
+	resolveHostnames(graphHostnameIPs(snapshot, switchChassisMACs), graphDNSWait)
 }
 
 // countEdges counts total edges in graph
@@ -2716,6 +2871,10 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 
 	// 0. Build switchChassisMACs map
 	switchChassisMACs := buildSwitchChassisMACs(snapshot)
+
+	// The reverse DNS names the labels use, looked up before the build and
+	// waited for at most graphDNSWait (RC-1)
+	graphResolveHostnames(snapshot, switchChassisMACs)
 
 	// 1. Add all Nodes (two switches with the same node id: the last one in
 	// IP order sets the label)

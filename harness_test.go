@@ -133,6 +133,7 @@ func installSeams(dir string) {
 	}
 	eventClock = testClock.Now
 	macIPClock = testClock.Now
+	dnsClock = testClock.Now
 	startMacIPCollector = func() { macIPCollectorStarts.Add(1) }
 	startLiveAnalysis = func(*DJGraph) { liveAnalyses.Add(1) }
 	exportsDir = guardExportsDir
@@ -195,7 +196,8 @@ func resetState(t *testing.T) {
 	interfaceTrafficMapMutex.Unlock()
 
 	dnsCacheMutex.Lock()
-	dnsCache = make(map[string]string)
+	dnsCache = make(map[string]dnsEntry)
+	dnsInflight = make(map[string]chan struct{})
 	dnsCacheMutex.Unlock()
 	ttlOSCacheMutex.Lock()
 	ttlOSCache = make(map[string]ttlOSEntry)
