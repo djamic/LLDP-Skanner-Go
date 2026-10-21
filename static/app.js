@@ -77,6 +77,26 @@ function uiNodeText(d) {
     return d.hostname || d.sysName || d.label || d.id;
 }
 
+// uiIsIPv4 accepts a dotted quad with octets 0-255.
+function uiIsIPv4(s) {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
+    return !!m && m.slice(1).every(octet => Number(octet) <= 255);
+}
+
+// uiNodeIPs lists the node's own addresses: the id when it is an IP, then
+// every label line that is exactly an IPv4 address, in label order (the
+// SNMP/ARP IP comes first; enrichGraphWithIPs appends the cache IP after it).
+// A "VMs: a, b" line (a hypervisor's guests) or SysDesc text is not the
+// node's address. Connect, History and the info panel all use ips[0].
+function uiNodeIPs(node) {
+    const ips = node.ip ? [node.ip] : [];
+    (node.sysName || node.label || '').split('\n').forEach(line => {
+        const s = line.trim();
+        if (uiIsIPv4(s) && !ips.includes(s)) ips.push(s);
+    });
+    return ips;
+}
+
 // uiRenderNodeLabel (re)builds the tspans of one node label when its text
 // changed, so later IP/DNS/ESXi enrichment shows up on the canvas.
 function uiRenderNodeLabel(el, d) {
@@ -757,23 +777,13 @@ function viewHistory() {
         return;
     }
 
-    // Find the node to get its IP
+    // Find the node to get its own IP (never a VM IP from a 'VMs:' line)
     const node = rawData.nodes.find(n => n.id === selectedNodeId);
     if (node) {
-        let ip = node.ip;
-
-        // If no IP field, try to extract from sysName or label
-        if (!ip) {
-            const text = node.sysName || node.label || '';
-            // Match IP pattern
-            const ipMatch = text.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
-            if (ipMatch) {
-                ip = ipMatch[1];
-            }
-        }
+        const ip = uiNodeIPs(node)[0];
 
         if (ip) {
-            window.location.href = `/history.html?id=${ip}`;
+            window.location.href = `/history.html?id=${encodeURIComponent(ip)}`;
         } else {
             alert('No IP address available for this device');
         }
@@ -792,12 +802,7 @@ function connectToDevice() {
 
     const node = rawData.nodes.find(n => n.id === selectedNodeId);
     if (node) {
-        let ip = node.ip;
-        if (!ip) {
-            const text = node.sysName || node.label || '';
-            const ipMatch = text.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
-            if (ipMatch) ip = ipMatch[1];
-        }
+        const ip = uiNodeIPs(node)[0];
 
         if (ip) {
             connectedDeviceIP = ip;
@@ -1003,8 +1008,9 @@ function showInfoPanel(node) {
     // Extract data from label/info
     let type = node.group || 'unknown';
     let vendor = '';
-    let ip = '';
     let sysName = '';
+    // Same address as Connect and History; further IP lines are listed after it
+    const ips = uiNodeIPs(node);
 
     // Parse info lines
     lines.forEach(line => {
@@ -1014,9 +1020,8 @@ function showInfoPanel(node) {
             if (parts.length > 1) {
                 vendor = parts.slice(1).join(' ');
             }
-        } else if (line.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-            // IP address
-            ip = line;
+        } else if (uiIsIPv4(line.trim())) {
+            // IP address (see ips)
         } else if (line && !line.startsWith('[')) {
             // System name or description
             if (!sysName) sysName = line;
@@ -1087,7 +1092,8 @@ function showInfoPanel(node) {
     document.getElementById('infoType').textContent = typeNames[type] || type;
     document.getElementById('infoMAC').textContent = node.id;
     document.getElementById('infoVendor').textContent = vendor || 'Unknown';
-    document.getElementById('infoIP').textContent = ip || 'Not available';
+    document.getElementById('infoIP').textContent = ips.length === 0 ? 'Not available'
+        : ips[0] + (ips.length > 1 ? ` (also ${ips.slice(1).join(', ')})` : '');
     document.getElementById('infoSysName').textContent = sysName || node.id;
     document.getElementById('infoConnections').textContent = totalConnections;
 
