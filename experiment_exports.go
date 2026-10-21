@@ -66,8 +66,10 @@ func ExportHealthScores(devices []*DeviceData, graph *DJGraph) {
 		Topology:    graphData,
 	}
 
+	// BuildReport: the same checks and health score as Analyze, without its
+	// Telegram alerts, InfluxDB point and live-state update (H6)
 	analyzer := NewAnalyzer(fullData)
-	report := analyzer.Analyze()
+	report := analyzer.BuildReport()
 
 	// Build anomaly map: device IP -> list of anomaly types
 	anomalyMap := make(map[string][]string)

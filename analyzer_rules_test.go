@@ -574,3 +574,32 @@ func TestAnalyzerAnomaliesOnGraphNodes(t *testing.T) {
 		t.Errorf("anomaly map %v, want loopback and congestion on node 4c:ae:a3:09:00:22", got)
 	}
 }
+
+// TestExportHealthScoresKeepsLiveState (H6): the experiment's
+// health_scores.json analyses the devices without the live side effects of
+// Analyze(): no Telegram alert, no anomaly_summary point in InfluxDB, and
+// the health score, anomaly map and total_macs /api/graph serves stay.
+func TestExportHealthScoresKeepsLiveState(t *testing.T) {
+	resetState(t)
+	SetLastReport(77, map[string][]string{"10.0.9.1": {"stp"}}, 12)
+	before := fmt.Sprint(lastReportRecord())
+	hub := &DeviceData{IP: "10.0.9.74", ChassisID: "4c:ae:a3:09:00:74", Interfaces: gigabitPorts(4, nil),
+		MACTable: macEntries(2, "00:1b:21:09:74:01", "00:1b:21:09:74:02")}
+	exportsDir = t.TempDir()
+	influxRec.start("anomaly_summary")
+	ExportHealthScores([]*DeviceData{hub}, nil)
+	if points := influxRec.stop(); len(points) != 0 {
+		t.Errorf("health export wrote %d anomaly_summary point(s)", len(points))
+	}
+	if msgs := bot.taken(); len(msgs) != 0 {
+		t.Errorf("health export sent %d bot message(s): %v", len(msgs), msgs)
+	}
+	if after := fmt.Sprint(lastReportRecord()); after != before {
+		t.Errorf("health export changed the live state:\nbefore %s\nafter  %s", before, after)
+	}
+	var health HealthScoreExport
+	reportReadJSON(t, filepath.Join(exportsDir, "health_scores.json"), &health)
+	if len(health.Devices) != 1 || !slices.Equal(health.Devices[0].Anomalies, []string{"shadow_it"}) {
+		t.Errorf("health_scores.json devices = %+v, want the hub port's shadow_it anomaly", health.Devices)
+	}
+}
