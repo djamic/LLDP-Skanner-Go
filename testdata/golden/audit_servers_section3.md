@@ -61,7 +61,6 @@ graph TD
   VM_Windowsbr172_20_0_50["[VM] 🪟 Windows<br>172.20.0.50"]
   HPbr172_20_254_204["HP<br>172.20.254.204"]
   br172_20_230_253br172_20_7_227["<br>172.20.230.253<br>172.20.7.227"]
-  BMC_Fujitsu_iRMCbr172_16_25_231["[BMC] Fujitsu iRMC<br>172.16.25.231"]
   VM_Windowsbr10_10_10_70["[VM] 🪟 Windows<br>10.10.10.70"]
   HPbr172_20_254_223["HP<br>172.20.254.223"]
   VM_Linuxbr10_10_10_69["[VM] 🐧 Linux<br>10.10.10.69"]
@@ -117,7 +116,6 @@ graph TD
   HPEbr172_20_254_199-- "TGE1/0/52 [T] 4G ↔ TGE1/0/50" -->HPEbr172_20_254_202
   HPEbr172_20_254_199-- "ge1/0/32" -->HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_9_121_195_158_2_214
   A_3_Etajbr172_20_230_46-- "GE1/0/48 [T] 1G ↔ GE1/0/45" -->HPEbr172_20_253_10
-  A_3_Etajbr172_20_230_46-- "GE1/0/7 [V1624] 100M ↔ " -->BMC_Fujitsu_iRMCbr172_16_25_231
   A_3_Etajbr172_20_230_46-- "GE1/0/47 [T] 1G ↔ " -->br172_20_230_47
   HPEbr172_20_253_11-- "TGE1/0/49 [T] 10G ↔ TGE1/0/49" -->br172_20_254_203
   HPEbr172_20_253_11-- "TGE1/0/51 [T] 1G ↔ GE1/0/28" -->HPbr172_20_254_204
@@ -252,7 +250,6 @@ graph TD
   style VM_Windowsbr172_20_0_50 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style HPbr172_20_254_204 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style br172_20_230_253br172_20_7_227 fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  style BMC_Fujitsu_iRMCbr172_16_25_231 fill:#FF6F00,stroke:#E65100,color:#fff
   style VM_Windowsbr10_10_10_70 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style HPbr172_20_254_223 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style VM_Linuxbr10_10_10_69 fill:#9C27B0,stroke:#7B1FA2,color:#fff

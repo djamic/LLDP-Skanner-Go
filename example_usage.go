@@ -1716,111 +1716,22 @@ func isRandomMAC(mac string) bool {
 	return secondChar == '2' || secondChar == '6' || secondChar == 'a' || secondChar == 'e'
 }
 
-// isBMC detects server BMC/management interfaces (iDRAC, iLO, IPMI, XCC, iRMC, CIMC).
-// Strategy: 1) MAC OUI match, 2) LLDP name keyword match.
+// isBMC detects server BMC/management interfaces (iDRAC, iLO, IPMI, XCC, iRMC, CIMC)
+// by a keyword in the LLDP or DNS name (Q5). The OUI only names the maker of a
+// BMC whose name just says "BMC" or "IPMI": server makers use the same OUIs
+// for ordinary NICs, so a server NIC without such a name is no BMC.
 // Returns (isBMC bool, bmcType string e.g. "Dell iDRAC").
 func isBMC(mac, name string) (bool, string) {
-	mac = normalizeMAC(mac)
-	nameLower := strings.ToLower(name)
-
-	// ── Step 1: MAC OUI (first 8 chars = "aa:bb:cc") ──────────────────────────
-	// These OUI blocks are EXCLUSIVELY used by BMC/management NIC hardware.
-	bmcOUIs := map[string]string{
-		// Dell iDRAC (Remote Access Controller)
-		"14:fe:b5": "Dell iDRAC",
-		"18:66:da": "Dell iDRAC",
-		"b0:83:fe": "Dell iDRAC",
-		"f8:db:88": "Dell iDRAC",
-		"f0:1f:af": "Dell iDRAC",
-		"b8:ca:3a": "Dell iDRAC",
-		"d0:94:66": "Dell iDRAC",
-		"54:bf:64": "Dell iDRAC",
-
-		// HPE iLO (Integrated Lights-Out)
-		"98:e7:f4": "HPE iLO",
-		"b4:99:ba": "HPE iLO",
-		"94:18:82": "HPE iLO",
-		"9c:8e:99": "HPE iLO",
-		"58:20:b1": "HPE iLO",
-		"3c:a8:2a": "HPE iLO",
-		"10:60:4b": "HPE iLO",
-
-		// Lenovo XClarity / IMM (Integrated Management Module)
-		"6c:ae:8b": "Lenovo XCC",
-		"40:f2:e9": "Lenovo XCC",
-		"b8:ac:6f": "Lenovo XCC",
-		"00:00:17": "Lenovo IMM",
-		"d0:50:99": "Lenovo XCC",
-
-		// Supermicro IPMI / BMC
-		"0c:c4:7a": "Supermicro IPMI",
-
-		// IBM IMM / BMC
-		"00:21:5e": "IBM IMM",
-		"00:1a:64": "IBM IMM",
-		"d8:d3:85": "IBM IMM",
-
-		// Cisco CIMC (Unified Computing System)
-		"54:7f:ee": "Cisco CIMC",
-		"cc:46:d6": "Cisco CIMC",
-		"70:df:2f": "Cisco CIMC",
-
-		// Fujitsu iRMC (integrated Remote Management Controller)
-		"90:1b:0e": "Fujitsu iRMC",
-		"00:19:99": "Fujitsu iRMC",
-
-		// ASRock / ASUS ASMB (Server Management Board)
-		"a8:5e:45": "ASUS ASMB",
-		"70:85:c2": "ASRock IPMI",
-
-		// Inspur / H3C / Huawei server BMC
-		"00:e0:86": "Inspur BMC",
-		"9c:69:b4": "H3C iBMC",
-		"00:18:82": "Huawei iBMC", // Also regular Huawei NIC, but check name below
+	kind := bmcTypeByName(name)
+	if kind == "" {
+		return false, ""
 	}
-
-	if len(mac) >= 8 {
-		prefix := mac[:8]
-		if bmcType, ok := bmcOUIs[prefix]; ok {
-			return true, bmcType
+	if kind == "BMC" || kind == "IPMI" {
+		if maker := bmcTypeByOUI(mac); maker != "" {
+			kind = maker
 		}
 	}
-
-	// ── Step 2: LLDP name keyword match ────────────────────────────────────────
-	// BMC interfaces often self-report via LLDP with recognizable names.
-	bmcKeywords := []struct {
-		keyword string
-		kind    string
-	}{
-		{"idrac", "Dell iDRAC"},
-		{"drac", "Dell iDRAC"},
-		{"-bmc", "BMC"},
-		{"_bmc", "BMC"},
-		{".bmc", "BMC"},
-		{"ipmi", "IPMI"},
-		{" ilo", "HPE iLO"},
-		{"-ilo", "HPE iLO"},
-		{"_ilo", "HPE iLO"},
-		{"ilo.", "HPE iLO"},
-		{"xclarity", "Lenovo XCC"},
-		{"-xcc", "Lenovo XCC"},
-		{"_xcc", "Lenovo XCC"},
-		{"-imm", "Lenovo IMM"},
-		{"cimc", "Cisco CIMC"},
-		{"irmc", "Fujitsu iRMC"},
-		{"asmb", "ASUS ASMB"},
-		{"ibmc", "Huawei iBMC"},
-		{"mgmt-bmc", "BMC"},
-		{"management-controller", "BMC"},
-	}
-
-	for _, kw := range bmcKeywords {
-		if strings.Contains(nameLower, kw.keyword) {
-			return true, kw.kind
-		}
-	}
-
-	return false, ""
+	return true, kind
 }
 
 

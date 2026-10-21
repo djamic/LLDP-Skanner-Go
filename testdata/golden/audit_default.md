@@ -430,7 +430,7 @@ graph TD
 | 172.20.254.247 | HP |  | 30 | 0 |
 | 172.20.254.249 | HUAWEI |  | 33 | 1261 |
 
-### 4.2 Endpoint qurilmalar (674 ta)
+### 4.2 Endpoint qurilmalar (675 ta)
 
 | # | ID / MAC | Ma'lumot | IP | Connected to |
 |---|---|---|---|---|
@@ -875,239 +875,240 @@ graph TD
 | 439 | 88:88:88:88:87:88 | [LLDP-EP] | 172.16.24.207 | A 3 Etaj (GE1/0/18 [V1624] 100M) |
 | 440 | 8c:90:2d:4f:5c:93 | [ENDPOINT] |  | - |
 | 441 | 8c:ec:4b:dc:28:d9 | [LLDP-EP] Dell | 172.16.1.242 | B-318/2 (GE1/0/23 [V160] 1G) |
-| 442 | 90:2e:16:9d:3d:37 | [ENDPOINT] LCFC | 172.16.0.57 | - |
-| 443 | 90:2e:16:9d:3d:3c | [ENDPOINT] LCFC | 172.16.0.239 |  (GE1/0/40 [V160]) |
-| 444 | 90:2e:16:9d:3d:5e | [ENDPOINT] LCFC | 172.16.1.217 |  (GE1/0/12 [V160]) |
-| 445 | 90:2e:16:d4:3d:60 | [LLDP-EP] LCFC | 172.16.4.147 | D - 1 (GE1/0/31 [V164] 1G) |
-| 446 | 90:5a:08:29:cd:15 | [ENDPOINT] | 172.16.35.227 | HPE (GE1/0/11 [V1632]) |
-| 447 | 90:5a:08:be:c5:4e | [LLDP-EP] | 172.16.32.234 | HPE (GE1/0/12 [V1632] 1G) |
-| 448 | 90:8d:6e:5c:2e:d9 | [LLDP-EP] | 172.16.8.17 | HPE (GE1/0/11 [V168] 100M) |
-| 449 | 90:8d:6e:5c:2f:31 | [LLDP-EP] | 172.16.13.216 | E-209 (Eth1/0/4 [V1612] 1G) |
-| 450 | 90:8d:6e:5c:2f:c2 | [LLDP-EP] | 172.16.20.16 | A-332 (GE1/0/18 [V1620] 1G) |
-| 451 | 90:8d:6e:5c:30:eb | [LLDP-EP] | 172.16.23.252 | A-332 (GE1/0/22 [V1620] 1G) |
-| 452 | 90:8d:6e:5c:31:49 | [LLDP-EP] | 172.16.18.97 | HPE (GE1/0/7 [V1616] 1G) |
-| 453 | 90:8d:6e:5c:65:3a | [LLDP-EP] | 172.16.9.250 | HPE (GE1/0/35 [V168] 100M) |
-| 454 | 90:8d:6e:5c:67:2a | [LLDP-EP] | 172.16.10.30 | HPE (GE1/0/15 [V168] 100M) |
-| 455 | 90:9a:4a:24:f1:dd | [ENDPOINT] | 172.16.12.18 | - |
-| 456 | 90:9a:4a:3c:6e:bf | [ENDPOINT] | 172.16.22.217 | A Mobil (GE1/0/18 [V1620]) |
-| 457 | 94:c6:91:3b:29:a1 | [LLDP-EP] EliteGroup | 172.16.4.107 | D - 1 (GE1/0/23 [V164] 100M) |
-| 458 | 94:c6:91:3f:f2:7b | [LLDP-EP] EliteGroup | 172.16.0.217 | A RRT Kalidor (GE1/0/20 [V1624] 1G) |
-| 459 | 94:c6:91:3f:f3:4f | [ENDPOINT] EliteGroup | 172.16.0.4 | - |
-| 460 | 94:c6:91:3f:f3:61 | [ENDPOINT] EliteGroup |  | - |
-| 461 | 94:c6:91:3f:f4:41 | [ENDPOINT] EliteGroup |  | - |
-| 462 | 94:c6:91:3f:f4:67 | [ENDPOINT] EliteGroup | 172.16.1.126 | - |
-| 463 | 94:c6:91:3f:f4:73 | [LLDP-EP] EliteGroup | 172.20.7.83 | A-332 (GE1/0/33 [T] 1G) |
-| 464 | 94:c6:91:3f:f4:c7 | [ENDPOINT] EliteGroup | 172.16.2.6 | HPE (GE1/0/20 [V160]) |
-| 465 | 94:c6:91:3f:f8:3a | [LLDP-EP] EliteGroup | 172.20.14.127 | HPE (GE1/0/39 [T] 1G) |
-| 466 | 94:c6:91:3f:f8:80 | [ENDPOINT] EliteGroup | 172.16.21.40 | A-332 (GE1/0/19 [V1620]) |
-| 467 | 94:c6:91:3f:f8:ee | [LLDP-EP] EliteGroup | 10.20.5.230 | SNR-S2995G-24FX (Eth1/0/3 [T] 1G) |
-| 468 | 94:c6:91:3f:f8:f8 | [ENDPOINT] EliteGroup | 172.16.20.120 | - |
-| 469 | 98:da:c4:b6:62:bd | [ENDPOINT] | 172.16.15.21 | SNR-S2985G-24TC (Eth1/0/15 [V1612]) |
-| 470 | 98:ee:cb:e0:88:fe | [LLDP-EP] Wistron | 172.16.35.152 | F-6(2) (Eth1/0/9 [V1632] 100M) |
-| 471 | 98:ee:cb:e0:89:0c | [LLDP-EP] Wistron | 172.16.2.65 | B-318/2 (GE1/0/45 [V160] 100M) |
-| 472 | 98:ee:cb:e0:89:4e | [LLDP-EP] Wistron | 172.16.9.236 | HPE (GE1/0/21 [V168] 1G) |
-| 473 | 98:ee:cb:e0:89:70 | [LLDP-EP] Wistron | 172.16.4.99 | D 1-2 (GE1/0/48 [V164] 100M) |
-| 474 | 98:ee:cb:e0:89:74 | [LLDP-EP] Wistron | 172.16.5.209 | D - 1 (GE1/0/33 [V164] 100M) |
-| 475 | 98:ee:cb:e0:89:78 | [LLDP-EP] Wistron | 172.16.10.255 | HPE (GE1/0/10 [V168] 100M) |
-| 476 | 98:ee:cb:e0:89:80 | [ENDPOINT] Wistron | 172.16.12.156 | - |
-| 477 | 98:ee:cb:e0:89:81 | [LLDP-EP] Wistron | 172.16.4.155 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 478 | 98:ee:cb:e0:89:84 | [LLDP-EP] Wistron | 172.16.4.41 | D 1-2 (GE1/0/17 [V164] 1G) |
-| 479 | 98:ee:cb:e0:89:89 | [LLDP-EP] Wistron | 172.16.10.3 | HPE (GE1/0/23 [V168] 100M) |
-| 480 | 98:ee:cb:e0:89:c2 | [LLDP-EP] Wistron | 172.16.2.18 | B-318/2 (GE1/0/28 [V160] 100M) |
-| 481 | 98:ee:cb:e0:89:c4 | [LLDP-EP] Wistron | 172.16.17.227 | HPE (GE1/0/37 [V1616] 1G) |
-| 482 | 98:ee:cb:e0:89:c8 | [LLDP-EP] Wistron | 172.16.17.23 | C 424/a (GE1/0/9 [V1616] 1G) |
-| 483 | 98:ee:cb:e0:89:d6 | [ENDPOINT] Wistron | 172.16.35.244 | F-8 (Eth1/0/5 [V1632]) |
-| 484 | 98:ee:cb:e0:89:ea | [LLDP-EP] Wistron | 172.16.26.89 | A RRT Kalidor (GE1/0/37 [V1624] 1G) |
-| 485 | 98:ee:cb:e0:89:f1 | [LLDP-EP] Wistron | 172.16.18.18 | HPE (GE1/0/17 [V1616] 100M) |
-| 486 | 98:ee:cb:e0:89:f2 | [LLDP-EP] Wistron | 172.16.35.50 | F-6(2) (Eth1/0/5 [V1632] 100M) |
-| 487 | 98:ee:cb:e0:89:fb | [LLDP-EP] Wistron | 172.16.4.175 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 488 | 98:ee:cb:e0:8a:73 | [LLDP-EP] Wistron | 172.16.32.22 | F-5 (Eth1/0/8 [V1632] 100M) |
-| 489 | 98:ee:cb:e0:8a:74 | [LLDP-EP] Wistron | 172.16.34.26 | F-1 (Eth1/0/7 [V1632] 1G) |
-| 490 | 98:ee:cb:e0:8a:97 | [LLDP-EP] Wistron | 172.16.4.140 | D 1-2 (GE1/0/40 [V164] 100M) |
-| 491 | 98:ee:cb:e0:8a:aa | [LLDP-EP] Wistron | 172.16.17.173 | HPE (GE1/0/37 [V1616] 1G) |
-| 492 | 98:ee:cb:e0:8a:e7 | [ENDPOINT] Wistron | 172.16.17.188 | HPE (GE1/0/45 [V1616]) |
-| 493 | 98:ee:cb:e0:8b:15 | [LLDP-EP] Wistron | 172.16.9.254 | HPE (GE1/0/19 [V168] 100M) |
-| 494 | 98:ee:cb:e0:8b:2d | [LLDP-EP] Wistron | 172.16.27.154 | A RRT Kalidor (GE1/0/33 [V1624] 100M) |
-| 495 | 98:ee:cb:e0:8b:4e | [LLDP-EP] Wistron | 172.16.4.149 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 496 | 98:ee:cb:e0:8b:4f | [ENDPOINT] Wistron | 172.16.16.57 | C 424/a (GE1/0/15 [V1616]) |
-| 497 | 98:ee:cb:e0:8b:5e | [LLDP-EP] Wistron | 172.16.34.39 | F-6(1) (Eth1/0/13 [V1632] 100M) |
-| 498 | 98:ee:cb:e0:8b:67 | [LLDP-EP] Wistron | 172.16.4.150 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 499 | 98:ee:cb:e0:8b:a1 | [ENDPOINT] Wistron | 172.16.19.203 | C 424/a (GE1/0/5 [V1616]) |
-| 500 | 98:ee:cb:e0:8b:ab | [LLDP-EP] Wistron | 172.16.34.47 | F-5 (Eth1/0/3 [V1632] 100M) |
-| 501 | 98:ee:cb:e0:8b:d7 | [LLDP-EP] Wistron | 172.16.4.141 | D 1-2 (GE1/0/40 [V164] 100M) |
-| 502 | 98:ee:cb:e0:8b:d9 | [LLDP-EP] Wistron | 172.16.8.40 | HPE (GE1/0/23 [V168] 100M) |
-| 503 | 98:ee:cb:e0:8c:07 | [LLDP-EP] Wistron | 172.16.27.156 | A RRT Kalidor (GE1/0/37 [V1624] 1G) |
-| 504 | 98:ee:cb:e0:8c:0d | [LLDP-EP] Wistron | 172.16.19.128 | HPE (GE1/0/31 [V1616] 1G) |
-| 505 | 98:ee:cb:e0:98:1e | [LLDP-EP] Wistron | 172.16.12.48 | E109-2 (Eth1/0/16 [V1612] 100M) |
-| 506 | 98:ee:cb:fd:e8:e8 | [ENDPOINT] Wistron | 172.16.0.192 | B-423 (GE1/0/42 [V160]) |
-| 507 | 9c:53:22:51:bb:cf | [ENDPOINT] | 172.16.0.204 | HP (GE1/0/6 [V160]) |
-| 508 | a0:36:bc:26:6e:e9 | [LLDP-EP] | 172.16.15.29 | HPE (GE1/0/16 [V1612] 100M) |
-| 509 | a4:cf:99:5d:8c:79 | [ENDPOINT] | 172.16.2.192 | - |
-| 510 | a8:29:48:59:b3:c3 | [ENDPOINT] |  | - |
-| 511 | a8:29:48:59:b4:17 | [ENDPOINT] |  | A_padval_SNR (Eth1/0/13 [V1624]) |
-| 512 | a8:60:b6:2e:b5:64 | [LLDP-EP] | 172.16.32.21 | F-5 (Eth1/0/14 [V1632] 1G) |
-| 513 | a8:6e:84:7c:45:88 | [ENDPOINT] | 172.15.117.43 | TTJ-3&4 (GE1/0/3 [V1500]) |
-| 514 | a8:6e:84:7c:45:b8 | [ENDPOINT] | 172.15.116.188 | TTJ-3&4 (GE1/0/4 [V1500]) |
-| 515 | a8:6e:84:b9:2b:39 | [ENDPOINT] | 172.16.32.143 | F-3(2) (Eth1/0/13 [V1632]) |
-| 516 | a8:6e:84:c7:d1:3d | [ENDPOINT] | 172.16.21.123 | A-332 (GE1/0/7 [V1620]) |
-| 517 | a8:a1:59:a0:c9:a3 | [ENDPOINT] | 172.16.27.73 | - |
-| 518 | aa:a3:95:63:22:35 | [ENDPOINT] |  | - |
-| 519 | aa:cc:de:aa:11:11 | [LLDP-EP] | 172.16.18.58 | C 424/a (GE1/0/37 [V1616] 100M) |
-| 520 | ac:15:a2:b5:2b:8d | [ENDPOINT] | 172.16.26.244 | A RRT Kalidor (GE1/0/10 [V1624]) |
-| 521 | ac:84:c6:65:e8:fb | [ENDPOINT] | 172.16.34.186 | F-1 (Eth1/0/2 [V1632]) |
-| 522 | ac:f4:66:2a:b1:2a | [LLDP-EP] | 172.16.5.28 | D - 1 (GE1/0/32 [V164] 100M) |
-| 523 | ac:f4:66:bc:00:52 | [LLDP-EP] |  | A_padval_SNR (Eth1/0/25 [V1500] 100M) |
-| 524 | ac:f4:66:bc:03:28 | [LLDP-EP] | 172.16.33.222 | F-3(2) (Eth1/0/6 [V1632] 100M) |
-| 525 | b0:7b:25:10:32:3c | [LLDP-EP] | 172.16.32.26 | F-6(2) (Eth1/0/3 [V1632] 100M) |
-| 526 | b0:a7:b9:ee:8d:6e | [ENDPOINT] | 172.16.14.170 | - |
-| 527 | b0:be:76:3c:fb:e7 | [ENDPOINT] | 172.20.12.147 | HPE (GE1/0/37 [T]) |
-| 528 | b4:7a:f1:4a:c1:98 | [HYPERVISOR] HPE ProLiant Server | 172.20.14.103 | HPE (GE1/0/29 1G) |
-| 529 | b4:a9:fc:fc:7e:d3 | [LLDP-EP] Quanta |  | SNR-S2985G-24TC (Eth1/0/6 [V17]) |
-| 530 | b4:b0:24:3c:20:1f | [ENDPOINT] | 172.17.3.45 | E205-24 (Eth1/0/21 [V1612]) |
-| 531 | b8:97:5a:5b:00:90 | [LLDP-EP] Biostar | 172.16.27.138 | A 3 Etaj (GE1/0/7 [V1624] 100M) |
-| 532 | b8:97:5a:ff:2f:92 | [LLDP-EP] Biostar | 172.16.4.124 | D 1-2 (GE1/0/46 [V164] 100M) |
-| 533 | b8:ec:a3:96:06:22 | [ENDPOINT] |  | F-4(2)_28P (Eth1/0/21 [V1632]) |
-| 534 | bc:5f:f4:e8:c2:cd | [ENDPOINT] | 172.16.19.183 | HPE (GE1/0/29 [V1616]) |
-| 535 | bc:e9:2f:bb:d4:44 | [LLDP-EP] | 172.20.18.73 | B-423 (GE1/0/47 [T] 1G) |
-| 536 | bc:ec:a0:32:19:6a | [LLDP-EP] Compal | 172.16.22.203 | A Mobil (GE1/0/32 [V1620] 100M) |
-| 537 | bc:ec:a0:32:34:e0 | [LLDP-EP] Compal | 172.16.23.91 | A Mobil (GE1/0/39 [V1620] 1G) |
-| 538 | bc:ec:a0:36:08:bb | [LLDP-EP] Compal | 172.16.1.61 | HPE (GE1/0/40 [V168] 100M) |
-| 539 | bc:ec:a0:36:09:1f | [LLDP-EP] Compal | 169.254.87.175 | D 1-2 (GE1/0/17 [V164] 1G) |
-| 540 | bc:ec:a0:36:09:8f | [LLDP-EP] Compal | 172.16.6.216 | D - 1 (GE1/0/35 [V164] 100M) |
-| 541 | bc:ec:a0:36:09:b9 | [LLDP-EP] Compal | 172.16.4.202 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 542 | bc:ec:a0:36:09:ce | [LLDP-EP] Compal | 172.16.4.201 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 543 | bc:ec:a0:36:0a:10 | [LLDP-EP] Compal | 172.16.4.193 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 544 | bc:ec:a0:36:0a:73 | [LLDP-EP] Compal | 172.16.4.197 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 545 | bc:ec:a0:36:0a:7d | [LLDP-EP] Compal | 172.16.11.185 | HPE (GE1/0/24 [V168] 1G) |
-| 546 | bc:ec:a0:36:0b:6c | [LLDP-EP] Compal | 172.16.4.198 | D 1-2 (GE1/0/42 [V164] 1G) |
-| 547 | bc:fc:e7:67:02:64 | [LLDP-EP] | 172.16.16.11 | MEDIA MARKAZ (GE1/0/24 [V1616] 1G) |
-| 548 | bc:fc:e7:ec:15:d6 | [ENDPOINT] | 172.16.22.26 | A Mobil (GE1/0/24 [V1620]) |
-| 549 | c0:00:4f:44:42:ce | [LLDP-EP] | 172.16.2.221 | B-318/2 (GE1/0/26 [V160] 100M) |
-| 550 | c0:18:03:5b:64:3d | [ENDPOINT] | 172.16.0.42 |  (GE1/0/16 [V160]) |
-| 551 | c0:18:03:5b:65:42 | [ENDPOINT] | 172.16.0.47 | - |
-| 552 | c0:18:03:88:71:f5 | [ENDPOINT] | 172.16.2.90 |  (GE1/0/36 [V160]) |
-| 553 | c0:18:03:88:72:16 | [LLDP-EP] | 172.16.0.43 |  (Eth1/0/6 [V160] 100M) |
-| 554 | c0:4a:00:e1:d9:49 | [ENDPOINT] | 172.16.0.163 | HP (GE1/0/10 [V160]) |
-| 555 | c0:74:ad:90:01:7f | [ENDPOINT] | 172.16.0.30 |  (GE1/0/34 [V160]) |
-| 556 | c0:74:ad:90:01:8e | [ENDPOINT] | 172.16.1.105 | - |
-| 557 | c0:bf:be:d9:9b:d7 | [ENDPOINT] | 172.16.14.151 | - |
-| 558 | c0:c9:e3:32:95:1d | [ENDPOINT] | 172.16.32.17 | F-8 (Eth1/0/13 [V1632]) |
-| 559 | c4:34:6b:b8:41:94 | [ENDPOINT] | 10.10.10.68 | - |
-| 560 | c4:6e:1f:5d:ea:7c | [ENDPOINT] |  | F-9 (GE1/0/24 [V1632]) |
-| 561 | c8:41:8a:20:51:72 | [LLDP-EP] | 172.16.25.131 | A_padval_SNR (Eth1/0/4 [V1624] 1G) |
-| 562 | c8:41:8a:22:08:b3 | [LLDP-EP] | 172.16.32.154 | A_padval_SNR (Eth1/0/1 [V1632] 1G) |
-| 563 | c8:41:8a:22:0e:38 | [LLDP-EP] | 172.20.8.206 | HPE (GE1/0/39 [T] 1G) |
-| 564 | c8:54:4b:fe:74:d4 | [ENDPOINT] |  | F-5 (Eth1/0/24 [V1632]) |
-| 565 | c8:7e:a1:ba:ec:91 | [ENDPOINT] | 172.16.0.223 |  (GE1/0/27 [V160]) |
-| 566 | c8:7e:a1:ba:ec:92 | [ENDPOINT] | 172.16.1.143 |  (GE1/0/25 [V160]) |
-| 567 | c8:7e:a1:ba:ec:ab | [ENDPOINT] | 172.16.2.168 |  (GE1/0/19 [V160]) |
-| 568 | c8:7e:a1:ba:ed:0d | [ENDPOINT] | 172.16.2.56 |  (GE1/0/31 [V160]) |
-| 569 | c8:d3:ff:bb:28:90 | [ENDPOINT] | 172.16.1.135 | - |
-| 570 | c8:d9:d2:7f:8b:3b | [LLDP-EP] | 172.16.24.51 | A 3 Etaj (GE1/0/7 [V1624] 100M) |
-| 571 | cc:2d:21:7f:64:39 | [ENDPOINT] | 172.16.20.175 | A Mobil (GE1/0/19 [V1620]) |
-| 572 | cc:2d:21:c1:46:29 | [ENDPOINT] | 172.16.18.21 | MEDIA MARKAZ (GE1/0/47 [V1616]) |
-| 573 | cc:3e:5f:18:83:cf | [LLDP-EP] |  | HPE (GE1/0/47 [V1624] 1G) |
-| 574 | cc:3e:5f:d2:35:ac | [LLDP-EP] |  | D 1-2 (GE1/0/25 [V164] 100M) |
-| 575 | d0:ad:08:f0:8a:88 | [LLDP-EP] | 172.16.6.70 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 576 | d4:61:37:03:81:dd | [LLDP-EP] | 172.16.4.255 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 577 | d4:61:37:03:81:e0 | [LLDP-EP] | 172.16.4.212 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 578 | d4:61:37:03:82:54 | [LLDP-EP] | 172.16.6.122 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 579 | d4:61:37:03:82:6c | [LLDP-EP] | 172.16.6.78 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 580 | d4:61:37:03:82:6d | [LLDP-EP] | 172.16.5.193 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 581 | d8:43:ae:b6:79:46 | [LLDP-EP] | 172.16.35.114 | F-9 (GE1/0/5 [V1632] 1G) |
-| 582 | d8:47:32:70:a9:31 | [ENDPOINT] | 172.16.23.174 | A-332 (GE1/0/13 [V1620]) |
-| 583 | d8:47:32:cb:92:af | [ENDPOINT] | 172.16.27.152 | A 3 Etaj (GE1/0/12 [V1624]) |
-| 584 | d8:47:32:e9:b4:63 | [ENDPOINT] | 172.16.33.94 | F-5 (Eth1/0/11 [V1632]) |
-| 585 | d8:47:32:e9:c0:d9 | [ENDPOINT] | 172.16.0.21 | B-423 (GE1/0/11 [V160]) |
-| 586 | d8:5e:d3:78:9c:78 | [LLDP-EP] | 172.15.27.150 | MEDIA MARKAZ (GE1/0/18 [V1500] 1G) |
-| 587 | d8:bb:c1:d4:98:b6 | [ENDPOINT] | 172.16.33.75 | F-2 (GE1/0/11 [V1632]) |
-| 588 | d8:bb:c1:df:5b:04 | [LLDP-EP] | 172.16.16.12 | MEDIA MARKAZ (GE1/0/22 [V1616] 1G) |
-| 589 | d8:e2:df:f8:8a:91 | [LLDP-EP] | 172.16.0.34 | B-318/1 (GE1/0/39 [V160] 100M) |
-| 590 | e0:07:1b:f2:e6:e8 | [ENDPOINT] | 10.10.10.37 | HPE (GE1/0/6 [V10]) |
-| 591 | e0:73:e7:c3:cd:44 | [LLDP-EP] | 172.16.6.75 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 592 | e0:73:e7:c3:ce:13 | [LLDP-EP] | 172.16.5.10 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 593 | e0:73:e7:c3:ce:8c | [LLDP-EP] | 172.16.6.119 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 594 | e0:d5:5e:6e:83:0e | [LLDP-EP] Gigabyte | 172.16.11.40 | HPE (GE1/0/12 [V168] 1G) |
-| 595 | e0:d5:5e:f6:f1:bd | [LLDP-EP] Gigabyte | 172.16.4.161 | D - 1 (GE1/0/16 [V164] 1G) |
-| 596 | e0:d9:e3:d4:b4:c0 | [LLDP-EP] Eltex |  | A-332 (GE1/0/47 [V1620] 1G) |
-| 597 | e0:d9:e3:f1:05:40 | [LLDP-EP] Eltex | 172.16.1.115 | HPE (GE1/0/8 [V160] 100M) |
-| 598 | e4:54:e8:d0:2a:55 | [LLDP-EP] | 172.16.11.27 | HPE (GE1/0/25 [V168] 1G) |
-| 599 | e4:5a:d4:44:1d:c0 | [ENDPOINT] | 172.16.14.252 | - |
-| 600 | e4:5a:d4:6b:3a:00 | [ENDPOINT] | 172.17.3.47 | - |
-| 601 | e4:5a:d4:6b:3a:1b | [ENDPOINT] |  | - |
-| 602 | e4:a8:df:87:0d:94 | [ENDPOINT] Compal | 172.16.1.138 |  (GE1/0/9 [V160]) |
-| 603 | e4:a8:df:87:18:27 | [ENDPOINT] Compal | 172.16.2.130 |  (GE1/0/3 [V160]) |
-| 604 | e4:a8:df:89:1d:4f | [LLDP-EP] Compal | 172.16.34.242 | F-2 (GE1/0/47 [V1632] 100M) |
-| 605 | e4:a8:df:89:1e:12 | [ENDPOINT] Compal | 172.16.34.73 | F-2 (GE1/0/5 [V1632]) |
-| 606 | e4:a8:df:89:b4:33 | [LLDP-EP] Compal | 172.16.8.61 | HPE (GE1/0/30 [V168] 1G) |
-| 607 | e4:a8:df:89:b5:81 | [ENDPOINT] Compal | 172.16.0.202 |  (GE1/0/13 [V160]) |
-| 608 | e4:a8:df:89:b7:72 | [LLDP-EP] Compal | 172.16.8.24 | HPE (GE1/0/43 [V168] 1G) |
-| 609 | e4:a8:df:9d:ed:04 | [LLDP-EP] Compal |  | HPE (GE1/0/43 [V168] 100M) |
-| 610 | e4:a8:df:9f:44:26 | [LLDP-EP] Compal |  | A 3 Etaj (GE1/0/8 [V1624] 10M) |
-| 611 | e4:a8:df:a2:4e:e6 | [LLDP-EP] Compal | 172.16.9.172 | HPE (GE1/0/32 [V168] 1G) |
-| 612 | e4:a8:df:a2:4f:04 | [LLDP-EP] Compal | 172.16.11.60 | HPE (GE1/0/46 [V168] 100M) |
-| 613 | e4:a8:df:a2:4f:20 | [LLDP-EP] Compal | 172.16.10.92 | HPE (GE1/0/32 [V168] 1G) |
-| 614 | e4:a8:df:a2:4f:67 | [LLDP-EP] Compal | 172.16.9.76 | HPE (GE1/0/42 [V168] 100M) |
-| 615 | e8:48:b8:f7:43:f1 | [ENDPOINT] | 172.16.2.219 | B-423 (GE1/0/19 [V160]) |
-| 616 | e8:65:d4:9e:a7:d8 | [ENDPOINT] | 172.16.33.160 | F-4_48P (Eth1/0/16 [V1632]) |
-| 617 | e8:94:f6:ca:86:dd | [ENDPOINT] | 172.20.19.132 | SNR-S2985G-24TC (Eth1/0/1) |
-| 618 | e8:c6:e6:74:87:eb | [ENDPOINT] | 172.16.2.129 |  (GE1/0/17 [V160]) |
-| 619 | e8:de:27:db:9b:f3 | [ENDPOINT] | 172.16.0.88 | HPE (GE1/0/24 [V160]) |
-| 620 | ea:38:83:16:b0:cc | [LLDP-EP] |  | HPE (GE1/0/47 [V1500] 1G) |
-| 621 | ec:74:d7:64:cb:9f | [ENDPOINT] | 172.16.2.189 | - |
-| 622 | ec:74:d7:64:cb:a3 | [LLDP-EP] | 172.16.1.28 |  (Eth1/0/20 [V160] 100M) |
-| 623 | ec:74:d7:64:cb:a5 | [LLDP-EP] | 172.16.1.25 |  (Eth1/0/9 [V160] 100M) |
-| 624 | ec:74:d7:64:cb:a6 | [LLDP-EP] | 172.16.1.18 |  (Eth1/0/11 [V160] 100M) |
-| 625 | ec:74:d7:64:cb:a7 | [LLDP-EP] | 172.16.3.4 |  (Eth1/0/14 [V160] 100M) |
-| 626 | ec:74:d7:64:cb:a8 | [LLDP-EP] | 172.16.1.191 |  (Eth1/0/5 [V160] 100M) |
-| 627 | ec:74:d7:64:cb:ab | [LLDP-EP] | 172.16.3.208 |  (Eth1/0/13 [V160] 100M) |
-| 628 | ec:74:d7:64:cb:ac | [LLDP-EP] | 172.16.1.15 |  (Eth1/0/15 [V160] 100M) |
-| 629 | ec:74:d7:64:cb:ad | [LLDP-EP] | 172.16.1.45 |  (Eth1/0/1 [V160] 100M) |
-| 630 | ec:74:d7:64:cb:ae | [LLDP-EP] | 172.16.1.19 |  (Eth1/0/3 [V160] 100M) |
-| 631 | ec:74:d7:64:cb:b1 | [LLDP-EP] | 172.16.0.37 |  (Eth1/0/4 [V160] 100M) |
-| 632 | ec:74:d7:64:cb:b2 | [LLDP-EP] | 172.16.0.106 |  (Eth1/0/7 [V160] 100M) |
-| 633 | ec:74:d7:64:cb:b8 | [LLDP-EP] | 172.16.0.206 |  (Eth1/0/12 [V160] 100M) |
-| 634 | ec:74:d7:64:ce:58 | [LLDP-EP] | 172.16.1.0 |  (Eth1/0/6 [V160] 100M) |
-| 635 | ec:74:d7:64:ce:5b | [LLDP-EP] | 172.16.3.237 |  (Eth1/0/8 [V160] 100M) |
-| 636 | f0:2f:74:1e:ac:2e | [LLDP-EP] ASUS | 172.16.18.110 | HPE (GE1/0/14 [V1616] 1G) |
-| 637 | f0:2f:74:86:c8:f9 | [LLDP-EP] ASUS | 172.16.10.34 | HPE (GE1/0/5 [V168] 1G) |
-| 638 | f0:d4:e2:e6:ee:99 | [ENDPOINT] | 172.16.32.117 | HPE (GE1/0/31 [V1632]) |
-| 639 | f4:4d:30:c7:f2:58 | [LLDP-EP] EliteGroup | 172.16.0.213 | B-318/3 (GE1/0/28 [V160] 1G) |
-| 640 | f4:4d:30:c7:f2:6e | [LLDP-EP] EliteGroup | 172.16.2.239 | HPE (GE1/0/12 [V160] 1G) |
-| 641 | f4:4d:30:c7:f4:26 | [LLDP-EP] EliteGroup | 172.16.34.236 | F-6(1) (Eth1/0/13 [V1632] 100M) |
-| 642 | f4:4d:30:c7:f4:76 | [LLDP-EP] EliteGroup | 172.16.4.165 | D - 1 (GE1/0/16 [V164] 1G) |
-| 643 | f4:4d:30:c7:f4:78 | [LLDP-EP] EliteGroup | 172.16.11.30 | HPE (GE1/0/41 [V168] 1G) |
-| 644 | f4:4d:30:c7:f4:81 | [LLDP-EP] EliteGroup | 172.16.2.143 | B-318/1 (GE1/0/32 [V160] 1G) |
-| 645 | f4:4d:30:c7:f4:ad | [LLDP-EP] EliteGroup | 172.16.8.37 | HPE (GE1/0/20 [V168] 1G) |
-| 646 | f4:4d:30:c7:f4:bc | [LLDP-EP] EliteGroup | 172.16.16.21 | C 424/a (GE1/0/45 [V1616] 1G) |
-| 647 | f4:4d:30:c7:f5:f6 | [LLDP-EP] EliteGroup | 172.16.24.68 | A RRT Kalidor (GE1/0/37 [V1624] 1G) |
-| 648 | f4:4d:30:c7:f6:1f | [LLDP-EP] EliteGroup | 172.16.11.28 | HPE (GE1/0/36 [V168] 100M) |
-| 649 | f4:4d:30:c7:f6:3a | [LLDP-EP] EliteGroup | 172.16.27.208 | A 3 Etaj (GE1/0/43 [V1624] 100M) |
-| 650 | f4:4d:30:c7:f6:61 | [LLDP-EP] EliteGroup | 172.16.4.20 | D - 1 (GE1/0/16 [V164] 1G) |
-| 651 | f4:4d:30:c7:f6:6d | [LLDP-EP] EliteGroup | 172.16.8.147 | HPE (GE1/0/39 [V168] 100M) |
-| 652 | f4:4d:30:c7:f6:79 | [LLDP-EP] EliteGroup | 172.16.3.18 | HPE (GE1/0/18 [V160] 100M) |
-| 653 | f4:4d:30:c7:f6:7e | [LLDP-EP] EliteGroup | 172.16.8.47 | HPE (GE1/0/42 [V168] 1G) |
-| 654 | f4:4d:30:c7:f6:a0 | [LLDP-EP] EliteGroup | 169.254.170.19 | C 424/a (GE1/0/45 [V1616] 1G) |
-| 655 | f4:4d:30:c7:f6:f7 | [LLDP-EP] EliteGroup | 172.16.16.223 | HPE (GE1/0/6 [V1616] 1G) |
-| 656 | f4:4d:30:c7:f7:25 | [LLDP-EP] EliteGroup | 172.16.18.88 | HPE (GE1/0/32 [V1616] 1G) |
-| 657 | f4:4d:30:c7:f7:9a | [LLDP-EP] EliteGroup | 172.16.0.54 | B-318/2 (GE1/0/35 [V160] 100M) |
-| 658 | f4:4d:30:c7:f7:a8 | [LLDP-EP] EliteGroup | 172.16.8.53 | HPE (GE1/0/34 [V168] 1G) |
-| 659 | f4:4d:30:c7:f7:ae | [LLDP-EP] EliteGroup | 172.16.16.158 | C 424/a (GE1/0/31 [V1616] 100M) |
-| 660 | f4:4d:30:c7:f8:75 | [ENDPOINT] EliteGroup | 172.16.3.252 | HPE (GE1/0/11 [V160]) |
-| 661 | f4:4d:30:c7:f8:81 | [LLDP-EP] EliteGroup | 172.16.4.92 | D 1-2 (GE1/0/18 [V164] 100M) |
-| 662 | f4:4d:30:c7:f8:d7 | [LLDP-EP] EliteGroup | 172.16.3.174 | HP (GE1/0/9 [V160] 100M) |
-| 663 | f4:4d:30:c7:f8:e1 | [LLDP-EP] EliteGroup | 172.16.18.163 | C 424/a (GE1/0/35 [V1616] 1G) |
-| 664 | f4:4d:30:c7:f9:7f | [LLDP-EP] EliteGroup | 172.16.16.46 | C 424/a (GE1/0/45 [V1616] 1G) |
-| 665 | f4:4d:30:c7:f9:ba | [LLDP-EP] EliteGroup | 172.16.7.115 | D - 1 (GE1/0/16 [V164] 1G) |
-| 666 | f4:4d:30:c7:fb:9f | [LLDP-EP] EliteGroup | 172.16.18.218 | C 424/a (GE1/0/45 [V1616] 1G) |
-| 667 | f4:4d:30:c7:fc:a3 | [LLDP-EP] EliteGroup | 172.16.10.121 | HPE (GE1/0/9 [V168] 1G) |
-| 668 | f4:8e:38:aa:12:5d | [ENDPOINT] | 172.16.22.194 | HPE (GE1/0/11 [V1620]) |
-| 669 | f4:b5:20:0e:2a:21 | [LLDP-EP] | 172.16.1.229 | B-423 (GE1/0/26 [V160] 1G) |
-| 670 | f4:b5:20:1e:88:f2 | [LLDP-EP] | 172.16.17.171 | HPE (GE1/0/6 [V1616] 1G) |
-| 671 | f4:b5:20:1f:51:55 | [LLDP-EP] | 172.16.16.138 | HPE (GE1/0/6 [V1616] 1G) |
-| 672 | f4:b5:20:1f:52:15 | [LLDP-EP] | 172.16.18.60 | HPE (GE1/0/6 [V1616] 1G) |
-| 673 | f8:f0:82:d8:73:c6 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/39 [V164]) |
-| 674 | f8:f0:82:d8:78:90 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/19 [V164]) |
+| 442 | 90:1b:0e:f8:44:46 | [HYPERVISOR] Fujitsu Server | 172.16.25.231 | A 3 Etaj (GE1/0/7 [V1624] 100M) |
+| 443 | 90:2e:16:9d:3d:37 | [ENDPOINT] LCFC | 172.16.0.57 | - |
+| 444 | 90:2e:16:9d:3d:3c | [ENDPOINT] LCFC | 172.16.0.239 |  (GE1/0/40 [V160]) |
+| 445 | 90:2e:16:9d:3d:5e | [ENDPOINT] LCFC | 172.16.1.217 |  (GE1/0/12 [V160]) |
+| 446 | 90:2e:16:d4:3d:60 | [LLDP-EP] LCFC | 172.16.4.147 | D - 1 (GE1/0/31 [V164] 1G) |
+| 447 | 90:5a:08:29:cd:15 | [ENDPOINT] | 172.16.35.227 | HPE (GE1/0/11 [V1632]) |
+| 448 | 90:5a:08:be:c5:4e | [LLDP-EP] | 172.16.32.234 | HPE (GE1/0/12 [V1632] 1G) |
+| 449 | 90:8d:6e:5c:2e:d9 | [LLDP-EP] | 172.16.8.17 | HPE (GE1/0/11 [V168] 100M) |
+| 450 | 90:8d:6e:5c:2f:31 | [LLDP-EP] | 172.16.13.216 | E-209 (Eth1/0/4 [V1612] 1G) |
+| 451 | 90:8d:6e:5c:2f:c2 | [LLDP-EP] | 172.16.20.16 | A-332 (GE1/0/18 [V1620] 1G) |
+| 452 | 90:8d:6e:5c:30:eb | [LLDP-EP] | 172.16.23.252 | A-332 (GE1/0/22 [V1620] 1G) |
+| 453 | 90:8d:6e:5c:31:49 | [LLDP-EP] | 172.16.18.97 | HPE (GE1/0/7 [V1616] 1G) |
+| 454 | 90:8d:6e:5c:65:3a | [LLDP-EP] | 172.16.9.250 | HPE (GE1/0/35 [V168] 100M) |
+| 455 | 90:8d:6e:5c:67:2a | [LLDP-EP] | 172.16.10.30 | HPE (GE1/0/15 [V168] 100M) |
+| 456 | 90:9a:4a:24:f1:dd | [ENDPOINT] | 172.16.12.18 | - |
+| 457 | 90:9a:4a:3c:6e:bf | [ENDPOINT] | 172.16.22.217 | A Mobil (GE1/0/18 [V1620]) |
+| 458 | 94:c6:91:3b:29:a1 | [LLDP-EP] EliteGroup | 172.16.4.107 | D - 1 (GE1/0/23 [V164] 100M) |
+| 459 | 94:c6:91:3f:f2:7b | [LLDP-EP] EliteGroup | 172.16.0.217 | A RRT Kalidor (GE1/0/20 [V1624] 1G) |
+| 460 | 94:c6:91:3f:f3:4f | [ENDPOINT] EliteGroup | 172.16.0.4 | - |
+| 461 | 94:c6:91:3f:f3:61 | [ENDPOINT] EliteGroup |  | - |
+| 462 | 94:c6:91:3f:f4:41 | [ENDPOINT] EliteGroup |  | - |
+| 463 | 94:c6:91:3f:f4:67 | [ENDPOINT] EliteGroup | 172.16.1.126 | - |
+| 464 | 94:c6:91:3f:f4:73 | [LLDP-EP] EliteGroup | 172.20.7.83 | A-332 (GE1/0/33 [T] 1G) |
+| 465 | 94:c6:91:3f:f4:c7 | [ENDPOINT] EliteGroup | 172.16.2.6 | HPE (GE1/0/20 [V160]) |
+| 466 | 94:c6:91:3f:f8:3a | [LLDP-EP] EliteGroup | 172.20.14.127 | HPE (GE1/0/39 [T] 1G) |
+| 467 | 94:c6:91:3f:f8:80 | [ENDPOINT] EliteGroup | 172.16.21.40 | A-332 (GE1/0/19 [V1620]) |
+| 468 | 94:c6:91:3f:f8:ee | [LLDP-EP] EliteGroup | 10.20.5.230 | SNR-S2995G-24FX (Eth1/0/3 [T] 1G) |
+| 469 | 94:c6:91:3f:f8:f8 | [ENDPOINT] EliteGroup | 172.16.20.120 | - |
+| 470 | 98:da:c4:b6:62:bd | [ENDPOINT] | 172.16.15.21 | SNR-S2985G-24TC (Eth1/0/15 [V1612]) |
+| 471 | 98:ee:cb:e0:88:fe | [LLDP-EP] Wistron | 172.16.35.152 | F-6(2) (Eth1/0/9 [V1632] 100M) |
+| 472 | 98:ee:cb:e0:89:0c | [LLDP-EP] Wistron | 172.16.2.65 | B-318/2 (GE1/0/45 [V160] 100M) |
+| 473 | 98:ee:cb:e0:89:4e | [LLDP-EP] Wistron | 172.16.9.236 | HPE (GE1/0/21 [V168] 1G) |
+| 474 | 98:ee:cb:e0:89:70 | [LLDP-EP] Wistron | 172.16.4.99 | D 1-2 (GE1/0/48 [V164] 100M) |
+| 475 | 98:ee:cb:e0:89:74 | [LLDP-EP] Wistron | 172.16.5.209 | D - 1 (GE1/0/33 [V164] 100M) |
+| 476 | 98:ee:cb:e0:89:78 | [LLDP-EP] Wistron | 172.16.10.255 | HPE (GE1/0/10 [V168] 100M) |
+| 477 | 98:ee:cb:e0:89:80 | [ENDPOINT] Wistron | 172.16.12.156 | - |
+| 478 | 98:ee:cb:e0:89:81 | [LLDP-EP] Wistron | 172.16.4.155 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 479 | 98:ee:cb:e0:89:84 | [LLDP-EP] Wistron | 172.16.4.41 | D 1-2 (GE1/0/17 [V164] 1G) |
+| 480 | 98:ee:cb:e0:89:89 | [LLDP-EP] Wistron | 172.16.10.3 | HPE (GE1/0/23 [V168] 100M) |
+| 481 | 98:ee:cb:e0:89:c2 | [LLDP-EP] Wistron | 172.16.2.18 | B-318/2 (GE1/0/28 [V160] 100M) |
+| 482 | 98:ee:cb:e0:89:c4 | [LLDP-EP] Wistron | 172.16.17.227 | HPE (GE1/0/37 [V1616] 1G) |
+| 483 | 98:ee:cb:e0:89:c8 | [LLDP-EP] Wistron | 172.16.17.23 | C 424/a (GE1/0/9 [V1616] 1G) |
+| 484 | 98:ee:cb:e0:89:d6 | [ENDPOINT] Wistron | 172.16.35.244 | F-8 (Eth1/0/5 [V1632]) |
+| 485 | 98:ee:cb:e0:89:ea | [LLDP-EP] Wistron | 172.16.26.89 | A RRT Kalidor (GE1/0/37 [V1624] 1G) |
+| 486 | 98:ee:cb:e0:89:f1 | [LLDP-EP] Wistron | 172.16.18.18 | HPE (GE1/0/17 [V1616] 100M) |
+| 487 | 98:ee:cb:e0:89:f2 | [LLDP-EP] Wistron | 172.16.35.50 | F-6(2) (Eth1/0/5 [V1632] 100M) |
+| 488 | 98:ee:cb:e0:89:fb | [LLDP-EP] Wistron | 172.16.4.175 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 489 | 98:ee:cb:e0:8a:73 | [LLDP-EP] Wistron | 172.16.32.22 | F-5 (Eth1/0/8 [V1632] 100M) |
+| 490 | 98:ee:cb:e0:8a:74 | [LLDP-EP] Wistron | 172.16.34.26 | F-1 (Eth1/0/7 [V1632] 1G) |
+| 491 | 98:ee:cb:e0:8a:97 | [LLDP-EP] Wistron | 172.16.4.140 | D 1-2 (GE1/0/40 [V164] 100M) |
+| 492 | 98:ee:cb:e0:8a:aa | [LLDP-EP] Wistron | 172.16.17.173 | HPE (GE1/0/37 [V1616] 1G) |
+| 493 | 98:ee:cb:e0:8a:e7 | [ENDPOINT] Wistron | 172.16.17.188 | HPE (GE1/0/45 [V1616]) |
+| 494 | 98:ee:cb:e0:8b:15 | [LLDP-EP] Wistron | 172.16.9.254 | HPE (GE1/0/19 [V168] 100M) |
+| 495 | 98:ee:cb:e0:8b:2d | [LLDP-EP] Wistron | 172.16.27.154 | A RRT Kalidor (GE1/0/33 [V1624] 100M) |
+| 496 | 98:ee:cb:e0:8b:4e | [LLDP-EP] Wistron | 172.16.4.149 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 497 | 98:ee:cb:e0:8b:4f | [ENDPOINT] Wistron | 172.16.16.57 | C 424/a (GE1/0/15 [V1616]) |
+| 498 | 98:ee:cb:e0:8b:5e | [LLDP-EP] Wistron | 172.16.34.39 | F-6(1) (Eth1/0/13 [V1632] 100M) |
+| 499 | 98:ee:cb:e0:8b:67 | [LLDP-EP] Wistron | 172.16.4.150 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 500 | 98:ee:cb:e0:8b:a1 | [ENDPOINT] Wistron | 172.16.19.203 | C 424/a (GE1/0/5 [V1616]) |
+| 501 | 98:ee:cb:e0:8b:ab | [LLDP-EP] Wistron | 172.16.34.47 | F-5 (Eth1/0/3 [V1632] 100M) |
+| 502 | 98:ee:cb:e0:8b:d7 | [LLDP-EP] Wistron | 172.16.4.141 | D 1-2 (GE1/0/40 [V164] 100M) |
+| 503 | 98:ee:cb:e0:8b:d9 | [LLDP-EP] Wistron | 172.16.8.40 | HPE (GE1/0/23 [V168] 100M) |
+| 504 | 98:ee:cb:e0:8c:07 | [LLDP-EP] Wistron | 172.16.27.156 | A RRT Kalidor (GE1/0/37 [V1624] 1G) |
+| 505 | 98:ee:cb:e0:8c:0d | [LLDP-EP] Wistron | 172.16.19.128 | HPE (GE1/0/31 [V1616] 1G) |
+| 506 | 98:ee:cb:e0:98:1e | [LLDP-EP] Wistron | 172.16.12.48 | E109-2 (Eth1/0/16 [V1612] 100M) |
+| 507 | 98:ee:cb:fd:e8:e8 | [ENDPOINT] Wistron | 172.16.0.192 | B-423 (GE1/0/42 [V160]) |
+| 508 | 9c:53:22:51:bb:cf | [ENDPOINT] | 172.16.0.204 | HP (GE1/0/6 [V160]) |
+| 509 | a0:36:bc:26:6e:e9 | [LLDP-EP] | 172.16.15.29 | HPE (GE1/0/16 [V1612] 100M) |
+| 510 | a4:cf:99:5d:8c:79 | [ENDPOINT] | 172.16.2.192 | - |
+| 511 | a8:29:48:59:b3:c3 | [ENDPOINT] |  | - |
+| 512 | a8:29:48:59:b4:17 | [ENDPOINT] |  | A_padval_SNR (Eth1/0/13 [V1624]) |
+| 513 | a8:60:b6:2e:b5:64 | [LLDP-EP] | 172.16.32.21 | F-5 (Eth1/0/14 [V1632] 1G) |
+| 514 | a8:6e:84:7c:45:88 | [ENDPOINT] | 172.15.117.43 | TTJ-3&4 (GE1/0/3 [V1500]) |
+| 515 | a8:6e:84:7c:45:b8 | [ENDPOINT] | 172.15.116.188 | TTJ-3&4 (GE1/0/4 [V1500]) |
+| 516 | a8:6e:84:b9:2b:39 | [ENDPOINT] | 172.16.32.143 | F-3(2) (Eth1/0/13 [V1632]) |
+| 517 | a8:6e:84:c7:d1:3d | [ENDPOINT] | 172.16.21.123 | A-332 (GE1/0/7 [V1620]) |
+| 518 | a8:a1:59:a0:c9:a3 | [ENDPOINT] | 172.16.27.73 | - |
+| 519 | aa:a3:95:63:22:35 | [ENDPOINT] |  | - |
+| 520 | aa:cc:de:aa:11:11 | [LLDP-EP] | 172.16.18.58 | C 424/a (GE1/0/37 [V1616] 100M) |
+| 521 | ac:15:a2:b5:2b:8d | [ENDPOINT] | 172.16.26.244 | A RRT Kalidor (GE1/0/10 [V1624]) |
+| 522 | ac:84:c6:65:e8:fb | [ENDPOINT] | 172.16.34.186 | F-1 (Eth1/0/2 [V1632]) |
+| 523 | ac:f4:66:2a:b1:2a | [LLDP-EP] | 172.16.5.28 | D - 1 (GE1/0/32 [V164] 100M) |
+| 524 | ac:f4:66:bc:00:52 | [LLDP-EP] |  | A_padval_SNR (Eth1/0/25 [V1500] 100M) |
+| 525 | ac:f4:66:bc:03:28 | [LLDP-EP] | 172.16.33.222 | F-3(2) (Eth1/0/6 [V1632] 100M) |
+| 526 | b0:7b:25:10:32:3c | [LLDP-EP] | 172.16.32.26 | F-6(2) (Eth1/0/3 [V1632] 100M) |
+| 527 | b0:a7:b9:ee:8d:6e | [ENDPOINT] | 172.16.14.170 | - |
+| 528 | b0:be:76:3c:fb:e7 | [ENDPOINT] | 172.20.12.147 | HPE (GE1/0/37 [T]) |
+| 529 | b4:7a:f1:4a:c1:98 | [HYPERVISOR] HPE ProLiant Server | 172.20.14.103 | HPE (GE1/0/29 1G) |
+| 530 | b4:a9:fc:fc:7e:d3 | [LLDP-EP] Quanta |  | SNR-S2985G-24TC (Eth1/0/6 [V17]) |
+| 531 | b4:b0:24:3c:20:1f | [ENDPOINT] | 172.17.3.45 | E205-24 (Eth1/0/21 [V1612]) |
+| 532 | b8:97:5a:5b:00:90 | [LLDP-EP] Biostar | 172.16.27.138 | A 3 Etaj (GE1/0/7 [V1624] 100M) |
+| 533 | b8:97:5a:ff:2f:92 | [LLDP-EP] Biostar | 172.16.4.124 | D 1-2 (GE1/0/46 [V164] 100M) |
+| 534 | b8:ec:a3:96:06:22 | [ENDPOINT] |  | F-4(2)_28P (Eth1/0/21 [V1632]) |
+| 535 | bc:5f:f4:e8:c2:cd | [ENDPOINT] | 172.16.19.183 | HPE (GE1/0/29 [V1616]) |
+| 536 | bc:e9:2f:bb:d4:44 | [LLDP-EP] | 172.20.18.73 | B-423 (GE1/0/47 [T] 1G) |
+| 537 | bc:ec:a0:32:19:6a | [LLDP-EP] Compal | 172.16.22.203 | A Mobil (GE1/0/32 [V1620] 100M) |
+| 538 | bc:ec:a0:32:34:e0 | [LLDP-EP] Compal | 172.16.23.91 | A Mobil (GE1/0/39 [V1620] 1G) |
+| 539 | bc:ec:a0:36:08:bb | [LLDP-EP] Compal | 172.16.1.61 | HPE (GE1/0/40 [V168] 100M) |
+| 540 | bc:ec:a0:36:09:1f | [LLDP-EP] Compal | 169.254.87.175 | D 1-2 (GE1/0/17 [V164] 1G) |
+| 541 | bc:ec:a0:36:09:8f | [LLDP-EP] Compal | 172.16.6.216 | D - 1 (GE1/0/35 [V164] 100M) |
+| 542 | bc:ec:a0:36:09:b9 | [LLDP-EP] Compal | 172.16.4.202 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 543 | bc:ec:a0:36:09:ce | [LLDP-EP] Compal | 172.16.4.201 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 544 | bc:ec:a0:36:0a:10 | [LLDP-EP] Compal | 172.16.4.193 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 545 | bc:ec:a0:36:0a:73 | [LLDP-EP] Compal | 172.16.4.197 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 546 | bc:ec:a0:36:0a:7d | [LLDP-EP] Compal | 172.16.11.185 | HPE (GE1/0/24 [V168] 1G) |
+| 547 | bc:ec:a0:36:0b:6c | [LLDP-EP] Compal | 172.16.4.198 | D 1-2 (GE1/0/42 [V164] 1G) |
+| 548 | bc:fc:e7:67:02:64 | [LLDP-EP] | 172.16.16.11 | MEDIA MARKAZ (GE1/0/24 [V1616] 1G) |
+| 549 | bc:fc:e7:ec:15:d6 | [ENDPOINT] | 172.16.22.26 | A Mobil (GE1/0/24 [V1620]) |
+| 550 | c0:00:4f:44:42:ce | [LLDP-EP] | 172.16.2.221 | B-318/2 (GE1/0/26 [V160] 100M) |
+| 551 | c0:18:03:5b:64:3d | [ENDPOINT] | 172.16.0.42 |  (GE1/0/16 [V160]) |
+| 552 | c0:18:03:5b:65:42 | [ENDPOINT] | 172.16.0.47 | - |
+| 553 | c0:18:03:88:71:f5 | [ENDPOINT] | 172.16.2.90 |  (GE1/0/36 [V160]) |
+| 554 | c0:18:03:88:72:16 | [LLDP-EP] | 172.16.0.43 |  (Eth1/0/6 [V160] 100M) |
+| 555 | c0:4a:00:e1:d9:49 | [ENDPOINT] | 172.16.0.163 | HP (GE1/0/10 [V160]) |
+| 556 | c0:74:ad:90:01:7f | [ENDPOINT] | 172.16.0.30 |  (GE1/0/34 [V160]) |
+| 557 | c0:74:ad:90:01:8e | [ENDPOINT] | 172.16.1.105 | - |
+| 558 | c0:bf:be:d9:9b:d7 | [ENDPOINT] | 172.16.14.151 | - |
+| 559 | c0:c9:e3:32:95:1d | [ENDPOINT] | 172.16.32.17 | F-8 (Eth1/0/13 [V1632]) |
+| 560 | c4:34:6b:b8:41:94 | [ENDPOINT] | 10.10.10.68 | - |
+| 561 | c4:6e:1f:5d:ea:7c | [ENDPOINT] |  | F-9 (GE1/0/24 [V1632]) |
+| 562 | c8:41:8a:20:51:72 | [LLDP-EP] | 172.16.25.131 | A_padval_SNR (Eth1/0/4 [V1624] 1G) |
+| 563 | c8:41:8a:22:08:b3 | [LLDP-EP] | 172.16.32.154 | A_padval_SNR (Eth1/0/1 [V1632] 1G) |
+| 564 | c8:41:8a:22:0e:38 | [LLDP-EP] | 172.20.8.206 | HPE (GE1/0/39 [T] 1G) |
+| 565 | c8:54:4b:fe:74:d4 | [ENDPOINT] |  | F-5 (Eth1/0/24 [V1632]) |
+| 566 | c8:7e:a1:ba:ec:91 | [ENDPOINT] | 172.16.0.223 |  (GE1/0/27 [V160]) |
+| 567 | c8:7e:a1:ba:ec:92 | [ENDPOINT] | 172.16.1.143 |  (GE1/0/25 [V160]) |
+| 568 | c8:7e:a1:ba:ec:ab | [ENDPOINT] | 172.16.2.168 |  (GE1/0/19 [V160]) |
+| 569 | c8:7e:a1:ba:ed:0d | [ENDPOINT] | 172.16.2.56 |  (GE1/0/31 [V160]) |
+| 570 | c8:d3:ff:bb:28:90 | [ENDPOINT] | 172.16.1.135 | - |
+| 571 | c8:d9:d2:7f:8b:3b | [LLDP-EP] | 172.16.24.51 | A 3 Etaj (GE1/0/7 [V1624] 100M) |
+| 572 | cc:2d:21:7f:64:39 | [ENDPOINT] | 172.16.20.175 | A Mobil (GE1/0/19 [V1620]) |
+| 573 | cc:2d:21:c1:46:29 | [ENDPOINT] | 172.16.18.21 | MEDIA MARKAZ (GE1/0/47 [V1616]) |
+| 574 | cc:3e:5f:18:83:cf | [LLDP-EP] |  | HPE (GE1/0/47 [V1624] 1G) |
+| 575 | cc:3e:5f:d2:35:ac | [LLDP-EP] |  | D 1-2 (GE1/0/25 [V164] 100M) |
+| 576 | d0:ad:08:f0:8a:88 | [LLDP-EP] | 172.16.6.70 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 577 | d4:61:37:03:81:dd | [LLDP-EP] | 172.16.4.255 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 578 | d4:61:37:03:81:e0 | [LLDP-EP] | 172.16.4.212 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 579 | d4:61:37:03:82:54 | [LLDP-EP] | 172.16.6.122 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 580 | d4:61:37:03:82:6c | [LLDP-EP] | 172.16.6.78 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 581 | d4:61:37:03:82:6d | [LLDP-EP] | 172.16.5.193 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 582 | d8:43:ae:b6:79:46 | [LLDP-EP] | 172.16.35.114 | F-9 (GE1/0/5 [V1632] 1G) |
+| 583 | d8:47:32:70:a9:31 | [ENDPOINT] | 172.16.23.174 | A-332 (GE1/0/13 [V1620]) |
+| 584 | d8:47:32:cb:92:af | [ENDPOINT] | 172.16.27.152 | A 3 Etaj (GE1/0/12 [V1624]) |
+| 585 | d8:47:32:e9:b4:63 | [ENDPOINT] | 172.16.33.94 | F-5 (Eth1/0/11 [V1632]) |
+| 586 | d8:47:32:e9:c0:d9 | [ENDPOINT] | 172.16.0.21 | B-423 (GE1/0/11 [V160]) |
+| 587 | d8:5e:d3:78:9c:78 | [LLDP-EP] | 172.15.27.150 | MEDIA MARKAZ (GE1/0/18 [V1500] 1G) |
+| 588 | d8:bb:c1:d4:98:b6 | [ENDPOINT] | 172.16.33.75 | F-2 (GE1/0/11 [V1632]) |
+| 589 | d8:bb:c1:df:5b:04 | [LLDP-EP] | 172.16.16.12 | MEDIA MARKAZ (GE1/0/22 [V1616] 1G) |
+| 590 | d8:e2:df:f8:8a:91 | [LLDP-EP] | 172.16.0.34 | B-318/1 (GE1/0/39 [V160] 100M) |
+| 591 | e0:07:1b:f2:e6:e8 | [ENDPOINT] | 10.10.10.37 | HPE (GE1/0/6 [V10]) |
+| 592 | e0:73:e7:c3:cd:44 | [LLDP-EP] | 172.16.6.75 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 593 | e0:73:e7:c3:ce:13 | [LLDP-EP] | 172.16.5.10 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 594 | e0:73:e7:c3:ce:8c | [LLDP-EP] | 172.16.6.119 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 595 | e0:d5:5e:6e:83:0e | [LLDP-EP] Gigabyte | 172.16.11.40 | HPE (GE1/0/12 [V168] 1G) |
+| 596 | e0:d5:5e:f6:f1:bd | [LLDP-EP] Gigabyte | 172.16.4.161 | D - 1 (GE1/0/16 [V164] 1G) |
+| 597 | e0:d9:e3:d4:b4:c0 | [LLDP-EP] Eltex |  | A-332 (GE1/0/47 [V1620] 1G) |
+| 598 | e0:d9:e3:f1:05:40 | [LLDP-EP] Eltex | 172.16.1.115 | HPE (GE1/0/8 [V160] 100M) |
+| 599 | e4:54:e8:d0:2a:55 | [LLDP-EP] | 172.16.11.27 | HPE (GE1/0/25 [V168] 1G) |
+| 600 | e4:5a:d4:44:1d:c0 | [ENDPOINT] | 172.16.14.252 | - |
+| 601 | e4:5a:d4:6b:3a:00 | [ENDPOINT] | 172.17.3.47 | - |
+| 602 | e4:5a:d4:6b:3a:1b | [ENDPOINT] |  | - |
+| 603 | e4:a8:df:87:0d:94 | [ENDPOINT] Compal | 172.16.1.138 |  (GE1/0/9 [V160]) |
+| 604 | e4:a8:df:87:18:27 | [ENDPOINT] Compal | 172.16.2.130 |  (GE1/0/3 [V160]) |
+| 605 | e4:a8:df:89:1d:4f | [LLDP-EP] Compal | 172.16.34.242 | F-2 (GE1/0/47 [V1632] 100M) |
+| 606 | e4:a8:df:89:1e:12 | [ENDPOINT] Compal | 172.16.34.73 | F-2 (GE1/0/5 [V1632]) |
+| 607 | e4:a8:df:89:b4:33 | [LLDP-EP] Compal | 172.16.8.61 | HPE (GE1/0/30 [V168] 1G) |
+| 608 | e4:a8:df:89:b5:81 | [ENDPOINT] Compal | 172.16.0.202 |  (GE1/0/13 [V160]) |
+| 609 | e4:a8:df:89:b7:72 | [LLDP-EP] Compal | 172.16.8.24 | HPE (GE1/0/43 [V168] 1G) |
+| 610 | e4:a8:df:9d:ed:04 | [LLDP-EP] Compal |  | HPE (GE1/0/43 [V168] 100M) |
+| 611 | e4:a8:df:9f:44:26 | [LLDP-EP] Compal |  | A 3 Etaj (GE1/0/8 [V1624] 10M) |
+| 612 | e4:a8:df:a2:4e:e6 | [LLDP-EP] Compal | 172.16.9.172 | HPE (GE1/0/32 [V168] 1G) |
+| 613 | e4:a8:df:a2:4f:04 | [LLDP-EP] Compal | 172.16.11.60 | HPE (GE1/0/46 [V168] 100M) |
+| 614 | e4:a8:df:a2:4f:20 | [LLDP-EP] Compal | 172.16.10.92 | HPE (GE1/0/32 [V168] 1G) |
+| 615 | e4:a8:df:a2:4f:67 | [LLDP-EP] Compal | 172.16.9.76 | HPE (GE1/0/42 [V168] 100M) |
+| 616 | e8:48:b8:f7:43:f1 | [ENDPOINT] | 172.16.2.219 | B-423 (GE1/0/19 [V160]) |
+| 617 | e8:65:d4:9e:a7:d8 | [ENDPOINT] | 172.16.33.160 | F-4_48P (Eth1/0/16 [V1632]) |
+| 618 | e8:94:f6:ca:86:dd | [ENDPOINT] | 172.20.19.132 | SNR-S2985G-24TC (Eth1/0/1) |
+| 619 | e8:c6:e6:74:87:eb | [ENDPOINT] | 172.16.2.129 |  (GE1/0/17 [V160]) |
+| 620 | e8:de:27:db:9b:f3 | [ENDPOINT] | 172.16.0.88 | HPE (GE1/0/24 [V160]) |
+| 621 | ea:38:83:16:b0:cc | [LLDP-EP] |  | HPE (GE1/0/47 [V1500] 1G) |
+| 622 | ec:74:d7:64:cb:9f | [ENDPOINT] | 172.16.2.189 | - |
+| 623 | ec:74:d7:64:cb:a3 | [LLDP-EP] | 172.16.1.28 |  (Eth1/0/20 [V160] 100M) |
+| 624 | ec:74:d7:64:cb:a5 | [LLDP-EP] | 172.16.1.25 |  (Eth1/0/9 [V160] 100M) |
+| 625 | ec:74:d7:64:cb:a6 | [LLDP-EP] | 172.16.1.18 |  (Eth1/0/11 [V160] 100M) |
+| 626 | ec:74:d7:64:cb:a7 | [LLDP-EP] | 172.16.3.4 |  (Eth1/0/14 [V160] 100M) |
+| 627 | ec:74:d7:64:cb:a8 | [LLDP-EP] | 172.16.1.191 |  (Eth1/0/5 [V160] 100M) |
+| 628 | ec:74:d7:64:cb:ab | [LLDP-EP] | 172.16.3.208 |  (Eth1/0/13 [V160] 100M) |
+| 629 | ec:74:d7:64:cb:ac | [LLDP-EP] | 172.16.1.15 |  (Eth1/0/15 [V160] 100M) |
+| 630 | ec:74:d7:64:cb:ad | [LLDP-EP] | 172.16.1.45 |  (Eth1/0/1 [V160] 100M) |
+| 631 | ec:74:d7:64:cb:ae | [LLDP-EP] | 172.16.1.19 |  (Eth1/0/3 [V160] 100M) |
+| 632 | ec:74:d7:64:cb:b1 | [LLDP-EP] | 172.16.0.37 |  (Eth1/0/4 [V160] 100M) |
+| 633 | ec:74:d7:64:cb:b2 | [LLDP-EP] | 172.16.0.106 |  (Eth1/0/7 [V160] 100M) |
+| 634 | ec:74:d7:64:cb:b8 | [LLDP-EP] | 172.16.0.206 |  (Eth1/0/12 [V160] 100M) |
+| 635 | ec:74:d7:64:ce:58 | [LLDP-EP] | 172.16.1.0 |  (Eth1/0/6 [V160] 100M) |
+| 636 | ec:74:d7:64:ce:5b | [LLDP-EP] | 172.16.3.237 |  (Eth1/0/8 [V160] 100M) |
+| 637 | f0:2f:74:1e:ac:2e | [LLDP-EP] ASUS | 172.16.18.110 | HPE (GE1/0/14 [V1616] 1G) |
+| 638 | f0:2f:74:86:c8:f9 | [LLDP-EP] ASUS | 172.16.10.34 | HPE (GE1/0/5 [V168] 1G) |
+| 639 | f0:d4:e2:e6:ee:99 | [ENDPOINT] | 172.16.32.117 | HPE (GE1/0/31 [V1632]) |
+| 640 | f4:4d:30:c7:f2:58 | [LLDP-EP] EliteGroup | 172.16.0.213 | B-318/3 (GE1/0/28 [V160] 1G) |
+| 641 | f4:4d:30:c7:f2:6e | [LLDP-EP] EliteGroup | 172.16.2.239 | HPE (GE1/0/12 [V160] 1G) |
+| 642 | f4:4d:30:c7:f4:26 | [LLDP-EP] EliteGroup | 172.16.34.236 | F-6(1) (Eth1/0/13 [V1632] 100M) |
+| 643 | f4:4d:30:c7:f4:76 | [LLDP-EP] EliteGroup | 172.16.4.165 | D - 1 (GE1/0/16 [V164] 1G) |
+| 644 | f4:4d:30:c7:f4:78 | [LLDP-EP] EliteGroup | 172.16.11.30 | HPE (GE1/0/41 [V168] 1G) |
+| 645 | f4:4d:30:c7:f4:81 | [LLDP-EP] EliteGroup | 172.16.2.143 | B-318/1 (GE1/0/32 [V160] 1G) |
+| 646 | f4:4d:30:c7:f4:ad | [LLDP-EP] EliteGroup | 172.16.8.37 | HPE (GE1/0/20 [V168] 1G) |
+| 647 | f4:4d:30:c7:f4:bc | [LLDP-EP] EliteGroup | 172.16.16.21 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 648 | f4:4d:30:c7:f5:f6 | [LLDP-EP] EliteGroup | 172.16.24.68 | A RRT Kalidor (GE1/0/37 [V1624] 1G) |
+| 649 | f4:4d:30:c7:f6:1f | [LLDP-EP] EliteGroup | 172.16.11.28 | HPE (GE1/0/36 [V168] 100M) |
+| 650 | f4:4d:30:c7:f6:3a | [LLDP-EP] EliteGroup | 172.16.27.208 | A 3 Etaj (GE1/0/43 [V1624] 100M) |
+| 651 | f4:4d:30:c7:f6:61 | [LLDP-EP] EliteGroup | 172.16.4.20 | D - 1 (GE1/0/16 [V164] 1G) |
+| 652 | f4:4d:30:c7:f6:6d | [LLDP-EP] EliteGroup | 172.16.8.147 | HPE (GE1/0/39 [V168] 100M) |
+| 653 | f4:4d:30:c7:f6:79 | [LLDP-EP] EliteGroup | 172.16.3.18 | HPE (GE1/0/18 [V160] 100M) |
+| 654 | f4:4d:30:c7:f6:7e | [LLDP-EP] EliteGroup | 172.16.8.47 | HPE (GE1/0/42 [V168] 1G) |
+| 655 | f4:4d:30:c7:f6:a0 | [LLDP-EP] EliteGroup | 169.254.170.19 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 656 | f4:4d:30:c7:f6:f7 | [LLDP-EP] EliteGroup | 172.16.16.223 | HPE (GE1/0/6 [V1616] 1G) |
+| 657 | f4:4d:30:c7:f7:25 | [LLDP-EP] EliteGroup | 172.16.18.88 | HPE (GE1/0/32 [V1616] 1G) |
+| 658 | f4:4d:30:c7:f7:9a | [LLDP-EP] EliteGroup | 172.16.0.54 | B-318/2 (GE1/0/35 [V160] 100M) |
+| 659 | f4:4d:30:c7:f7:a8 | [LLDP-EP] EliteGroup | 172.16.8.53 | HPE (GE1/0/34 [V168] 1G) |
+| 660 | f4:4d:30:c7:f7:ae | [LLDP-EP] EliteGroup | 172.16.16.158 | C 424/a (GE1/0/31 [V1616] 100M) |
+| 661 | f4:4d:30:c7:f8:75 | [ENDPOINT] EliteGroup | 172.16.3.252 | HPE (GE1/0/11 [V160]) |
+| 662 | f4:4d:30:c7:f8:81 | [LLDP-EP] EliteGroup | 172.16.4.92 | D 1-2 (GE1/0/18 [V164] 100M) |
+| 663 | f4:4d:30:c7:f8:d7 | [LLDP-EP] EliteGroup | 172.16.3.174 | HP (GE1/0/9 [V160] 100M) |
+| 664 | f4:4d:30:c7:f8:e1 | [LLDP-EP] EliteGroup | 172.16.18.163 | C 424/a (GE1/0/35 [V1616] 1G) |
+| 665 | f4:4d:30:c7:f9:7f | [LLDP-EP] EliteGroup | 172.16.16.46 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 666 | f4:4d:30:c7:f9:ba | [LLDP-EP] EliteGroup | 172.16.7.115 | D - 1 (GE1/0/16 [V164] 1G) |
+| 667 | f4:4d:30:c7:fb:9f | [LLDP-EP] EliteGroup | 172.16.18.218 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 668 | f4:4d:30:c7:fc:a3 | [LLDP-EP] EliteGroup | 172.16.10.121 | HPE (GE1/0/9 [V168] 1G) |
+| 669 | f4:8e:38:aa:12:5d | [ENDPOINT] | 172.16.22.194 | HPE (GE1/0/11 [V1620]) |
+| 670 | f4:b5:20:0e:2a:21 | [LLDP-EP] | 172.16.1.229 | B-423 (GE1/0/26 [V160] 1G) |
+| 671 | f4:b5:20:1e:88:f2 | [LLDP-EP] | 172.16.17.171 | HPE (GE1/0/6 [V1616] 1G) |
+| 672 | f4:b5:20:1f:51:55 | [LLDP-EP] | 172.16.16.138 | HPE (GE1/0/6 [V1616] 1G) |
+| 673 | f4:b5:20:1f:52:15 | [LLDP-EP] | 172.16.18.60 | HPE (GE1/0/6 [V1616] 1G) |
+| 674 | f8:f0:82:d8:73:c6 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/39 [V164]) |
+| 675 | f8:f0:82:d8:78:90 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/19 [V164]) |
 
 ### 4.3 Hypervisor serverlar (4 ta)
 
@@ -1224,12 +1225,6 @@ graph TD
 | 37 | bc:9b:5e:47:62:24 | [ENDPOINT] Hikvision | 10.20.10.34 | - |
 | 38 | bc:9b:5e:47:63:39 | [ENDPOINT] Hikvision | 10.20.10.37 | - |
 | 39 | bc:9b:5e:47:66:9d | [ENDPOINT] Hikvision | 10.20.10.32 | - |
-
-### 4.9 BMC/iLO (1 ta)
-
-| # | ID / MAC | Ma'lumot | IP | Connected to |
-|---|---|---|---|---|
-| 1 | 90:1b:0e:f8:44:46 | [BMC] Fujitsu iRMC | 172.16.25.231 | A 3 Etaj (GE1/0/7 [V1624] 100M) |
 
 ### 4.12 Wi-Fi / Random MAC (2 ta)
 

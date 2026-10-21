@@ -235,3 +235,94 @@ func TestServerNICDecisions(t *testing.T) {
 		}
 	}
 }
+
+// TestIsBMC: a BMC is recognised only by a keyword in its LLDP or DNS name;
+// the OUI only names the maker of a generic "BMC"/"IPMI" (Q5; F32, F33).
+func TestIsBMC(t *testing.T) {
+	for _, c := range []struct{ mac, name, want string }{
+		{"", "", ""},
+		{"00:18:82:11:22:33", "", ""}, // Huawei NICs share the iBMC OUI
+		{"0c:c4:7a:11:22:33", "", ""}, // Supermicro onboard NICs
+		{"f8:db:88:11:22:33", "", ""},
+		{"70:85:c2:11:22:33", "", ""}, // ASRock desktop boards
+		{"00:18:82:11:22:33", "core-sw-huawei", ""},
+		{"x", "ILOCZJ33411C3", "HPE iLO"}, // iLO default name: ILO + serial
+		{"x", "ILOCZ240304GY.tuit.local", "HPE iLO"},
+		{"x", "PC-ILONA", ""},
+		{"x", "kamilo.tuit.uz", ""},
+		{"x", "ilovepizza12", ""},
+		{"x", "pc-immanuel", ""},
+		{"x", "firmcorp-pc", ""},
+		{"x", "mgmt-bmc", "BMC"},
+		{"x", "bmc-node1", "BMC"},
+		{"x", "node1_bmc", "BMC"},
+		{"x", "rack2.bmc01", "BMC"},
+		{"x", "esx01-ilo.tuit.local", "HPE iLO"},
+		{"x", "ilo5-esx01", "HPE iLO"},
+		{"x", "srv01-idrac", "Dell iDRAC"},
+		{"x", "idrac-ABC1234", "Dell iDRAC"},
+		{"x", "R720-DRAC", "Dell iDRAC"},
+		{"x", "XCC-7X06-J30A1234", "Lenovo XCC"},
+		{"x", "srv-xclarity", "Lenovo XCC"},
+		{"x", "IMM-40f2e9abcdef", "Lenovo IMM"},
+		{"x", "server-imm", "Lenovo IMM"},
+		{"x", "iRMCF844A6", "Fujitsu iRMC"},
+		{"x", "irmc-rx300", "Fujitsu iRMC"},
+		{"x", "cimc-ucs01", "Cisco CIMC"},
+		{"x", "ASMB9-iKVM", "ASUS ASMB"},
+		{"x", "ibmc-2288h", "Huawei iBMC"},
+		{"x", "ipmi-gw", "IPMI"},
+		{"x", "management-controller", "BMC"},
+		{"x", "DESKTOP-V380CHD", ""},
+		{"x", "B-318/1", ""},
+		{"0c:c4:7a:09:00:16", "node16-ipmi", "Supermicro IPMI"},
+		{"f8:db:88:11:22:33", "rack1-bmc", "Dell iDRAC"},
+		{"d0:50:99:11:22:33", "rack1-bmc", "ASRock IPMI"}, // was "Lenovo XCC"
+		{"3c:a8:2a:11:22:33", "srv01-idrac", "Dell iDRAC"},
+	} {
+		ok, kind := isBMC(c.mac, c.name)
+		if ok != (c.want != "") || kind != c.want {
+			t.Errorf("isBMC(%q, %q) = %v, %q; want %q", c.mac, c.name, ok, kind, c.want)
+		}
+	}
+}
+
+// TestBMCKeywordsReachable: no keyword is shadowed by an earlier one.
+func TestBMCKeywordsReachable(t *testing.T) {
+	for _, kw := range macBMCKeywords {
+		if kw.match == "serial" {
+			continue
+		}
+		if got := bmcTypeByName(kw.keyword); got != kw.kind {
+			t.Errorf("bmcTypeByName(%q) = %q, want %q", kw.keyword, got, kw.kind)
+		}
+	}
+}
+
+// ouiTestBMCMakers lists, for every BMC type, the fragments of the IEEE
+// organization name of an OUI that may carry it.
+var ouiTestBMCMakers = map[string][]string{
+	"Dell iDRAC": {"dell"}, "HPE iLO": {"hewlett"}, "IBM IMM": {"ibm"}, "Oracle ILOM": {"oracle"},
+	"Supermicro IPMI": {"super micro"}, "Cisco CIMC": {"cisco"}, "Fujitsu iRMC": {"fujitsu"},
+	"ASUS ASMB": {"asustek"}, "ASRock IPMI": {"asrock"}, "Avocent BMC": {"avocent"},
+	"Huawei iBMC": {"huawei"},
+}
+
+// TestBMCOUIMakers: every BMC type an OUI names is the maker IEEE registers
+// the OUI to (F33).
+func TestBMCOUIMakers(t *testing.T) {
+	n := 0
+	for prefix, org := range ouiTestIEEENames(t) {
+		kind := bmcTypeByOUI(prefix + ":00:00:01")
+		if kind == "" {
+			continue
+		}
+		n++
+		if !ouiTestContainsAny(strings.ToLower(org), ouiTestBMCMakers[kind]) {
+			t.Errorf("%s: BMC %q, but IEEE registers it to %q", prefix, kind, org)
+		}
+	}
+	if n != 33 {
+		t.Errorf("%d BMC OUIs, want 33", n)
+	}
+}

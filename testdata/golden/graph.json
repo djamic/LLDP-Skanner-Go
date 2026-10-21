@@ -3,7 +3,7 @@
     "nodes": 928,
     "links": 927,
     "edges": 927,
-    "groups": {"access_point": 82, "bmc": 1, "camera": 39, "endpoint": 674, "hub": 33, "hypervisor": 4, "switch": 73, "vm": 20, "wifi_random": 2},
+    "groups": {"access_point": 82, "camera": 39, "endpoint": 675, "hub": 33, "hypervisor": 4, "switch": 73, "vm": 20, "wifi_random": 2},
     "unreachable_nodes": 1
   },
   "nodes": [
@@ -555,7 +555,7 @@
     {"id": "88:88:88:88:87:88", "group": "endpoint", "type": "endpoint", "label": "[LLDP-EP]\n172.16.24.207\n88:88:88:88:87:88", "sysName": "[LLDP-EP]\n172.16.24.207"},
     {"id": "8c:90:2d:4f:5c:93", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT]\n8c:90:2d:4f:5c:93", "sysName": "[ENDPOINT]"},
     {"id": "8c:ec:4b:dc:28:d9", "group": "endpoint", "type": "endpoint", "label": "[LLDP-EP] Dell\n172.16.1.242\n8c:ec:4b:dc:28:d9", "sysName": "[LLDP-EP] Dell\n172.16.1.242"},
-    {"id": "90:1b:0e:f8:44:46", "group": "bmc", "type": "bmc", "label": "[BMC] Fujitsu iRMC\n172.16.25.231\n90:1b:0e:f8:44:46", "sysName": "[BMC] Fujitsu iRMC\n172.16.25.231"},
+    {"id": "90:1b:0e:f8:44:46", "group": "endpoint", "type": "endpoint", "label": "[HYPERVISOR] Fujitsu Server\n[LLDP-EP]\n172.16.25.231\n90:1b:0e:f8:44:46", "sysName": "[HYPERVISOR] Fujitsu Server\n[LLDP-EP]\n172.16.25.231"},
     {"id": "90:2e:16:9d:3d:37", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] LCFC\n172.16.0.57\n90:2e:16:9d:3d:37", "sysName": "[ENDPOINT] LCFC\n172.16.0.57"},
     {"id": "90:2e:16:9d:3d:3c", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] LCFC\n172.16.0.239\n90:2e:16:9d:3d:3c", "sysName": "[ENDPOINT] LCFC\n172.16.0.239"},
     {"id": "90:2e:16:9d:3d:5e", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] LCFC\n172.16.1.217\n90:2e:16:9d:3d:5e", "sysName": "[ENDPOINT] LCFC\n172.16.1.217"},
@@ -2414,7 +2414,7 @@
     "88:88:88:88:87:88": "[LLDP-EP]\n172.16.24.207",
     "8c:90:2d:4f:5c:93": "[ENDPOINT]",
     "8c:ec:4b:dc:28:d9": "[LLDP-EP] Dell\n172.16.1.242",
-    "90:1b:0e:f8:44:46": "[BMC] Fujitsu iRMC\n172.16.25.231",
+    "90:1b:0e:f8:44:46": "[HYPERVISOR] Fujitsu Server\n[LLDP-EP]\n172.16.25.231",
     "90:2e:16:9d:3d:37": "[ENDPOINT] LCFC\n172.16.0.57",
     "90:2e:16:9d:3d:3c": "[ENDPOINT] LCFC\n172.16.0.239",
     "90:2e:16:9d:3d:5e": "[ENDPOINT] LCFC\n172.16.1.217",
