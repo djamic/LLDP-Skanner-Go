@@ -178,3 +178,60 @@ func TestOUICuratedCategories(t *testing.T) {
 		}
 	}
 }
+
+// ouiTestServerMakers lists, for every server-NIC label, the fragments of
+// the IEEE organization name it may stand for. 34:40:b5 is registered to IBM
+// and labelled Lenovo, which took over IBM's x86 servers (Q6 keeps it).
+var ouiTestServerMakers = map[string][]string{
+	"Dell": {"dell"}, "Dell PowerEdge": {"dell"}, "HPE": {"hewlett"}, "HPE ProLiant": {"hewlett"},
+	"SuperMicro": {"super micro"}, "Tyan": {"tyan"}, "Lenovo": {"lenovo", "ibm"},
+	"Cisco UCS": {"cisco"}, "Fujitsu": {"fujitsu"}, "IBM": {"ibm"},
+}
+
+// TestServerNICsAreServerMakers: every OUI isServerNIC accepts belongs to the
+// server maker of its label, so no PC or switch maker is a "server" (Q6, Q7).
+func TestServerNICsAreServerMakers(t *testing.T) {
+	n := 0
+	for prefix, org := range ouiTestIEEENames(t) {
+		ok, label := isServerNIC(prefix + ":00:00:01")
+		if !ok {
+			continue
+		}
+		n++
+		if !ouiTestContainsAny(strings.ToLower(org), ouiTestServerMakers[label]) {
+			t.Errorf("%s: server NIC %q, but IEEE registers it to %q", prefix, label, org)
+		}
+	}
+	if n != 34 {
+		t.Errorf("%d server-NIC OUIs, want 34", n)
+	}
+}
+
+// TestServerNICDecisions pins the owner decisions on the server-NIC table.
+func TestServerNICDecisions(t *testing.T) {
+	for _, c := range []struct {
+		mac   string
+		ok    bool
+		label string
+	}{
+		{"f8:f0:82:7a:d9:69", false, ""}, // Q7: NAGTECH builds SNR switches
+		{"e8:6a:64:11:22:33", false, ""}, // Q6: LCFC (Lenovo PC ODM)
+		{"54:ee:75:11:22:33", false, ""}, // Q6: Wistron
+		{"08:94:ef:11:22:33", false, ""}, // Q6: Wistron
+		{"7c:d3:0a:11:22:33", false, ""}, // Q6: Inventec
+		{"00:1b:24:11:22:33", false, ""}, // Q6: Quanta
+		{"74:56:3c:bb:d0:16", false, ""}, // Q6: GIGA-BYTE
+		{"a0:36:9f:11:22:33", false, ""}, // Q6: Intel
+		{"00:23:ae:11:22:33", false, ""}, // Q6: Dell PCs, was "Lenovo"
+		{"a0:42:3f:11:22:33", true, "Tyan"},
+		{"34:40:b5:11:22:33", true, "Lenovo"},
+		{"5c:ed:8c:ba:a4:7c", true, "HPE ProLiant"},
+		{"0c:c4:7a:11:22:33", true, "SuperMicro"},
+		{"F8:DB:88:11:22:33", true, "Dell"},
+	} {
+		ok, label := isServerNIC(c.mac)
+		if ok != c.ok || label != c.label {
+			t.Errorf("isServerNIC(%q) = %v, %q; want %v, %q", c.mac, ok, label, c.ok, c.label)
+		}
+	}
+}

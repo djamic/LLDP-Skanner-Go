@@ -1500,34 +1500,6 @@ var hypervisorMACPrefixes = []string{
 	"08:00:27",
 }
 
-// serverNICPrefixes — физический NIC серверов на базе которых запускают ESXi/KVM
-// Dell, HPE, SuperMicro, Lenovo, Cisco UCS, Fujitsu, IBM
-var serverNICPrefixes = []string{
-	// Dell Inc. (PowerEdge серия)
-	"4c:d9:8f", // Dell PowerEdge
-	"f8:db:88", // Dell
-	"18:db:f2", "b0:83:fe", "b4:45:06", "00:14:22", "00:21:9b",
-	"08:94:ef", "00:1a:a0", "d4:ae:52", "a0:36:9f",
-	"34:17:eb", "00:26:b9",
-	// Hewlett Packard Enterprise (ProLiant, Synergy)
-	"3c:a8:2a", "48:df:37", "5c:ed:8c", "9c:b6:54",
-	"f8:f0:82", "4c:ae:a3", // HPE iLO/FlexibleLOM
-	"10:e7:c6", "00:26:55", "1c:98:ec",
-	"94:57:a5", "ec:b1:d7", "b4:7a:f1", "e8:39:35",
-	// SuperMicro
-	"0c:c4:7a", "3c:ec:ef", "ac:1f:6b",
-	"74:56:3c", "00:25:90", "a0:42:3f",
-	// Lenovo (ThinkServer, ThinkSystem)
-	"e8:6a:64", "7c:d3:0a", "54:ee:75",
-	"00:23:ae", "34:40:b5",
-	// Cisco UCS
-	"00:25:b5", "00:2a:6a", "a8:9d:21",
-	// Fujitsu
-	"90:1b:0e", "00:1b:24",
-	// IBM
-	"00:14:5e", "00:21:5e",
-}
-
 // isHypervisorMAC checks if a MAC address belongs to a known hypervisor vendor
 func isHypervisorMAC(mac string) bool {
 	mac = strings.ToLower(mac)
@@ -1559,31 +1531,33 @@ func isHypervisorPort(macs []string) bool {
 // Used to detect ESXi/KVM hypervisors that run on physical servers.
 func isServerNIC(mac string) (bool, string) {
 	mac = strings.ToLower(mac)
+	// Only OUIs of server makers: PC/laptop ODMs (LCFC, Wistron, Inventec,
+	// Quanta, GIGA-BYTE, Intel, Dell 00:23:ae) and the SNR switches
+	// (f8:f0:82) are left out (Q6, Q7).
 	prefixVendor := map[string]string{
 		// Dell
 		"4c:d9:8f": "Dell PowerEdge", "f8:db:88": "Dell",
 		"18:db:f2": "Dell", "b0:83:fe": "Dell", "b4:45:06": "Dell",
-		"00:14:22": "Dell", "00:21:9b": "Dell", "08:94:ef": "Dell",
-		"00:1a:a0": "Dell", "d4:ae:52": "Dell", "a0:36:9f": "Dell",
+		"00:14:22": "Dell", "00:21:9b": "Dell",
+		"00:1a:a0": "Dell", "d4:ae:52": "Dell",
 		"34:17:eb": "Dell", "00:26:b9": "Dell",
-	// HPE ProLiant NIC OUIs (iLO, FlexLOM — NOT 4c:ae:a3 which is HPE switch)
-	"f8:f0:82": "HPE", "10:e7:c6": "HPE",
-	"00:26:55": "HPE", "1c:98:ec": "HPE",
-	"94:57:a5": "HPE", "ec:b1:d7": "HPE",
-	"b4:7a:f1": "HPE ProLiant", "e8:39:35": "HPE",
-	"3c:a8:2a": "HPE ProLiant", "48:df:37": "HPE ProLiant",
-	"5c:ed:8c": "HPE ProLiant", "9c:b6:54": "HPE ProLiant",
-		// SuperMicro
+		// HPE ProLiant NIC OUIs (iLO, FlexLOM — NOT 4c:ae:a3 which is HPE switch)
+		"10:e7:c6": "HPE",
+		"00:26:55": "HPE", "1c:98:ec": "HPE",
+		"94:57:a5": "HPE", "ec:b1:d7": "HPE",
+		"b4:7a:f1": "HPE ProLiant", "e8:39:35": "HPE",
+		"3c:a8:2a": "HPE ProLiant", "48:df:37": "HPE ProLiant",
+		"5c:ed:8c": "HPE ProLiant", "9c:b6:54": "HPE ProLiant",
+		// SuperMicro, Tyan
 		"0c:c4:7a": "SuperMicro", "3c:ec:ef": "SuperMicro",
-		"ac:1f:6b": "SuperMicro", "74:56:3c": "SuperMicro (GIGA-BYTE)",
-		"00:25:90": "SuperMicro", "a0:42:3f": "SuperMicro",
-		// Lenovo
-		"e8:6a:64": "Lenovo ThinkSystem", "7c:d3:0a": "Lenovo",
-		"54:ee:75": "Lenovo", "00:23:ae": "Lenovo", "34:40:b5": "Lenovo",
+		"ac:1f:6b": "SuperMicro",
+		"00:25:90": "SuperMicro", "a0:42:3f": "Tyan",
+		// Lenovo (34:40:b5 is registered to IBM, whose x86 servers Lenovo took over)
+		"34:40:b5": "Lenovo",
 		// Cisco UCS
 		"00:25:b5": "Cisco UCS", "00:2a:6a": "Cisco UCS", "a8:9d:21": "Cisco UCS",
 		// Fujitsu
-		"90:1b:0e": "Fujitsu", "00:1b:24": "Fujitsu",
+		"90:1b:0e": "Fujitsu",
 		// IBM
 		"00:14:5e": "IBM", "00:21:5e": "IBM",
 	}
