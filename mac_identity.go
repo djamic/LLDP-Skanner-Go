@@ -112,6 +112,28 @@ func (m macAddr) IsRandom() bool { return m.IsLocal() && !m.IsMulticast() }
 // IsZeroOUI: the OUI 00:00:00, which only appears on garbage entries.
 func (m macAddr) IsZeroOUI() bool { return m[0] == 0 && m[1] == 0 && m[2] == 0 }
 
+// IsSpecial: no station address. Null, broadcast, multicast and zero-OUI
+// MACs are filtered everywhere (Q11).
+func (m macAddr) IsSpecial() bool {
+	return m.IsNull() || m.IsBroadcast() || m.IsMulticast() || m.IsZeroOUI()
+}
+
+// macIsBrokenMAC reports text made of 1-2 digit hex groups separated by
+// colons or spaces that is not a whole MAC, such as "01:ac:10:01:0f" (a
+// network-address chassis id read as hex) or "aa:bb:cc:dd:ee".
+func macIsBrokenMAC(s string) bool {
+	groups := strings.FieldsFunc(s, func(r rune) bool { return r == ':' || r == ' ' })
+	if len(groups) < 2 || strings.Contains(s, "::") {
+		return false
+	}
+	for _, g := range groups {
+		if len(g) > 2 || strings.Trim(strings.ToLower(g), "0123456789abcdef") != "" {
+			return false
+		}
+	}
+	return true
+}
+
 // ============================================================
 // MAC identity — BMC detection
 // ============================================================

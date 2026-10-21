@@ -478,3 +478,64 @@ func TestRandomMACNotVirtualNIC(t *testing.T) {
 		}
 	}
 }
+
+// TestSpecialMAC: one filter policy for MACs, by the bits of the parsed
+// address: null, broadcast, multicast and the zero OUI (Q11). Hostnames and
+// IPs are never special (F38).
+func TestSpecialMAC(t *testing.T) {
+	for _, c := range []struct {
+		mac  string
+		want bool
+	}{
+		{"00:00:00:00:00:00", true},
+		{"ff:ff:ff:ff:ff:ff", true},
+		{"01:00:5e:00:00:16", true},
+		{"01-80-c2-00-00-0e", true},
+		{"33:33:00:00:00:01", true},
+		{"03:00:00:00:00:01", true},
+		{"15:04:05:11:22:33", true},
+		{"00:00:00:12:34:56", true}, // zero OUI (F39: graph and snapshots agree)
+		{"4c:ae:a3:8e:42:11", false},
+		{"52:54:00:12:34:56", false},
+		{"02:42:ac:11:00:02", false},
+		{"B-318/1", false},
+		{"E109-9", false},
+		{"173.16.1.15", false},
+		{"2001:db8::1", false},
+		{"", false},
+	} {
+		if got := isSpecialMAC(c.mac); got != c.want {
+			t.Errorf("isSpecialMAC(%q) = %v, want %v", c.mac, got, c.want)
+		}
+	}
+}
+
+// TestInvalidID: a MAC id is invalid when it is special; a hostname, IP or
+// port id only when it is empty, all zeros, or a broken MAC (F38, F39; Q11).
+func TestInvalidID(t *testing.T) {
+	for _, c := range []struct {
+		id   string
+		want bool
+	}{
+		{"", true}, {" ", true}, {"0", true},
+		{"0.0.0.0", true}, {"0:0:0:0", true}, {"::", true},
+		{"00:00:00:00:00:00", true}, {"0:0:0:0:0:0", true}, {"00 00 00 00 00 00", true},
+		{"00-00-00-00-00-00", true}, {"000000000000", true},
+		{"00:00:00:12:34:56", true},
+		{"ff:ff:ff:ff:ff:ff", true}, {"FF:FF:FF:FF:FF:FF", true},
+		{"01:00:5e:00:00:fb", true}, {"33:33:00:00:00:01", true}, {"03:00:00:00:00:01", true},
+		{"01:ac:10:01:0f", true}, // network-address chassis id read as hex
+		{"aa:bb:cc:dd:ee", true}, {"00:00:00:01", true}, {"01 AC 10 01 0F", true},
+		{"B-318/1", false}, {"E109-9", false}, {"A-332", false}, {"SW1", false}, {"A1", false},
+		{"173.16.1.15", false}, {"172.16.1.15", false},
+		{"2001:db8::1", false}, {"fe80::1", false}, {"1:2:3:4:5:6:7:8", false},
+		{"DESKTOP-V380CHD", false}, {"AB-12", false},
+		{"no:such:object:available:on:this:agent:at:this:oid", false},
+		{"4c:ae:a3:8e:42:11", false}, {"4caea32784cb", false},
+		{"02:42:ac:11:00:02", false}, {"52:54:00:12:34:56", false},
+	} {
+		if got := isInvalidID(c.id); got != c.want {
+			t.Errorf("isInvalidID(%q) = %v, want %v", c.id, got, c.want)
+		}
+	}
+}

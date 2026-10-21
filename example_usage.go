@@ -1658,37 +1658,12 @@ func detectOSByTTL(ip string) string {
 	
 	return ""
 }
-// isSpecialMAC checks if MAC is broadcast, null, or multicast (should be filtered)
+// isSpecialMAC checks if MAC is broadcast, null, multicast or zero-OUI (should be
+// filtered everywhere, Q11). It reads the bits of the parsed address, so text that
+// is no MAC (a hostname, an IP) is never special (F38).
 func isSpecialMAC(mac string) bool {
-	mac = strings.ToLower(mac)
-
-	// Null MAC
-	if mac == "00:00:00:00:00:00" {
-		return true
-	}
-
-	// Broadcast MAC
-	if mac == "ff:ff:ff:ff:ff:ff" {
-		return true
-	}
-
-	// Multicast MAC (first octet has LSB set to 1)
-	// Common prefixes: 01:00:5e (IPv4 multicast), 33:33 (IPv6 multicast)
-	if strings.HasPrefix(mac, "01:") || strings.HasPrefix(mac, "33:33:") {
-		return true
-	}
-
-	// Check if first octet is odd (multicast bit set)
-	parts := strings.Split(mac, ":")
-	if len(parts) >= 1 {
-		var firstByte int
-		fmt.Sscanf(parts[0], "%x", &firstByte)
-		if firstByte&1 == 1 {
-			return true // Multicast
-		}
-	}
-
-	return false
+	m, ok := parseMAC(mac)
+	return ok && m.IsSpecial()
 }
 
 // isRandomMAC checks if a MAC address uses locally administered address (random/private):
@@ -1773,56 +1748,23 @@ func resolveHostname(ip string) string {
 
 	return name
 }
-// isInvalidID checks if an ID is garbage/invalid (should be filtered)
+// isInvalidID checks if an ID is garbage/invalid (should be filtered).
+// A MAC is invalid when isSpecialMAC says so (null, broadcast, multicast,
+// zero OUI). Any other id (hostname, IP, port name) is invalid only when it is
+// empty or all zeros ("0.0.0.0", "0:0:0:0", "::"), or when it is a broken MAC
+// ("01:ac:10:01:0f"); short hostnames like "SW1" are valid (F38, F39; Q11).
 func isInvalidID(id string) bool {
-	// Empty
-	if id == "" {
+	if m, ok := parseMAC(id); ok {
+		return m.IsSpecial()
+	}
+	id = strings.TrimSpace(id)
+	if strings.Trim(id, "0:.- ") == "" {
 		return true
 	}
-
-	// Zero IP format
-	if id == "0.0.0.0" || id == "0:0:0:0" {
-		return true
+	if net.ParseIP(id) != nil {
+		return false
 	}
-
-	// Null MAC formats (various formats: colon, dash, space-separated)
-	if id == "00:00:00:00:00:00" || id == "0:0:0:0:0:0" {
-		return true
-	}
-	if id == "00 00 00 00 00 00" || id == "00-00-00-00-00-00" {
-		return true
-	}
-
-	// Generic all-zero check (strip separators)
-	stripped := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(id, ":", ""), "-", ""), " ", "")
-	if stripped == "000000000000" {
-		return true
-	}
-
-	// Partial zero MACs (0:0:0 pattern at start)
-	if strings.HasPrefix(id, "0:0:0") || strings.HasPrefix(id, "00:00:00") {
-		return true
-	}
-	if strings.HasPrefix(id, "00 00 00") || strings.HasPrefix(id, "00-00-00") {
-		return true
-	}
-
-	// Broadcast
-	if id == "ff:ff:ff:ff:ff:ff" {
-		return true
-	}
-
-	// Too short (less than 5 chars likely garbage)
-	if len(id) < 5 {
-		return true
-	}
-
-	// Check if it's a known multicast/special MAC
-	if isSpecialMAC(id) {
-		return true
-	}
-
-	return false
+	return macIsBrokenMAC(id)
 }
 
 // getMACVendor returns vendor name for a MAC address based on OUI

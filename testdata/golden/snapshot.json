@@ -8,7 +8,6 @@
     {"mac": "00:08:22:34:9b:eb", "switch": "172.20.230.82", "port": 47}
   ],
   "compare_left": [
-    {"mac": "00:00:00:2d:2a:56", "switch": "172.20.230.3", "port": 42, "ip": "172.15.19.157"},
     {"mac": "00:50:56:00:00:99", "switch": "172.20.230.3", "port": 41, "vendor": "VMware"},
     {"mac": "02:00:5e:10:00:01", "switch": "172.20.230.3", "port": 40}
   ],
@@ -21,7 +20,7 @@
   "compare_summary": {
     "health_delta": -5,
     "lost_hosts": ["172.20.230.250"],
-    "mac_count_delta": 0,
+    "mac_count_delta": 1,
     "new_hosts": ["172.20.230.17"],
     "restored_hosts": ["172.20.230.1"],
     "unreachable_hosts": ["172.20.254.249"]
@@ -36,7 +35,6 @@
     {"time": "18:35:34", "type": "join", "mac": "00:00:20:00:00:20", "switchIP": "172.20.230.82", "port": 48, "message": "00:00:20:00:00:20 on 172.20.230.82:48"},
     {"time": "18:35:34", "type": "join", "mac": "00:00:78:00:09:c0", "switchIP": "172.20.230.82", "port": 48, "message": "00:00:78:00:09:c0 on 172.20.230.82:48"},
     {"time": "18:35:34", "type": "join", "mac": "00:08:22:34:9b:eb", "switchIP": "172.20.230.82", "port": 47, "message": "00:08:22:34:9b:eb on 172.20.230.82:47"},
-    {"time": "18:35:34", "type": "leave", "mac": "00:00:00:2d:2a:56", "ip": "172.15.19.157", "switchIP": "172.20.230.3", "port": 42, "message": "00:00:00:2d:2a:56 → 172.15.19.157 from 172.20.230.3:42"},
     {"time": "18:35:34", "type": "leave", "mac": "00:50:56:00:00:99", "vendor": "VMware", "switchIP": "172.20.230.3", "port": 41, "message": "00:50:56:00:00:99 (VMware) from 172.20.230.3:41"},
     {"time": "18:35:34", "type": "leave", "mac": "02:00:5e:10:00:01", "switchIP": "172.20.230.3", "port": 40, "message": "02:00:5e:10:00:01 from 172.20.230.3:40"},
     {"time": "18:35:34", "type": "port_down", "switchIP": "172.20.254.249", "port": 27, "message": "Port DOWN: 172.20.254.249 port 27"}
@@ -46,14 +44,13 @@
     {"measurement": "device_events", "tags": {"event_type": "join", "vendor": ""}, "fields": {"ip": "", "mac": "00:00:78:00:09:c0", "switch_ip": "172.20.230.82"}},
     {"measurement": "device_events", "tags": {"event_type": "join", "vendor": ""}, "fields": {"ip": "", "mac": "00:08:22:34:9b:eb", "switch_ip": "172.20.230.82"}},
     {"measurement": "device_events", "tags": {"event_type": "leave", "vendor": ""}, "fields": {"ip": "", "mac": "02:00:5e:10:00:01", "switch_ip": "172.20.230.3"}},
-    {"measurement": "device_events", "tags": {"event_type": "leave", "vendor": ""}, "fields": {"ip": "172.15.19.157", "mac": "00:00:00:2d:2a:56", "switch_ip": "172.20.230.3"}},
     {"measurement": "device_events", "tags": {"event_type": "leave", "vendor": "VMware"}, "fields": {"ip": "", "mac": "00:50:56:00:00:99", "switch_ip": "172.20.230.3"}},
-    {"measurement": "network_summary", "fields": {"active_hosts": 75, "health_score": 70, "random_macs": 1139, "shadow_it_ports": 141, "unique_macs": 4569}}
+    {"measurement": "network_summary", "fields": {"active_hosts": 75, "health_score": 70, "random_macs": 1139, "shadow_it_ports": 141, "unique_macs": 4566}}
   ],
   "previous_cycle": {
     "fixed_anomaly": "172.20.230.250 loopback",
     "joined": ["00:00:20:00:00:20", "00:00:78:00:09:c0", "00:08:22:34:9b:eb"],
-    "left": ["02:00:5e:10:00:01", "00:50:56:00:00:99", "00:00:00:2d:2a:56"],
+    "left": ["02:00:5e:10:00:01", "00:50:56:00:00:99", "00:00:5f:00:6d:4f"],
     "lost_host": "172.20.230.250",
     "made_reachable_before": ["172.20.254.249"],
     "made_unreachable_before": "172.20.230.1",
@@ -199,9 +196,6 @@
     "172.20.254.249": {"SysName": "HUAWEI", "Vendor": "", "Health": 70, "Unreachable": true}
   },
   "snapshot_macs": {
-    "00:00:00:00:13:63": {"switch": "172.20.230.82", "port": 48},
-    "00:00:00:29:0c:00": {"switch": "172.20.230.82", "port": 48},
-    "00:00:00:30:00:00": {"switch": "172.20.230.82", "port": 48},
     "00:00:01:00:01:15": {"switch": "172.20.230.82", "port": 48},
     "00:00:20:00:00:20": {"switch": "172.20.230.82", "port": 48},
     "00:00:5e:00:01:14": {"switch": "172.20.254.249", "port": 19, "vendor": "IANA (VRRP)"},
@@ -4846,7 +4840,7 @@
   },
   "snapshot_summary": {
     "active_hosts": 75,
-    "active_macs": 4569,
+    "active_macs": 4566,
     "graph_edges": 927,
     "graph_nodes": 928,
     "health_score": 70,
