@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,13 +11,16 @@ import (
 	"image/draw"
 	"image/png"
 	"log"
+	"maps"
 	"math"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,13 +45,24 @@ type TopologyEdge struct {
 	Label  string `json:"label"`
 }
 
+// reportGraphData is GetGraphData with the nodes in id order and the links
+// in source, target order, so a graph always gives the same report (Q16).
+func reportGraphData(graph *DJGraph) GraphData {
+	data := graph.GetGraphData()
+	slices.SortFunc(data.Nodes, func(a, b GraphNode) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(data.Links, func(a, b GraphLink) int {
+		return cmp.Or(strings.Compare(a.Source, b.Source), strings.Compare(a.Target, b.Target))
+	})
+	return data
+}
+
 // GenerateTopologySVG creates an SVG of the switch/router-only topology
 func GenerateTopologySVG(graph *DJGraph) string {
 	if graph == nil {
 		return ""
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 
 	// Filter: only switch and router nodes
 	var nodes []TopologyNode
@@ -160,7 +175,7 @@ func GenerateTopologyPNG(graph *DJGraph) string {
 		return "<p><i>Topologiya ma'lumotlari mavjud emas</i></p>"
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 
 	// Filter: only switch and router nodes
 	type pngNode struct {
@@ -348,6 +363,39 @@ type DeviceSummary struct {
 	MACs     int    `json:"macs"`
 }
 
+// reportSysNameVendors names the vendor of a polled device from keywords in
+// its sysName, for chassis MACs without an OUI vendor. The first match wins.
+var reportSysNameVendors = []struct {
+	keywords []string
+	vendor   string
+}{
+	{[]string{"snr"}, "SNR"},
+	{[]string{"mikrotik"}, "MikroTik"},
+	{[]string{"cisco"}, "Cisco"},
+	{[]string{"hpe", "hp"}, "HPE"},
+	{[]string{"ubiquiti", "ubnt"}, "Ubiquiti"},
+	{[]string{"huawei"}, "Huawei"},
+	{[]string{"fortinet", "fortigate"}, "Fortinet"},
+}
+
+// reportDeviceVendor is the vendor of a polled device in every report and
+// export: the OUI vendor of its chassis MAC, else the vendor its sysName
+// names, else "" (unknown).
+func reportDeviceVendor(d *DeviceData) string {
+	if vendor := getMACVendor(d.ChassisID); vendor != "" {
+		return vendor
+	}
+	name := strings.ToLower(d.SysName)
+	for _, rule := range reportSysNameVendors {
+		for _, keyword := range rule.keywords {
+			if strings.Contains(name, keyword) {
+				return rule.vendor
+			}
+		}
+	}
+	return ""
+}
+
 func registerReportRoutes() {
 	http.HandleFunc("/api/report/summary", reportSummaryHandler)
 	http.HandleFunc("/api/report/topology-svg", reportTopologySVGHandler)
@@ -388,13 +436,14 @@ func reportSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Top devices
+	// Top devices (in IP order)
 	collectedDataMutex.RLock()
-	for _, dev := range collectedData {
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		dev := collectedData[ip]
 		summary.TopDevices = append(summary.TopDevices, DeviceSummary{
 			IP:      dev.IP,
 			SysName: dev.SysName,
-			Vendor:  getMACVendor(dev.ChassisID),
+			Vendor:  reportDeviceVendor(dev),
 			Ports:   len(dev.Interfaces),
 			MACs:    len(dev.MACTable),
 		})
@@ -423,12 +472,13 @@ func reportFullHandler(w http.ResponseWriter, r *http.Request) {
 	totalMACs := lastTotalMACs
 	lastReportMutex.RUnlock()
 
-	// Build device table
+	// Build device table (in IP order)
 	var deviceRows strings.Builder
 	totalSwitches := 0
 	collectedDataMutex.RLock()
-	for _, dev := range collectedData {
-		vendor := getMACVendor(dev.ChassisID)
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		dev := collectedData[ip]
+		vendor := reportDeviceVendor(dev)
 		deviceRows.WriteString(fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td></tr>\n",
 			dev.IP, dev.SysName, vendor, len(dev.Interfaces), len(dev.MACTable)))
 		totalSwitches++
@@ -571,7 +621,7 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 		return "graph TD\n  NoData[Topologiya ma'lumotlari mavjud emas]"
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 
 	// Build allowed groups set
 	allowedGroups := make(map[string]bool)
@@ -662,6 +712,9 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 		"phone":        {"#3F51B5", "#303F9F"},
 		"iot":          {"#607D8B", "#455A64"},
 		"wifi_random":  {"#00BCD4", "#0097A7"},
+		"printer":      {"#795548", "#5D4037"},
+		"server":       {"#FF5722", "#E64A19"},
+		"unknown":      {"#9E9E9E", "#757575"},
 	}
 
 	var sb strings.Builder
@@ -718,6 +771,9 @@ func GenerateTopologyLegend(groups []string) string {
 		"phone":        {"🔵", "Phone"},
 		"iot":          {"⬜", "IoT"},
 		"wifi_random":  {"🔷", "Random MAC"},
+		"printer":      {"🟤", "Printer"},
+		"server":       {"🔶", "Server"},
+		"unknown":      {"⚪", "Unknown"},
 	}
 
 	var sb strings.Builder
@@ -736,7 +792,7 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 		return ""
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 
 	// Find all hub nodes
 	type hubInfo struct {
@@ -746,6 +802,10 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 
 	for _, n := range data.Nodes {
 		if n.Group != "hub" {
+			continue
+		}
+		// Q14: a port with a confirmed ESXi host is a hypervisor, not Shadow IT
+		if reportHubOnESXiPort(graph, n.ID) {
 			continue
 		}
 		label := n.SysName
@@ -869,22 +929,88 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 	return md.String()
 }
 
+// reportHubOnESXiPort reports whether the port behind a hub node carries an
+// HTTP-confirmed ESXi host. It checks the hub's member nodes and every MAC
+// the switch's FDB holds for that port: the graph draws at most 5 members,
+// and a host can be confirmed after the graph was built.
+func reportHubOnESXiPort(g *DJGraph, hubID string) bool {
+	for member := range g.Edges[hubID] {
+		if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(member)); ok {
+			return true
+		}
+	}
+	switchID, port, ok := reportParseHubID(hubID)
+	if !ok {
+		return false
+	}
+	collectedDataMutex.RLock()
+	defer collectedDataMutex.RUnlock()
+	for _, d := range collectedData {
+		if reportDeviceNode(g, d) != switchID {
+			continue
+		}
+		for _, entry := range d.MACTable {
+			if entry.PortNumber != port {
+				continue
+			}
+			if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(entry.MACAddress)); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// reportParseHubID splits a hub node id, "hub-<switch node>-p<FDB port>" as
+// buildGraphEdges builds it, into the switch node and the port number.
+func reportParseHubID(id string) (switchID string, port int, ok bool) {
+	rest, isHub := strings.CutPrefix(id, "hub-")
+	i := strings.LastIndex(rest, "-p")
+	if !isHub || i < 0 {
+		return "", 0, false
+	}
+	port, err := strconv.Atoi(rest[i+2:])
+	if err != nil {
+		return "", 0, false
+	}
+	return rest[:i], port, true
+}
+
+// reportDeviceNode returns the graph node a polled device is drawn as: the
+// node of its chassis id, else the node named by its IP (a switch without a
+// usable chassis id), else "".
+func reportDeviceNode(g *DJGraph, d *DeviceData) string {
+	if id := normalizeID(d.ChassisID, 0); id != "" && g.Nodes[id] {
+		return id
+	}
+	if g.Nodes[d.IP] {
+		return d.IP
+	}
+	return ""
+}
+
 // GenerateHypervisorDiagrams creates individual mermaid diagrams for each Hypervisor node
 func GenerateHypervisorDiagrams(graph *DJGraph) string {
 	if graph == nil {
 		return ""
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
+	nodeByID := make(map[string]GraphNode, len(data.Nodes))
+	for _, n := range data.Nodes {
+		nodeByID[n.ID] = n
+	}
+	hostNICs, covered := reportHypervisorHosts(data, nodeByID)
 
-	// Find all hypervisor nodes
+	// Find all hypervisor nodes, except those drawn inside a hyp- node's
+	// diagram (its host NIC, or one of its vNIC children)
 	type hypInfo struct {
 		ID, Label, SafeID string
 	}
 	var hypervisors []hypInfo
 
 	for _, n := range data.Nodes {
-		if n.Group != "hypervisor" {
+		if n.Group != "hypervisor" || covered[n.ID] {
 			continue
 		}
 		label := n.SysName
@@ -909,8 +1035,15 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 		var sb strings.Builder
 		sb.WriteString("graph LR\n")
 
-		// Hypervisor node (cyan hexagon)
+		// Hypervisor node (cyan hexagon), with the host's own NIC(s)
 		hypDisplayLabel := strings.ReplaceAll(hyp.Label, "\n", "<br>")
+		for _, nic := range hostNICs[hyp.ID] {
+			if ip := reportNodeIP(nodeByID[nic]); ip != "" {
+				hypDisplayLabel += fmt.Sprintf("<br>Host: %s (%s)", nic, ip)
+			} else {
+				hypDisplayLabel += "<br>Host: " + nic
+			}
+		}
 		sb.WriteString(fmt.Sprintf("  %s{{\"%s\"}}\n", hyp.SafeID, hypDisplayLabel))
 
 		// Find parent switch(es) connected TO this hypervisor
@@ -947,27 +1080,29 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 			}
 		}
 
-		// Find VM children connected FROM this hypervisor
+		// Find VM children connected FROM this hypervisor: only vNIC links
+		// (detectHypervisors) lead to VMs. A VM that is itself a hypervisor
+		// (a nested ESXi) is drawn in the hypervisor colour.
 		vmCount := 0
 		for _, link := range data.Links {
-			if link.Source == hyp.ID {
+			if link.Source == hyp.ID && link.Label == "vNIC" {
 				tgtSafe := sanitizeMermaidID(link.Target)
 				if len(tgtSafe) <= 4 {
 					continue
 				}
 				tgtLabel := link.Target
-				for _, n := range data.Nodes {
-					if n.ID == link.Target {
-						if n.SysName != "" {
-							lines := strings.SplitN(n.SysName, "\n", 3)
-							tgtLabel = strings.Join(lines[:min(len(lines), 2)], "<br>")
-						}
-						break
-					}
+				child := nodeByID[link.Target]
+				if child.SysName != "" {
+					lines := strings.SplitN(child.SysName, "\n", 3)
+					tgtLabel = strings.Join(lines[:min(len(lines), 2)], "<br>")
 				}
 				sb.WriteString(fmt.Sprintf("  %s[\"%s\"]\n", tgtSafe, tgtLabel))
 				sb.WriteString(fmt.Sprintf("  %s-->%s\n", hyp.SafeID, tgtSafe))
-				sb.WriteString(fmt.Sprintf("  style %s fill:#9C27B0,stroke:#7B1FA2,color:#fff\n", tgtSafe))
+				if child.Group == "hypervisor" {
+					sb.WriteString(fmt.Sprintf("  style %s fill:#26C6DA,stroke:#0097A7,color:#fff\n", tgtSafe))
+				} else {
+					sb.WriteString(fmt.Sprintf("  style %s fill:#9C27B0,stroke:#7B1FA2,color:#fff\n", tgtSafe))
+				}
 				vmCount++
 			}
 		}
@@ -982,6 +1117,70 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 	}
 
 	return md.String()
+}
+
+// reportHypervisorHosts finds the hypervisor-group nodes that belong to a
+// hyp- node: its vNIC children, and the host's own NIC, which the graph
+// keeps as a separate node on the same switch port. hosts maps a hyp- node
+// to its host NICs; covered marks all of these nodes, which get no diagram
+// of their own.
+func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts map[string][]string, covered map[string]bool) {
+	hypOnPort := map[string][]string{} // switch node + "|" + port → hyp- nodes
+	for _, l := range data.Links {
+		if strings.HasPrefix(l.Target, "hyp-") {
+			if port := reportEdgePort(l.Label); port != "" {
+				key := l.Source + "|" + port
+				hypOnPort[key] = append(hypOnPort[key], l.Target)
+			}
+		}
+	}
+	hosts = map[string][]string{}
+	covered = map[string]bool{}
+	for _, l := range data.Links {
+		n := nodes[l.Target]
+		if n.Group != "hypervisor" || strings.HasPrefix(n.ID, "hyp-") {
+			continue
+		}
+		if strings.HasPrefix(l.Source, "hyp-") && l.Label == "vNIC" {
+			covered[n.ID] = true
+			continue
+		}
+		for _, hyp := range hypOnPort[l.Source+"|"+reportEdgePort(l.Label)] {
+			covered[n.ID] = true
+			hosts[hyp] = append(hosts[hyp], n.ID)
+		}
+	}
+	for hyp, nics := range hosts {
+		slices.Sort(nics)
+		hosts[hyp] = slices.Compact(nics)
+	}
+	return hosts, covered
+}
+
+// reportEdgePort returns the local port an edge label starts with, as a
+// hypervisor port key: "GE1/0/4 [T] ↓1M ↑0M", "ge1/0/4" and
+// "GE1/0/4 [V100]|eth0" all give "ge1/0/4"; "" when there is none.
+func reportEdgePort(label string) string {
+	local, _, _ := strings.Cut(label, "|")
+	fields := strings.Fields(local)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.ToLower(normalizePortName(fields[0]))
+}
+
+// reportNodeIP returns a node's IP: its id when that is an IP, else the
+// first label line that is an IP address.
+func reportNodeIP(n GraphNode) string {
+	if n.IP != "" {
+		return n.IP
+	}
+	for _, line := range strings.Split(n.SysName, "\n") {
+		if trimmed := strings.TrimSpace(line); net.ParseIP(trimmed) != nil {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 // sanitizeMermaidID creates a safe mermaid node ID
@@ -1031,14 +1230,15 @@ func generateAuditMD(groups []string) string {
 	totalMACs := lastTotalMACs
 	lastReportMutex.RUnlock()
 
-	// Device table
+	// Device table (in IP order)
 	var deviceRows strings.Builder
 	totalSwitches := 0
 	collectedDataMutex.RLock()
 	deviceRows.WriteString("| IP | Hostname | Vendor | Portlar | MAC lar |\n")
 	deviceRows.WriteString("|---|---|---|---|---|\n")
-	for _, dev := range collectedData {
-		vendor := getMACVendor(dev.ChassisID)
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		dev := collectedData[ip]
+		vendor := reportDeviceVendor(dev)
 		deviceRows.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %d |\n",
 			dev.IP, dev.SysName, vendor, len(dev.Interfaces), len(dev.MACTable)))
 		totalSwitches++
@@ -1109,7 +1309,7 @@ func generateAuditMD(groups []string) string {
 
 	// Build per-group tables from graph data
 	if graph != nil {
-		data := graph.GetGraphData()
+		data := reportGraphData(graph)
 
 		// Group order and display names
 		type groupDef struct {
@@ -1128,15 +1328,27 @@ func generateAuditMD(groups []string) string {
 			{"server", "4.10 Serverlar"},
 			{"router", "4.11 Routerlar"},
 			{"wifi_random", "4.12 Wi-Fi / Random MAC"},
+			{"access_point", "4.13 Wi-Fi nuqtalari (Access Point)"},
+			{"printer", "4.14 Printerlar"},
 		}
 
 		// Group nodes
 		grouped := make(map[string][]GraphNode)
 		for _, n := range data.Nodes {
 			if n.Group == "switch" || n.Group == "unknown" {
-				continue // switches already in 4.1
+				continue // switches (and switches without a name) already in 4.1
 			}
 			grouped[n.Group] = append(grouped[n.Group], n)
+		}
+		// A group without a title above still gets a table, after the others
+		titled := make(map[string]bool)
+		for _, gd := range groupOrder {
+			titled[gd.key] = true
+		}
+		for _, group := range slices.Sorted(maps.Keys(grouped)) {
+			if !titled[group] {
+				groupOrder = append(groupOrder, groupDef{group, fmt.Sprintf("4.%d %s", len(groupOrder)+2, group)})
+			}
 		}
 
 		// Build adjacency lookup for "connected to" info
@@ -1196,17 +1408,7 @@ func generateAuditMD(groups []string) string {
 					info = lines[0]
 				}
 
-				ip := n.IP
-				if ip == "" && n.SysName != "" {
-					// Try to extract IP from info lines
-					for _, line := range strings.Split(n.SysName, "\n") {
-						trimmed := strings.TrimSpace(line)
-						if net.ParseIP(trimmed) != nil {
-							ip = trimmed
-							break
-						}
-					}
-				}
+				ip := reportNodeIP(n)
 
 				conn := connectedTo[n.ID]
 				if conn == "" {
@@ -1264,11 +1466,12 @@ func generateAuditMD(groups []string) string {
 
 		for _, vid := range vlanIDs {
 			vi := vlanMap[vid]
-			// Build switch list with counts
+			// Build switch list with counts (in IP order)
 			var switchNames []string
 			totalAccess := 0
 			totalTrunk := 0
-			for ip, cnt := range vi.accessPorts {
+			for _, ip := range slices.SortedFunc(maps.Keys(vi.accessPorts), compareIPs) {
+				cnt := vi.accessPorts[ip]
 				// Get switch name
 				name := ip
 				collectedDataMutex.RLock()

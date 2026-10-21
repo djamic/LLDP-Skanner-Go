@@ -121,11 +121,11 @@
       {"ip": "172.20.254.199", "sysname": "HPE", "vendor": "SNR", "ports": 55, "macs": 2316},
       {"ip": "172.20.254.202", "sysname": "HPE", "vendor": "SNR", "ports": 66, "macs": 2560},
       {"ip": "172.20.254.203", "sysname": "", "vendor": "SNR", "ports": 55, "macs": 2421},
-      {"ip": "172.20.254.204", "sysname": "HP", "vendor": "", "ports": 30, "macs": 1459},
-      {"ip": "172.20.254.223", "sysname": "HP", "vendor": "", "ports": 30, "macs": 0},
+      {"ip": "172.20.254.204", "sysname": "HP", "vendor": "HPE", "ports": 30, "macs": 1459},
+      {"ip": "172.20.254.223", "sysname": "HP", "vendor": "HPE", "ports": 30, "macs": 0},
       {"ip": "172.20.254.226", "sysname": "Jamic", "vendor": "Huawei", "ports": 0, "macs": 0},
-      {"ip": "172.20.254.247", "sysname": "HP", "vendor": "", "ports": 30, "macs": 0},
-      {"ip": "172.20.254.249", "sysname": "HUAWEI", "vendor": "", "ports": 33, "macs": 1261}
+      {"ip": "172.20.254.247", "sysname": "HP", "vendor": "HPE", "ports": 30, "macs": 0},
+      {"ip": "172.20.254.249", "sysname": "HUAWEI", "vendor": "Huawei", "ports": 33, "macs": 1261}
     ]
   }
 }
