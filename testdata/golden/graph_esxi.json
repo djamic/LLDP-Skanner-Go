@@ -12,11 +12,11 @@
   ],
   "node_changes": [
     {"id": "00:0c:29:20:d6:60", "before": {"group": "vm", "sysName": "[VM] 🐧 Linux VMware\n10.10.10.25"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\n[VM] 🐧 Linux VMware\n10.10.10.25"}},
-    {"id": "00:0e:c8:9f:f5:c0", "before": {"group": "endpoint", "sysName": "[LLDP-EP]\nWIN-PV5G8BJ7CAO\n172.16.3.57"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[LLDP-EP]\nWIN-PV5G8BJ7CAO\n172.16.3.57"}},
-    {"id": "08:35:71:ec:46:12", "before": {"group": "endpoint", "sysName": "[ENDPOINT]\n195.158.2.202\n[DNS] PC-JAMIL"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[ENDPOINT]\n195.158.2.202\n[DNS] PC-JAMIL"}},
+    {"id": "00:0e:c8:9f:f5:c0", "before": {"group": "endpoint", "sysName": "[LLDP-EP] Zoran Corporation\nWIN-PV5G8BJ7CAO\n172.16.3.57"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[LLDP-EP] Zoran Corporation\nWIN-PV5G8BJ7CAO\n172.16.3.57"}},
+    {"id": "08:35:71:ec:46:12", "before": {"group": "endpoint", "sysName": "[ENDPOINT] CASwell INC.\n195.158.2.202\n[DNS] PC-JAMIL"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[ENDPOINT] CASwell INC.\n195.158.2.202\n[DNS] PC-JAMIL"}},
     {"id": "4c:ae:a3:27:7e:ca", "before": {"group": "switch", "sysName": "HPE\n172.20.254.10"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\nHPE\n172.20.254.10"}},
     {"id": "56:8b:ca:d3:33:cd", "before": {"group": "wifi_random", "sysName": "[WiFi]\n172.16.16.223\n[DNS] nas01"}, "after": {"group": "wifi_random", "sysName": "[HYPERVISOR] VMware ESXi\n[WiFi]\n172.16.16.223\n[DNS] nas01"}},
-    {"id": "5c:62:8b:b8:b3:11", "before": {"group": "endpoint", "sysName": "[ENDPOINT]\n172.16.0.121"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[ENDPOINT]\n172.16.0.121"}},
+    {"id": "5c:62:8b:b8:b3:11", "before": {"group": "endpoint", "sysName": "[ENDPOINT] TP-Link Systems Inc\n172.16.0.121"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[ENDPOINT] TP-Link Systems Inc\n172.16.0.121"}},
     {"id": "5c:ed:8c:ba:a4:7c", "before": {"group": "endpoint", "sysName": "[ENDPOINT] HPE\n172.20.6.139\n[DNS] ILOCZJ33411C3"}, "after": {"group": "endpoint", "sysName": "[HYPERVISOR] VMware ESXi\n[ENDPOINT] HPE\n172.20.6.139\n[DNS] ILOCZJ33411C3"}}
   ],
   "links_added": null,

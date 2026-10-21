@@ -1,24 +1,31 @@
 package main
 
 import (
+	"bufio"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/klauspost/oui"
 )
 
 // ============================================================
-// OUI Vendor Lookup — IEEE database + local fallback
+// OUI Vendor Lookup — curated table + IEEE database
 // ============================================================
 
 var (
-	ouiDB     oui.OuiDB
+	ouiDB     oui.StaticDB // IEEE records from oui.txt; nil when none loaded
 	ouiDBOnce sync.Once
 	ouiDBOk   bool
 
-	// Extended OUI database — covers top vendors in TUIT network
-	// This supplements the library when IEEE download fails
+	// Extended OUI database — covers top vendors in TUIT network. Its short
+	// names come first; the IEEE database names the other OUIs (Q1).
 	extendedVendorDB = map[string]string{
 		// ===== Network Equipment =====
 		"4c:ae:a3": "HPE",
@@ -302,29 +309,108 @@ var (
 
 // ouiOpenHTTP downloads the IEEE database when oui.txt cannot be opened.
 // Tests replace it so nothing is downloaded.
-var ouiOpenHTTP = oui.OpenStaticHttp
+var ouiOpenHTTP = ouiDownload
+
+// ouiIEEEURL is where the IEEE publishes oui.txt.
+const ouiIEEEURL = "http://standards-oui.ieee.org/oui.txt"
+
+// loadOUIFile reads the IEEE database from an oui.txt file.
+func loadOUIFile(path string) (oui.StaticDB, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	db, err := ouiParse(f)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return db, nil
+}
+
+// ouiDownload is the production ouiOpenHTTP: it fetches oui.txt from the IEEE.
+func ouiDownload(url string) (oui.StaticDB, error) {
+	return ouiFetch(&http.Client{Timeout: 2 * time.Minute}, url)
+}
+
+// ouiFetch downloads oui.txt with client. Anything but a 200 answer whose
+// body holds OUI records is an error (an error page used to "load" as an
+// empty database, F2).
+func ouiFetch(client *http.Client, url string) (oui.StaticDB, error) {
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s: HTTP %d %s", url, resp.StatusCode, resp.Status)
+	}
+	db, err := ouiParse(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", url, err)
+	}
+	return db, nil
+}
+
+// ouiParse reads an IEEE oui.txt in either layout: the compact one shipped
+// here ("00-00-0C   (hex)\t\tCisco Systems, Inc" then a "(base 16)" line,
+// nothing else) and the one the IEEE publishes (a header, then address
+// lines and a blank line after every record). Only the "(hex)" lines count;
+// the name is kept even when empty. The library's own parser stops after the
+// first record of the compact layout (F1). A text without a single record is
+// an error.
+func ouiParse(r io.Reader) (oui.StaticDB, error) {
+	// oui.StaticDB has unexported methods, so only the library can make one:
+	// an empty one from an empty input. RawDB returns its map.
+	db, err := oui.OpenStatic(strings.NewReader(""))
+	if err != nil {
+		return nil, err
+	}
+	raw := db.RawDB()
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for sc.Scan() {
+		head, name, ok := strings.Cut(sc.Text(), "(hex)")
+		head = strings.TrimSpace(head)
+		if !ok || len(head) != 8 || head[2] != '-' || head[5] != '-' {
+			continue
+		}
+		var prefix [3]byte
+		if _, err := hex.Decode(prefix[:], []byte(head[0:2]+head[3:5]+head[6:8])); err != nil {
+			continue
+		}
+		raw[prefix] = oui.Entry{Prefix: oui.HardwareAddr(prefix), Manufacturer: strings.TrimSpace(name),
+			Local: prefix[0]&0x02 != 0, Multicast: prefix[0]&0x01 != 0}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return nil, errors.New("no OUI records")
+	}
+	return db, nil
+}
 
 // initOUIDatabase tries to load the IEEE OUI database
 func initOUIDatabase() {
 	ouiDBOnce.Do(func() {
 		// Try local file first
-		db, err := oui.OpenStaticFile("oui.txt")
+		db, err := loadOUIFile("oui.txt")
 		if err == nil {
 			ouiDB = db
 			ouiDBOk = true
-			raw := db.RawDB()
-			fmt.Printf("✅ OUI database loaded: %d entries\n", len(raw))
+			fmt.Printf("✅ OUI database loaded: %d entries\n", len(db.RawDB()))
 			return
 		}
+		fmt.Printf("⚠️ OUI file not loaded: %v\n", err)
 
 		// Try downloading from IEEE
 		fmt.Println("⏳ Downloading IEEE OUI database...")
-		db2, err := ouiOpenHTTP("http://standards-oui.ieee.org/oui.txt")
-		if err == nil {
-			ouiDB = db2
+		db, err = ouiOpenHTTP(ouiIEEEURL)
+		if err == nil && db != nil {
+			ouiDB = db
 			ouiDBOk = true
-			raw := db2.RawDB()
-			fmt.Printf("✅ OUI database downloaded: %d entries\n", len(raw))
+			fmt.Printf("✅ OUI database downloaded: %d entries\n", len(db.RawDB()))
 			return
 		}
 
@@ -368,27 +454,43 @@ func normalizeMAC(mac string) string {
 }
 
 // lookupVendor resolves MAC address to vendor name
-// Priority: 1) klauspost/oui (IEEE), 2) extendedVendorDB (local)
+// Priority: 1) extendedVendorDB (curated), 2) the IEEE organization (Q1).
+// Text that is no MAC and special MACs (null, broadcast, multicast, zero
+// OUI) have no vendor.
 func lookupVendor(mac string) string {
 	m, ok := parseMAC(mac)
-	if !ok {
+	if !ok || m.IsSpecial() {
 		return "Unknown"
 	}
-
-	// 1. Try IEEE OUI database
-	if ouiDBOk && ouiDB != nil {
-		entry, err := ouiDB.LookUp(oui.HardwareAddr{m[0], m[1], m[2]})
-		if err == nil && entry != nil {
-			return strings.TrimSpace(entry.Manufacturer)
-		}
-	}
-
-	// 2. Try extended local database
 	if vendor, ok := extendedVendorDB[m.OUI()]; ok {
 		return vendor
 	}
-
+	if name := ouiIEEEName(m); name != "" {
+		return name
+	}
 	return "Unknown"
+}
+
+// ouiIEEEName returns the IEEE organization of the MAC's OUI, or "" when no
+// database is loaded or the record names no vendor: an empty name (F5),
+// "Private", or an "IEEE Registration Authority" block that the IEEE split
+// into MA-M/MA-S assignments, whose owners oui.txt does not list. A locally
+// administered (random) address has no IEEE vendor either: the few records
+// with that bit are company IDs, not the maker of a random address.
+func ouiIEEEName(m macAddr) string {
+	if ouiDB == nil || m.IsLocal() {
+		return ""
+	}
+	e, ok := ouiDB.RawDB()[[3]byte{m[0], m[1], m[2]}]
+	if !ok {
+		return ""
+	}
+	name := strings.TrimSpace(e.Manufacturer)
+	switch strings.ToLower(name) {
+	case "private", "ieee registration authority":
+		return ""
+	}
+	return name
 }
 
 // ouiCategoryWords are the rules categorizeVendor applies to vendor names

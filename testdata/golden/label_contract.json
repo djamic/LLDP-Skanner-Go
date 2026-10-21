@@ -1,9 +1,9 @@
 {
   "groups": {
-    "access_point": {"graph_nodes": 82, "index_html_data_group": true, "app_js_literal": true},
+    "access_point": {"graph_nodes": 92, "index_html_data_group": true, "app_js_literal": true},
     "bmc": {"graph_nodes": 0, "index_html_data_group": true, "app_js_literal": true},
-    "camera": {"graph_nodes": 39, "index_html_data_group": true, "app_js_literal": true},
-    "endpoint": {"graph_nodes": 675, "index_html_data_group": true, "app_js_literal": true},
+    "camera": {"graph_nodes": 42, "index_html_data_group": true, "app_js_literal": true},
+    "endpoint": {"graph_nodes": 662, "index_html_data_group": true, "app_js_literal": true},
     "hub": {"graph_nodes": 33, "index_html_data_group": true, "app_js_literal": true},
     "hypervisor": {"graph_nodes": 4, "index_html_data_group": true, "app_js_literal": true},
     "iot": {"graph_nodes": 0, "index_html_data_group": true, "app_js_literal": true},

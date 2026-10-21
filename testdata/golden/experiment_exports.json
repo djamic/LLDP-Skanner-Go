@@ -94,7 +94,7 @@
       {"anomalies": ["shadow_it", "shadow_it", "shadow_it"], "health_score": 70, "ip": "172.20.230.83", "mac_count": 603, "port_count": 29, "sys_name": "SNR-S2985G-24TC", "vendor": "SNR"},
       {"anomalies": null, "health_score": 100, "ip": "172.20.230.240", "mac_count": 2265, "port_count": 57, "sys_name": "HPE", "vendor": "HPE"},
       {"anomalies": null, "health_score": 100, "ip": "172.20.230.241", "mac_count": 2077, "port_count": 57, "sys_name": "HPE", "vendor": "HPE"},
-      {"anomalies": null, "health_score": 100, "ip": "172.20.230.253", "mac_count": 0, "port_count": 0, "sys_name": "", "vendor": ""},
+      {"anomalies": null, "health_score": 100, "ip": "172.20.230.253", "mac_count": 0, "port_count": 0, "sys_name": "", "vendor": "Hewlett Packard Enterprise"},
       {"anomalies": ["shadow_it"], "health_score": 90, "ip": "172.20.230.254", "mac_count": 2323, "port_count": 29, "sys_name": "SNR-S2995G-24FX", "vendor": "SNR"},
       {"anomalies": ["shadow_it"], "health_score": 90, "ip": "172.20.240.1", "mac_count": 675, "port_count": 53, "sys_name": "F-4_48P", "vendor": "SNR"},
       {"anomalies": ["shadow_it"], "health_score": 90, "ip": "172.20.240.2", "mac_count": 173, "port_count": 29, "sys_name": "F-4(2)_28P", "vendor": "SNR"},
@@ -116,10 +116,10 @@
       {"anomalies": null, "health_score": 100, "ip": "172.20.254.199", "mac_count": 2316, "port_count": 55, "sys_name": "HPE", "vendor": "HPE"},
       {"anomalies": ["shadow_it", "shadow_it", "shadow_it", "shadow_it"], "health_score": 60, "ip": "172.20.254.202", "mac_count": 2560, "port_count": 66, "sys_name": "HPE", "vendor": "HPE"},
       {"anomalies": null, "health_score": 100, "ip": "172.20.254.203", "mac_count": 2421, "port_count": 55, "sys_name": "", "vendor": "HPE"},
-      {"anomalies": ["shadow_it", "shadow_it"], "health_score": 80, "ip": "172.20.254.204", "mac_count": 1459, "port_count": 30, "sys_name": "HP", "vendor": "HPE"},
-      {"anomalies": null, "health_score": 100, "ip": "172.20.254.223", "mac_count": 0, "port_count": 30, "sys_name": "HP", "vendor": "HPE"},
+      {"anomalies": ["shadow_it", "shadow_it"], "health_score": 80, "ip": "172.20.254.204", "mac_count": 1459, "port_count": 30, "sys_name": "HP", "vendor": "Hewlett Packard"},
+      {"anomalies": null, "health_score": 100, "ip": "172.20.254.223", "mac_count": 0, "port_count": 30, "sys_name": "HP", "vendor": "Hewlett Packard"},
       {"anomalies": null, "health_score": 100, "ip": "172.20.254.226", "mac_count": 0, "port_count": 0, "sys_name": "Jamic", "vendor": "Eltex"},
-      {"anomalies": null, "health_score": 100, "ip": "172.20.254.247", "mac_count": 0, "port_count": 30, "sys_name": "HP", "vendor": "HPE"},
+      {"anomalies": null, "health_score": 100, "ip": "172.20.254.247", "mac_count": 0, "port_count": 30, "sys_name": "HP", "vendor": "Hewlett Packard"},
       {"anomalies": ["shadow_it", "shadow_it", "shadow_it"], "health_score": 70, "ip": "172.20.254.249", "mac_count": 1261, "port_count": 33, "sys_name": "HUAWEI", "vendor": "Huawei"}
     ],
     "export_time": "<time>",
@@ -280,13 +280,15 @@
   },
   "vendor_stats": {
     "export_time": "<time>",
-    "total_vendors": 5,
+    "total_vendors": 7,
     "vendors": [
       {"device_count": 1, "fdb_failure": 1, "fdb_success": 0, "lldp_failure": 0, "lldp_success": 1, "snmp_failure": 0, "snmp_success": 1, "vendor": "Eltex"},
-      {"device_count": 41, "fdb_failure": 2, "fdb_success": 39, "lldp_failure": 1, "lldp_success": 40, "snmp_failure": 0, "snmp_success": 41, "vendor": "HPE"},
+      {"device_count": 38, "fdb_failure": 0, "fdb_success": 38, "lldp_failure": 1, "lldp_success": 37, "snmp_failure": 0, "snmp_success": 38, "vendor": "HPE"},
+      {"device_count": 3, "fdb_failure": 2, "fdb_success": 1, "lldp_failure": 0, "lldp_success": 3, "snmp_failure": 0, "snmp_success": 3, "vendor": "Hewlett Packard"},
+      {"device_count": 1, "fdb_failure": 1, "fdb_success": 0, "lldp_failure": 0, "lldp_success": 1, "snmp_failure": 0, "snmp_success": 1, "vendor": "Hewlett Packard Enterprise"},
       {"device_count": 1, "fdb_failure": 0, "fdb_success": 1, "lldp_failure": 1, "lldp_success": 0, "snmp_failure": 0, "snmp_success": 1, "vendor": "Huawei"},
       {"device_count": 28, "fdb_failure": 0, "fdb_success": 28, "lldp_failure": 0, "lldp_success": 28, "snmp_failure": 0, "snmp_success": 28, "vendor": "SNR"},
-      {"device_count": 4, "fdb_failure": 4, "fdb_success": 0, "lldp_failure": 3, "lldp_success": 1, "snmp_failure": 0, "snmp_success": 4, "vendor": "Unknown"}
+      {"device_count": 3, "fdb_failure": 3, "fdb_success": 0, "lldp_failure": 3, "lldp_success": 0, "snmp_failure": 0, "snmp_success": 3, "vendor": "Unknown"}
     ]
   }
 }

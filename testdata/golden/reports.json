@@ -62,7 +62,7 @@
       {"ip": "172.20.230.83", "sysname": "SNR-S2985G-24TC", "vendor": "SNR", "ports": 29, "macs": 603},
       {"ip": "172.20.230.240", "sysname": "HPE", "vendor": "HPE", "ports": 57, "macs": 2265},
       {"ip": "172.20.230.241", "sysname": "HPE", "vendor": "HPE", "ports": 57, "macs": 2077},
-      {"ip": "172.20.230.253", "sysname": "", "vendor": "", "ports": 0, "macs": 0},
+      {"ip": "172.20.230.253", "sysname": "", "vendor": "Hewlett Packard Enterprise", "ports": 0, "macs": 0},
       {"ip": "172.20.230.254", "sysname": "SNR-S2995G-24FX", "vendor": "SNR", "ports": 29, "macs": 2323},
       {"ip": "172.20.240.1", "sysname": "F-4_48P", "vendor": "SNR", "ports": 53, "macs": 675},
       {"ip": "172.20.240.2", "sysname": "F-4(2)_28P", "vendor": "SNR", "ports": 29, "macs": 173},
@@ -84,10 +84,10 @@
       {"ip": "172.20.254.199", "sysname": "HPE", "vendor": "HPE", "ports": 55, "macs": 2316},
       {"ip": "172.20.254.202", "sysname": "HPE", "vendor": "HPE", "ports": 66, "macs": 2560},
       {"ip": "172.20.254.203", "sysname": "", "vendor": "HPE", "ports": 55, "macs": 2421},
-      {"ip": "172.20.254.204", "sysname": "HP", "vendor": "", "ports": 30, "macs": 1459},
-      {"ip": "172.20.254.223", "sysname": "HP", "vendor": "", "ports": 30, "macs": 0},
+      {"ip": "172.20.254.204", "sysname": "HP", "vendor": "Hewlett Packard", "ports": 30, "macs": 1459},
+      {"ip": "172.20.254.223", "sysname": "HP", "vendor": "Hewlett Packard", "ports": 30, "macs": 0},
       {"ip": "172.20.254.226", "sysname": "Jamic", "vendor": "Eltex", "ports": 0, "macs": 0},
-      {"ip": "172.20.254.247", "sysname": "HP", "vendor": "", "ports": 30, "macs": 0},
+      {"ip": "172.20.254.247", "sysname": "HP", "vendor": "Hewlett Packard", "ports": 30, "macs": 0},
       {"ip": "172.20.254.249", "sysname": "HUAWEI", "vendor": "", "ports": 33, "macs": 1261}
     ]
   }

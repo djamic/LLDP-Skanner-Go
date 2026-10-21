@@ -3,10 +3,14 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/klauspost/oui"
 )
 
 // ouiTestIEEENames reads the organization name of every record of the shipped
@@ -108,9 +112,9 @@ func TestOUIVendorRenames(t *testing.T) {
 		{"78:45:58:11:22:33", "Ubiquiti"},
 		{"bc:9b:5e:11:22:33", "Hikvision"},
 		{"98:ee:cb:11:22:33", "Wistron"},
-		{"00:e2:69:53:ec:10", "Unknown"}, // placeholder "Unknown (OUI 00:e2:69)" dropped
-		{"64:6e:ea:11:22:33", "Unknown"}, // placeholder "Unknown (OUI 64:6e:ea)" dropped
-		{"48:f3:17:07:58:7f", "Unknown"}, // IEEE "Private": "Shenzhen Reecam" dropped
+		{"00:e2:69:53:ec:10", "Unknown"},         // placeholder "Unknown (OUI 00:e2:69)" dropped
+		{"64:6e:ea:11:22:33", "Iskratel d.o.o."}, // placeholder "Unknown (OUI 64:6e:ea)" dropped: IEEE name
+		{"48:f3:17:07:58:7f", "Unknown"},         // IEEE "Private": "Shenzhen Reecam" dropped
 		{"52:54:00:12:34:56", "QEMU/KVM"},
 	} {
 		if got := lookupVendor(c.mac); got != c.want {
@@ -577,6 +581,151 @@ func TestOUIKeyForms(t *testing.T) {
 	for _, text := range []string{"f8:db:88", "00:50:56:aa", "00:50:56:aa:bb:cc:dd", "52:54:00 VM"} {
 		if ok, _ := isServerNIC(text); ok || isHypervisorMAC(text) || bmcTypeByOUI(text) != "" || lookupVendor(text) != "Unknown" {
 			t.Errorf("%q is no MAC but an OUI table answered", text)
+		}
+	}
+}
+
+// ouiTestCompact is the compact oui.txt layout shipped with the scanner: a
+// "(hex)" and a "(base 16)" line per record, no blank lines, no addresses.
+const ouiTestCompact = "00-00-0C   (hex)\t\tCisco Systems, Inc\n" +
+	"00000C     (base 16)\t\tCisco Systems, Inc\n" +
+	"52-54-00   (hex)\t\t\n" +
+	"525400     (base 16)\t\t\n" +
+	"74-AC-B9   (hex)\t\tUbiquiti Inc\n" +
+	"74ACB9     (base 16)\t\tUbiquiti Inc\n"
+
+// ouiTestStandard is the layout the IEEE publishes: a header, address lines
+// and a blank line after every record, CRLF line ends.
+const ouiTestStandard = "OUI/MA-L                                                    Organization                                 \r\n" +
+	"company_id                                                  Organization                                 \r\n" +
+	"                                                            Address                                      \r\n" +
+	"\r\n" +
+	"28-6F-B9   (hex)\t\tNokia Shanghai Bell Co., Ltd.\r\n" +
+	"286FB9     (base 16)\t\tNokia Shanghai Bell Co., Ltd.\r\n" +
+	"\t\t\t\tNo.388 Ning Qiao Road,Jin Qiao Pudong Shanghai\r\n" +
+	"\t\t\t\tShanghai   201206\r\n" +
+	"\t\t\t\tCN\r\n" +
+	"\r\n" +
+	"08-EA-44   (hex)\t\tExtreme Networks Headquarters\r\n" +
+	"08EA44     (base 16)\t\tExtreme Networks Headquarters\r\n" +
+	"\t\t\t\t2121 RDU Center Drive \r\n" +
+	"\t\t\t\tMorrisville  NC  27560\r\n" +
+	"\t\t\t\tUS\r\n" +
+	"\r\n"
+
+func ouiTestNames(t *testing.T, db oui.StaticDB) map[string]string {
+	t.Helper()
+	names := map[string]string{}
+	for p, e := range db.RawDB() {
+		names[macAddr{p[0], p[1], p[2]}.OUI()] = e.Manufacturer
+	}
+	return names
+}
+
+// TestOUIParseLayouts: both oui.txt layouts load every record (F1).
+func TestOUIParseLayouts(t *testing.T) {
+	for _, c := range []struct {
+		name, text string
+		want       map[string]string
+	}{
+		{"compact", ouiTestCompact, map[string]string{"00:00:0c": "Cisco Systems, Inc", "52:54:00": "", "74:ac:b9": "Ubiquiti Inc"}},
+		{"standard", ouiTestStandard, map[string]string{"28:6f:b9": "Nokia Shanghai Bell Co., Ltd.", "08:ea:44": "Extreme Networks Headquarters"}},
+	} {
+		db, err := ouiParse(strings.NewReader(c.text))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if got := ouiTestNames(t, db); fmt.Sprint(got) != fmt.Sprint(c.want) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+	for _, text := range []string{"", "<html><body>403 Forbidden</body></html>\n", "OUI/MA-L Organization\n"} {
+		if _, err := ouiParse(strings.NewReader(text)); err == nil {
+			t.Errorf("ouiParse(%q): no error for a text without records", text)
+		}
+	}
+}
+
+// TestLoadOUIFileShipped: the shipped oui.txt loads all of its records,
+// with the names this test's own parser reads (F1).
+func TestLoadOUIFileShipped(t *testing.T) {
+	db, err := loadOUIFile("oui.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, want := ouiTestNames(t, db), ouiTestIEEENames(t)
+	if len(got) != len(want) || len(got) < 39000 {
+		t.Fatalf("loaded %d records, oui.txt has %d", len(got), len(want))
+	}
+	for prefix, name := range want {
+		if got[prefix] != name {
+			t.Errorf("%s: loaded %q, oui.txt says %q", prefix, got[prefix], name)
+		}
+	}
+	if _, err := loadOUIFile("no-such-oui.txt"); err == nil {
+		t.Error("loadOUIFile of a missing file: no error")
+	}
+}
+
+// ouiTestTransport answers every request with one canned response.
+type ouiTestTransport struct {
+	status int
+	body   string
+}
+
+func (tr ouiTestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: tr.status, Status: http.StatusText(tr.status), Request: req,
+		Header: http.Header{}, Body: io.NopCloser(strings.NewReader(tr.body))}, nil
+}
+
+// TestOUIFetch: the download fallback accepts only a 200 answer that holds
+// records (F2). No socket is opened: the client's transport is canned.
+func TestOUIFetch(t *testing.T) {
+	for _, c := range []struct {
+		status int
+		body   string
+		ok     bool
+	}{
+		{http.StatusOK, ouiTestCompact, true},
+		{http.StatusOK, ouiTestStandard, true},
+		{http.StatusForbidden, ouiTestCompact, false},
+		{http.StatusTeapot, "I'm a teapot", false},
+		{http.StatusOK, "", false},
+		{http.StatusOK, "<html><body>Please enable JavaScript</body></html>", false},
+	} {
+		client := &http.Client{Transport: ouiTestTransport{c.status, c.body}}
+		db, err := ouiFetch(client, "http://oui.invalid/oui.txt")
+		if (err == nil) != c.ok || (c.ok && len(db.RawDB()) == 0) {
+			t.Errorf("status %d, body %.20q: db %v, err %v", c.status, c.body, db != nil, err)
+		}
+	}
+}
+
+// TestLookupVendorOrder: the curated name first; for other OUIs the IEEE
+// name; an IEEE record that names no vendor (empty, Private, an IEEE
+// Registration Authority block) is unknown (Q1; F5).
+func TestLookupVendorOrder(t *testing.T) {
+	if !ouiDBOk || ouiDB == nil || len(ouiDB.RawDB()) < 39000 {
+		t.Fatalf("TestMain did not load oui.txt: ok=%v", ouiDBOk)
+	}
+	for _, c := range []struct{ mac, want string }{
+		{"52:54:00:12:34:56", "QEMU/KVM"}, // IEEE name is empty
+		{"4c:ae:a3:27:84:cb", "HPE"},      // curated short name, not "Hewlett Packard Enterprise"
+		{"00:00:0c:07:ac:01", "Cisco Systems, Inc"},
+		{"74:ac:b9:96:47:f5", "Ubiquiti Inc"},
+		{"64:6e:ea:11:22:33", "Iskratel d.o.o."},
+		{"00:48:54:11:22:33", "Unknown"}, // IEEE record without a name
+		{"48:f3:17:07:58:7f", "Unknown"}, // IEEE "Private"
+		{"9c:69:b4:11:22:33", "Unknown"}, // IEEE Registration Authority (MA-M/MA-S)
+		{"00:e2:69:53:ec:10", "Unknown"}, // not in oui.txt
+		{"00:00:00:00:00:00", "Unknown"}, // special MACs name no vendor (00:00:00 is Xerox's)
+		{"00:00:00:12:34:56", "Unknown"},
+		{"01:00:5e:00:00:fb", "Unknown"},
+		{"da:a1:19:00:00:01", "Unknown"}, // random address; IEEE lists DA-A1-19 as a Google company ID
+		{"DESKTOP-V380CHD", "Unknown"},
+	} {
+		if got := lookupVendor(c.mac); got != c.want {
+			t.Errorf("lookupVendor(%q) = %q, want %q", c.mac, got, c.want)
 		}
 	}
 }

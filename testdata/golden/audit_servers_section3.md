@@ -58,12 +58,12 @@ graph TD
   B_3183br172_20_230_1["B-318/3<br>172.20.230.1"]
   HPEbr172_20_230_5["HPE<br>172.20.230.5"]
   HPEbr172_20_230_9["HPE<br>172.20.230.9"]
-  VM_Windowsbr172_20_0_50["[VM] 🪟 Windows<br>172.20.0.50"]
+  VM_Windows_Intel_Corporatebr172_20_0_50["[VM] 🪟 Windows Intel Corporate<br>172.20.0.50"]
   HPbr172_20_254_204["HP<br>172.20.254.204"]
   br172_20_230_253br172_20_7_227["<br>172.20.230.253<br>172.20.7.227"]
-  VM_Windowsbr10_10_10_70["[VM] 🪟 Windows<br>10.10.10.70"]
+  VM_Windows_Hewlett_Packard_Enterprisebr10_10_10_70["[VM] 🪟 Windows Hewlett Packard Enterprise<br>10.10.10.70"]
   HPbr172_20_254_223["HP<br>172.20.254.223"]
-  VM_Linuxbr10_10_10_69["[VM] 🐧 Linux<br>10.10.10.69"]
+  VM_Linux_Hewlett_Packard_Enterprisebr10_10_10_69["[VM] 🐧 Linux Hewlett Packard Enterprise<br>10.10.10.69"]
   Jamicbr172_20_254_226["Jamic<br>172.20.254.226"]
   E_209_2br172_20_230_34["E-209.2<br>172.20.230.34"]
   E205_48br172_20_230_31["E205-48<br>172.20.230.31"]
@@ -102,8 +102,8 @@ graph TD
   D_1br172_20_230_3-- "TGE1/0/52 [T] 1G ↔ TGE1/0/49" -->HPEbr172_20_253_10
   D_1br172_20_230_3-- "TGE1/0/51 [T] 1G ↔ TGE1/0/52" -->D_1_2br172_20_230_48
   HPEbr172_20_254_10-- "GE1/0/48 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_254_202
-  HPEbr172_20_254_10-- "GE1/0/5 [T]" -->VM_Windowsbr10_10_10_70
-  HPEbr172_20_254_10-- "GE1/0/4 [T]" -->VM_Linuxbr10_10_10_69
+  HPEbr172_20_254_10-- "GE1/0/5 [T]" -->VM_Windows_Hewlett_Packard_Enterprisebr10_10_10_70
+  HPEbr172_20_254_10-- "GE1/0/4 [T]" -->VM_Linux_Hewlett_Packard_Enterprisebr10_10_10_69
   HPEbr172_20_254_10-- "ge1/0/4" -->HYPERVISOR_VMware_ESXibr5_VMs_on_ge104brVMs_10_10_10_25_10_10_10_24_10_10_10_31_10_10_10_31_10_10_10_66
   HPEbr172_20_254_10-- "ge1/0/5" -->HYPERVISOR_VMware_ESXibr3_VMs_on_ge105brVMs_10_10_10_30_10_10_10_23_10_10_10_22
   HPEbr172_20_230_2-- "TGE1/0/51 [T] 1G ↔ " -->E205_48br172_20_230_31
@@ -123,7 +123,7 @@ graph TD
   HPEbr172_20_253_11-- "GE1/0/26 [T] 1G ↔ " -->Jamicbr172_20_254_226
   HPEbr172_20_253_10-- "GE1/0/47 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_253_11
   HPEbr172_20_254_202-- "TGE1/0/49 [T] 10G ↔ TGE1/0/50" -->br172_20_254_203
-  HPEbr172_20_254_202-- "GE1/0/32 [T]" -->VM_Windowsbr172_20_0_50
+  HPEbr172_20_254_202-- "GE1/0/32 [T]" -->VM_Windows_Intel_Corporatebr172_20_0_50
   HPEbr172_20_254_202-- "ge1/0/32" -->HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_13_243_172_20_6_247
   HPEbr172_20_230_240-- "TGE1/0/52 [T] 4G ↔ " -->SNR_S2995G_24FXbr172_20_230_254
   HPEbr172_20_230_7-- "GE1/0/8 [T] 1G ↔ GE1/0/48" -->A_220br172_20_230_49
@@ -247,12 +247,12 @@ graph TD
   style B_3183br172_20_230_1 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style HPEbr172_20_230_5 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style HPEbr172_20_230_9 fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  style VM_Windowsbr172_20_0_50 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style VM_Windows_Intel_Corporatebr172_20_0_50 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style HPbr172_20_254_204 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style br172_20_230_253br172_20_7_227 fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  style VM_Windowsbr10_10_10_70 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style VM_Windows_Hewlett_Packard_Enterprisebr10_10_10_70 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style HPbr172_20_254_223 fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  style VM_Linuxbr10_10_10_69 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style VM_Linux_Hewlett_Packard_Enterprisebr10_10_10_69 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style Jamicbr172_20_254_226 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style E_209_2br172_20_230_34 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style E205_48br172_20_230_31 fill:#4A90E2,stroke:#2A6FC2,color:#fff
