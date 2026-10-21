@@ -532,3 +532,130 @@ func TestGraphFDBEndpoints(t *testing.T) {
 		t.Errorf("LLDP endpoint with a BMC DNS name = %q", got)
 	}
 }
+
+// graphServerRelabel is the label detectHypervisors gives a server-NIC node
+// that is not protected as a switch (it follows the server-NIC table).
+func graphServerRelabel(mac, label string) string {
+	if ok, vendor := isServerNIC(mac); ok {
+		return fmt.Sprintf("[HYPERVISOR] %s Server\n%s", vendor, label)
+	}
+	return label
+}
+
+// TestGraphSwitchProtection covers Q2's precondition and F36: switch
+// protection (server-NIC relabel, ESXi rewrite, groups) and the Zabbix SNR
+// templates come from the polled-switch set and sysName/sysDescr, not from
+// vendor words in labels; HTTP-confirmed ESXi hosts are hypervisors whatever
+// their tag (Q10, F10).
+func TestGraphSwitchProtection(t *testing.T) {
+	resetState(t)
+	devices := map[string]*DeviceData{
+		// A polled switch whose chassis OUI is also a server-NIC OUI.
+		"10.9.4.1": {IP: "10.9.4.1", SysName: "SW-50", ChassisID: "3c:a8:2a:04:01:00", Interfaces: gigabitPorts(8, nil),
+			Neighbors: []LLDPNeighbor{
+				{LocalPortNum: 1, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: "1C 98 EC 04 00 01", RemPortIdSubtype: 5, RemPortId: "\"Gi1/0/1\"",
+					RemSysName: "agg-1", RemSysDesc: "HPE Comware Platform Software, Software Version 7.1.070"},
+				{LocalPortNum: 2, RemIndex: 2, RemChassisIdSubtype: 4, RemChassisId: "94 57 A5 04 00 02", RemPortIdSubtype: 3, RemPortId: "94 57 A5 04 00 02",
+					RemSysName: "web01"},
+				{LocalPortNum: 3, RemIndex: 3, RemChassisIdSubtype: 4, RemChassisId: "F8 F0 82 04 00 03", RemPortIdSubtype: 7, RemPortId: "\"28\"",
+					RemSysDesc: "SNR-S2995G-24FX Device, Compiled 2020"},
+			},
+			MACTable: append(macEntries(5, "5c:ed:8c:04:05:01"), macEntries(6, "00:1b:21:04:06:01")...)},
+		"10.9.4.2": {IP: "10.9.4.2", SysName: "SNR-S2985G-24TC", ChassisID: "f8:f0:82:04:02:00", Interfaces: gigabitPorts(4, nil)},
+		"10.9.4.3": {IP: "10.9.4.3", SysName: "E109", ChassisID: "f8:f0:82:04:03:00", Interfaces: gigabitPorts(4, nil)},
+	}
+	ConfirmedESXiMACs.Store("3c:a8:2a:04:01:00", true) // a stale binding to a switch
+	ConfirmedESXiMACs.Store("1c:98:ec:04:00:01", true)
+	ConfirmedESXiMACs.Store("00:1b:21:04:06:01", true)
+	g := buildGraphFromSnapshot(devices)
+
+	tag := func(tag, id string) string { // tag line as the build writes it
+		if vendor := getMACVendor(id); vendor != "" {
+			return tag + " " + vendor
+		}
+		return tag
+	}
+	want := map[string]string{
+		"3c:a8:2a:04:01:00": "SW-50\n10.9.4.1",
+		"1c:98:ec:04:00:01": tag("[LLDP-EP]", "1c:98:ec:04:00:01") + "\nagg-1\nHPE Comware Platform Software, Software Version 7.1.070",
+		"94:57:a5:04:00:02": graphServerRelabel("94:57:a5:04:00:02", tag("[LLDP-EP]", "94:57:a5:04:00:02")+"\nweb01"),
+		"f8:f0:82:04:00:03": tag("[LLDP-EP]", "f8:f0:82:04:00:03") + "\nSNR-S2995G-24FX Device, Compiled 2020",
+		"5c:ed:8c:04:05:01": graphServerRelabel("5c:ed:8c:04:05:01", tag("[ENDPOINT]", "5c:ed:8c:04:05:01")),
+		"00:1b:21:04:06:01": "[HYPERVISOR] VMware ESXi\n" + tag("[ENDPOINT]", "00:1b:21:04:06:01"),
+	}
+	for id, label := range want {
+		if got := g.SwitchInfo[id]; got != label {
+			t.Errorf("%s label = %q, want %q", id, got, label)
+		}
+	}
+	groups := map[string]string{
+		"3c:a8:2a:04:01:00": "switch",     // polled: never hypervisor
+		"00:1b:21:04:06:01": "hypervisor", // confirmed ESXi with an [ENDPOINT] tag
+	}
+	for id, wantGroup := range groups {
+		if got := g.determineDeviceGroup(id, g.SwitchInfo[id]); got != wantGroup {
+			t.Errorf("%s group = %q, want %q", id, got, wantGroup)
+		}
+	}
+	if got := g.determineDeviceGroup("1c:98:ec:04:00:01", g.SwitchInfo["1c:98:ec:04:00:01"]); got == "hypervisor" {
+		t.Errorf("LLDP switch with a confirmed MAC is grouped hypervisor")
+	}
+
+	zabbix := map[string]bool{"f8:f0:82:04:02:00": true, "f8:f0:82:04:03:00": false, "f8:f0:82:04:00:03": true, "1c:98:ec:04:00:01": false}
+	for id, snr := range zabbix {
+		templates := g.GenerateZabbixTemplate(id)
+		if got := strings.Contains(fmt.Sprint(templates), "SNR"); got != snr {
+			t.Errorf("Zabbix templates of %s = %v, want SNR %v", id, templates, snr)
+		}
+	}
+
+	// Q10 on its own: tags do not matter for a confirmed ESXi host, and an
+	// unconfirmed [HYPERVISOR] prefix keeps today's precedence.
+	clearConfirmedESXi()
+	tg := NewDJGraph()
+	for _, info := range []string{"[ENDPOINT] Dell", "[LLDP-EP]\nesx01", "[WiFi]", "[BMC] Dell iDRAC", "[HYPERVISOR] VMware ESXi\n[ENDPOINT]"} {
+		const mac = "00:1b:21:04:07:01"
+		if got := tg.determineDeviceGroup(mac, info); got == "hypervisor" {
+			t.Errorf("unconfirmed %q grouped hypervisor", info)
+		}
+		ConfirmedESXiMACs.Store(mac, true)
+		if got := tg.determineDeviceGroup(mac, info); got != "hypervisor" {
+			t.Errorf("confirmed %q grouped %q", info, got)
+		}
+		clearConfirmedESXi()
+	}
+	if got := tg.determineDeviceGroup("5c:ed:8c:04:07:02", "[HYPERVISOR] HPE ProLiant Server\n[ENDPOINT] Intel"); got != "endpoint" {
+		t.Errorf("unconfirmed server NIC grouped %q", got)
+	}
+}
+
+// TestGraphIPEnrichment covers F68 (an IP is added unless it is a whole
+// label line) and F69 (the hyp "VMs:" line lists the IP each VM label shows).
+func TestGraphIPEnrichment(t *testing.T) {
+	resetState(t)
+	g := NewDJGraph()
+	addInfoNode(g, "00:1b:21:03:00:01", "[ENDPOINT]\n10.10.10.68")
+	addInfoNode(g, "00:1b:21:03:00:02", "[ENDPOINT]\n10.10.10.6")
+	addInfoNode(g, "hyp-x-ge1_0_1", "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/1")
+	addInfoNode(g, "00:50:56:03:00:01", "[VM] 🐧 Linux VMware\n10.0.0.5")
+	addInfoNode(g, "00:50:56:03:00:02", "[VM] 🐧 Linux VMware")
+	g.AddEdge("hyp-x-ge1_0_1", "00:50:56:03:00:01", "vNIC")
+	g.AddEdge("hyp-x-ge1_0_1", "00:50:56:03:00:02", "vNIC")
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP = map[string]string{
+		"00:1b:21:03:00:01": "10.10.10.6", "00:1b:21:03:00:02": "10.10.10.6",
+		"00:50:56:03:00:01": "10.0.0.9", "00:50:56:03:00:02": "10.0.0.7",
+	}
+	globalMACtoIPMutex.Unlock()
+	enrichGraphWithIPs(g)
+	for id, want := range map[string]string{
+		"00:1b:21:03:00:01": "[ENDPOINT]\n10.10.10.68\n10.10.10.6",
+		"00:1b:21:03:00:02": "[ENDPOINT]\n10.10.10.6",
+		"00:50:56:03:00:01": "[VM] 🐧 Linux VMware\n10.0.0.5\n10.0.0.9",
+		"hyp-x-ge1_0_1":     "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/1\nVMs: 10.0.0.5, 10.0.0.7",
+	} {
+		if got := g.SwitchInfo[id]; got != want {
+			t.Errorf("%s = %q, want %q", id, got, want)
+		}
+	}
+}

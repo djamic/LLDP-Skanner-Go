@@ -30,7 +30,10 @@ type DJGraph struct {
 
 	// graphSwitches holds the node ids of the polled devices (set by the
 	// graph build): such a node is a switch, whatever its label says.
+	// graphSysText holds the sysName/sysDescr text known for a node (the
+	// polled sysName, LLDP RemSysName and RemSysDesc), never vendor text.
 	graphSwitches map[string]bool
+	graphSysText  map[string]string
 }
 
 // NewDJGraph creates a new graph instance
@@ -413,6 +416,12 @@ func (g *DJGraph) determineDeviceGroup(node, info string) string {
 		return graphNameGroup(node, info, true)
 	}
 
+	// An HTTP-confirmed ESXi host is a hypervisor whatever tag its label
+	// has ([ENDPOINT], [LLDP-EP], [WiFi], [BMC]); a switch never is.
+	if graphIsConfirmedESXi(node) && !graphIsSwitchNode(g, node) {
+		return "hypervisor"
+	}
+
 	// Check for Wi-Fi random MAC endpoints
 	if strings.Contains(info, "[WiFi]") {
 		return "wifi_random"
@@ -499,12 +508,13 @@ func (g *DJGraph) GenerateZabbixTemplate(node string) []map[string]string {
 		{"name": "Network Generic Device by SNMP"},
 	}
 
-	info, err := g.GetNodeInfo(node)
-	if err != nil || info == "" {
+	// SNR devices by their sysName/sysDescr (polled sysName, LLDP), never by
+	// the vendor text in the label
+	if !g.Nodes[node] {
 		return templates
 	}
 
-	if strings.Contains(info, "SNR") {
+	if strings.Contains(g.graphSysText[node], "SNR") {
 		templates = []map[string]string{
 			{"name": "Template SNR Broadcast-Multicast-Unicast"},
 			{"name": "Template SNR CPU Usage"},

@@ -17,7 +17,7 @@
     "wifi_random": {"graph_nodes": 17, "index_html_data_group": true, "app_js_literal": true}
   },
   "tokens": {
-    "Server\n": {"graph_nodes": 15, "graph_edges": 0, "app_js": false, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
+    "Server\n": {"graph_nodes": 17, "graph_edges": 0, "app_js": false, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "Unmanaged": {"graph_nodes": 33, "graph_edges": 0, "app_js": true, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
     "VMs:": {"graph_nodes": 13, "graph_edges": 0, "app_js": false, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "VMware ESXi": {"graph_nodes": 13, "graph_edges": 0, "app_js": false, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
@@ -25,7 +25,7 @@
     "[DNS]": {"graph_nodes": 52, "graph_edges": 0, "app_js": false, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "[ENDPOINT]": {"graph_nodes": 278, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "[HUB]": {"graph_nodes": 33, "graph_edges": 0, "app_js": true, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
-    "[HYPERVISOR]": {"graph_nodes": 28, "graph_edges": 0, "app_js": false, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
+    "[HYPERVISOR]": {"graph_nodes": 30, "graph_edges": 0, "app_js": false, "app_js_lowercase": true, "index_html": false, "index_html_lowercase": false},
     "[LLDP-EP]": {"graph_nodes": 544, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "[MAC-REF]": {"graph_nodes": 0, "graph_edges": 2, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},
     "[T]": {"graph_nodes": 0, "graph_edges": 103, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false},

@@ -986,8 +986,8 @@
     {"id": "f8:f0:82:d1:3c:12", "group": "switch", "type": "switch", "label": "F-4-glavniy\n172.20.240.3\nf8:f0:82:d1:3c:12", "sysName": "F-4-glavniy\n172.20.240.3"},
     {"id": "f8:f0:82:d1:67:5e", "group": "switch", "type": "switch", "label": "SNR-S2995G-24FX\n172.20.230.254\nf8:f0:82:d1:67:5e", "sysName": "SNR-S2995G-24FX\n172.20.230.254"},
     {"id": "f8:f0:82:d8:62:67", "group": "switch", "type": "switch", "label": "\n172.20.230.77\nf8:f0:82:d8:62:67", "sysName": "\n172.20.230.77"},
-    {"id": "f8:f0:82:d8:73:c6", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] SNR\nf8:f0:82:d8:73:c6", "sysName": "[ENDPOINT] SNR"},
-    {"id": "f8:f0:82:d8:78:90", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] SNR\nf8:f0:82:d8:78:90", "sysName": "[ENDPOINT] SNR"},
+    {"id": "f8:f0:82:d8:73:c6", "group": "endpoint", "type": "endpoint", "label": "[HYPERVISOR] HPE Server\n[ENDPOINT] SNR\nf8:f0:82:d8:73:c6", "sysName": "[HYPERVISOR] HPE Server\n[ENDPOINT] SNR"},
+    {"id": "f8:f0:82:d8:78:90", "group": "endpoint", "type": "endpoint", "label": "[HYPERVISOR] HPE Server\n[ENDPOINT] SNR\nf8:f0:82:d8:78:90", "sysName": "[HYPERVISOR] HPE Server\n[ENDPOINT] SNR"},
     {"id": "f8:f0:82:d8:7d:07", "group": "switch", "type": "switch", "label": "\n172.20.230.47\nf8:f0:82:d8:7d:07", "sysName": "\n172.20.230.47"},
     {"id": "f8:f0:82:d8:7e:81", "group": "switch", "type": "switch", "label": "A_padval_SNR\n172.20.230.51\nf8:f0:82:d8:7e:81", "sysName": "A_padval_SNR\n172.20.230.51"},
     {"id": "hub-4c:ae:a3:27:76:8a-p48", "group": "hub", "type": "hub", "label": "[HUB] Unmanaged\n7 devices\nhub-4c:ae:a3:27:76:8a-p48", "sysName": "[HUB] Unmanaged\n7 devices"},
@@ -1031,11 +1031,11 @@
     {"id": "hyp-4c:ae:a3:27:86:4a-ge1_0_26", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/26\nVMs: 172.20.226.17, 172.20.15.118\nhyp-4c:ae:a3:27:86:4a-ge1_0_26", "sysName": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/26\nVMs: 172.20.226.17, 172.20.15.118"},
     {"id": "hyp-4c:ae:a3:27:86:4a-ge1_0_28", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/28\nVMs: 172.20.228.1, 172.20.20.100, 172.20.14.186, 172.20.10.227\nhyp-4c:ae:a3:27:86:4a-ge1_0_28", "sysName": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/28\nVMs: 172.20.228.1, 172.20.20.100, 172.20.14.186, 172.20.10.227"},
     {"id": "hyp-4c:ae:a3:27:86:4a-ge1_0_30", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/30\nVMs: 172.16.24.136, 172.20.7.141, 172.20.10.162, 172.20.1.106\nhyp-4c:ae:a3:27:86:4a-ge1_0_30", "sysName": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/30\nVMs: 172.16.24.136, 172.20.7.141, 172.20.10.162, 172.20.1.106"},
-    {"id": "hyp-4c:ae:a3:27:86:4a-ge1_0_31", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/31\nVMs: 172.20.20.168, 172.20.9.199, 172.20.224.49, 195.158.2.222\nhyp-4c:ae:a3:27:86:4a-ge1_0_31", "sysName": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/31\nVMs: 172.20.20.168, 172.20.9.199, 172.20.224.49, 195.158.2.222"},
+    {"id": "hyp-4c:ae:a3:27:86:4a-ge1_0_31", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/31\nVMs: 172.20.0.5, 172.20.9.199, 172.20.224.49, 195.158.2.222\nhyp-4c:ae:a3:27:86:4a-ge1_0_31", "sysName": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/31\nVMs: 172.20.0.5, 172.20.9.199, 172.20.224.49, 195.158.2.222"},
     {"id": "hyp-4c:ae:a3:27:86:4a-ge1_0_32", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.9.121, 195.158.2.214\nhyp-4c:ae:a3:27:86:4a-ge1_0_32", "sysName": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.9.121, 195.158.2.214"},
     {"id": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_26", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n13 VMs on ge1/0/26\nVMs: 172.20.7.72, 172.20.18.209, 172.20.7.58, 172.20.19.209, 172.20.17.47, 172.20.14.78, 172.20.19.122, 172.20.14.120, 172.20.16.67, 172.20.11.187, 172.20.20.218, 172.20.7.71, 172.20.14.159\nhyp-4c:ae:a3:8d:ee:c9-ge1_0_26", "sysName": "[HYPERVISOR] VMware ESXi\n13 VMs on ge1/0/26\nVMs: 172.20.7.72, 172.20.18.209, 172.20.7.58, 172.20.19.209, 172.20.17.47, 172.20.14.78, 172.20.19.122, 172.20.14.120, 172.20.16.67, 172.20.11.187, 172.20.20.218, 172.20.7.71, 172.20.14.159"},
     {"id": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247\nhyp-4c:ae:a3:8d:ee:c9-ge1_0_32", "sysName": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247"},
-    {"id": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_35", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/35\nVMs: 172.20.1.253, 172.20.12.137, 172.20.11.130\nhyp-4c:ae:a3:8d:ee:c9-ge1_0_35", "sysName": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/35\nVMs: 172.20.1.253, 172.20.12.137, 172.20.11.130"}
+    {"id": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_35", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/35\nVMs: 172.20.1.253, 172.20.1.219, 172.20.11.130\nhyp-4c:ae:a3:8d:ee:c9-ge1_0_35", "sysName": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/35\nVMs: 172.20.1.253, 172.20.1.219, 172.20.11.130"}
   ],
   "links": [
     {"source": "172.20.254.249", "target": "4c:ae:a3:a2:01:ac", "label": "GE0/0/14 [MAC-REF]|", "sourceLabel": "GE0/0/14 [MAC-REF]", "unreachable": true},
@@ -3045,8 +3045,8 @@
     "f8:f0:82:d1:3c:12": "F-4-glavniy\n172.20.240.3",
     "f8:f0:82:d1:67:5e": "SNR-S2995G-24FX\n172.20.230.254",
     "f8:f0:82:d8:62:67": "\n172.20.230.77",
-    "f8:f0:82:d8:73:c6": "[ENDPOINT] SNR",
-    "f8:f0:82:d8:78:90": "[ENDPOINT] SNR",
+    "f8:f0:82:d8:73:c6": "[HYPERVISOR] HPE Server\n[ENDPOINT] SNR",
+    "f8:f0:82:d8:78:90": "[HYPERVISOR] HPE Server\n[ENDPOINT] SNR",
     "f8:f0:82:d8:7d:07": "\n172.20.230.47",
     "f8:f0:82:d8:7e:81": "A_padval_SNR\n172.20.230.51",
     "hub-4c:ae:a3:27:76:8a-p48": "[HUB] Unmanaged\n7 devices",
@@ -3090,11 +3090,11 @@
     "hyp-4c:ae:a3:27:86:4a-ge1_0_26": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/26\nVMs: 172.20.226.17, 172.20.15.118",
     "hyp-4c:ae:a3:27:86:4a-ge1_0_28": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/28\nVMs: 172.20.228.1, 172.20.20.100, 172.20.14.186, 172.20.10.227",
     "hyp-4c:ae:a3:27:86:4a-ge1_0_30": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/30\nVMs: 172.16.24.136, 172.20.7.141, 172.20.10.162, 172.20.1.106",
-    "hyp-4c:ae:a3:27:86:4a-ge1_0_31": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/31\nVMs: 172.20.20.168, 172.20.9.199, 172.20.224.49, 195.158.2.222",
+    "hyp-4c:ae:a3:27:86:4a-ge1_0_31": "[HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/31\nVMs: 172.20.0.5, 172.20.9.199, 172.20.224.49, 195.158.2.222",
     "hyp-4c:ae:a3:27:86:4a-ge1_0_32": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.9.121, 195.158.2.214",
     "hyp-4c:ae:a3:8d:ee:c9-ge1_0_26": "[HYPERVISOR] VMware ESXi\n13 VMs on ge1/0/26\nVMs: 172.20.7.72, 172.20.18.209, 172.20.7.58, 172.20.19.209, 172.20.17.47, 172.20.14.78, 172.20.19.122, 172.20.14.120, 172.20.16.67, 172.20.11.187, 172.20.20.218, 172.20.7.71, 172.20.14.159",
     "hyp-4c:ae:a3:8d:ee:c9-ge1_0_32": "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/32\nVMs: 172.20.13.243, 172.20.6.247",
-    "hyp-4c:ae:a3:8d:ee:c9-ge1_0_35": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/35\nVMs: 172.20.1.253, 172.20.12.137, 172.20.11.130"
+    "hyp-4c:ae:a3:8d:ee:c9-ge1_0_35": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/35\nVMs: 172.20.1.253, 172.20.1.219, 172.20.11.130"
   },
   "node_status": {
     "172.20.230.17": "unreachable",

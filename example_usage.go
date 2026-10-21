@@ -902,6 +902,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		}
 		knownMACs[targetID] = true
 		lldpPorts[neighbor.LocalPortNum] = true
+		graphAddSysText(graph, targetID, neighbor.RemSysName, neighbor.RemSysDesc)
 
 		logDebug("    -> Neighbor: %s (ID: %s) via LocalPort: %d", displayName, targetID, neighbor.LocalPortNum)
 
@@ -1199,6 +1200,16 @@ func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceDa
 		}
 	}
 	return info
+}
+
+// graphLabelIP is the first label line that is an IP address, or "".
+func graphLabelIP(info string) string {
+	for _, line := range strings.Split(info, "\n") {
+		if net.ParseIP(line) != nil {
+			return line
+		}
+	}
+	return ""
 }
 
 // graphAddFDBEndpoint creates the node of an FDB MAC unless an earlier port
@@ -2699,7 +2710,41 @@ func graphAddSwitchNode(graph *DJGraph, d *DeviceData) string {
 		graph.graphSwitches = make(map[string]bool)
 	}
 	graph.graphSwitches[id] = true
+	graphAddSysText(graph, id, d.SysName)
 	return id
+}
+
+// graphAddSysText records sysName/sysDescr text for a node (each distinct
+// text once, in build order).
+func graphAddSysText(graph *DJGraph, id string, texts ...string) {
+	for _, text := range texts {
+		text = strings.TrimSpace(text)
+		if text == "" || strings.Contains(graph.graphSysText[id], text) {
+			continue
+		}
+		if graph.graphSysText == nil {
+			graph.graphSysText = make(map[string]string)
+		}
+		if graph.graphSysText[id] != "" {
+			text = graph.graphSysText[id] + "\n" + text
+		}
+		graph.graphSysText[id] = text
+	}
+}
+
+// graphSwitchSysMarkers are sysName/sysDescr words of switches (HPE/H3C
+// Comware, Huawei VRP, Cisco IOS, SNR).
+var graphSwitchSysMarkers = []string{"Comware", "HUAWEI", "Cisco", "SNR"}
+
+// graphIsSwitchNode reports whether a node is a switch: a polled device, or
+// an LLDP neighbor whose sysName/sysDescr names a switch platform. Vendor
+// text in labels plays no part.
+func graphIsSwitchNode(graph *DJGraph, id string) bool {
+	if graph.graphSwitches[id] {
+		return true
+	}
+	sys := graph.graphSysText[id]
+	return slices.ContainsFunc(graphSwitchSysMarkers, func(m string) bool { return strings.Contains(sys, m) })
 }
 
 // buildSwitchChassisMACs creates a map of normalized switch MACs -> node IDs
@@ -3039,36 +3084,19 @@ func detectHypervisors(graph *DJGraph) {
 
 	// --- Phase 2: Server NIC detection ---
 	// Tag nodes from known server vendors (Dell/HPE/SuperMicro) as potential hypervisors.
-	// Only applies to endpoint/vm/unknown nodes — NOT switches.
-	// Build set of known switch node IDs first
-	switchNodeIDs := map[string]bool{}
-	for nid, info := range graph.SwitchInfo {
-		if strings.Contains(info, "[SWITCH]") || strings.Contains(info, "HPE\n172") ||
-			strings.Contains(info, "HUAWEI") || strings.Contains(info, "Cisco") ||
-			strings.Contains(info, "Comware") || strings.Contains(info, "SNR") {
-			switchNodeIDs[nid] = true
-		}
-	}
-	// Also mark all SNMP-managed devices (from collectedData) as switches
-	// These are devices we successfully walked — they are managed switches, not hypervisors
-	collectedDataMutex.RLock()
-	for _, dev := range collectedData {
-		switchNodeIDs[dev.IP] = true
-		switchNodeIDs[graphDeviceNodeID(dev)] = true
-	}
-	collectedDataMutex.RUnlock()
-
-	for nodeID := range graph.Nodes {
+	// Only applies to endpoint/vm/unknown nodes — NOT switches: the polled
+	// devices of this build and LLDP neighbors whose sysName/sysDescr names
+	// a switch (graphIsSwitchNode; vendor words in labels do not count).
+	for _, nodeID := range slices.Sorted(maps.Keys(graph.Nodes)) {
 		if strings.HasPrefix(nodeID, "hyp-") || strings.HasPrefix(nodeID, "hub-") {
 			continue
 		}
-		if switchNodeIDs[nodeID] {
+		if graphIsSwitchNode(graph, nodeID) {
 			continue // skip switches
 		}
 		if isServer, vendor := isServerNIC(nodeID); isServer {
 			info := graph.SwitchInfo[nodeID]
-			if strings.Contains(info, "[HYPERVISOR]") || strings.Contains(info, "[SWITCH]") ||
-				strings.Contains(info, "[BMC]") {
+			if strings.Contains(info, "[HYPERVISOR]") || strings.Contains(info, "[BMC]") {
 				continue
 			}
 			graph.SwitchInfo[nodeID] = fmt.Sprintf("[HYPERVISOR] %s Server\n%s", vendor, info)

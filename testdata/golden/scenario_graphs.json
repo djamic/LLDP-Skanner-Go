@@ -49,7 +49,7 @@
       "hub-4c:ae:a3:09:00:02-p24": "hub | [HUB] Unmanaged\n2 devices",
       "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
       "hyp-4c:ae:a3:09:00:02-ge1_0_10": "hypervisor | [HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/10",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43"
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/9\nVMs: 10.0.9.99, 10.0.9.42, 10.0.9.43"
     },
     "edges": [
       "10.0.9.5 -> 00:1b:21:09:51:01 : \"GE1/0/1|\"",
@@ -109,7 +109,7 @@
       "00:0c:29:09:0a:02": "vm | [VM] 💻 VMware VM VMware",
       "00:0c:29:09:0a:03": "vm | [VM] 💻 VMware VM VMware",
       "00:0c:29:09:0a:04": "vm | [VM] 💻 VMware VM VMware",
-      "00:1b:21:09:03:01": "endpoint | [HYPERVISOR] VMware ESXi\n[ENDPOINT]\n10.0.9.31",
+      "00:1b:21:09:03:01": "hypervisor | [HYPERVISOR] VMware ESXi\n[ENDPOINT]\n10.0.9.31",
       "00:1b:21:09:0b:01": "endpoint | [ENDPOINT]\n10.0.9.81",
       "00:1b:21:09:0b:02": "endpoint | [ENDPOINT]",
       "00:1b:21:09:0b:03": "endpoint | [ENDPOINT]",
@@ -117,7 +117,7 @@
       "00:1b:21:09:0b:05": "endpoint | [ENDPOINT]",
       "00:1b:21:09:0d:03": "bmc | [BMC] Dell iDRAC\n10.0.9.13\n[DNS] srv01-idrac",
       "00:1b:21:09:16:01": "endpoint | [ENDPOINT]\n10.0.9.25\n[DNS] pc-9-25",
-      "00:1b:21:09:18:01": "endpoint | [HYPERVISOR] VMware ESXi\n[ENDPOINT]",
+      "00:1b:21:09:18:01": "hypervisor | [HYPERVISOR] VMware ESXi\n[ENDPOINT]",
       "00:1b:21:09:18:02": "endpoint | [ENDPOINT]",
       "00:1b:21:09:1e:01": "endpoint | [ENDPOINT]",
       "00:1b:21:09:51:01": "endpoint | [ENDPOINT]",
@@ -136,23 +136,23 @@
       "10:7c:61:c0:9e:aa": "endpoint | [LLDP-EP]\nDESKTOP-V380CHD",
       "4c:ae:a3:09:00:02": "switch | sw-a\n10.0.9.2",
       "4c:ae:a3:09:00:03": "switch | sw-b\n10.0.9.3",
-      "4c:ae:a3:09:00:04": "switch | [HYPERVISOR] VMware ESXi\nsw-c\n10.0.9.4",
+      "4c:ae:a3:09:00:04": "switch | sw-c\n10.0.9.4",
       "52:54:00:09:08:01": "vm | [VM] 💻 KVM/Proxmox VM QEMU/KVM",
-      "5c:ed:8c:09:00:17": "endpoint | [HYPERVISOR] HPE ProLiant Server\n[LLDP-EP] Intel\nILOCZJ33411C3",
+      "5c:ed:8c:09:00:17": "hypervisor | [HYPERVISOR] HPE ProLiant Server\n[LLDP-EP] Intel\nILOCZJ33411C3",
       "5c:ed:8c:09:09:04": "endpoint | [HYPERVISOR] HPE ProLiant Server\n[ENDPOINT] Intel\n10.0.9.44",
       "74:56:3c:bb:d0:16": "endpoint | [HYPERVISOR] SuperMicro (GIGA-BYTE) Server\n[LLDP-EP]",
       "B-318/1": "endpoint | [LLDP-EP]",
       "aa:bb:cc:09:0e:01": "wifi_random | [WiFi]",
       "b0:83:fe:09:0b:07": "bmc | [BMC] Dell iDRAC Dell",
       "da:a1:19:09:0b:06": "wifi_random | [WiFi]",
-      "da:a1:19:09:0d:02": "wifi_random | [HYPERVISOR] VMware ESXi\n[WiFi]\n10.0.9.15\n[DNS] pc-9-15",
+      "da:a1:19:09:0d:02": "hypervisor | [HYPERVISOR] VMware ESXi\n[WiFi]\n10.0.9.15\n[DNS] pc-9-15",
       "de:a1:19:09:17:01": "wifi_random | [WiFi]",
       "ec:74:d7:64:cb:b1": "endpoint | [LLDP-EP]\nGXP1610_ec:74:d7:64:cb:b1",
       "f4:b5:20:19:12:5e": "endpoint | [LLDP-EP]\nprinter-7\nHP LaserJet",
       "hub-4c:ae:a3:09:00:02-p11": "hub | [HUB] Unmanaged\n7 devices",
       "hyp-10.0.9.7-ge1_0_2": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/2\nVMs: 10.0.9.71, 10.0.9.72",
       "hyp-4c:ae:a3:09:00:02-ge1_0_10": "hypervisor | [HYPERVISOR] VMware ESXi\n4 VMs on ge1/0/10",
-      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/9\nVMs: 10.0.9.41, 10.0.9.42, 10.0.9.43"
+      "hyp-4c:ae:a3:09:00:02-ge1_0_9": "hypervisor | [HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/9\nVMs: 10.0.9.99, 10.0.9.42, 10.0.9.43"
     },
     "edges": [
       "10.0.9.5 -> 00:1b:21:09:51:01 : \"GE1/0/1|\"",
@@ -277,7 +277,7 @@
       "b4:7a:f1:00:00:06": "endpoint | [HYPERVISOR] VMware ESXi\n[ENDPOINT] Supermicro",
       "e8:39:35:00:00:08": "switch | Cisco IOS\n172.20.0.8",
       "ec:b1:d7:00:00:12": "switch | HUAWEI S5720\n172.20.0.12",
-      "f8:f0:82:00:00:01": "endpoint | [ENDPOINT] SNR",
+      "f8:f0:82:00:00:01": "endpoint | [HYPERVISOR] HPE Server\n[ENDPOINT] SNR",
       "f8:f0:82:00:00:02": "endpoint | [HYPERVISOR] HPE Server\n[ENDPOINT] NAGTECH LLC",
       "hub-x-p1": "hub | [HUB] Unmanaged\n2 devices",
       "hyp-x-ge1": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1"

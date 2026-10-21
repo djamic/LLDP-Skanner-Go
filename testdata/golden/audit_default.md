@@ -1052,8 +1052,8 @@ graph TD
 | 612 | f4:e2:c6:f7:08:d1 | [LLDP-EP] ZTE | 172.15.1.81 | HPE (GE1/0/47 [V1500] 1G) |
 | 613 | f4:e2:c6:f7:1f:c1 | [LLDP-EP] ZTE | 172.15.1.68 | SNR-S2995G-24FX (Eth1/0/24 [T] 1G) |
 | 614 | f4:e2:c6:f7:23:81 | [LLDP-EP] ZTE | 172.15.1.69 | SNR-S2995G-24FX (Eth1/0/24 [T] 1G) |
-| 615 | f8:f0:82:d8:73:c6 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/39 [V164]) |
-| 616 | f8:f0:82:d8:78:90 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/19 [V164]) |
+| 615 | f8:f0:82:d8:73:c6 | [HYPERVISOR] HPE Server |  | D 1-2 (GE1/0/39 [V164]) |
+| 616 | f8:f0:82:d8:78:90 | [HYPERVISOR] HPE Server |  | D 1-2 (GE1/0/19 [V164]) |
 
 ### 4.3 Hypervisor serverlar (13 ta)
 
@@ -2606,11 +2606,11 @@ graph LR
 
 **Virtual mashinalar:** 4 ta
 
-### Hypervisor #9: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/31 — VMs: 172.20.20.168, 172.20.9.199, 172.20.224.49, 195.158.2.222
+### Hypervisor #9: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/31 — VMs: 172.20.0.5, 172.20.9.199, 172.20.224.49, 195.158.2.222
 
 ```mermaid
 graph LR
-  hyp_4caea327864a_ge1_0_31{{"[HYPERVISOR] VMware ESXi<br>4 VMs on ge1/0/31<br>VMs: 172.20.20.168, 172.20.9.199, 172.20.224.49, 195.158.2.222"}}
+  hyp_4caea327864a_ge1_0_31{{"[HYPERVISOR] VMware ESXi<br>4 VMs on ge1/0/31<br>VMs: 172.20.0.5, 172.20.9.199, 172.20.224.49, 195.158.2.222"}}
   4caea327864a["HPE<br>172.20.254.199"]
   4caea327864a-- "ge1/0/31" -->hyp_4caea327864a_ge1_0_31
   style 4caea327864a fill:#4A90E2,stroke:#2A6FC2,color:#fff
@@ -2721,11 +2721,11 @@ graph LR
 
 **Virtual mashinalar:** 2 ta
 
-### Hypervisor #13: [HYPERVISOR] VMware ESXi — 3 VMs on ge1/0/35 — VMs: 172.20.1.253, 172.20.12.137, 172.20.11.130
+### Hypervisor #13: [HYPERVISOR] VMware ESXi — 3 VMs on ge1/0/35 — VMs: 172.20.1.253, 172.20.1.219, 172.20.11.130
 
 ```mermaid
 graph LR
-  hyp_4caea38deec9_ge1_0_35{{"[HYPERVISOR] VMware ESXi<br>3 VMs on ge1/0/35<br>VMs: 172.20.1.253, 172.20.12.137, 172.20.11.130"}}
+  hyp_4caea38deec9_ge1_0_35{{"[HYPERVISOR] VMware ESXi<br>3 VMs on ge1/0/35<br>VMs: 172.20.1.253, 172.20.1.219, 172.20.11.130"}}
   4caea38deec9["HPE<br>172.20.254.202"]
   4caea38deec9-- "ge1/0/35" -->hyp_4caea38deec9_ge1_0_35
   style 4caea38deec9 fill:#4A90E2,stroke:#2A6FC2,color:#fff
