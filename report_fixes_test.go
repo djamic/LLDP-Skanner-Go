@@ -14,8 +14,9 @@ import (
 	"testing"
 )
 
-// Tests for the report and export fixes (F71-F76). They use hand-made
-// devices or graphs, so they do not depend on the fixture.
+// Tests for the report and export fixes (F71-F76, Q16). Except for
+// TestReportAuditDeterministic they use hand-made devices or graphs, not
+// the fixture.
 
 // reportSetDevices replaces collectedData with the given devices.
 func reportSetDevices(devices ...*DeviceData) {
@@ -143,6 +144,10 @@ func TestReportDeviceVendorConsistent(t *testing.T) {
 	if fmt.Sprint(gotBuckets) != fmt.Sprint(wantBuckets) {
 		t.Errorf("vendor_stats buckets = %v, want %v", gotBuckets, wantBuckets)
 	}
+	// Q16: the buckets come in vendor order
+	if !slices.IsSortedFunc(stats.Vendors, func(a, b VendorStat) int { return strings.Compare(a.Vendor, b.Vendor) }) {
+		t.Errorf("vendor_stats buckets are not in vendor order: %v", stats.Vendors)
+	}
 }
 
 // TestReportDeviceVendorRules (F71) pins the sysName keyword fallback.
@@ -176,7 +181,7 @@ func reportReadJSON(t *testing.T, path string, v any) {
 	}
 }
 
-// reportShadowHubs returns the hub ids GenerateShadowDiagrams draws, in order.
+// reportShadowHubs returns the hub ids GenerateShadowDiagrams drew, sorted.
 func reportShadowHubs(g *DJGraph, md string) []string {
 	var hubs []string
 	for id := range g.Nodes {
@@ -522,6 +527,7 @@ func TestReportBFSRoot(t *testing.T) {
 	// gateway IP as a substring only.
 	reportSetDevices()
 	gatewayIP = "10.0.76.1"
+	t.Cleanup(func() { gatewayIP = fixedGatewayIP })
 	h := NewDJGraph()
 	addInfoNode(h, "aa:bb:cc:76:00:11", "sw-11\n10.0.76.11")
 	addInfoNode(h, "aa:bb:cc:76:00:12", "sw-12\n10.0.76.12")
@@ -532,6 +538,29 @@ func TestReportBFSRoot(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		if core := reportBFSCore(t, h); core != "aa:bb:cc:76:00:11" {
 			t.Fatalf("run %d: BFS root = %s, want aa:bb:cc:76:00:11", i, core)
+		}
+	}
+}
+
+// TestReportAuditDeterministic (Q16): with GetGraphData in map order, as in
+// production, the report parts built from the devices and the graph come
+// out the same on every call.
+func TestReportAuditDeterministic(t *testing.T) {
+	SetGlobalGraph(buildFixtureGraph(t))
+	sortGraphData = false
+	t.Cleanup(func() { sortGraphData = true })
+	parts := func() []string {
+		md := generateAuditMD([]string{"switch", "hub", "endpoint", "vm", "hypervisor"})
+		rr := httptest.NewRecorder()
+		reportSummaryHandler(rr, httptest.NewRequest(http.MethodGet, "/api/report/summary", nil))
+		return []string{reportMDSection(md, "## 3.", "## 6."), reportMDSection(md, "## 7.", "## 9."), rr.Body.String()}
+	}
+	first := parts()
+	for call := 2; call <= 4; call++ {
+		for i, part := range parts() {
+			if part != first[i] {
+				t.Fatalf("call %d: part %d differs from the first call:\n%s", call, i, lineDiff([]byte(first[i]), []byte(part), 10))
+			}
 		}
 	}
 }

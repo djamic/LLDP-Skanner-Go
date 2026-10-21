@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -44,13 +45,24 @@ type TopologyEdge struct {
 	Label  string `json:"label"`
 }
 
+// reportGraphData is GetGraphData with the nodes in id order and the links
+// in source, target order, so a graph always gives the same report (Q16).
+func reportGraphData(graph *DJGraph) GraphData {
+	data := graph.GetGraphData()
+	slices.SortFunc(data.Nodes, func(a, b GraphNode) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(data.Links, func(a, b GraphLink) int {
+		return cmp.Or(strings.Compare(a.Source, b.Source), strings.Compare(a.Target, b.Target))
+	})
+	return data
+}
+
 // GenerateTopologySVG creates an SVG of the switch/router-only topology
 func GenerateTopologySVG(graph *DJGraph) string {
 	if graph == nil {
 		return ""
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 
 	// Filter: only switch and router nodes
 	var nodes []TopologyNode
@@ -163,7 +175,7 @@ func GenerateTopologyPNG(graph *DJGraph) string {
 		return "<p><i>Topologiya ma'lumotlari mavjud emas</i></p>"
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 
 	// Filter: only switch and router nodes
 	type pngNode struct {
@@ -424,9 +436,10 @@ func reportSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Top devices
+	// Top devices (in IP order)
 	collectedDataMutex.RLock()
-	for _, dev := range collectedData {
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		dev := collectedData[ip]
 		summary.TopDevices = append(summary.TopDevices, DeviceSummary{
 			IP:      dev.IP,
 			SysName: dev.SysName,
@@ -459,11 +472,12 @@ func reportFullHandler(w http.ResponseWriter, r *http.Request) {
 	totalMACs := lastTotalMACs
 	lastReportMutex.RUnlock()
 
-	// Build device table
+	// Build device table (in IP order)
 	var deviceRows strings.Builder
 	totalSwitches := 0
 	collectedDataMutex.RLock()
-	for _, dev := range collectedData {
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		dev := collectedData[ip]
 		vendor := reportDeviceVendor(dev)
 		deviceRows.WriteString(fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td></tr>\n",
 			dev.IP, dev.SysName, vendor, len(dev.Interfaces), len(dev.MACTable)))
@@ -613,7 +627,7 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 		return "graph TD\n  NoData[Topologiya ma'lumotlari mavjud emas]"
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 
 	// Build allowed groups set
 	allowedGroups := make(map[string]bool)
@@ -784,7 +798,7 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 		return ""
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 
 	// Find all hub nodes
 	type hubInfo struct {
@@ -987,7 +1001,7 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 		return ""
 	}
 
-	data := graph.GetGraphData()
+	data := reportGraphData(graph)
 	nodeByID := make(map[string]GraphNode, len(data.Nodes))
 	for _, n := range data.Nodes {
 		nodeByID[n.ID] = n
@@ -1222,13 +1236,14 @@ func generateAuditMD(groups []string) string {
 	totalMACs := lastTotalMACs
 	lastReportMutex.RUnlock()
 
-	// Device table
+	// Device table (in IP order)
 	var deviceRows strings.Builder
 	totalSwitches := 0
 	collectedDataMutex.RLock()
 	deviceRows.WriteString("| IP | Hostname | Vendor | Portlar | MAC lar |\n")
 	deviceRows.WriteString("|---|---|---|---|---|\n")
-	for _, dev := range collectedData {
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		dev := collectedData[ip]
 		vendor := reportDeviceVendor(dev)
 		deviceRows.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %d |\n",
 			dev.IP, dev.SysName, vendor, len(dev.Interfaces), len(dev.MACTable)))
@@ -1306,7 +1321,7 @@ func generateAuditMD(groups []string) string {
 
 	// Build per-group tables from graph data
 	if graph != nil {
-		data := graph.GetGraphData()
+		data := reportGraphData(graph)
 
 		// Group order and display names
 		type groupDef struct {
@@ -1463,11 +1478,12 @@ func generateAuditMD(groups []string) string {
 
 		for _, vid := range vlanIDs {
 			vi := vlanMap[vid]
-			// Build switch list with counts
+			// Build switch list with counts (in IP order)
 			var switchNames []string
 			totalAccess := 0
 			totalTrunk := 0
-			for ip, cnt := range vi.accessPorts {
+			for _, ip := range slices.SortedFunc(maps.Keys(vi.accessPorts), compareIPs) {
+				cnt := vi.accessPorts[ip]
 				// Get switch name
 				name := ip
 				collectedDataMutex.RLock()

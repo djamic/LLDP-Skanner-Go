@@ -331,10 +331,10 @@ func ExportVendorStats(devices []*DeviceData) {
 		}
 	}
 
-	// Convert map to slice
+	// Convert map to slice, in vendor order
 	var vendors []VendorStat
-	for _, v := range vendorMap {
-		vendors = append(vendors, *v)
+	for _, name := range slices.Sorted(maps.Keys(vendorMap)) {
+		vendors = append(vendors, *vendorMap[name])
 	}
 
 	export := VendorStatsExport{
