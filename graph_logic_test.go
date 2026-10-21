@@ -659,3 +659,37 @@ func TestGraphIPEnrichment(t *testing.T) {
 		}
 	}
 }
+
+// TestGraphBuildDeterminism covers F45/Q16: repeated builds of the same
+// devices give the same graph (map order never decides a label, an edge or
+// a group), and a MAC seen by two switches is labelled by the first switch
+// in IP order.
+func TestGraphBuildDeterminism(t *testing.T) {
+	resetState(t)
+	devices := scenarioNetwork()
+	// The same MAC on two switches with different local ARP answers: a direct
+	// port on 10.0.9.2 (sw-a, port 22) and a hub port on 10.0.9.4 (sw-c).
+	devices["10.0.9.2"].ARPTable = append(devices["10.0.9.2"].ARPTable, ARPEntry{IPAddress: "10.0.9.122", MACAddress: "00:1b:21:09:16:01"})
+	devices["10.0.9.4"].MACTable = append(devices["10.0.9.4"].MACTable, macEntries(7, "00:1b:21:09:16:01", "00:1b:21:09:47:02")...)
+	devices["10.0.9.4"].ARPTable = []ARPEntry{{IPAddress: "10.0.9.144", MACAddress: "00:1b:21:09:16:01"}}
+	collectedDataMutex.Lock()
+	collectedData = devices
+	collectedDataMutex.Unlock()
+	ConfirmedESXiMACs.Store("00:1b:21:09:03:01", true)
+
+	var first graphView
+	for i := 0; i < 30; i++ {
+		g := buildGraphFromSnapshot(snapshotCollectedData())
+		view := viewGraph(g)
+		if i == 0 {
+			first = view
+			if got := g.SwitchInfo["00:1b:21:09:16:01"]; !strings.Contains(got, "\n10.0.9.122") || strings.Contains(got, "10.0.9.144") {
+				t.Fatalf("MAC seen by two switches labelled %q, want the first switch's view", got)
+			}
+			continue
+		}
+		if fmt.Sprint(view) != fmt.Sprint(first) {
+			t.Fatalf("build %d differs from the first build", i)
+		}
+	}
+}
