@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -171,5 +172,79 @@ func reportReadJSON(t *testing.T, path string, v any) {
 	}
 	if err := json.Unmarshal(data, v); err != nil {
 		t.Fatalf("%s: %v", path, err)
+	}
+}
+
+// reportShadowHubs returns the hub ids GenerateShadowDiagrams draws, in order.
+func reportShadowHubs(g *DJGraph, md string) []string {
+	var hubs []string
+	for id := range g.Nodes {
+		if strings.HasPrefix(id, "hub-") && strings.Contains(md, "  "+sanitizeMermaidID(id)+"((") {
+			hubs = append(hubs, id)
+		}
+	}
+	slices.Sort(hubs)
+	return hubs
+}
+
+// TestReportShadowSectionSkipsESXiPorts (F72, Q14): section 7 lists the graph's
+// hub nodes, except hubs whose port carries an HTTP-confirmed ESXi host,
+// also when the host is confirmed after the graph was built and when it is
+// not one of the (at most 5) member nodes the graph draws.
+func TestReportShadowSectionSkipsESXiPorts(t *testing.T) {
+	resetState(t)
+	var macs []MACEntry
+	macs = append(macs, macEntries(3, "00:1b:21:72:03:01", "00:1b:21:72:03:02", "c4:34:6b:72:03:03")...)
+	macs = append(macs, macEntries(5, "00:1b:21:72:05:01", "00:1b:21:72:05:02", "00:1b:21:72:05:03",
+		"00:1b:21:72:05:04", "00:1b:21:72:05:05", "00:1b:21:72:05:06", "c4:34:6b:72:05:07")...)
+	macs = append(macs, macEntries(6, "00:1b:21:72:06:01", "00:1b:21:72:06:02")...)
+	sw := &DeviceData{IP: "10.0.72.2", SysName: "sw-72", ChassisID: "4c:ae:a3:72:00:02",
+		Interfaces: gigabitPorts(8, nil), MACTable: macs}
+	reportSetDevices(sw)
+	hubP3, hubP5, hubP6 := "hub-4c:ae:a3:72:00:02-p3", "hub-4c:ae:a3:72:00:02-p5", "hub-4c:ae:a3:72:00:02-p6"
+
+	g := reportBuildGraph()
+	if got := reportShadowHubs(g, GenerateShadowDiagrams(g)); !slices.Equal(got, []string{hubP3, hubP5, hubP6}) {
+		t.Fatalf("before ESXi confirmation: Shadow IT hubs = %v, want %v", got, []string{hubP3, hubP5, hubP6})
+	}
+
+	// Confirmed after the build: the graph still has the hubs.
+	ConfirmedESXiMACs.Store("c4:34:6b:72:03:03", true)
+	ConfirmedESXiMACs.Store("c4:34:6b:72:05:07", true)
+	md := GenerateShadowDiagrams(g)
+	if got := reportShadowHubs(g, md); !slices.Equal(got, []string{hubP6}) {
+		t.Errorf("after ESXi confirmation: Shadow IT hubs = %v, want [%s]", got, hubP6)
+	}
+	if n := strings.Count(md, "### Shadow IT #"); n != 1 {
+		t.Errorf("after ESXi confirmation: %d Shadow IT diagrams, want 1", n)
+	}
+
+	// Confirmed before the build.
+	g = reportBuildGraph()
+	SetGlobalGraph(g)
+	audit := generateAuditMD([]string{"switch", "hub"})
+	section := reportMDSection(audit, "## 7.", "## 8.", "## 9.")
+	if n := strings.Count(section, "### Shadow IT #"); n != 1 || !strings.Contains(section, sanitizeMermaidID(hubP6)+"((") {
+		t.Errorf("audit section 7 after a rebuild has %d diagrams, want only %s:\n%s", n, hubP6, section)
+	}
+}
+
+func TestReportParseHubID(t *testing.T) {
+	for _, c := range []struct {
+		id, switchID string
+		port         int
+		ok           bool
+	}{
+		{"hub-4c:ae:a3:72:00:02-p3", "4c:ae:a3:72:00:02", 3, true},
+		{"hub-10.0.72.9-p12", "10.0.72.9", 12, true},
+		{"hub-sw-pod-p7", "sw-pod", 7, true},
+		{"hub-x", "", 0, false},
+		{"hub-sw-pX", "", 0, false},
+		{"hyp-4c:ae:a3:72:00:02-ge1_0_3", "", 0, false},
+	} {
+		switchID, port, ok := reportParseHubID(c.id)
+		if switchID != c.switchID || port != c.port || ok != c.ok {
+			t.Errorf("reportParseHubID(%q) = %q, %d, %v; want %q, %d, %v", c.id, switchID, port, ok, c.switchID, c.port, c.ok)
+		}
 	}
 }

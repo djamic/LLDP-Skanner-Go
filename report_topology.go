@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -787,6 +788,10 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 		if n.Group != "hub" {
 			continue
 		}
+		// Q14: a port with a confirmed ESXi host is a hypervisor, not Shadow IT
+		if reportHubOnESXiPort(graph, n.ID) {
+			continue
+		}
 		label := n.SysName
 		if label == "" {
 			label = n.ID
@@ -906,6 +911,66 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 	}
 
 	return md.String()
+}
+
+// reportHubOnESXiPort reports whether the port behind a hub node carries an
+// HTTP-confirmed ESXi host. It checks the hub's member nodes and every MAC
+// the switch's FDB holds for that port: the graph draws at most 5 members,
+// and a host can be confirmed after the graph was built.
+func reportHubOnESXiPort(g *DJGraph, hubID string) bool {
+	for member := range g.Edges[hubID] {
+		if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(member)); ok {
+			return true
+		}
+	}
+	switchID, port, ok := reportParseHubID(hubID)
+	if !ok {
+		return false
+	}
+	collectedDataMutex.RLock()
+	defer collectedDataMutex.RUnlock()
+	for _, d := range collectedData {
+		if reportDeviceNode(g, d) != switchID {
+			continue
+		}
+		for _, entry := range d.MACTable {
+			if entry.PortNumber != port {
+				continue
+			}
+			if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(entry.MACAddress)); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// reportParseHubID splits a hub node id, "hub-<switch node>-p<FDB port>" as
+// buildGraphEdges builds it, into the switch node and the port number.
+func reportParseHubID(id string) (switchID string, port int, ok bool) {
+	rest, isHub := strings.CutPrefix(id, "hub-")
+	i := strings.LastIndex(rest, "-p")
+	if !isHub || i < 0 {
+		return "", 0, false
+	}
+	port, err := strconv.Atoi(rest[i+2:])
+	if err != nil {
+		return "", 0, false
+	}
+	return rest[:i], port, true
+}
+
+// reportDeviceNode returns the graph node a polled device is drawn as: the
+// node of its chassis id, else the node named by its IP (a switch without a
+// usable chassis id), else "".
+func reportDeviceNode(g *DJGraph, d *DeviceData) string {
+	if id := normalizeID(d.ChassisID, 0); id != "" && g.Nodes[id] {
+		return id
+	}
+	if g.Nodes[d.IP] {
+		return d.IP
+	}
+	return ""
 }
 
 // GenerateHypervisorDiagrams creates individual mermaid diagrams for each Hypervisor node

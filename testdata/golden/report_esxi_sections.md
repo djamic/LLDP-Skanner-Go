@@ -30,55 +30,6 @@ graph LR
 **Ulanganlar:** 5 ta qurilma
 
 ### Shadow IT #2: [HUB] Unmanaged
-2 devices
-
-```mermaid
-graph LR
-  hub_4caea3277eca_p3(("[HUB] Unmanaged<br>2 devices"))
-  4caea3277eca["[HYPERVISOR] VMware ESXi<br>HPE"]
-  4caea3277eca-- "GE1/0/3" -->hub_4caea3277eca_p3
-  style 4caea3277eca fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  000c29b745bb["[ENDPOINT] VMware<br>10.10.10.4"]
-  hub_4caea3277eca_p3-->000c29b745bb
-  style 000c29b745bb fill:#8BC34A,stroke:#6B9F30,color:#fff
-  c4346bb84194["[HYPERVISOR] VMware ESXi<br>[ENDPOINT]"]
-  hub_4caea3277eca_p3-->c4346bb84194
-  style c4346bb84194 fill:#8BC34A,stroke:#6B9F30,color:#fff
-  style hub_4caea3277eca_p3 fill:#FF9800,stroke:#E68A00,color:#fff
-```
-
-**Ulanganlar:** 2 ta qurilma
-
-### Shadow IT #3: [HUB] Unmanaged
-7 devices
-
-```mermaid
-graph LR
-  hub_4caea32785ea_p11(("[HUB] Unmanaged<br>7 devices"))
-  4caea32785ea["B-318/2<br>172.20.230.11"]
-  4caea32785ea-- "GE1/0/11" -->hub_4caea32785ea_p11
-  style 4caea32785ea fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  5c628bb8b311["[HYPERVISOR] VMware ESXi<br>[ENDPOINT]"]
-  hub_4caea32785ea_p11-->5c628bb8b311
-  style 5c628bb8b311 fill:#8BC34A,stroke:#6B9F30,color:#fff
-  94c6913ff34f["[ENDPOINT] EliteGroup<br>172.16.0.4"]
-  hub_4caea32785ea_p11-->94c6913ff34f
-  style 94c6913ff34f fill:#8BC34A,stroke:#6B9F30,color:#fff
-  94c6913ff361["[ENDPOINT] EliteGroup"]
-  hub_4caea32785ea_p11-->94c6913ff361
-  style 94c6913ff361 fill:#8BC34A,stroke:#6B9F30,color:#fff
-  94c6913ff441["[ENDPOINT] EliteGroup"]
-  hub_4caea32785ea_p11-->94c6913ff441
-  style 94c6913ff441 fill:#8BC34A,stroke:#6B9F30,color:#fff
-  94c6913ff467["[ENDPOINT] EliteGroup<br>172.16.1.126"]
-  hub_4caea32785ea_p11-->94c6913ff467
-  style 94c6913ff467 fill:#8BC34A,stroke:#6B9F30,color:#fff
-  style hub_4caea32785ea_p11 fill:#FF9800,stroke:#E68A00,color:#fff
-```
-
-**Ulanganlar:** 5 ta qurilma
-
-### Shadow IT #4: [HUB] Unmanaged
 3 devices
 
 ```mermaid
@@ -101,7 +52,7 @@ graph LR
 
 **Ulanganlar:** 3 ta qurilma
 
-### Shadow IT #5: [HUB] Unmanaged
+### Shadow IT #3: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -121,7 +72,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #6: [HUB] Unmanaged
+### Shadow IT #4: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -141,27 +92,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #7: [HUB] Unmanaged
-2 devices
-
-```mermaid
-graph LR
-  hub_4caea38deec9_p18(("[HUB] Unmanaged<br>2 devices"))
-  4caea38deec9["HPE<br>172.20.254.202"]
-  4caea38deec9-- "GE1/0/18" -->hub_4caea38deec9_p18
-  style 4caea38deec9 fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  000c292dde3c["[ENDPOINT] VMware<br>172.20.7.22"]
-  hub_4caea38deec9_p18-->000c292dde3c
-  style 000c292dde3c fill:#8BC34A,stroke:#6B9F30,color:#fff
-  08f1ea8d264e["[HYPERVISOR] VMware ESXi<br>[ENDPOINT]"]
-  hub_4caea38deec9_p18-->08f1ea8d264e
-  style 08f1ea8d264e fill:#8BC34A,stroke:#6B9F30,color:#fff
-  style hub_4caea38deec9_p18 fill:#FF9800,stroke:#E68A00,color:#fff
-```
-
-**Ulanganlar:** 2 ta qurilma
-
-### Shadow IT #8: [HUB] Unmanaged
+### Shadow IT #5: [HUB] Unmanaged
 5 devices
 
 ```mermaid
@@ -190,7 +121,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #9: [HUB] Unmanaged
+### Shadow IT #6: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -219,7 +150,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #10: [HUB] Unmanaged
+### Shadow IT #7: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -239,7 +170,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #11: [HUB] Unmanaged
+### Shadow IT #8: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -259,7 +190,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #12: [HUB] Unmanaged
+### Shadow IT #9: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -288,7 +219,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #13: [HUB] Unmanaged
+### Shadow IT #10: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -317,7 +248,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #14: [HUB] Unmanaged
+### Shadow IT #11: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -346,7 +277,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #15: [HUB] Unmanaged
+### Shadow IT #12: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -375,7 +306,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #16: [HUB] Unmanaged
+### Shadow IT #13: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -395,7 +326,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #17: [HUB] Unmanaged
+### Shadow IT #14: [HUB] Unmanaged
 3 devices
 
 ```mermaid
@@ -418,7 +349,7 @@ graph LR
 
 **Ulanganlar:** 3 ta qurilma
 
-### Shadow IT #18: [HUB] Unmanaged
+### Shadow IT #15: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -447,7 +378,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #19: [HUB] Unmanaged
+### Shadow IT #16: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -476,7 +407,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #20: [HUB] Unmanaged
+### Shadow IT #17: [HUB] Unmanaged
 5 devices
 
 ```mermaid
@@ -505,7 +436,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #21: [HUB] Unmanaged
+### Shadow IT #18: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -525,7 +456,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #22: [HUB] Unmanaged
+### Shadow IT #19: [HUB] Unmanaged
 3 devices
 
 ```mermaid
@@ -548,7 +479,7 @@ graph LR
 
 **Ulanganlar:** 3 ta qurilma
 
-### Shadow IT #23: [HUB] Unmanaged
+### Shadow IT #20: [HUB] Unmanaged
 4 devices
 
 ```mermaid
@@ -574,7 +505,7 @@ graph LR
 
 **Ulanganlar:** 4 ta qurilma
 
-### Shadow IT #24: [HUB] Unmanaged
+### Shadow IT #21: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -603,7 +534,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #25: [HUB] Unmanaged
+### Shadow IT #22: [HUB] Unmanaged
 7 devices
 
 ```mermaid
@@ -632,7 +563,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #26: [HUB] Unmanaged
+### Shadow IT #23: [HUB] Unmanaged
 5 devices
 
 ```mermaid
@@ -661,7 +592,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #27: [HUB] Unmanaged
+### Shadow IT #24: [HUB] Unmanaged
 9 devices
 
 ```mermaid
@@ -690,7 +621,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #28: [HUB] Unmanaged
+### Shadow IT #25: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -719,7 +650,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #29: [HUB] Unmanaged
+### Shadow IT #26: [HUB] Unmanaged
 7 devices
 
 ```mermaid
@@ -748,7 +679,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #30: [HUB] Unmanaged
+### Shadow IT #27: [HUB] Unmanaged
 4 devices
 
 ```mermaid
@@ -774,7 +705,7 @@ graph LR
 
 **Ulanganlar:** 4 ta qurilma
 
-### Shadow IT #31: [HUB] Unmanaged
+### Shadow IT #28: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -803,7 +734,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #32: [HUB] Unmanaged
+### Shadow IT #29: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -832,7 +763,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #33: [HUB] Unmanaged
+### Shadow IT #30: [HUB] Unmanaged
 3 devices
 
 ```mermaid
