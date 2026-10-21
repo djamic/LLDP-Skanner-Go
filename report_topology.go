@@ -348,6 +348,39 @@ type DeviceSummary struct {
 	MACs     int    `json:"macs"`
 }
 
+// reportSysNameVendors names the vendor of a polled device from keywords in
+// its sysName, for chassis MACs without an OUI vendor. The first match wins.
+var reportSysNameVendors = []struct {
+	keywords []string
+	vendor   string
+}{
+	{[]string{"snr"}, "SNR"},
+	{[]string{"mikrotik"}, "MikroTik"},
+	{[]string{"cisco"}, "Cisco"},
+	{[]string{"hpe", "hp"}, "HPE"},
+	{[]string{"ubiquiti", "ubnt"}, "Ubiquiti"},
+	{[]string{"huawei"}, "Huawei"},
+	{[]string{"fortinet", "fortigate"}, "Fortinet"},
+}
+
+// reportDeviceVendor is the vendor of a polled device in every report and
+// export: the OUI vendor of its chassis MAC, else the vendor its sysName
+// names, else "" (unknown).
+func reportDeviceVendor(d *DeviceData) string {
+	if vendor := getMACVendor(d.ChassisID); vendor != "" {
+		return vendor
+	}
+	name := strings.ToLower(d.SysName)
+	for _, rule := range reportSysNameVendors {
+		for _, keyword := range rule.keywords {
+			if strings.Contains(name, keyword) {
+				return rule.vendor
+			}
+		}
+	}
+	return ""
+}
+
 func registerReportRoutes() {
 	http.HandleFunc("/api/report/summary", reportSummaryHandler)
 	http.HandleFunc("/api/report/topology-svg", reportTopologySVGHandler)
@@ -394,7 +427,7 @@ func reportSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		summary.TopDevices = append(summary.TopDevices, DeviceSummary{
 			IP:      dev.IP,
 			SysName: dev.SysName,
-			Vendor:  getMACVendor(dev.ChassisID),
+			Vendor:  reportDeviceVendor(dev),
 			Ports:   len(dev.Interfaces),
 			MACs:    len(dev.MACTable),
 		})
@@ -428,7 +461,7 @@ func reportFullHandler(w http.ResponseWriter, r *http.Request) {
 	totalSwitches := 0
 	collectedDataMutex.RLock()
 	for _, dev := range collectedData {
-		vendor := getMACVendor(dev.ChassisID)
+		vendor := reportDeviceVendor(dev)
 		deviceRows.WriteString(fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td></tr>\n",
 			dev.IP, dev.SysName, vendor, len(dev.Interfaces), len(dev.MACTable)))
 		totalSwitches++
@@ -1044,7 +1077,7 @@ func generateAuditMD(groups []string) string {
 	deviceRows.WriteString("| IP | Hostname | Vendor | Portlar | MAC lar |\n")
 	deviceRows.WriteString("|---|---|---|---|---|\n")
 	for _, dev := range collectedData {
-		vendor := getMACVendor(dev.ChassisID)
+		vendor := reportDeviceVendor(dev)
 		deviceRows.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %d |\n",
 			dev.IP, dev.SysName, vendor, len(dev.Interfaces), len(dev.MACTable)))
 		totalSwitches++

@@ -80,25 +80,7 @@ func ExportHealthScores(devices []*DeviceData, graph *DJGraph) {
 	totalHealth := 0
 
 	for _, d := range devices {
-		vendor := getMACVendor(d.ChassisID)
-		if vendor == "" && d.SysName != "" {
-			// Try to infer vendor from sysName
-			nameLower := strings.ToLower(d.SysName)
-			switch {
-			case strings.Contains(nameLower, "snr"):
-				vendor = "SNR"
-			case strings.Contains(nameLower, "mikrotik"):
-				vendor = "MikroTik"
-			case strings.Contains(nameLower, "cisco"):
-				vendor = "Cisco"
-			case strings.Contains(nameLower, "hpe") || strings.Contains(nameLower, "hp"):
-				vendor = "HPE"
-			case strings.Contains(nameLower, "ubiquiti") || strings.Contains(nameLower, "ubnt"):
-				vendor = "Ubiquiti"
-			case strings.Contains(nameLower, "huawei"):
-				vendor = "Huawei"
-			}
-		}
+		vendor := reportDeviceVendor(d)
 
 		anomalies := anomalyMap[d.IP]
 		anomalyCount := len(anomalies)
@@ -298,28 +280,9 @@ func ExportVendorStats(devices []*DeviceData) {
 	vendorMap := make(map[string]*VendorStat)
 
 	for _, d := range devices {
-		vendor := getMACVendor(d.ChassisID)
+		vendor := reportDeviceVendor(d)
 		if vendor == "" {
-			// Try to infer from sysName
-			nameLower := strings.ToLower(d.SysName)
-			switch {
-			case strings.Contains(nameLower, "snr"):
-				vendor = "SNR"
-			case strings.Contains(nameLower, "mikrotik"):
-				vendor = "MikroTik"
-			case strings.Contains(nameLower, "cisco"):
-				vendor = "Cisco"
-			case strings.Contains(nameLower, "hpe") || strings.Contains(nameLower, "hp"):
-				vendor = "HPE"
-			case strings.Contains(nameLower, "ubiquiti") || strings.Contains(nameLower, "ubnt"):
-				vendor = "Ubiquiti"
-			case strings.Contains(nameLower, "huawei"):
-				vendor = "Huawei"
-			case strings.Contains(nameLower, "fortinet") || strings.Contains(nameLower, "fortigate"):
-				vendor = "Fortinet"
-			default:
-				vendor = "Unknown"
-			}
+			vendor = "Unknown" // the bucket of devices without a known vendor
 		}
 
 		if _, exists := vendorMap[vendor]; !exists {
