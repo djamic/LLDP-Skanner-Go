@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -400,5 +401,79 @@ func TestReportAuditListsEveryGroup(t *testing.T) {
 	legend := GenerateTopologyLegend(all)
 	if rows := strings.Count(legend, "\n") - 2; rows != len(all) {
 		t.Errorf("legend has %d rows for %d groups:\n%s", rows, len(all), legend)
+	}
+}
+
+// TestReportZabbixExportUsesDeviceIPs (F75): the Zabbix exports list the SNMP
+// devices with their management IPs (not node ids, which are mostly MACs),
+// one host per device, and no endpoints or hub-/hyp- nodes.
+func TestReportZabbixExportUsesDeviceIPs(t *testing.T) {
+	resetState(t)
+	noSuch := "No Such Object available on this agent at this OID"
+	reportSetDevices(
+		&DeviceData{IP: "10.0.75.2", SysName: "SNR-S2985G-24TC", ChassisID: "f8:f0:82:75:00:02",
+			Interfaces: gigabitPorts(8, nil),
+			MACTable:   append(macEntries(3, "00:1b:21:75:03:01", "00:1b:21:75:03:02"), macEntries(4, "00:1b:21:75:04:01")...)},
+		&DeviceData{IP: "10.0.75.3", SysName: "HPE", ChassisID: "", Interfaces: gigabitPorts(8, nil)},
+		&DeviceData{IP: "10.0.75.4", SysName: "sw-4", ChassisID: noSuch, Interfaces: gigabitPorts(8, nil)},
+		&DeviceData{IP: "10.0.75.5", SysName: "sw-5", ChassisID: noSuch, Interfaces: gigabitPorts(8, nil)},
+	)
+	g := reportBuildGraph()
+	dir := t.TempDir()
+	if err := g.ExportHostsToZabbix(filepath.Join(dir, "hosts.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.ExportToMap(filepath.Join(dir, "map.json")); err != nil {
+		t.Fatal(err)
+	}
+	var hosts struct {
+		Export struct {
+			Hosts []struct {
+				Host       string              `json:"host"`
+				Name       string              `json:"name"`
+				Templates  []map[string]string `json:"templates"`
+				Interfaces []map[string]any    `json:"interfaces"`
+			} `json:"hosts"`
+		} `json:"zabbix_export"`
+	}
+	reportReadJSON(t, filepath.Join(dir, "hosts.json"), &hosts)
+	var gotHosts, names []string
+	for _, h := range hosts.Export.Hosts {
+		gotHosts = append(gotHosts, h.Host)
+		names = append(names, h.Name)
+		ip, _ := h.Interfaces[0]["ip"].(string)
+		if net.ParseIP(ip) == nil || ip != h.Host {
+			t.Errorf("host %q has SNMP interface ip %q, want its IP", h.Host, ip)
+		}
+		if h.Host == "10.0.75.2" && !strings.Contains(fmt.Sprint(h.Templates), "SNR") {
+			t.Errorf("SNR switch got templates %v", h.Templates)
+		}
+	}
+	wantHosts := []string{"10.0.75.2", "10.0.75.3", "10.0.75.4", "10.0.75.5"}
+	if !slices.Equal(gotHosts, wantHosts) {
+		t.Errorf("Zabbix hosts = %v, want %v", gotHosts, wantHosts)
+	}
+	slices.Sort(names)
+	if len(slices.Compact(names)) != len(hosts.Export.Hosts) {
+		t.Errorf("visible host names are not unique: %v", names)
+	}
+
+	var zmap struct {
+		Export struct {
+			Maps []struct {
+				Selements []struct {
+					ID       string              `json:"selementid"`
+					Elements []map[string]string `json:"elements"`
+				} `json:"selements"`
+			} `json:"maps"`
+		} `json:"zabbix_export"`
+	}
+	reportReadJSON(t, filepath.Join(dir, "map.json"), &zmap)
+	var mapHosts []string
+	for _, e := range zmap.Export.Maps[0].Selements {
+		mapHosts = append(mapHosts, e.Elements[0]["host"])
+	}
+	if !slices.Equal(mapHosts, wantHosts) {
+		t.Errorf("Zabbix map elements = %v, want %v", mapHosts, wantHosts)
 	}
 }

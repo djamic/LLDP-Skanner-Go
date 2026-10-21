@@ -501,16 +501,17 @@ func (g *DJGraph) GenerateZabbixTemplate(node string) []map[string]string {
 	return templates
 }
 
-// ExportHostsToZabbix exports hosts to Zabbix JSON format
+// ExportHostsToZabbix exports hosts to Zabbix JSON format: one SNMP host per
+// polled device (reportZabbixHosts)
 func (g *DJGraph) ExportHostsToZabbix(filePath string) error {
 	hosts := []map[string]interface{}{}
 
-	for node := range g.Nodes {
-		templates := g.GenerateZabbixTemplate(node)
+	for _, zh := range reportZabbixHosts(g) {
+		templates := g.GenerateZabbixTemplate(zh.node)
 
 		host := map[string]interface{}{
-			"host":      node,
-			"name":      node,
+			"host":      zh.ip,
+			"name":      zh.name,
 			"templates": templates,
 			"groups": []map[string]string{
 				{"name": "Templates/Network devices"},
@@ -518,7 +519,7 @@ func (g *DJGraph) ExportHostsToZabbix(filePath string) error {
 			"interfaces": []map[string]interface{}{
 				{
 					"type": "SNMP",
-					"ip":   node,
+					"ip":   zh.ip,
 					"port": "161",
 					"details": map[string]string{
 						"community": "{$SNMP_COMMUNITY}",
@@ -556,20 +557,45 @@ func (g *DJGraph) ExportHostsToZabbix(filePath string) error {
 	return encoder.Encode(zabbixExport)
 }
 
-// ExportToMap exports to Zabbix map format
+// reportZabbixHost is one Zabbix host: a polled device, the graph node it
+// is drawn as ("" when the graph has none) and its management IP.
+type reportZabbixHost struct {
+	node, ip, name string
+}
+
+// reportZabbixHosts lists the polled devices (collectedData) in IP order.
+// Only they answer SNMP; endpoints and hub-/hyp- nodes are not Zabbix hosts.
+// The IP is also the technical host name: it is unique, while node ids are
+// mostly MACs, which Zabbix rejects. The visible name adds the sysName.
+func reportZabbixHosts(g *DJGraph) []reportZabbixHost {
+	collectedDataMutex.RLock()
+	defer collectedDataMutex.RUnlock()
+	var hosts []reportZabbixHost
+	for _, ip := range sortedDeviceIPs(collectedData) {
+		d := collectedData[ip]
+		name := d.IP
+		if d.SysName != "" {
+			name = fmt.Sprintf("%s (%s)", d.SysName, d.IP)
+		}
+		hosts = append(hosts, reportZabbixHost{node: reportDeviceNode(g, d), ip: d.IP, name: name})
+	}
+	return hosts
+}
+
+// ExportToMap exports to Zabbix map format: one element per host of
+// ExportHostsToZabbix
 func (g *DJGraph) ExportToMap(filePath string) error {
 	elements := []map[string]interface{}{}
 	id := 0
 
-	for node := range g.Nodes {
+	for _, zh := range reportZabbixHosts(g) {
 		id++
-		g.AddNodeID(node, id)
 
-		x, y, _ := g.GetNodeCoords(node)
+		x, y, _ := g.GetNodeCoords(zh.node)
 
 		element := map[string]interface{}{
 			"elementtype":      "0",
-			"elements":         []map[string]string{{"host": node}},
+			"elements":         []map[string]string{{"host": zh.ip}},
 			"label":            "{HOST.IP}",
 			"label_location":   "-1",
 			"x":                fmt.Sprintf("%d", x),
