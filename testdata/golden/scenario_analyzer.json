@@ -57,23 +57,18 @@
     }
   },
   "loopback_empty_chassis": {
-    "bot_messages": [
-      {"text": "📊 <b>Tarmoq holati:</b> 80/100 (Good)\n🔎 Jami topilgan muammolar: 1 ta"},
-      {"issue_id": "loop_lldp_10_0_9_21_3", "callbacks": ["ignore|loop_lldp_10_0_9_21_3", "verify|loop_lldp_10_0_9_21_3"], "text": "🔄 <b>LOOPBACK aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.21\n🔌 <b>Port:</b> GigabitEthernet1/0/3\n📊 <b>Holat:</b> 🔄 LOOPBACK: Port GigabitEthernet1/0/3 switch o'ziga qaytib ulangan! Kabel to'g'ri ulanganligini tekshiring.\n\n🚨 Bu port tarmoqda uzilishlarga sabab bo'lishi mumkin!"}
-    ],
-    "health_score": 80,
+    "bot_messages": null,
+    "health_score": 100,
     "last_report": {
-      "anomaly_map": {"10.0.9.21": ["loopback"]},
-      "health_score": 80,
+      "anomaly_map": {},
+      "health_score": 100,
       "total_macs": 0
     },
     "stp_device": "",
-    "suggestions": [
-      {"type": "loopback", "severity": "high", "device": "10.0.9.21", "issue_id": "loop_lldp_10_0_9_21_3", "value": "GigabitEthernet1/0/3", "description": "🔄 LOOPBACK: Port GigabitEthernet1/0/3 switch o'ziga qaytib ulangan! Kabel to'g'ri ulanganligini tekshiring."}
-    ],
+    "suggestions": null,
     "summary": {
       "congestion_issues": 0,
-      "loopback_issues": 1,
+      "loopback_issues": 0,
       "path_issues": 0,
       "shadow_it_issues": 0,
       "stability_issues": 0,

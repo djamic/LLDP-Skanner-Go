@@ -662,6 +662,12 @@ func (na *NetworkAnalyzer) analyzeLoopback() []OptimizationSuggestion {
 	for _, device := range na.Data.DevicesData {
 		deviceIP := device.IP
 		chassisMAC := normalizeMAC(device.ChassisID)
+		// A switch without a usable chassis id cannot recognise itself: an
+		// empty (or null) id equals every other empty id, for example a
+		// neighbor whose RemChassisId was not read (F17).
+		if isInvalidID(chassisMAC) {
+			continue
+		}
 
 		// Method 1: LLDP Self-Neighbor Detection
 		// If a switch sees its own ChassisID as an LLDP neighbor = cable looped back
