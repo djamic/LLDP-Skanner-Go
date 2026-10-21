@@ -392,6 +392,44 @@ func TestAnalyzerReportsListAnomalies(t *testing.T) {
 	}
 }
 
+// TestAnalyzerTrafficSuggestionOrder: congestion, physical and stability
+// suggestions come in device|interface order on every run, so the report
+// anomaly rows are stable (Q16).
+func TestAnalyzerTrafficSuggestionOrder(t *testing.T) {
+	resetState(t)
+	var data FullCaptureData
+	for _, ip := range []string{"10.0.9.75", "10.0.9.74"} {
+		for _, port := range []string{"GE1/0/9", "GE1/0/1", "GE1/0/5"} {
+			data.Metrics = append(data.Metrics, TrafficMetrics{DeviceIP: ip, Interface: port, InBps: 900_000_000, InDiscards: 1, InErrors: 1})
+			data.Events = append(data.Events, StatusEvent{DeviceIP: ip, Interface: port, OldStatus: 1, NewStatus: 2})
+		}
+	}
+	var first []string
+	for run := 0; run < 20; run++ {
+		var got []string
+		for _, s := range NewAnalyzer(data).BuildReport().Suggestions {
+			got = append(got, s.Type+"/"+s.Severity+" "+s.Device+" "+s.Description)
+		}
+		if run == 0 {
+			first = got
+			// One pass per kind: utilization, discards, errors, outages.
+			for _, kind := range []string{"congestion/high", "congestion/medium", "physical/high", "stability/high"} {
+				var keys []string
+				for _, line := range got {
+					if f := strings.Fields(line); f[0] == kind {
+						keys = append(keys, f[1]+"|"+line)
+					}
+				}
+				if len(keys) != 6 || !slices.IsSorted(keys) {
+					t.Errorf("%s suggestions not in device|interface order: %v", kind, keys)
+				}
+			}
+		} else if !slices.Equal(got, first) {
+			t.Fatalf("run %d: suggestion order changed:\n%v\nfirst run:\n%v", run, got, first)
+		}
+	}
+}
+
 // TestAnalyzerTotalMACsCountsUniqueAddresses: total_macs is the number of
 // distinct MAC addresses, not the number of FDB rows (F13, Q15).
 func TestAnalyzerTotalMACsCountsUniqueAddresses(t *testing.T) {

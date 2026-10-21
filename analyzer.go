@@ -481,8 +481,9 @@ func (na *NetworkAnalyzer) analyzeCongestion() []OptimizationSuggestion {
 		}
 	}
 
-	// Generate suggestions
-	for key, util := range interfaceUtil {
+	// Generate suggestions (in device|interface order)
+	for _, key := range slices.Sorted(maps.Keys(interfaceUtil)) {
+		util := interfaceUtil[key]
 		parts := strings.Split(key, "|")
 		utilMbps := util / 1000000
 
@@ -495,7 +496,8 @@ func (na *NetworkAnalyzer) analyzeCongestion() []OptimizationSuggestion {
 		})
 	}
 
-	for key, discards := range interfaceDiscards {
+	for _, key := range slices.Sorted(maps.Keys(interfaceDiscards)) {
+		discards := interfaceDiscards[key]
 		parts := strings.Split(key, "|")
 		suggestions = append(suggestions, OptimizationSuggestion{
 			Type:        "congestion",
@@ -506,7 +508,8 @@ func (na *NetworkAnalyzer) analyzeCongestion() []OptimizationSuggestion {
 		})
 	}
 
-	for key, errs := range interfaceErrors {
+	for _, key := range slices.Sorted(maps.Keys(interfaceErrors)) {
+		errs := interfaceErrors[key]
 		parts := strings.Split(key, "|")
 		suggestions = append(suggestions, OptimizationSuggestion{
 			Type:        "physical",
@@ -536,7 +539,8 @@ func (na *NetworkAnalyzer) analyzeStability() []OptimizationSuggestion {
 		}
 	}
 
-	for key, count := range flapping {
+	for _, key := range slices.Sorted(maps.Keys(flapping)) {
+		count := flapping[key]
 		parts := strings.Split(key, "|")
 		suggestions = append(suggestions, OptimizationSuggestion{
 			Type:        "stability",
