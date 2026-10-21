@@ -784,7 +784,7 @@ func analyzerShadowCounts(devices []*DeviceData) analyzerShadowStats {
 func (na *NetworkAnalyzer) analyzeLoopback() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
 
-	for _, device := range na.Data.DevicesData {
+	for _, device := range na.idx().devices { // IP order (Q16)
 		deviceIP := device.IP
 		// The switch's own MAC as the graph keys it (graphChassisKey: a
 		// canonical MAC, so a Cisco-dotted id matches its neighbors' view).

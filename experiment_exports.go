@@ -48,6 +48,9 @@ func ExportHealthScores(devices []*DeviceData, graph *DJGraph) {
 	if len(devices) == 0 {
 		return
 	}
+	// Devices in IP order: main() passes them in collectedData map order (Q16)
+	devices = slices.Clone(devices)
+	slices.SortStableFunc(devices, func(a, b *DeviceData) int { return compareIPs(a.IP, b.IP) })
 
 	// Build FullCaptureData for analyzer
 	var devicesValue []DeviceData

@@ -16,18 +16,16 @@ import (
 var exportTimes = regexp.MustCompile(`"(export_time|experiment_date|date|detect_time|notify_time)": "[^"]*"|"(latency_ms|average_latency_ms|max_latency_ms)": [0-9.]+`)
 
 // TestProductionOrderDeterminism runs the producers whose output can depend
-// on map iteration order with production settings: sortGraphData off and the
-// devices taken from collectedData in map order, as main() passes them. Each
-// producer runs several times on the same input, and the raw output bytes
-// (timestamps blanked) must be equal. A producer with a reason is known to
-// depend on map order today and is skipped when its runs differ; once Q16
-// makes it deterministic, delete the reason so that this test guards it. The
-// graph build itself is checked by TestGoldenGraph (two builds).
+// on map iteration order with production settings: the devices taken from
+// collectedData in map order, as main() passes them. Each producer runs
+// several times on the same input, and the raw output bytes (timestamps
+// blanked) must be equal. A producer with a reason is known to depend on map
+// order and is skipped when its runs differ; since Q16 none has one, so this
+// test guards all of them. The graph build itself is checked by
+// TestGoldenGraph (two builds).
 func TestProductionOrderDeterminism(t *testing.T) {
 	graph := buildFixtureGraph(t)
 	SetGlobalGraph(graph)
-	sortGraphData = false
-	t.Cleanup(func() { sortGraphData = true })
 	dir := t.TempDir()
 	graphDebugFile = filepath.Join(dir, "graphs_data.txt")
 	exportsDir = filepath.Join(dir, "results")
@@ -85,42 +83,42 @@ func TestProductionOrderDeterminism(t *testing.T) {
 			slices.Sort(ids)
 			return marshal(map[string]any{"health": r.HealthScore, "summary": r.Summary, "issues": ids})
 		}},
-		{"analyzer_report", "suggestions follow device and node order, and the stp Device comes from a map (F18)", func() []byte {
+		{"analyzer_report", "", func() []byte {
 			return marshal(analyze())
 		}},
-		{"GetGraphData", "nodes and links come in map order", func() []byte {
+		{"GetGraphData", "", func() []byte {
 			return marshal(graph.GetGraphData())
 		}},
-		{"api_graph", "/api/graph serves the GetGraphData order", func() []byte {
+		{"api_graph", "", func() []byte {
 			return []byte(serveGraph())
 		}},
-		{"snapshot", "a MAC on several switches goes to the last device in input order (F54)", func() []byte {
+		{"snapshot", "", func() []byte {
 			s := CreateSnapshot(mapOrder(), graph, &report)
 			s.Timestamp = time.Time{}
 			return marshal(s)
 		}},
-		{"bfs_depths", "deep_devices follow map order and the core can be chosen from maps (F76)", func() []byte {
+		{"bfs_depths", "", func() []byte {
 			ExportBFSDepths(graph)
 			return readFile("results/bfs_depths.json")
 		}},
-		{"zabbix_hosts", "hosts come in map order", func() []byte {
+		{"zabbix_hosts", "", func() []byte {
 			if err := graph.ExportHostsToZabbix(filepath.Join(dir, "zabbix_hosts.json")); err != nil {
 				t.Fatal(err)
 			}
 			return readFile("zabbix_hosts.json")
 		}},
-		{"zabbix_map", "selementid is assigned in map order", func() []byte {
+		{"zabbix_map", "", func() []byte {
 			if err := graph.ExportToMap(filepath.Join(dir, "zabbix_map.json")); err != nil {
 				t.Fatal(err)
 			}
 			return readFile("zabbix_map.json")
 		}},
-		{"audit_md", "rows follow collectedData and GetGraphData order", func() []byte {
+		{"audit_md", "", func() []byte {
 			md := generateAuditMD([]string{"switch", "hub"})
 			md = auditDateLine.ReplaceAllString(md, "Sana: <time>")
 			return []byte(auditScanTime.ReplaceAllString(md, "| Skanerlash vaqti | <time> |"))
 		}},
-		{"experiment_exports", "device, vendor and BFS lists follow map order", func() []byte {
+		{"experiment_exports", "", func() []byte {
 			resetBot()
 			generateExperimentReport(mapOrder(), expScanDuration, expCollectionDuration, expTotalDuration, graph)
 			bot.taken()

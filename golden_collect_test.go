@@ -478,7 +478,7 @@ func TestNoSideEffectSeamsLeak(t *testing.T) {
 	if out, err := runPing("192.0.2.1"); err != nil || !strings.Contains(out, "ttl=64") {
 		t.Errorf("runPing is not the fake ping: %q %v", out, err)
 	}
-	if !sortGraphData || botFloodDelay != 0 || gatewayIP != fixedGatewayIP {
+	if botFloodDelay != 0 || gatewayIP != fixedGatewayIP {
 		t.Error("harness settings were changed by a test")
 	}
 	if influxReady() {

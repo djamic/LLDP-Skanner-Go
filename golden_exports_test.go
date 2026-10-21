@@ -317,7 +317,7 @@ var (
 // the parts that come from map iteration over collectedData or anomaly
 // counts: the section 2 penalty rows, the section 4.1 switch rows (only
 // 4.1, not 4.10-4.14), and the switch list inside each section 5 VLAN row. Everything that comes from
-// GetGraphData is reproducible as is, because TestMain sets sortGraphData.
+// GetGraphData is reproducible as is (it returns sorted nodes and links).
 func canonicalAuditMD(md string) string {
 	md = auditDateLine.ReplaceAllString(md, "Sana: "+timePlaceholder)
 	md = auditScanTime.ReplaceAllString(md, "| Skanerlash vaqti | "+timePlaceholder+" |")

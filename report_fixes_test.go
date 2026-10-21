@@ -547,13 +547,11 @@ func TestReportBFSRoot(t *testing.T) {
 	}
 }
 
-// TestReportAuditDeterministic (Q16): with GetGraphData in map order, as in
-// production, the report parts built from the devices and the graph come
-// out the same on every call.
+// TestReportAuditDeterministic (Q16): the report parts built from the
+// devices (collectedData, a map) and the graph come out the same on every
+// call.
 func TestReportAuditDeterministic(t *testing.T) {
 	SetGlobalGraph(buildFixtureGraph(t))
-	sortGraphData = false
-	t.Cleanup(func() { sortGraphData = true })
 	parts := func() []string {
 		md := generateAuditMD([]string{"switch", "hub", "endpoint", "vm", "hypervisor"})
 		rr := httptest.NewRecorder()

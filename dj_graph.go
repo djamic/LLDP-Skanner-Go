@@ -390,23 +390,18 @@ func (g *DJGraph) GetGraphData() GraphData {
 		}
 	}
 
-	if sortGraphData {
-		slices.SortFunc(nodes, func(a, b GraphNode) int { return strings.Compare(a.ID, b.ID) })
-		slices.SortFunc(links, func(a, b GraphLink) int {
-			return cmp.Or(strings.Compare(a.Source, b.Source), strings.Compare(a.Target, b.Target))
-		})
-	}
+	// Nodes by id and links by source and target, so /api/graph, the reports
+	// and the captures do not depend on map order (Q16)
+	slices.SortFunc(nodes, func(a, b GraphNode) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(links, func(a, b GraphLink) int {
+		return cmp.Or(strings.Compare(a.Source, b.Source), strings.Compare(a.Target, b.Target))
+	})
 
 	return GraphData{
 		Nodes: nodes,
 		Links: links,
 	}
 }
-
-// sortGraphData makes GetGraphData return nodes sorted by id and links by
-// source and target. Production leaves it off (map order); tests turn it on so
-// that reports built from GetGraphData are reproducible.
-var sortGraphData = false
 
 // determineDeviceGroup categorizes devices based on their info
 func (g *DJGraph) determineDeviceGroup(node, info string) string {

@@ -140,7 +140,6 @@ func installSeams(dir string) {
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
 	globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
-	sortGraphData = true
 	gatewayIP = fixedGatewayIP
 	ignoredIssuesMutex.Lock()
 	ignoredIssuesData = map[string]bool{}
