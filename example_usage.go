@@ -1502,13 +1502,8 @@ var hypervisorMACPrefixes = []string{
 
 // isHypervisorMAC checks if a MAC address belongs to a known hypervisor vendor
 func isHypervisorMAC(mac string) bool {
-	mac = strings.ToLower(mac)
-	for _, prefix := range hypervisorMACPrefixes {
-		if strings.HasPrefix(mac, prefix) {
-			return true
-		}
-	}
-	return false
+	key := ouiKey(mac)
+	return key != "" && slices.Contains(hypervisorMACPrefixes, key)
 }
 
 // isHypervisorPort checks if the majority of MACs on a port are from hypervisors
@@ -1530,7 +1525,6 @@ func isHypervisorPort(macs []string) bool {
 // (Dell PowerEdge, HPE ProLiant, SuperMicro, Lenovo ThinkSystem, Cisco UCS etc.)
 // Used to detect ESXi/KVM hypervisors that run on physical servers.
 func isServerNIC(mac string) (bool, string) {
-	mac = strings.ToLower(mac)
 	// Only OUIs of server makers: PC/laptop ODMs (LCFC, Wistron, Inventec,
 	// Quanta, GIGA-BYTE, Intel, Dell 00:23:ae) and the SNR switches
 	// (f8:f0:82) are left out (Q6, Q7).
@@ -1561,11 +1555,8 @@ func isServerNIC(mac string) (bool, string) {
 		// IBM
 		"00:14:5e": "IBM", "00:21:5e": "IBM",
 	}
-	if len(mac) >= 8 {
-		prefix := mac[:8]
-		if vendor, ok := prefixVendor[prefix]; ok {
-			return true, vendor
-		}
+	if vendor, ok := prefixVendor[ouiKey(mac)]; ok {
+		return true, vendor
 	}
 	return false, ""
 }
@@ -1585,20 +1576,16 @@ func detectOSFromMAC(mac string, macToIP map[string]string, _ *DeviceData) strin
 	}
 
 	// 2. Fallback: guess by MAC prefix
-	if strings.HasPrefix(macNorm, "00:50:56") || strings.HasPrefix(macNorm, "00:0c:29") ||
-		strings.HasPrefix(macNorm, "00:05:69") || strings.HasPrefix(macNorm, "00:1c:14") {
+	switch ouiKey(mac) {
+	case "00:50:56", "00:0c:29", "00:05:69", "00:1c:14":
 		return "💻 VMware VM"
-	}
-	if strings.HasPrefix(macNorm, "52:54:00") || strings.HasPrefix(macNorm, "bc:24:11") {
+	case "52:54:00", "bc:24:11":
 		return "💻 KVM/Proxmox VM"
-	}
-	if strings.HasPrefix(macNorm, "00:15:5d") {
+	case "00:15:5d":
 		return "🪟 Hyper-V VM"
-	}
-	if strings.HasPrefix(macNorm, "00:16:3e") {
+	case "00:16:3e":
 		return "💻 Xen VM"
-	}
-	if strings.HasPrefix(macNorm, "08:00:27") {
+	case "08:00:27":
 		return "💻 VirtualBox VM"
 	}
 

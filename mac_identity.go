@@ -93,6 +93,16 @@ func (m macAddr) String() string {
 // OUI gives the first three octets as "aa:bb:cc", the key of the OUI tables.
 func (m macAddr) OUI() string { return m.String()[:8] }
 
+// ouiKey gives the OUI "aa:bb:cc" of a MAC in any form parseMAC reads, or ""
+// for text that is no MAC. It is the one key of every OUI table.
+func ouiKey(mac string) string {
+	m, ok := parseMAC(mac)
+	if !ok {
+		return ""
+	}
+	return m.OUI()
+}
+
 // IsNull: 00:00:00:00:00:00.
 func (m macAddr) IsNull() bool { return m == macAddr{} }
 
@@ -269,9 +279,5 @@ var macBMCOUIs = map[string]string{
 
 // bmcTypeByOUI returns the BMC maker the MAC's OUI names, or "".
 func bmcTypeByOUI(mac string) string {
-	mac = normalizeMAC(mac)
-	if len(mac) < 8 {
-		return ""
-	}
-	return macBMCOUIs[mac[:8]]
+	return macBMCOUIs[ouiKey(mac)]
 }

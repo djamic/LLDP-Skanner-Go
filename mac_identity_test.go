@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -536,6 +537,46 @@ func TestInvalidID(t *testing.T) {
 	} {
 		if got := isInvalidID(c.id); got != c.want {
 			t.Errorf("isInvalidID(%q) = %v, want %v", c.id, got, c.want)
+		}
+	}
+}
+
+// ouiTestForms writes one MAC in every text form parseMAC reads.
+func ouiTestForms(canonical string) []string {
+	m, ok := parseMAC(canonical)
+	if !ok {
+		panic(canonical)
+	}
+	h := strings.ReplaceAll(m.String(), ":", "")
+	up := strings.ToUpper(m.String())
+	unpadded := strings.NewReplacer(":0", ":").Replace(":" + m.String())[1:] // net-snmp "0:50:56:a:b:c"
+	return []string{
+		m.String(), up, strings.ReplaceAll(m.String(), ":", "-"), strings.ReplaceAll(up, ":", " "),
+		"Hex-STRING: " + strings.ReplaceAll(up, ":", " "), `"` + m.String() + `"`,
+		h[0:4] + "." + h[4:8] + "." + h[8:12], h, unpadded,
+	}
+}
+
+// TestOUIKeyForms: every OUI table answers the same for every text form of a
+// MAC, and nothing for text that is no MAC (one key rule: the OUI of the
+// parsed address).
+func TestOUIKeyForms(t *testing.T) {
+	for _, mac := range []string{"00:50:56:0a:0b:0c", "f8:db:88:01:02:03", "4c:ae:a3:27:84:cb", "52:54:00:12:34:56", "00:15:5d:00:00:01"} {
+		ok0, server0 := isServerNIC(mac)
+		want := fmt.Sprint(lookupVendor(mac), isHypervisorMAC(mac), ok0, server0, bmcTypeByOUI(mac),
+			detectOSFromMAC(mac, map[string]string{}, &DeviceData{}))
+		for _, form := range ouiTestForms(mac) {
+			ok, server := isServerNIC(form)
+			got := fmt.Sprint(lookupVendor(form), isHypervisorMAC(form), ok, server, bmcTypeByOUI(form),
+				detectOSFromMAC(form, map[string]string{}, &DeviceData{}))
+			if got != want {
+				t.Errorf("%q: %s, but %q gives %s", form, got, mac, want)
+			}
+		}
+	}
+	for _, text := range []string{"f8:db:88", "00:50:56:aa", "00:50:56:aa:bb:cc:dd", "52:54:00 VM"} {
+		if ok, _ := isServerNIC(text); ok || isHypervisorMAC(text) || bmcTypeByOUI(text) != "" || lookupVendor(text) != "Unknown" {
+			t.Errorf("%q is no MAC but an OUI table answered", text)
 		}
 	}
 }

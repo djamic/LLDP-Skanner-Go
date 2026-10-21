@@ -370,23 +370,21 @@ func normalizeMAC(mac string) string {
 // lookupVendor resolves MAC address to vendor name
 // Priority: 1) klauspost/oui (IEEE), 2) extendedVendorDB (local)
 func lookupVendor(mac string) string {
-	mac = normalizeMAC(mac)
-	if len(mac) < 8 {
+	m, ok := parseMAC(mac)
+	if !ok {
 		return "Unknown"
 	}
 
-	prefix := mac[:8] // "aa:bb:cc"
-
 	// 1. Try IEEE OUI database
 	if ouiDBOk && ouiDB != nil {
-		entry, err := ouiDB.Query(mac)
+		entry, err := ouiDB.LookUp(oui.HardwareAddr{m[0], m[1], m[2]})
 		if err == nil && entry != nil {
 			return strings.TrimSpace(entry.Manufacturer)
 		}
 	}
 
 	// 2. Try extended local database
-	if vendor, ok := extendedVendorDB[prefix]; ok {
+	if vendor, ok := extendedVendorDB[m.OUI()]; ok {
 		return vendor
 	}
 
