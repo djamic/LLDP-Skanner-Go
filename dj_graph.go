@@ -701,30 +701,33 @@ func (g *DJGraph) ExportToMap(filePath string) error {
 	return encoder.Encode(zabbixExport)
 }
 
-// CalculateDepths calculates hop count from a root node (BFS)
+// CalculateDepths calculates hop count from a root node (BFS). A link is
+// followed both ways: an edge's direction only says which switch reported
+// it, so following outgoing edges alone missed every node reached through a
+// link its far side reported (the analyzer's path check does the same, F19).
 func (g *DJGraph) CalculateDepths(rootID string) map[string]int {
 	depths := make(map[string]int)
 	if !g.Nodes[rootID] {
 		return depths
 	}
 
+	neighbors := make(map[string][]string)
+	for src, targets := range g.Edges {
+		for tgt := range targets {
+			neighbors[src] = append(neighbors[src], tgt)
+			neighbors[tgt] = append(neighbors[tgt], src)
+		}
+	}
+
 	queue := []string{rootID}
 	depths[rootID] = 0
-	visited := make(map[string]bool)
-	visited[rootID] = true
-
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
-		currentDepth := depths[current]
-
-		if neighbors, ok := g.Edges[current]; ok {
-			for neighbor := range neighbors {
-				if !visited[neighbor] {
-					visited[neighbor] = true
-					depths[neighbor] = currentDepth + 1
-					queue = append(queue, neighbor)
-				}
+		for _, next := range neighbors[current] {
+			if _, seen := depths[next]; !seen && g.Nodes[next] {
+				depths[next] = depths[current] + 1
+				queue = append(queue, next)
 			}
 		}
 	}
