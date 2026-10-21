@@ -1,6 +1,116 @@
 package main
 
-import "strings"
+import (
+	"encoding/hex"
+	"strings"
+)
+
+// ============================================================
+// MAC identity — parsed addresses
+// ============================================================
+
+// macAddr is a parsed 48-bit MAC address.
+type macAddr [6]byte
+
+// parseMAC reads every MAC text form the collectors and LLDP produce:
+//
+//	"4c:ae:a3:8e:42:11"  colons, any case; net-snmp also drops leading
+//	                     zeros ("0:c:29:aa:bb:cd")
+//	"4C AE A3 8E 42 11"  Hex-STRING bytes, optionally after a "Hex-STRING:"
+//	                     or "STRING:" prefix and in quotes
+//	"4c-ae-a3-8e-42-11"  dashes
+//	"5894.8000.f7a3"     Cisco dotted
+//	"4caea38e4211"       bare hex
+//
+// Everything else is no MAC: SNMP exception text, hostnames, IPs, partial or
+// overlong addresses, mixed separators.
+func parseMAC(s string) (macAddr, bool) {
+	s = strings.TrimSpace(s)
+	if rest, ok := strings.CutPrefix(s, "Hex-STRING:"); ok {
+		s = rest
+	} else if rest, ok := strings.CutPrefix(s, "STRING:"); ok {
+		s = rest
+	}
+	s = strings.TrimSpace(strings.Trim(strings.TrimSpace(s), `"`))
+
+	var digits string
+	switch {
+	case strings.Count(s, ":") == 5:
+		digits = macJoinGroups(strings.Split(s, ":"), 1)
+	case strings.Count(s, "-") == 5:
+		digits = macJoinGroups(strings.Split(s, "-"), 2)
+	case strings.Count(s, ".") == 2:
+		if g := strings.Split(s, "."); len(g[0]) == 4 && len(g[1]) == 4 && len(g[2]) == 4 {
+			digits = g[0] + g[1] + g[2]
+		}
+	case strings.ContainsAny(s, " \t"):
+		digits = macJoinGroups(strings.Fields(s), 2)
+	default:
+		digits = s
+	}
+	var m macAddr
+	if len(digits) != 12 {
+		return m, false
+	}
+	if _, err := hex.Decode(m[:], []byte(digits)); err != nil {
+		return macAddr{}, false
+	}
+	return m, true
+}
+
+// macJoinGroups joins six groups of minDigits to 2 characters into twelve,
+// padding single digits with a zero; any other shape gives "".
+func macJoinGroups(groups []string, minDigits int) string {
+	if len(groups) != 6 {
+		return ""
+	}
+	var b strings.Builder
+	for _, g := range groups {
+		if len(g) < minDigits || len(g) > 2 {
+			return ""
+		}
+		if len(g) == 1 {
+			b.WriteByte('0')
+		}
+		b.WriteString(g)
+	}
+	return b.String()
+}
+
+// String gives the canonical text "aa:bb:cc:dd:ee:ff".
+func (m macAddr) String() string {
+	const digits = "0123456789abcdef"
+	b := make([]byte, 0, 17)
+	for i, octet := range m {
+		if i > 0 {
+			b = append(b, ':')
+		}
+		b = append(b, digits[octet>>4], digits[octet&0x0f])
+	}
+	return string(b)
+}
+
+// OUI gives the first three octets as "aa:bb:cc", the key of the OUI tables.
+func (m macAddr) OUI() string { return m.String()[:8] }
+
+// IsNull: 00:00:00:00:00:00.
+func (m macAddr) IsNull() bool { return m == macAddr{} }
+
+// IsBroadcast: ff:ff:ff:ff:ff:ff.
+func (m macAddr) IsBroadcast() bool { return m == macAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff} }
+
+// IsMulticast: the I/G bit (group address; broadcast included).
+func (m macAddr) IsMulticast() bool { return m[0]&0x01 != 0 }
+
+// IsLocal: the U/L bit (locally administered).
+func (m macAddr) IsLocal() bool { return m[0]&0x02 != 0 }
+
+// IsRandom: a locally administered unicast address, such as a phone's
+// private Wi-Fi address.
+func (m macAddr) IsRandom() bool { return m.IsLocal() && !m.IsMulticast() }
+
+// IsZeroOUI: the OUI 00:00:00, which only appears on garbage entries.
+func (m macAddr) IsZeroOUI() bool { return m[0] == 0 && m[1] == 0 && m[2] == 0 }
 
 // ============================================================
 // MAC identity — BMC detection

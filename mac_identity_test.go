@@ -372,3 +372,109 @@ func TestDetectOSFromMACOrder(t *testing.T) {
 		t.Errorf("with a TTL 128 reply: %q, want Windows", got)
 	}
 }
+
+// TestParseMAC: every MAC text form the collectors and LLDP produce parses;
+// exception text, hostnames, IPs and partial addresses do not.
+func TestParseMAC(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"4c:ae:a3:8e:42:11", "4c:ae:a3:8e:42:11"},
+		{"4C:AE:A3:8E:42:11", "4c:ae:a3:8e:42:11"},
+		{"0:c:29:aa:bb:cd", "00:0c:29:aa:bb:cd"}, // net-snmp unpadded
+		{"0:0:0:0:0:0", "00:00:00:00:00:00"},
+		{"4C AE A3 8E 42 11", "4c:ae:a3:8e:42:11"},
+		{"4C AE A3 8E 42 11 ", "4c:ae:a3:8e:42:11"},
+		{"4C  AE A3 8E 42 11", "4c:ae:a3:8e:42:11"},
+		{"Hex-STRING: 4C AE A3 8E 42 11", "4c:ae:a3:8e:42:11"},
+		{"STRING: \"4c:ae:a3:8e:42:11\"", "4c:ae:a3:8e:42:11"},
+		{"\"4c:ae:a3:8e:42:11\"", "4c:ae:a3:8e:42:11"},
+		{"\"f8-f0-82-7a-d9-69\"", "f8:f0:82:7a:d9:69"},
+		{"f4-b5-20-19-12-5e", "f4:b5:20:19:12:5e"},
+		{"5894.8000.f7a3", "58:94:80:00:f7:a3"}, // Cisco dotted
+		{"B083.FE11.2233", "b0:83:fe:11:22:33"},
+		{"4caea32784cb", "4c:ae:a3:27:84:cb"},
+		{"No Such Instance currently exists at this OID", ""},
+		{"no:such:object:available:on:this:agent:at:this:oid", ""},
+		{"DESKTOP-V380CHD", ""},
+		{"FERUZA", ""},
+		{"\"pM{?WA\"", ""},
+		{"01 AC 10 01 0F", ""},
+		{"aa:bb:cc:dd:ee", ""},
+		{"aa:bb:cc:dd:ee:ff:00", ""},
+		{"4c:ae:a3-8e:42:11", ""},
+		{"a-b-c-d-e-f", ""},
+		{"004:ae:a3:8e:42:11", ""},
+		{"gg:ae:a3:8e:42:11", ""},
+		{"fe80::1", ""},
+		{"2001:db8::1", ""},
+		{"172.20.1.1", ""},
+		{"10.0.0", ""},
+		{"B-318/1", ""},
+		{"", ""},
+		{"  ", ""},
+	} {
+		m, ok := parseMAC(c.in)
+		got := ""
+		if ok {
+			got = m.String()
+		}
+		if got != c.want {
+			t.Errorf("parseMAC(%q) = %q, %v; want %q", c.in, got, ok, c.want)
+		}
+	}
+}
+
+// TestMACAddrBits pins the bit predicates of a parsed address.
+func TestMACAddrBits(t *testing.T) {
+	for _, c := range []struct {
+		mac                                                string
+		null, broadcast, multicast, local, random, zeroOUI bool
+	}{
+		{"00:00:00:00:00:00", true, false, false, false, false, true},
+		{"ff:ff:ff:ff:ff:ff", false, true, true, true, false, false},
+		{"01:00:5e:00:00:fb", false, false, true, false, false, false},
+		{"33:33:00:00:00:01", false, false, true, true, false, false},
+		{"03:00:00:00:00:01", false, false, true, true, false, false},
+		{"52:54:00:12:34:56", false, false, false, true, true, false},
+		{"02:42:ac:11:00:02", false, false, false, true, true, false},
+		{"da:a1:19:00:00:01", false, false, false, true, true, false},
+		{"00:00:00:12:34:56", false, false, false, false, false, true},
+		{"4c:ae:a3:8e:42:11", false, false, false, false, false, false},
+	} {
+		m, ok := parseMAC(c.mac)
+		if !ok {
+			t.Fatalf("parseMAC(%q) failed", c.mac)
+		}
+		got := [6]bool{m.IsNull(), m.IsBroadcast(), m.IsMulticast(), m.IsLocal(), m.IsRandom(), m.IsZeroOUI()}
+		want := [6]bool{c.null, c.broadcast, c.multicast, c.local, c.random, c.zeroOUI}
+		if got != want {
+			t.Errorf("%s: null/broadcast/multicast/local/random/zeroOUI = %v, want %v", c.mac, got, want)
+		}
+		if m.OUI() != c.mac[:8] {
+			t.Errorf("%s: OUI() = %q", c.mac, m.OUI())
+		}
+	}
+}
+
+// TestRandomMACNotVirtualNIC: a known virtual-NIC OUI is a VM, never a
+// random MAC, even with the local bit set (52:54:00 QEMU/KVM) (Q4). Only
+// parsed MACs can be random.
+func TestRandomMACNotVirtualNIC(t *testing.T) {
+	for _, c := range []struct {
+		mac  string
+		want bool
+	}{
+		{"52:54:00:12:34:56", false},
+		{"52-54-00-12-34-56", false},
+		{"02:42:ac:11:00:02", true}, // Docker bridge: no hypervisor OUI
+		{"da:a1:19:00:00:01", true},
+		{"2:11:22:33:44:55", true}, // unpadded net-snmp form
+		{"03:00:00:00:00:01", false},
+		{"fe80::1", false},
+		{"\"2\"", false},
+		{"B-318/1", false},
+	} {
+		if got := isRandomMAC(c.mac); got != c.want {
+			t.Errorf("isRandomMAC(%q) = %v, want %v", c.mac, got, c.want)
+		}
+	}
+}

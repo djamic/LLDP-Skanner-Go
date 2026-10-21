@@ -1691,19 +1691,13 @@ func isSpecialMAC(mac string) bool {
 	return false
 }
 
-// isRandomMAC checks if a MAC address uses locally administered address (random/private)
-// Rule: the second hex character of the first octet is 2, 6, A, or E
-// Examples: da:a1:19:... → 'a' ∈ {2,6,a,e} → random ✅
-//           00:1a:2b:... → '0' ∉ {2,6,a,e} → real ❌
+// isRandomMAC checks if a MAC address uses locally administered address (random/private):
+// the U/L bit is set and the I/G bit is not, e.g. da:a1:19:... (a phone's private
+// Wi-Fi address). A known virtual-NIC OUI is a VM, not random, even with the
+// U/L bit set (52:54:00 QEMU/KVM) (Q4). Text that is no MAC is never random.
 func isRandomMAC(mac string) bool {
-	mac = strings.ToLower(mac)
-	parts := strings.Split(mac, ":")
-	if len(parts) < 1 || len(parts[0]) < 2 {
-		return false
-	}
-	// Second hex char of first octet
-	secondChar := parts[0][1]
-	return secondChar == '2' || secondChar == '6' || secondChar == 'a' || secondChar == 'e'
+	m, ok := parseMAC(mac)
+	return ok && m.IsRandom() && !isHypervisorMAC(m.String())
 }
 
 // isBMC detects server BMC/management interfaces (iDRAC, iLO, IPMI, XCC, iRMC, CIMC)
