@@ -32,16 +32,28 @@ func init() {
 }
 
 func esxiCheckWorker() {
-	client := &http.Client{
-		Timeout: 2 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
-			DisableKeepAlives:     true,
-			ResponseHeaderTimeout: 1 * time.Second,
-		},
+	client := newESXiClient(&http.Transport{
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		DisableKeepAlives:     true,
+		ResponseHeaderTimeout: 1 * time.Second,
+	})
+	runESXiWorker(validationQueue, func(ip string) bool { return esxiProbe(client, ip) })
+}
+
+// newESXiClient returns the HTTP client of an ESXi check worker, which sends
+// its requests through transport.
+func newESXiClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{
+		Timeout:   2 * time.Second,
+		Transport: transport,
 	}
-	for job := range validationQueue {
-		if esxiProbe(client, job.ip) {
+}
+
+// runESXiWorker probes the IP of every job it receives and stores the MAC as
+// a confirmed ESXi host when the probe succeeds.
+func runESXiWorker(jobs <-chan esxiJob, probe func(ip string) bool) {
+	for job := range jobs {
+		if probe(job.ip) {
 			fmt.Printf("✅ [Active-Check] Confirmed ESXi via HTTP: %s (MAC: %s)\n", job.ip, job.mac)
 			ConfirmedESXiMACs.Store(job.mac, true)
 		}
@@ -64,6 +76,12 @@ func probeESXiHost(client *http.Client, ip string) bool {
 	}
 	conn.Close()
 
+	return esxiUIAnswers(client, ip)
+}
+
+// esxiUIAnswers sends GET https://ip/ui/ with client and applies the ESXi
+// fingerprint to the response body.
+func esxiUIAnswers(client *http.Client, ip string) bool {
 	// HTTP GET /ui/ check
 	req, _ := http.NewRequest("GET", "https://"+ip+"/ui/", nil)
 	resp, err := client.Do(req)
@@ -605,27 +623,35 @@ func startMacIPService() {
 	// Load persistent cache first
 	loadMacIPCache()
 
+	startMacIPCollector()
+}
+
+// startMacIPCollector starts the background ARP collection of the MAC-IP
+// service. Tests replace it so no collection loop is started.
+var startMacIPCollector = func() { go runMacIPCollector() }
+
+// runMacIPCollector collects the ARP tables at once and then every 5 minutes,
+// and starts the one-time gateway subnet discovery.
+func runMacIPCollector() {
+	fmt.Println("🚀 [MacIPService] Started — collecting ARP from all switches every 5 min")
+
+	// First run immediately
+	collectARPFromAllSwitches()
+
+	// Discover new SNMP devices from gateway subnets (one-time after first ARP)
 	go func() {
-		fmt.Println("🚀 [MacIPService] Started — collecting ARP from all switches every 5 min")
-
-		// First run immediately
-		collectARPFromAllSwitches()
-
-		// Discover new SNMP devices from gateway subnets (one-time after first ARP)
-		go func() {
-			time.Sleep(10 * time.Second) // wait for ARP cache to populate
-			fmt.Println("🔍 [SubnetDisc] Starting gateway subnet discovery...")
-			RunSubnetDiscovery()
-		}()
-
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			fmt.Println("⏱️  [MacIPService] Periodic ARP collection started...")
-			collectARPFromAllSwitches()
-		}
+		time.Sleep(10 * time.Second) // wait for ARP cache to populate
+		fmt.Println("🔍 [SubnetDisc] Starting gateway subnet discovery...")
+		RunSubnetDiscovery()
 	}()
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		fmt.Println("⏱️  [MacIPService] Periodic ARP collection started...")
+		collectARPFromAllSwitches()
+	}
 }
 
 // TriggerMacIPCollection can be called externally to force an immediate ARP sweep

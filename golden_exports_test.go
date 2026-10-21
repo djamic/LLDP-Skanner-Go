@@ -290,12 +290,22 @@ func TestGoldenReports(t *testing.T) {
 	checkGolden(t, "audit_default.md", []byte(canonicalAuditMD(generateAuditMD([]string{"switch", "hub"}))))
 
 	// Only section 3 (Mermaid topology and legend) depends on the groups.
-	servers := canonicalAuditMD(generateAuditMD([]string{"switch", "router", "hypervisor", "vm", "bmc", "server"}))
-	start, end := strings.Index(servers, "## 3."), strings.Index(servers, "## 4.")
+	// This set has every other group, also those with no nodes in the
+	// fixture or no legend row (printer, server, unknown).
+	servers := canonicalAuditMD(generateAuditMD([]string{"switch", "router", "hypervisor", "vm", "bmc", "server", "access_point", "wifi_random", "printer", "unknown"}))
+	checkGolden(t, "audit_servers_section3.md", []byte(auditSections(t, servers, "## 3.", "## 4.")))
+}
+
+// auditSections returns the part of an audit report from the heading that
+// starts with from up to the heading that starts with to.
+func auditSections(t *testing.T, md, from, to string) string {
+	t.Helper()
+	start := strings.Index(md, "\n"+from)
+	end := strings.Index(md, "\n"+to)
 	if start < 0 || end < start {
-		t.Fatalf("audit report has no section 3")
+		t.Fatalf("audit report has no %q ... %q part", from, to)
 	}
-	checkGolden(t, "audit_servers_section3.md", []byte(servers[start:end]))
+	return md[start+1 : end+1]
 }
 
 var (

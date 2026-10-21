@@ -170,30 +170,12 @@ func main() {
 	savedData, err := LoadSavedData()
 	hasSavedHosts := err == nil && savedData != nil && len(savedData.Hosts) > 0
 
+	// Saved hosts and the first graph, then the MAC-IP cache and gateway ARP
+	var savedHosts map[string]*DeviceData
 	if hasSavedHosts {
-		fmt.Println("📂 Found saved network data, loading...")
-
-		// Populate collectedData from saved
-		collectedDataMutex.Lock()
-		for ip, data := range savedData.Hosts {
-			collectedData[ip] = data
-			// Set traffic baseline
-			updateTrafficCounters(ip, data.Interfaces)
-		}
-		collectedDataMutex.Unlock()
-
-		// Rebuild graph
-		rebuildGraph()
-		fmt.Printf("✅ Loaded %d hosts from saved data\n", len(savedData.Hosts))
+		savedHosts = savedData.Hosts
 	}
-
-	// MAC-IP Service: load cache and start background ARP collection
-	// (covers gateway + all discovered switches)
-	startMacIPService()
-
-	// Collect ARP table from gateway first (legacy - also done by MacIPService)
-	fmt.Printf("🔍 Collecting ARP table from gateway %s...\n", gatewayIP)
-	collectGatewayARP()
+	loadStartupData(savedHosts)
 
 	// Start web server immediately in background
 	go StartWebServer("8088")
@@ -208,27 +190,7 @@ func main() {
 	}
 	if *modeFlag == "monitor24h" && hasSavedHosts {
 		// Start traffic monitoring in background
-		snmpObj := NewSNMPObject(
-			func(data *DeviceData) {
-				// Phase 8: Mark as reachable
-				data.Unreachable = false
-				data.LastSeen = time.Now()
-				collectedDataMutex.Lock()
-				collectedData[data.IP] = data
-				collectedDataMutex.Unlock()
-				updateTrafficCounters(data.IP, data.Interfaces)
-			},
-			func(ip string, err error) {
-				// Phase 8: Mark as unreachable but PRESERVE old data
-				collectedDataMutex.Lock()
-				if existing, ok := collectedData[ip]; ok {
-					existing.Unreachable = true
-					// LastSeen stays unchanged — keeps last successful poll time
-				}
-				collectedDataMutex.Unlock()
-				fmt.Printf("🔴 [Monitor] Switch unreachable: %s (%v)\n", ip, err)
-			},
-		)
+		snmpObj := newMonitorSNMPObject()
 		startTrafficPolling(snmpObj)
 		startPeriodicLabelRefresh()
 		startPeriodicRescan(snmpObj)
@@ -245,7 +207,7 @@ func main() {
 		fmt.Println("🔄 Starting traffic monitoring...")
 
 		// Create SNMP Object for traffic polling
-		snmpObject := NewSNMPObject(nil, nil)
+		snmpObject := newSavedHostsSNMPObject()
 		startTrafficPolling(snmpObject)
 		startPeriodicLabelRefresh()
 		startPeriodicRescan(snmpObject)
@@ -287,63 +249,7 @@ func main() {
 		fmt.Println("📊 Graph will update in real-time as devices are discovered")
 
 		// Create SNMP Object for detailed data collection
-		snmpObject := NewSNMPObject(
-			// OnSuccess callback
-			func(data *DeviceData) {
-				atomic.AddInt32(&dataCollected, 1)
-
-				// Phase 8: Mark as reachable
-				data.Unreachable = false
-				data.LastSeen = time.Now()
-
-				// Store data for later processing
-				collectedDataMutex.Lock()
-				collectedData[data.IP] = data
-				collectedDataMutex.Unlock()
-
-				// Update traffic counters (set baseline for first poll)
-				updateTrafficCounters(data.IP, data.Interfaces)
-
-				fmt.Printf("[📊] %s (%s) - %d interfaces, %d neighbors, ChassisID: %s\n",
-					data.IP, data.SysName, len(data.Interfaces), len(data.Neighbors), data.ChassisID)
-
-				// REACTIVE: Rebuild graph from current collected data.
-				// rebuildGraph finishes the whole graph (hypervisors and IP
-				// labels included) before it publishes it, like the periodic
-				// rescans, so HTTP handlers never see a half-built graph.
-				newGraph := rebuildGraph()
-				fmt.Printf("  [GRAPH STATE] Nodes: %d, Edges: %d\n", len(newGraph.Nodes), countEdges(newGraph))
-
-				// 7. Run Analyze() immediately so health_score is available in /api/graph
-				go func() {
-					collectedDataMutex.RLock()
-					var devSlice []DeviceData
-					for _, d := range collectedData {
-						devSlice = append(devSlice, *d)
-					}
-					collectedDataMutex.RUnlock()
-					fd := FullCaptureData{
-						Session:     CaptureSession{ID: "live", Name: "Live", StartTime: time.Now()},
-						DevicesData: devSlice,
-						Topology:    newGraph.GetGraphData(),
-					}
-					a := NewAnalyzer(fd)
-					r := a.Analyze()
-					fmt.Printf("📊 [HealthScore] %d/100 (%s)\n", r.HealthScore, GetHealthLabel(r.HealthScore))
-				}()
-			},
-			// OnFailure callback
-			func(ip string, err error) {
-				fmt.Printf("[❌] Data collection failed for %s: %v\n", ip, err)
-				atomic.AddInt32(&dataCollected, 1)
-				// Phase 8: Mark as unreachable but PRESERVE old data
-				collectedDataMutex.Lock()
-				if existing, ok := collectedData[ip]; ok {
-					existing.Unreachable = true
-				}
-				collectedDataMutex.Unlock()
-			},
-		)
+		snmpObject := newReactiveSNMPObject()
 
 		// Define callback function for scan results
 		resultCallback := func(result ScanResult) {
@@ -542,6 +448,152 @@ func main() {
 	} // End of else block
 }
 
+// loadStartupData runs the startup steps before the mode dispatch: the saved
+// hosts (nil when there are none) go into collectedData and the first graph
+// is built from them; then the MAC-IP service loads its cache and starts, and
+// the gateway ARP table is read.
+func loadStartupData(savedHosts map[string]*DeviceData) {
+	if len(savedHosts) > 0 {
+		fmt.Println("📂 Found saved network data, loading...")
+
+		// Populate collectedData from saved
+		collectedDataMutex.Lock()
+		for ip, data := range savedHosts {
+			collectedData[ip] = data
+			// Set traffic baseline
+			updateTrafficCounters(ip, data.Interfaces)
+		}
+		collectedDataMutex.Unlock()
+
+		// Rebuild graph
+		rebuildGraph()
+		fmt.Printf("✅ Loaded %d hosts from saved data\n", len(savedHosts))
+	}
+
+	// MAC-IP Service: load cache and start background ARP collection
+	// (covers gateway + all discovered switches)
+	startMacIPService()
+
+	// Collect ARP table from gateway first (legacy - also done by MacIPService)
+	fmt.Printf("🔍 Collecting ARP table from gateway %s...\n", gatewayIP)
+	collectGatewayARP()
+}
+
+// storeCollectedDevice stores the data of a successful SNMP poll in
+// collectedData and marks the switch reachable (the OnSuccess callbacks).
+func storeCollectedDevice(data *DeviceData) {
+	// Phase 8: Mark as reachable
+	data.Unreachable = false
+	data.LastSeen = time.Now()
+	collectedDataMutex.Lock()
+	collectedData[data.IP] = data
+	collectedDataMutex.Unlock()
+}
+
+// markUnreachable flags a known switch as unreachable after a failed poll
+// and keeps its last data (the OnFailure callbacks).
+func markUnreachable(ip string) {
+	// Phase 8: Mark as unreachable but PRESERVE old data
+	collectedDataMutex.Lock()
+	if existing, ok := collectedData[ip]; ok {
+		existing.Unreachable = true
+		// LastSeen stays unchanged — keeps last successful poll time
+	}
+	collectedDataMutex.Unlock()
+}
+
+// newMonitorSNMPObject returns the SNMP object of monitor24h mode with saved
+// hosts: every poll is stored and updates the traffic counters, and a failed
+// poll marks the switch unreachable.
+func newMonitorSNMPObject() *SNMPObject {
+	return NewSNMPObject(
+		func(data *DeviceData) {
+			storeCollectedDevice(data)
+			updateTrafficCounters(data.IP, data.Interfaces)
+		},
+		func(ip string, err error) {
+			markUnreachable(ip)
+			fmt.Printf("🔴 [Monitor] Switch unreachable: %s (%v)\n", ip, err)
+		},
+	)
+}
+
+// newSavedHostsSNMPObject returns the SNMP object of normal mode with saved
+// hosts (traffic polling, periodic and rescue rescans). It has no callbacks,
+// so the data its CollectData calls collect is not stored.
+func newSavedHostsSNMPObject() *SNMPObject {
+	return NewSNMPObject(nil, nil)
+}
+
+// newReactiveSNMPObject returns the SNMP object of the first scan in normal
+// mode without saved hosts: every collected switch updates the graph at once
+// (handleReactiveDevice) and the analysis runs on the new graph.
+func newReactiveSNMPObject() *SNMPObject {
+	return NewSNMPObject(
+		// OnSuccess callback
+		func(data *DeviceData) {
+			newGraph := handleReactiveDevice(data)
+
+			// 7. Run Analyze() immediately so health_score is available in /api/graph
+			startLiveAnalysis(newGraph)
+		},
+		// OnFailure callback
+		func(ip string, err error) {
+			fmt.Printf("[❌] Data collection failed for %s: %v\n", ip, err)
+			atomic.AddInt32(&dataCollected, 1)
+			markUnreachable(ip)
+		},
+	)
+}
+
+// startLiveAnalysis runs analyzeLiveGraph in the background. Tests replace it
+// so that no analysis outlives a test.
+var startLiveAnalysis = func(graph *DJGraph) { go analyzeLiveGraph(graph) }
+
+// analyzeLiveGraph runs Analyze() on collectedData and graph, which sets the
+// health score and anomalies that /api/graph serves.
+func analyzeLiveGraph(graph *DJGraph) {
+	collectedDataMutex.RLock()
+	var devSlice []DeviceData
+	for _, d := range collectedData {
+		devSlice = append(devSlice, *d)
+	}
+	collectedDataMutex.RUnlock()
+	fd := FullCaptureData{
+		Session:     CaptureSession{ID: "live", Name: "Live", StartTime: time.Now()},
+		DevicesData: devSlice,
+		Topology:    graph.GetGraphData(),
+	}
+	a := NewAnalyzer(fd)
+	r := a.Analyze()
+	fmt.Printf("📊 [HealthScore] %d/100 (%s)\n", r.HealthScore, GetHealthLabel(r.HealthScore))
+}
+
+// handleReactiveDevice is the OnSuccess work of the first scan: it stores the
+// switch, then rebuilds and publishes the graph and returns it. CollectData
+// runs in one goroutine per switch, so calls overlap; rebuildGraph publishes
+// their graphs in the order of their snapshots.
+func handleReactiveDevice(data *DeviceData) *DJGraph {
+	atomic.AddInt32(&dataCollected, 1)
+
+	// Store data for later processing
+	storeCollectedDevice(data)
+
+	// Update traffic counters (set baseline for first poll)
+	updateTrafficCounters(data.IP, data.Interfaces)
+
+	fmt.Printf("[📊] %s (%s) - %d interfaces, %d neighbors, ChassisID: %s\n",
+		data.IP, data.SysName, len(data.Interfaces), len(data.Neighbors), data.ChassisID)
+
+	// REACTIVE: Rebuild graph from current collected data.
+	// rebuildGraph finishes the whole graph (hypervisors and IP
+	// labels included) before it publishes it, like the periodic
+	// rescans, so HTTP handlers never see a half-built graph.
+	newGraph := rebuildGraph()
+	fmt.Printf("  [GRAPH STATE] Nodes: %d, Edges: %d\n", len(newGraph.Nodes), countEdges(newGraph))
+	return newGraph
+}
+
 // Helper to format raw string as Hex with colons
 func formatAsHex(raw string) string {
 	// If it already looks like a MAC (xx:xx:xx...), just return normalized
@@ -645,8 +697,8 @@ func normalizeID(id string, subtype int) string {
 // is a MAC (the chassis id or RemSysName becomes the display name); otherwise
 // the chassis id itself (could be a hostname).
 func resolveLLDPTarget(neighbor LLDPNeighbor) (targetID, displayName string) {
-	chassisID := normalizeID(neighbor.RemChassisId, neighbor.RemChassisIdSubtype)
-	portID := normalizeID(neighbor.RemPortId, neighbor.RemPortIdSubtype)
+	chassisID := lldpChassisID(neighbor)
+	portID := lldpPortID(neighbor)
 
 	// Check if ChassisID looks like a MAC (contains colons and correct length)
 	chassisIsMAC := strings.Count(chassisID, ":") == 5 && len(chassisID) == 17
@@ -666,6 +718,29 @@ func resolveLLDPTarget(neighbor LLDPNeighbor) (targetID, displayName string) {
 	}
 	// No MAC found - use ChassisID as fallback (could be hostname)
 	return chassisID, neighbor.RemSysName
+}
+
+// lldpChassisID is the normalized chassis id resolveLLDPTarget works with.
+func lldpChassisID(neighbor LLDPNeighbor) string {
+	return normalizeID(neighbor.RemChassisId, neighbor.RemChassisIdSubtype)
+}
+
+// lldpPortID is the normalized port id resolveLLDPTarget checks for a port
+// MAC.
+func lldpPortID(neighbor LLDPNeighbor) string {
+	return normalizeID(neighbor.RemPortId, neighbor.RemPortIdSubtype)
+}
+
+// lldpKnownMACs returns the MACs that buildGraphEdges treats as known from
+// LLDP: FDB entries with these MACs get no endpoint node.
+func lldpKnownMACs(data *DeviceData) map[string]bool {
+	knownMACs := make(map[string]bool)
+	for _, neighbor := range data.Neighbors {
+		// Normalize and add LLDP neighbor MACs
+		mac := normalizeMAC(neighbor.RemChassisId)
+		knownMACs[mac] = true
+	}
+	return knownMACs
 }
 
 // buildGraphEdges builds graph edges using ChassisID as the primary key
@@ -822,12 +897,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 
 	// Process MAC Address Table - create endpoint nodes
 	// Track which MACs are already known (from LLDP)
-	knownMACs := make(map[string]bool)
-	for _, neighbor := range data.Neighbors {
-		// Normalize and add LLDP neighbor MACs
-		mac := normalizeMAC(neighbor.RemChassisId)
-		knownMACs[mac] = true
-	}
+	knownMACs := lldpKnownMACs(data)
 
 	// Build MAC to IP lookup from local ARP table (normalize keys)
 	macToIP := make(map[string]string)
@@ -2590,10 +2660,20 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 	}
 }
 
+// graphBuildMutex makes snapshot, build and publish in rebuildGraph one step,
+// so graphs are published in the order their snapshots were taken: when
+// reactive callbacks overlap, the graph published last holds the newest
+// collectedData. It is taken before collectedDataMutex and globalGraphMutex,
+// so a caller of rebuildGraph must hold neither (no caller does).
+var graphBuildMutex sync.Mutex
+
 // rebuildGraph rebuilds the graph from collectedData and publishes it.
 // It is the only build path: the reactive scan callback, the periodic and
 // rescue rescans, LLDP discovery and UI rescans all call it.
 func rebuildGraph() *DJGraph {
+	graphBuildMutex.Lock()
+	defer graphBuildMutex.Unlock()
+
 	// DEADLOCK FIX: Take a snapshot of collectedData under a SHORT RLock,
 	// then release it BEFORE doing any graph work.
 	// This prevents nested lock deadlock when rebuildGraph() is called from
@@ -2901,21 +2981,9 @@ func handleRescanRequests(snmpObject *SNMPObject) {
 					// Create a new SNMPObject with OnSuccess callback for each device
 					settings := GetCurrentSettings()
 					rescanSNMP := NewSNMPObject(
-						func(data *DeviceData) {
-							// Phase 8: Mark as reachable
-							data.Unreachable = false
-							data.LastSeen = time.Now()
-							collectedDataMutex.Lock()
-							collectedData[data.IP] = data
-							collectedDataMutex.Unlock()
-						},
+						storeCollectedDevice,
 						func(ip string, err error) {
-							// Phase 8: Mark as unreachable but PRESERVE old data
-							collectedDataMutex.Lock()
-							if existing, ok := collectedData[ip]; ok {
-								existing.Unreachable = true
-							}
-							collectedDataMutex.Unlock()
+							markUnreachable(ip)
 							fmt.Printf("🔴 [Rescan] Switch unreachable: %s (%v)\n", ip, err)
 						},
 					)

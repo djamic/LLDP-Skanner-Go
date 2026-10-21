@@ -163,10 +163,13 @@ func hypervisorCase(build func(g *DJGraph)) graphView {
 }
 
 // TestGoldenScenarioGraphs pins detectHypervisors on hand-made graphs (mixed
-// VMware OUIs, Proxmox and the second VMware OUI, KVM, hub children, a
-// speed-only edge label, server-NIC relabelling and its switch protections)
-// and the whole build (buildGraphFromSnapshot) on a small synthetic network
-// that exercises every branch of buildGraphEdges and addMACCrossRefEdges.
+// VMware OUIs, mixed hypervisor families with the lowest MAC in the
+// minority, in the majority and in a tie, Proxmox and the other VMware OUIs,
+// KVM, hub children, a speed-only edge label, server-NIC relabelling and its
+// switch protections), enrichGraphWithIPs with an IP that is a prefix of one
+// in the label, and the whole build (buildGraphFromSnapshot) on a small
+// synthetic network that exercises every branch of buildGraphEdges and
+// addMACCrossRefEdges.
 func TestGoldenScenarioGraphs(t *testing.T) {
 	resetState(t)
 	const sw = "4c:ae:a3:00:01:01"
@@ -189,9 +192,28 @@ func TestGoldenScenarioGraphs(t *testing.T) {
 		addInfoNode(g, sw, "SNR-S2985G\n172.20.0.11")
 		vmPort(g, "GE1/0/6 [T]", "00:05:69:00:06:01", "00:05:69:00:06:02")
 	})
+	rec["hyp_vmware_00_1c_14"] = hypervisorCase(func(g *DJGraph) {
+		addInfoNode(g, sw, "SNR-S2985G\n172.20.0.11")
+		vmPort(g, "GE1/0/14 [T]", "00:1c:14:00:0e:01", "00:1c:14:00:0e:02")
+	})
 	rec["hyp_kvm_52_54_00"] = hypervisorCase(func(g *DJGraph) {
 		addInfoNode(g, sw, "SNR-S2985G\n172.20.0.11")
 		vmPort(g, "GE1/0/8 [T]", "52:54:00:00:08:01", "52:54:00:00:08:02")
+	})
+	// Mixed hypervisor families: the lowest MAC is in the minority (one
+	// Hyper-V MAC, two KVM MACs), in the majority (two Hyper-V, one KVM),
+	// and a 1:1 tie.
+	rec["hyp_mixed_family_minority_first"] = hypervisorCase(func(g *DJGraph) {
+		addInfoNode(g, sw, "SNR-S2985G\n172.20.0.11")
+		vmPort(g, "GE1/0/27 [T]", "00:15:5d:00:1b:01", "52:54:00:00:1b:02", "52:54:00:00:1b:03")
+	})
+	rec["hyp_mixed_family_majority_first"] = hypervisorCase(func(g *DJGraph) {
+		addInfoNode(g, sw, "SNR-S2985G\n172.20.0.11")
+		vmPort(g, "GE1/0/29 [T]", "00:15:5d:00:1d:01", "00:15:5d:00:1d:02", "52:54:00:00:1d:03")
+	})
+	rec["hyp_mixed_family_tie"] = hypervisorCase(func(g *DJGraph) {
+		addInfoNode(g, sw, "SNR-S2985G\n172.20.0.11")
+		vmPort(g, "GE1/0/28 [T]", "52:54:00:00:1c:01", "00:15:5d:00:1c:02")
 	})
 	rec["hyp_single_vm_mac"] = hypervisorCase(func(g *DJGraph) {
 		addInfoNode(g, sw, "SNR-S2985G\n172.20.0.11")
@@ -243,6 +265,17 @@ func TestGoldenScenarioGraphs(t *testing.T) {
 		addInfoNode(g, "hyp-x-ge1", "[HYPERVISOR] VMware ESXi\n2 VMs on ge1")
 	})
 
+	// enrichGraphWithIPs when the label already holds an IP of which the
+	// node's own IP is a prefix (10.0.9.41 vs 10.0.9.4), and a control node.
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP = map[string]string{"00:1b:21:09:29:01": "10.0.9.4", "00:1b:21:09:29:02": "10.0.9.5"}
+	globalMACtoIPMutex.Unlock()
+	enrich := NewDJGraph()
+	addInfoNode(enrich, "00:1b:21:09:29:01", "[ENDPOINT] Intel\n10.0.9.41")
+	addInfoNode(enrich, "00:1b:21:09:29:02", "[ENDPOINT] Intel\n10.0.9.41")
+	enrichGraphWithIPs(enrich)
+	rec["enrich_ip_prefix_of_label_ip"] = viewGraph(enrich)
+
 	// Whole build on a synthetic network.
 	devices := scenarioNetwork()
 	collectedDataMutex.Lock()
@@ -293,8 +326,9 @@ func macEntries(port int, macs ...string) []MACEntry {
 // scenarioNetwork is a small network that reaches every branch of the graph
 // build: LLDP neighbors of each subtype shape (MAC, hostname + port MAC,
 // network address, null chassis, rejected hostname, NULL0 port, ASCII MAC,
-// BMC and server-NIC OUIs), FDB ports for the VM, hub (2+ MACs), trunk,
-// uplink and direct (one MAC, or at most 3 on a trunk) branches, MAC
+// BMC and server-NIC OUIs, port ids of subtype 1 and 5), FDB ports for the
+// VM, hub (2+ MACs), trunk, uplink and direct (one MAC, or at most 3 on a
+// trunk) branches, an LLDP neighbor's port MAC seen on another port, MAC
 // cross-reference links, switches with exception-text chassis ids (merged
 // node) and a switch without a chassis id.
 func scenarioNetwork() map[string]*DeviceData {
@@ -316,7 +350,8 @@ func scenarioNetwork() map[string]*DeviceData {
 	swAMACs = append(swAMACs, macEntries(22, "00:1b:21:09:16:01")...)
 	swAMACs = append(swAMACs, macEntries(23, "de:a1:19:09:17:01")...)
 	swAMACs = append(swAMACs, macEntries(14, "AA:BB:CC:09:0E:01")...)
-	swAMACs = append(swAMACs, macEntries(15, "10:7c:61:c0:9e:aa")...)
+	// Port 15: the port MAC of the port-2 LLDP neighbor plus one more MAC.
+	swAMACs = append(swAMACs, macEntries(15, "10:7c:61:c0:9e:aa", "00:1b:21:09:0f:02")...)
 	swAMACs = append(swAMACs, macEntries(3, "00:1b:21:09:03:01")...)
 	swAMACs = append(swAMACs, macEntries(24, "00:1b:21:09:18:01", "00:1b:21:09:18:02")...)
 	swAMACs = append(swAMACs, macEntries(29, "00:1b:21:09:1d:01")...)
@@ -342,6 +377,11 @@ func scenarioNetwork() map[string]*DeviceData {
 			{LocalPortNum: 7, RemIndex: 7, RemChassisIdSubtype: 7, RemChassisId: "\"f4-b5-20-19-12-5e\"", RemPortIdSubtype: 7, RemPortId: "\"eth0\"", RemSysName: "printer-7", RemSysDesc: "HP LaserJet\nrev 2"},
 			{LocalPortNum: 16, RemIndex: 8, RemChassisIdSubtype: 4, RemChassisId: "0C C4 7A 09 00 16", RemPortIdSubtype: 3, RemPortId: "0C C4 7A 09 00 16", RemSysName: "node16-ipmi"},
 			{LocalPortNum: 17, RemIndex: 9, RemChassisIdSubtype: 4, RemChassisId: "5C ED 8C 09 00 17", RemPortIdSubtype: 3, RemPortId: "5C ED 8C 09 00 17", RemSysName: "ILOCZJ33411C3"},
+			// Port ids whose subtype number means something else for a port
+			// than for a chassis: 1 is ifAlias (chassis: entPhysicalAlias)
+			// and 5 is ifName (chassis: network address).
+			{LocalPortNum: 25, RemIndex: 10, RemChassisIdSubtype: 7, RemChassisId: "printer-x", RemPortIdSubtype: 1, RemPortId: "uplink"},
+			{LocalPortNum: 26, RemIndex: 11, RemChassisIdSubtype: 7, RemChassisId: "nas-26", RemPortIdSubtype: 5, RemPortId: "\"eth0\"", RemSysName: "nas-26"},
 		},
 		ARPTable: []ARPEntry{{IPAddress: "10.0.9.99", MACAddress: "00:50:56:09:09:01", Interface: 1}},
 		MACTable: swAMACs,

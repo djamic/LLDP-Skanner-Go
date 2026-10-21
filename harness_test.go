@@ -12,7 +12,11 @@ package main
 //	git diff testdata/golden      # review what changed
 //
 // The fixtures are frozen gzip copies of network_data.json and
-// mac_ip_cache.json in testdata/.
+// mac_ip_cache.json in testdata/. Time-dependent code that has a clock seam
+// (eventClock) runs on testClock, which stands still unless a test moves it.
+// TestGoldenUIApp also starts Node.js, when it is installed, to run
+// static/app.js against a stub DOM (testdata/ui/app_probe.js); that script
+// sends nothing either.
 
 import (
 	"bufio"
@@ -53,6 +57,7 @@ var (
 	guardExportsDir     string
 	guardGraphDebugFile string
 	guardMacIPCacheFile string
+	guardCapturesDir    string
 )
 
 // guard counts attempts to reach the network through a seam that tests never
@@ -61,6 +66,11 @@ var guard struct {
 	esxiProbes   atomic.Int64
 	ouiDownloads atomic.Int64
 }
+
+// macIPCollectorStarts counts the MAC-IP collection loops production would
+// have started (the stub starts none), and liveAnalyses the background
+// analyses the reactive scan would have started.
+var macIPCollectorStarts, liveAnalyses atomic.Int64
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -102,6 +112,7 @@ func installSeams(dir string) {
 	guardExportsDir = filepath.Join(dir, "results")
 	guardGraphDebugFile = filepath.Join(dir, "graphs_data.txt")
 	guardMacIPCacheFile = filepath.Join(dir, "mac_ip_cache.json")
+	guardCapturesDir = filepath.Join(dir, "captures")
 
 	runPing = fakePing
 	lookupAddr = fakeReverseDNS
@@ -120,9 +131,13 @@ func installSeams(dir string) {
 		guard.ouiDownloads.Add(1)
 		return nil, errors.New("harness: IEEE download disabled")
 	}
+	eventClock = testClock.Now
+	startMacIPCollector = func() { macIPCollectorStarts.Add(1) }
+	startLiveAnalysis = func(*DJGraph) { liveAnalyses.Add(1) }
 	exportsDir = guardExportsDir
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
+	capturesDir = guardCapturesDir
 	sortGraphData = true
 	gatewayIP = fixedGatewayIP
 	ignoredIssuesMutex.Lock()
@@ -185,6 +200,16 @@ func resetState(t *testing.T) {
 	networkEventLogMutex.Lock()
 	networkEventLog = nil
 	networkEventLogMutex.Unlock()
+	openEventTimesMutex.Lock()
+	openEventTimes = make(map[string]time.Time)
+	openEventTimesMutex.Unlock()
+	testClock.set(fixedTime)
+
+	macIPServiceMu.Lock()
+	macIPServiceRunning = false
+	macIPServiceMu.Unlock()
+	macIPCollectorStarts.Store(0)
+	liveAnalyses.Store(0)
 
 	SetLastReport(0, map[string][]string{}, 0)
 	SetGlobalGraph(nil)
@@ -195,12 +220,15 @@ func resetState(t *testing.T) {
 	exportsDir = guardExportsDir
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
+	capturesDir = guardCapturesDir
 	t.Cleanup(func() {
 		exportsDir = guardExportsDir
 		graphDebugFile = guardGraphDebugFile
 		macIPCacheFile = guardMacIPCacheFile
+		capturesDir = guardCapturesDir
 		clearConfirmedESXi()
 		influxRec.stop()
+		releaseDNSHolds()
 	})
 }
 
@@ -321,6 +349,33 @@ func deviceValues(devices []*DeviceData) []DeviceData {
 // fixedTime is used wherever the code under test takes a time from its input.
 var fixedTime = time.Date(2026, 10, 20, 18, 35, 34, 0, time.FixedZone("UZT", 5*3600))
 
+// fakeClock is the clock behind the eventClock seam. It stands still at
+// fixedTime until a test sets or advances it.
+type fakeClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+var testClock = &fakeClock{now: fixedTime}
+
+func (c *fakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *fakeClock) set(t time.Time) {
+	c.mu.Lock()
+	c.now = t
+	c.mu.Unlock()
+}
+
+func (c *fakeClock) advance(d time.Duration) {
+	c.mu.Lock()
+	c.now = c.now.Add(d)
+	c.mu.Unlock()
+}
+
 // captureData is the analyzer input production builds: devices plus the
 // GetGraphData topology.
 func captureData(id string, devices []*DeviceData, graph *DJGraph) FullCaptureData {
@@ -373,11 +428,60 @@ var fakeDNSNames = map[string]string{
 	"10.0.9.13":     "srv01-idrac.tuit.local.",    // scenario endpoint
 }
 
+// dnsHold makes the next reverse lookup of one IP wait (a slow DNS server):
+// entered is closed when the lookup starts, and the lookup answers once
+// release is closed or the caller's context (resolveHostname: 2 s) ends.
+type dnsHold struct {
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (h *dnsHold) free() { h.once.Do(func() { close(h.release) }) }
+
+var (
+	dnsHolds     sync.Map // ip → *dnsHold, until a lookup takes it
+	dnsHoldsMu   sync.Mutex
+	dnsHoldsMade []*dnsHold
+)
+
+// holdReverseDNS makes the next reverse lookup of ip wait until the returned
+// hold is freed. resetState frees every hold when the test ends, so a failed
+// test never leaves a build waiting.
+func holdReverseDNS(ip string) *dnsHold {
+	h := &dnsHold{entered: make(chan struct{}), release: make(chan struct{})}
+	dnsHoldsMu.Lock()
+	dnsHoldsMade = append(dnsHoldsMade, h)
+	dnsHoldsMu.Unlock()
+	dnsHolds.Store(ip, h)
+	return h
+}
+
+func releaseDNSHolds() {
+	dnsHolds.Range(func(k, _ any) bool {
+		dnsHolds.Delete(k)
+		return true
+	})
+	dnsHoldsMu.Lock()
+	for _, h := range dnsHoldsMade {
+		h.free()
+	}
+	dnsHoldsMade = nil
+	dnsHoldsMu.Unlock()
+}
+
 // fakeReverseDNS resolves the fixture address space without any network
 // traffic: the fixed names above, and "pc-<c>-<d>.tuit.local." for private
 // IPv4 addresses whose last octet is divisible by 5. Everything else fails
 // like an unknown host.
-func fakeReverseDNS(_ context.Context, ip string) ([]string, error) {
+func fakeReverseDNS(ctx context.Context, ip string) ([]string, error) {
+	if v, ok := dnsHolds.LoadAndDelete(ip); ok {
+		h := v.(*dnsHold)
+		close(h.entered)
+		select {
+		case <-h.release:
+		case <-ctx.Done():
+		}
+	}
 	if name, ok := fakeDNSNames[ip]; ok {
 		return []string{name}, nil
 	}

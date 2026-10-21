@@ -283,11 +283,15 @@ var (
 // Tests replace it so nothing is downloaded.
 var ouiOpenHTTP = oui.OpenStaticHttp
 
+// ouiFile is the local IEEE database file (tests point it elsewhere to reach
+// the download fallback).
+var ouiFile = "oui.txt"
+
 // initOUIDatabase tries to load the IEEE OUI database
 func initOUIDatabase() {
 	ouiDBOnce.Do(func() {
 		// Try local file first
-		db, err := oui.OpenStaticFile("oui.txt")
+		db, err := oui.OpenStaticFile(ouiFile)
 		if err == nil {
 			ouiDB = db
 			ouiDBOk = true

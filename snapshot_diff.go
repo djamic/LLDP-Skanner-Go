@@ -132,6 +132,10 @@ func AddNetworkEvent(evt NetworkEvent) {
 	go persistEventToInflux(evt)
 }
 
+// eventClock is the time source of the event durations. Tests replace it
+// with a clock they control.
+var eventClock = time.Now
+
 // persistEventToInflux writes the event to InfluxDB with duration calculation
 func persistEventToInflux(evt NetworkEvent) {
 	durationS := 0
@@ -142,11 +146,11 @@ func persistEventToInflux(evt NetworkEvent) {
 	switch evt.Type {
 	case "host_down", "port_down":
 		// Open event — record start time
-		openEventTimes[key] = time.Now()
+		openEventTimes[key] = eventClock()
 	case "host_up", "port_up":
 		// Close event — calculate duration
 		if start, ok := openEventTimes[key]; ok {
-			durationS = int(time.Since(start).Seconds())
+			durationS = int(eventClock().Sub(start).Seconds())
 			delete(openEventTimes, key)
 		}
 	}

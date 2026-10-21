@@ -161,11 +161,15 @@ const (
 	oidSTPRoot  = ".1.3.6.1.2.1.17.2.5"
 	oidSTPCost  = ".1.3.6.1.2.1.17.2.6"
 	oidSTPPort  = ".1.3.6.1.2.1.17.2.7"
+	// dot1dBasePortIfIndex: bridge port number → ifIndex. CollectData does
+	// not walk it today; the answer is there for the bridge-port mapping.
+	oidBasePortIf = ".1.3.6.1.2.1.17.1.4.1.2"
 )
 
 // healthyAgent answers every walk CollectData makes, with the value shapes
 // seen on real switches (quoted strings, Hex-STRING with trailing space,
-// printable STRING MACs, exception text, short OIDs and garbage lines).
+// printable STRING MACs, exception text, short OIDs and garbage lines), and
+// the bridge-port → ifIndex table, where bridge port 1 is not ifIndex 1.
 func healthyAgent() map[string][]string {
 	walks := map[string][]string{
 		oidChassis: {oidChassis + " = Hex-STRING: F8 F0 82 D8 7E 81 "},
@@ -175,6 +179,7 @@ func healthyAgent() map[string][]string {
 			oidIfDescr + ".25 = STRING: \"GigabitEthernet1/0/25\"",
 			oidIfDescr + ".28 = STRING: \"GigabitEthernet1/0/28\"",
 			oidIfDescr + ".50 = STRING: \"NULL0\"",
+			oidIfDescr + ".101 = STRING: \"Ten-GigabitEthernet1/0/49\"",
 		},
 		// ifSpeed and ifHighSpeed are walked concurrently and both write
 		// IfSpeed, so no interface gets both (the result would depend on
@@ -207,7 +212,10 @@ func healthyAgent() map[string][]string {
 			oidLLDPMan + ".3.3900.28.1.1.4.172.20.0.3 = INTEGER: 2",
 			oidLLDPMan + ".4.3900.28.1.1.4.172.20.0.3 = INTEGER: 26",
 		},
+		// FDB ports are bridge port numbers. Bridge port 1 is ifIndex 101
+		// (dot1dBasePortIfIndex below), the others equal their ifIndex.
 		oidFDBPort: {
+			oidFDBPort + ".0.27.33.9.1.1 = INTEGER: 1",
 			oidFDBPort + ".0.80.86.1.2.3 = INTEGER: 5",
 			oidFDBPort + ".248.240.130.209.103.94 = INTEGER: 28",
 			oidFDBPort + ".16.124.97.192.158.170 = INTEGER: 25",
@@ -239,6 +247,13 @@ func healthyAgent() map[string][]string {
 		oidSTPRoot:  {oidSTPRoot + ".0 = Hex-STRING: 80 00 00 16 E0 5A 5C E0 "},
 		oidSTPCost:  {oidSTPCost + ".0 = INTEGER: 4"},
 		oidSTPPort:  {oidSTPPort + ".0 = INTEGER: 28"},
+		oidBasePortIf: {
+			oidBasePortIf + ".1 = INTEGER: 101",
+			oidBasePortIf + ".2 = INTEGER: 2",
+			oidBasePortIf + ".5 = INTEGER: 5",
+			oidBasePortIf + ".25 = INTEGER: 25",
+			oidBasePortIf + ".28 = INTEGER: 28",
+		},
 	}
 	var egress []string
 	for vlan := 1; vlan <= 7; vlan++ {
@@ -325,7 +340,8 @@ func TestGoldenScenarioSNMPCollect(t *testing.T) {
 // TestGoldenScenarioMACIPCache pins the MAC→IP cache and the ESXi queue:
 // ARP collection from a switch (first write wins, new MACs queued), the
 // gateway ARP collector (last write wins, nothing queued), loading the cache
-// file (every new entry queued), saving it, and the confirmed-ESXi skip.
+// file (every new entry queued), saving it, the confirmed-ESXi skip, and the
+// cache over 30 days (no entry expires, a changed IP is ignored).
 func TestGoldenScenarioMACIPCache(t *testing.T) {
 	resetState(t)
 	fakeSNMP.set("10.9.0.1", healthyAgent())
@@ -390,7 +406,55 @@ func TestGoldenScenarioMACIPCache(t *testing.T) {
 	clearConfirmedESXi()
 	rec["queue_validation"] = map[string]any{"queued": esxiJobs.taken()}
 
+	rec["cache_aging"] = cacheAging(t, filepath.Join(dir, "aging.json"))
+
 	checkGolden(t, "scenario_cache.json", goldenJSON(t, rec, 3))
+}
+
+// cacheAging runs the cache through 30 days on the test clock: load three
+// entries, see one of them again with a new IP plus a new MAC an hour later,
+// see the same ARP table 30 days later, and save. The cache keeps no times
+// today, so every entry stays and keeps its first IP, and the changed IP is
+// not probed. An entry TTL must read the time through a seam that
+// installSeams points at testClock (as eventClock does); its expiry then
+// shows up here.
+func cacheAging(t *testing.T, path string) []map[string]any {
+	t.Helper()
+	macIPCacheFile = path
+	cacheJSON := `{"00:1b:21:0a:00:01": "10.0.1.1", "00:1b:21:0a:00:02": "10.0.1.2", "00:50:56:0a:00:03": "10.0.1.3"}`
+	if err := os.WriteFile(path, []byte(cacheJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fakeSNMP.set("10.9.0.7", map[string][]string{oidARP: {
+		oidARP + ".5.10.0.1.11 = Hex-STRING: 00 1B 21 0A 00 01 ",
+		oidARP + ".5.10.0.1.4 = Hex-STRING: 00 1B 21 0A 00 04 ",
+	}})
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP = map[string]string{}
+	globalMACtoIPMutex.Unlock()
+	esxiJobs.reset()
+	obj := &SNMPObject{Community: "public", Port: 161, Timeout: 10 * time.Second, Retries: 1}
+	state := func(step string) map[string]any {
+		globalMACtoIPMutex.RLock()
+		defer globalMACtoIPMutex.RUnlock()
+		return map[string]any{"step": step, "clock": testClock.Now().Format(time.RFC3339), "mac_to_ip": maps.Clone(globalMACtoIP), "queued": esxiJobs.taken()}
+	}
+	var steps []map[string]any
+	loadMacIPCache()
+	steps = append(steps, state("load "+cacheJSON))
+	testClock.advance(time.Hour)
+	collectARPFromSwitch(obj, "10.9.0.7")
+	steps = append(steps, state("ARP: 00:1b:21:0a:00:01 now 10.0.1.11, new 00:1b:21:0a:00:04"))
+	testClock.advance(30 * 24 * time.Hour)
+	collectARPFromSwitch(obj, "10.9.0.7")
+	saveMacIPCache()
+	saved, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := state("same ARP table 30 days later, then save")
+	last["saved"] = string(saved)
+	return append(steps, last)
 }
 
 // TestNoSideEffectSeamsLeak checks the harness itself: the stubs answer
@@ -409,5 +473,16 @@ func TestNoSideEffectSeamsLeak(t *testing.T) {
 	}
 	if influxReady() {
 		t.Error("InfluxDB recording is on outside a recording window")
+	}
+	if !eventClock().Equal(fixedTime) {
+		t.Error("eventClock is not the test clock")
+	}
+	if capturesDir != guardCapturesDir || ouiFile != "oui.txt" {
+		t.Errorf("file seams were changed by a test: captures %q, oui %q", capturesDir, ouiFile)
+	}
+	startMacIPCollector()
+	startLiveAnalysis(NewDJGraph())
+	if macIPCollectorStarts.Load() != 1 || liveAnalyses.Load() != 1 {
+		t.Error("startMacIPCollector or startLiveAnalysis is not the stub")
 	}
 }

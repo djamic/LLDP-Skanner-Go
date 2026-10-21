@@ -1,0 +1,163 @@
+{
+  "alerts": [],
+  "all_filter": {
+    "fixture": {
+      "kept_by_group": {"access_point": 32, "bmc": 1, "camera": 43, "endpoint": 607, "hub": 33, "hypervisor": 4, "iot": 29, "phone": 84, "switch": 73, "vm": 20, "wifi_random": 2},
+      "kept_links": 927,
+      "links": 927,
+      "nodes_by_group": {"access_point": 32, "bmc": 1, "camera": 43, "endpoint": 607, "hub": 33, "hypervisor": 4, "iot": 29, "phone": 84, "switch": 73, "vm": 20, "wifi_random": 2}
+    },
+    "ui": {
+      "kept_by_group": {"endpoint": 9, "hub": 3, "hypervisor": 1, "switch": 2, "vm": 2},
+      "kept_links": 15,
+      "links": 18,
+      "nodes_by_group": {"endpoint": 9, "hub": 3, "hypervisor": 1, "printer": 1, "server": 1, "switch": 2, "unknown": 1, "vm": 2}
+    }
+  },
+  "connected": [
+    {
+      "graph": "fixture",
+      "kept": 928,
+      "neighbors": 54,
+      "node": "4c:ae:a3:a2:15:ec",
+      "nodes": 928
+    },
+    {
+      "graph": "ui",
+      "kept": 17,
+      "neighbors": 9,
+      "node": "4c:ae:a3:09:80:01",
+      "nodes": 20
+    }
+  ],
+  "group_colors": {
+    "access_point": "#FF9800",
+    "bmc": "#FF6F00",
+    "camera": "#E91E63",
+    "endpoint": "#8BC34A",
+    "hub": "#FF9800",
+    "hypervisor": "#26C6DA",
+    "iot": "#607D8B",
+    "phone": "#3F51B5",
+    "printer": "#795548",
+    "router": "#E24A4A",
+    "server": "#FF5722",
+    "switch": "#4A90E2",
+    "unknown": "#9E9E9E",
+    "vm": "#9C27B0",
+    "wifi_random": "#00BCD4"
+  },
+  "info_panel": [
+    {
+      "connections": 9,
+      "graph": "ui",
+      "ip": "10.0.9.80",
+      "node": "4c:ae:a3:09:80:01",
+      "peers": ["🏗️ [HYPERVISOR] VMware ESXi", "💻 [ENDPOINT] Intel", "❓ [ENDPOINT] Epson", "❓ linux-node", "❓ 10.0.9.89", "💻 [LLDP-EP] SNR", "🔌 [HUB] Unmanaged", "🔌 [HUB] Unmanaged", "💻 [LLDP-EP]"],
+      "port_groups": ["ge1/0/2", "GE1/0/3", "GE1/0/4", "GE1/0/5", "GE1/0/6", "GE1/0/7", "GE1/0/8", "GE1/0/9", "GE1/0/10"],
+      "sys_name": "sw-ui",
+      "title": "sw-ui",
+      "type": "🔀 Switch",
+      "vendor": "Unknown"
+    },
+    {
+      "connections": 1,
+      "graph": "ui",
+      "ip": "Not available",
+      "node": "4c:ae:a3:09:80:07",
+      "peers": ["🔀 sw-ui"],
+      "port_groups": ["GE1/0/7"],
+      "sys_name": "sw-peer",
+      "title": "sw-peer",
+      "type": "💻 Endpoint",
+      "vendor": "SNR"
+    },
+    {
+      "connections": 1,
+      "graph": "ui",
+      "ip": "10.0.9.61",
+      "node": "00:50:56:09:80:01",
+      "peers": ["🏗️ [HYPERVISOR] VMware ESXi"],
+      "port_groups": ["—"],
+      "sys_name": "00:50:56:09:80:01",
+      "title": "00:50:56:09:80:01",
+      "type": "🖥️ VM",
+      "vendor": "Unknown"
+    },
+    {
+      "connections": 3,
+      "graph": "ui",
+      "ip": "Not available",
+      "node": "hub-4c:ae:a3:09:80:01-p8",
+      "peers": ["💻 esx-a", "💻 [ENDPOINT] Intel", "🔀 sw-ui"],
+      "port_groups": ["—", "GE1/0/8"],
+      "sys_name": "2 devices",
+      "title": "2 devices",
+      "type": "🔌 Hub",
+      "vendor": "Unmanaged"
+    },
+    {
+      "connections": 1,
+      "graph": "ui",
+      "ip": "Not available",
+      "node": "aa:bb:cc:09:86:01",
+      "peers": ["🔀 sw-ui"],
+      "port_groups": ["GE1/0/10"],
+      "sys_name": "<img src=x onerror=alert(1)> shadow",
+      "title": "<img src=x onerror=alert(1)> shadow",
+      "type": "💻 Endpoint",
+      "vendor": "Unknown"
+    }
+  ],
+  "ip_choice": [
+    {
+      "connect_ip": "10.0.9.61",
+      "graph": "ui",
+      "history_url": "/history.html?id=10.0.9.61",
+      "info_panel_ip": "Not available",
+      "node": "hyp-4c:ae:a3:09:80:01-ge1_0_2"
+    },
+    {
+      "connect_ip": "10.0.9.41",
+      "graph": "ui",
+      "history_url": "/history.html?id=10.0.9.41",
+      "info_panel_ip": "10.0.9.4",
+      "node": "00:1b:21:09:80:03"
+    },
+    {
+      "connect_ip": "10.0.9.80",
+      "graph": "ui",
+      "history_url": "/history.html?id=10.0.9.80",
+      "info_panel_ip": "10.0.9.80",
+      "node": "4c:ae:a3:09:80:01"
+    }
+  ],
+  "legend_colors": {
+    "access_point": "#00BCD4",
+    "bmc": "#FF6F00",
+    "camera": "#E91E63",
+    "endpoint": "#8BC34A",
+    "hub": "#FF9800",
+    "hypervisor": "#26C6DA",
+    "iot": "#607D8B",
+    "phone": "#3F51B5",
+    "router": "#E24A4A",
+    "switch": "#4A90E2",
+    "vm": "#9C27B0",
+    "wifi_random": "#00BCD4"
+  },
+  "shadow_it": {
+    "fixture": {
+      "headings": ["📡 F-9", "📡 B-318/2", "📡 HPE", "📡", "📡 TTJ-3&4", "📡 B-423", "📡 D 1-2", "📡 B-318/3", "📡 HP", "📡 E109", "📡 E-209", "📡 E109-2", "📡 E205-24", "📡 F-3(1)", "📡 F-7(1)", "📡 F-6(1)", "📡 F-1", "📡 F-8", "📡 F-5", "📡 F-4_48P", "📡 A_padval_SNR"],
+      "labels": ["[HUB] Unmanaged · 7 devices · hub-4c:ae:a3:27:76:8a-p48", "[HUB] Unmanaged · 7 devices · hub-4c:ae:a3:27:85:ea-p11", "[HUB] Unmanaged · 3 devices · hub-4c:ae:a3:8d:d5:99-p27", "[HUB] Unmanaged · 5 devices · hub-4c:ae:a3:8e:19:09-p37", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:a2:0d:4c-p39", "[HUB] Unmanaged · 8 devices · hub-4c:ae:a3:a2:18:ec-p1", "[HUB] Unmanaged · 6 devices · hub-4c:ae:a3:a2:18:ec-p7", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:a2:19:ac-p3", "[HUB] Unmanaged · 3 devices · hub-4c:ae:a3:a2:19:ac-p47", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:8d:ec:c1-p28", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:8d:ec:c1-p4", "[HUB] Unmanaged · 8 devices · hub-4c:ae:a3:a2:01:ac-p1", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:a2:03:2c-p17", "[HUB] Unmanaged · 6 devices · hub-4c:ae:a3:a2:15:ec-p2", "[HUB] Unmanaged · 8 devices · hub-4c:ae:a3:a2:18:2c-p40", "[HUB] Unmanaged · 8 devices · hub-78:48:59:72:ec:ee-p13", "[HUB] Unmanaged · 6 devices · hub-f8:f0:82:7a:d9:69-p2", "[HUB] Unmanaged · 5 devices · hub-f8:f0:82:7a:d9:69-p48", "[HUB] Unmanaged · 2 devices · hub-f8:f0:82:7c:2c:c7-p2", "[HUB] Unmanaged · 3 devices · hub-f8:f0:82:7c:2c:c7-p27", "[HUB] Unmanaged · 4 devices · hub-f8:f0:82:7c:2d:17-p18", "[HUB] Unmanaged · 6 devices · hub-f8:f0:82:7c:30:cf-p17", "[HUB] Unmanaged · 7 devices · hub-f8:f0:82:7c:f9:58-p24", "[HUB] Unmanaged · 5 devices · hub-f8:f0:82:7c:fa:26-p24", "[HUB] Unmanaged · 9 devices · hub-f8:f0:82:7c:fa:72-p24", "[HUB] Unmanaged · 8 devices · hub-f8:f0:82:7c:fa:ca-p1", "[HUB] Unmanaged · 7 devices · hub-f8:f0:82:7c:fa:ca-p20", "[HUB] Unmanaged · 4 devices · hub-f8:f0:82:d0:22:ce-p48", "[HUB] Unmanaged · 6 devices · hub-f8:f0:82:d0:23:0a-p48", "[HUB] Unmanaged · 6 devices · hub-f8:f0:82:d0:23:92-p48", "[HUB] Unmanaged · 3 devices · hub-f8:f0:82:d8:7e:81-p3"],
+      "port_lines": [],
+      "raw_img_tag_in_html": false
+    },
+    "ui": {
+      "headings": ["📡 sw-ui", "📡 [ENDPOINT] Intel"],
+      "labels": ["[LLDP-EP] · shadow · aa:bb:cc:09:86:01", "[HUB] Unmanaged · 2 devices · hub-4c:ae:a3:09:80:01-p8", "[HUB] Unmanaged · 2 devices · hub-no:such:object:available:on:this:agent:at:this:oid-p3"],
+      "port_lines": [],
+      "raw_img_tag_in_html": true
+    }
+  }
+}

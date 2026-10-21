@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -141,7 +142,8 @@ type esxiGolden struct {
 
 // TestGoldenGraphESXi marks a few fixture MACs as confirmed ESXi hosts and
 // pins what changes against the same build without them: graph labels and
-// groups, the analyzer's Shadow-IT alerts and the experiment counts.
+// groups, the analyzer's Shadow-IT alerts and the experiment counts; and the
+// audit report's Shadow-IT and hypervisor sections for the ESXi graph.
 func TestGoldenGraphESXi(t *testing.T) {
 	baseGraph := buildFixtureGraph(t)
 	base := graphRecord(baseGraph)
@@ -204,6 +206,13 @@ func TestGoldenGraphESXi(t *testing.T) {
 		rec.Experiment[k+"_after"] = esxiMetrics[k]
 	}
 	checkGolden(t, "graph_esxi.json", goldenJSON(t, rec, 2))
+
+	// The audit report's Shadow-IT and hypervisor sections (7 and 8) for the
+	// ESXi graph, with the ESXi MACs still confirmed. The same sections of
+	// the plain graph are in audit_default.md.
+	SetGlobalGraph(esxiGraph)
+	audit := canonicalAuditMD(generateAuditMD([]string{"switch", "hub"}))
+	checkGolden(t, "audit_esxi_sections.md", []byte(auditSections(t, audit, "## 7.", "## 9.")))
 }
 
 func linkDiff(before, after []goldenLink) (added, removed []goldenLink) {
@@ -260,17 +269,14 @@ type lldpTarget struct {
 	Target         string `json:"target"`
 	Display        string `json:"display,omitempty"`
 	Invalid        bool   `json:"invalid,omitempty"`
-	KnownMAC       string `json:"known_mac"`
 }
 
-// TestGoldenLLDPTargets pins, for every LLDP neighbor in the fixture (in
-// stored order), the normalized ids, the node id and display name chosen by
-// resolveLLDPTarget, whether isInvalidID drops it, whether the local port is
-// a NULL interface, and the knownMACs key (normalizeMAC of the raw chassis).
-func TestGoldenLLDPTargets(t *testing.T) {
-	resetState(t)
-	devices := fixtureDevices(t)
+// lldpTargetRows lists the LLDP neighbors of the devices (IP order, stored
+// neighbor order) with the ids production derives from them, and the MACs
+// each device treats as known from LLDP (lldpKnownMACs, sorted).
+func lldpTargetRows(devices map[string]*DeviceData) ([]lldpTarget, map[string][]string) {
 	var rows []lldpTarget
+	known := map[string][]string{}
 	for _, d := range sortedDevices(devices) {
 		for _, n := range d.Neighbors {
 			target, display := resolveLLDPTarget(n)
@@ -286,16 +292,36 @@ func TestGoldenLLDPTargets(t *testing.T) {
 				PortID:         n.RemPortId,
 				SysName:        n.RemSysName,
 				MgmtIP:         n.RemMgmtIP,
-				NormChassis:    normalizeID(n.RemChassisId, n.RemChassisIdSubtype),
-				NormPort:       normalizeID(n.RemPortId, n.RemPortIdSubtype),
+				NormChassis:    lldpChassisID(n),
+				NormPort:       lldpPortID(n),
 				Target:         target,
 				Display:        display,
 				Invalid:        isInvalidID(target),
-				KnownMAC:       normalizeMAC(n.RemChassisId),
 			})
 		}
+		if macs := lldpKnownMACs(d); len(macs) > 0 {
+			known[d.IP] = slices.Sorted(maps.Keys(macs))
+		}
 	}
-	checkGolden(t, "lldp_targets.json", goldenJSON(t, map[string]any{"neighbors": rows}, 2))
+	return rows, known
+}
+
+// TestGoldenLLDPTargets pins, for every LLDP neighbor in the fixture and in
+// the synthetic scenario network (in stored order), the normalized chassis
+// and port ids resolveLLDPTarget works with, the node id and display name it
+// chooses, whether isInvalidID drops the target and whether the local port is
+// a NULL interface; and per device the MACs buildGraphEdges treats as known
+// from LLDP (lldpKnownMACs).
+func TestGoldenLLDPTargets(t *testing.T) {
+	resetState(t)
+	rows, known := lldpTargetRows(fixtureDevices(t))
+	scenarioRows, scenarioKnown := lldpTargetRows(scenarioNetwork())
+	checkGolden(t, "lldp_targets.json", goldenJSON(t, map[string]any{
+		"neighbors":           rows,
+		"known_macs":          known,
+		"scenario_neighbors":  scenarioRows,
+		"scenario_known_macs": scenarioKnown,
+	}, 2))
 }
 
 // TestRebuildGraphPublishesCompleteGraph checks change B: rebuildGraph (used
@@ -367,5 +393,254 @@ func TestRebuildGraphPublishesCompleteGraph(t *testing.T) {
 		if n != 1 && n != full {
 			t.Errorf("/api/graph served a graph with %d nodes (old graph: 1, finished graph: %d)", n, full)
 		}
+	}
+}
+
+// reactiveDevices are four small switches for the reactive-scan tests. Each
+// has a direct endpoint with a known IP (its build does a reverse lookup)
+// and a VM port, so a complete build has a hyp- node with a "VMs:" line.
+func reactiveDevices() []*DeviceData {
+	var devs []*DeviceData
+	for i := 1; i <= 4; i++ {
+		devs = append(devs, &DeviceData{
+			IP:         fmt.Sprintf("10.0.8.%d", i),
+			SysName:    fmt.Sprintf("sw-r%d", i),
+			ChassisID:  fmt.Sprintf("4c:ae:a3:08:00:%02x", i),
+			Interfaces: gigabitPorts(4, nil),
+			MACTable: append(macEntries(1, fmt.Sprintf("00:1b:21:08:%02x:01", i)),
+				macEntries(2, fmt.Sprintf("00:50:56:08:%02x:01", i), fmt.Sprintf("00:50:56:08:%02x:02", i))...),
+		})
+	}
+	return devs
+}
+
+// reactiveMACtoIP gives every MAC of reactiveDevices an IP.
+func reactiveMACtoIP() map[string]string {
+	m := map[string]string{}
+	for i := 1; i <= 4; i++ {
+		m[fmt.Sprintf("00:1b:21:08:%02x:01", i)] = fmt.Sprintf("10.0.8.%d", 50+i)
+		m[fmt.Sprintf("00:50:56:08:%02x:01", i)] = fmt.Sprintf("10.0.8.%d", 60+i)
+		m[fmt.Sprintf("00:50:56:08:%02x:02", i)] = fmt.Sprintf("10.0.8.%d", 70+i)
+	}
+	return m
+}
+
+// useReactiveNetwork resets the state for a reactive-scan test: empty
+// collectedData, the MAC-IP map of reactiveDevices, a fake SNMP agent for
+// each of the four switches and a temporary graphs_data.txt.
+func useReactiveNetwork(t *testing.T) {
+	t.Helper()
+	resetState(t)
+	graphDebugFile = filepath.Join(t.TempDir(), "graphs_data.txt")
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP = reactiveMACtoIP()
+	globalMACtoIPMutex.Unlock()
+	for i := 1; i <= 4; i++ {
+		fakeSNMP.set(fmt.Sprintf("10.0.8.%d", i), reactiveAgent(i))
+	}
+}
+
+// reactiveAgent answers CollectData for switch i of reactiveDevices: its
+// chassis id, four ports, and the FDB (the endpoint on port 1, two VMware
+// MACs on port 2). Every other walk fails, as on a switch without LLDP.
+func reactiveAgent(i int) map[string][]string {
+	walks := map[string][]string{
+		oidChassis: {fmt.Sprintf("%s = Hex-STRING: 4C AE A3 08 00 %02X ", oidChassis, i)},
+		oidFDBPort: {
+			fmt.Sprintf("%s.0.27.33.8.%d.1 = INTEGER: 1", oidFDBPort, i),
+			fmt.Sprintf("%s.0.80.86.8.%d.1 = INTEGER: 2", oidFDBPort, i),
+			fmt.Sprintf("%s.0.80.86.8.%d.2 = INTEGER: 2", oidFDBPort, i),
+		},
+	}
+	for p := 1; p <= 4; p++ {
+		walks[oidIfDescr] = append(walks[oidIfDescr], fmt.Sprintf("%s.%d = STRING: \"GigabitEthernet1/0/%d\"", oidIfDescr, p, p))
+	}
+	return walks
+}
+
+// collectReactiveDevices returns what CollectData delivers for the four
+// reactive switches (collected with a plain SNMP object).
+func collectReactiveDevices(t *testing.T) []*DeviceData {
+	t.Helper()
+	var devs []*DeviceData
+	for _, d := range reactiveDevices() {
+		var got *DeviceData
+		NewSNMPObject(func(data *DeviceData) { got = data }, nil).CollectData(d.IP, d.SysName)
+		if got == nil || len(got.MACTable) != 3 {
+			t.Fatalf("fake agent for %s did not deliver its FDB: %+v", d.IP, got)
+		}
+		devs = append(devs, got)
+	}
+	return devs
+}
+
+// serveGraph returns the /api/graph response body.
+func serveGraph() string {
+	rr := httptest.NewRecorder()
+	graphHandler(rr, httptest.NewRequest(http.MethodGet, "/api/graph", nil))
+	return rr.Body.String()
+}
+
+// waitDone waits for ch to be closed, failing the test after 10 seconds.
+func waitDone(t *testing.T, ch <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timed out waiting for %s", what)
+	}
+}
+
+// TestReactiveScanPublishesNewestGraph checks the order of the reactive graph
+// publishes (review finding B1). The SNMP object of the first scan
+// (newReactiveSNMPObject) collects two switches at the same time and the
+// first one's build is slow: its reverse lookup hangs until the second
+// switch has been stored. The graph published last must hold both switches,
+// as it did when the reactive build held the collectedData read lock.
+func TestReactiveScanPublishesNewestGraph(t *testing.T) {
+	useReactiveNetwork(t)
+	scan := newReactiveSNMPObject()
+
+	hold := holdReverseDNS("10.0.8.51") // the endpoint behind the first switch
+	first, second := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(first)
+		scan.CollectData("10.0.8.1", "sw-r1")
+	}()
+	waitDone(t, hold.entered, "the first build to look up 10.0.8.51")
+	go func() {
+		defer close(second)
+		scan.CollectData("10.0.8.2", "sw-r2")
+	}()
+	// Wait until the second switch is stored (at most 2 s: a build that keeps
+	// the collectedData read lock delays the store until it is done). TryRLock
+	// keeps this loop from queueing behind the waiting writer.
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
+		if !collectedDataMutex.TryRLock() {
+			continue
+		}
+		_, stored := collectedData["10.0.8.2"]
+		collectedDataMutex.RUnlock()
+		if stored {
+			break
+		}
+	}
+	// Give the second callback time to build and publish, if it is not
+	// made to wait for the first build.
+	select {
+	case <-second:
+	case <-time.After(300 * time.Millisecond):
+	}
+	hold.free()
+	waitDone(t, first, "the first switch's collection")
+	waitDone(t, second, "the second switch's collection")
+
+	got := GetGlobalGraph()
+	if !got.Nodes["4c:ae:a3:08:00:02"] {
+		t.Fatal("the graph published last has no node for 10.0.8.2: an older snapshot was published after a newer one")
+	}
+	want := goldenJSON(t, graphRecord(buildGraphFromSnapshot(snapshotCollectedData())), 2)
+	if rec := goldenJSON(t, graphRecord(got), 2); !bytes.Equal(rec, want) {
+		t.Fatalf("the graph published last is not the complete build of both switches:\n%s", lineDiff(want, rec, 20))
+	}
+	if n := liveAnalyses.Load(); n != 2 {
+		t.Errorf("%d background analyses started, want one per collected switch (2)", n)
+	}
+}
+
+// TestReactiveScanServesOnlyCompleteGraphs collects four switches at once
+// with the SNMP object of the first scan, as main() does with one goroutine
+// per switch, while four readers poll /api/graph (run it with -race too).
+// Every graph served must be the complete build, hypervisor nodes and IP
+// lines included, of some set of the switches, and the graph published last
+// must be the complete build of all four (review findings B1 and C1).
+func TestReactiveScanServesOnlyCompleteGraphs(t *testing.T) {
+	useReactiveNetwork(t)
+	devs := collectReactiveDevices(t)
+
+	// The /api/graph response of the complete build of every subset. The
+	// empty subset is also the graph main() publishes at startup.
+	complete := map[string]string{}
+	allSwitches := ""
+	for mask := 0; mask < 1<<len(devs); mask++ {
+		subset := map[string]*DeviceData{}
+		var names []string
+		for i, d := range devs {
+			if mask&(1<<i) != 0 {
+				cp := *d
+				subset[d.IP] = &cp
+				names = append(names, d.SysName)
+			}
+		}
+		collectedDataMutex.Lock()
+		collectedData = subset
+		collectedDataMutex.Unlock()
+		SetGlobalGraph(buildGraphFromSnapshot(snapshotCollectedData()))
+		name := "{" + strings.Join(names, ",") + "}"
+		complete[serveGraph()] = name
+		allSwitches = name
+	}
+	if len(complete) != 1<<len(devs) {
+		t.Fatalf("the complete builds of different switch sets are not all different (%d of %d)", len(complete), 1<<len(devs))
+	}
+	collectedDataMutex.Lock()
+	collectedData = map[string]*DeviceData{}
+	collectedDataMutex.Unlock()
+	SetGlobalGraph(NewDJGraph())
+
+	stop := make(chan struct{})
+	var readers sync.WaitGroup
+	stopReaders := sync.OnceFunc(func() {
+		close(stop)
+		readers.Wait()
+	})
+	defer stopReaders()
+	var mu sync.Mutex
+	served := map[string]int{}
+	for i := 0; i < 4; i++ {
+		readers.Add(1)
+		go func() {
+			defer readers.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				body := serveGraph()
+				mu.Lock()
+				served[body]++
+				mu.Unlock()
+			}
+		}()
+	}
+	scan := newReactiveSNMPObject()
+	var collections sync.WaitGroup
+	for _, d := range devs {
+		collections.Add(1)
+		go func(ip, name string) {
+			defer collections.Done()
+			scan.CollectData(ip, name)
+		}(d.IP, d.SysName)
+	}
+	allDone := make(chan struct{})
+	go func() {
+		collections.Wait()
+		close(allDone)
+	}()
+	waitDone(t, allDone, "the reactive collections")
+	final := serveGraph()
+	stopReaders()
+
+	if name, ok := complete[final]; !ok || name != allSwitches {
+		t.Fatalf("the graph published last is %q, want the complete build of %s", name, allSwitches)
+	}
+	for body, n := range served {
+		if _, ok := complete[body]; !ok {
+			t.Errorf("/api/graph served %d time(s) a graph that is not the complete build of any set of the switches:\n%.600s", n, body)
+		}
+	}
+	if n := liveAnalyses.Load(); n != int64(len(devs)) {
+		t.Errorf("%d background analyses started, want one per collected switch (%d)", n, len(devs))
 	}
 }

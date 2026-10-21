@@ -54,7 +54,8 @@
       {"IfIndex": 2, "IfDescr": "\"GigabitEthernet1/0/2\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 4294967295, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 2, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
       {"IfIndex": 25, "IfDescr": "\"GigabitEthernet1/0/25\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
       {"IfIndex": 28, "IfDescr": "\"GigabitEthernet1/0/28\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 10000000000, "IfPhysAddress": "", "IfAdminStatus": 1, "IfOperStatus": 1, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
-      {"IfIndex": 50, "IfDescr": "\"NULL0\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0}
+      {"IfIndex": 50, "IfDescr": "\"NULL0\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 101, "IfDescr": "\"Ten-GigabitEthernet1/0/49\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0}
     ],
     "neighbors": [
       {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 7, "RemChassisIdSubtype": 0, "RemChassisId": "00 00 00 00 00 00", "RemPortIdSubtype": 0, "RemPortId": "", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
@@ -94,7 +95,8 @@
       {"IfIndex": 2, "IfDescr": "\"GigabitEthernet1/0/2\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 4294967295, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 2, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
       {"IfIndex": 25, "IfDescr": "\"GigabitEthernet1/0/25\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
       {"IfIndex": 28, "IfDescr": "\"GigabitEthernet1/0/28\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 10000000000, "IfPhysAddress": "", "IfAdminStatus": 1, "IfOperStatus": 1, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
-      {"IfIndex": 50, "IfDescr": "\"NULL0\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0}
+      {"IfIndex": 50, "IfDescr": "\"NULL0\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0},
+      {"IfIndex": 101, "IfDescr": "\"Ten-GigabitEthernet1/0/49\"", "IfAlias": "", "IfType": 0, "IfMtu": 0, "IfSpeed": 0, "IfPhysAddress": "", "IfAdminStatus": 0, "IfOperStatus": 0, "IfInOctets": 0, "IfOutOctets": 0, "IfInErrors": 0, "IfOutErrors": 0, "IfInDiscards": 0, "IfOutDiscards": 0}
     ],
     "neighbors": [
       {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 7, "RemChassisIdSubtype": 0, "RemChassisId": "00 00 00 00 00 00", "RemPortIdSubtype": 0, "RemPortId": "", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
@@ -103,6 +105,7 @@
     ],
     "mac_table_nil": false,
     "mac_table": [
+      {"MACAddress": "00:1b:21:09:01:01", "PortNumber": 1, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "00:50:56:01:02:03", "PortNumber": 5, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "f8:f0:82:d1:67:5e", "PortNumber": 28, "VlanID": 0, "Status": "learned"},
       {"MACAddress": "10:7c:61:c0:9e:aa", "PortNumber": 25, "VlanID": 0, "Status": "learned"},

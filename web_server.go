@@ -48,6 +48,10 @@ var (
 // snapshot). Tests point it at a temporary file.
 var graphDebugFile = "graphs_data.txt"
 
+// capturesDir is where the capture report handlers read saved sessions
+// (<id>_full_data.json). Tests point it at a temporary directory.
+var capturesDir = "captures"
+
 func init() {
 	rescanTrigger = make(chan bool, 1)
 	lastAnomalyMap = make(map[string][]string)
@@ -669,7 +673,7 @@ func reportGenerateHandler(w http.ResponseWriter, r *http.Request) {
 	// duplicating logic from analyzer or capture manager would be better
 	
 	// Create Analyzer
-	filename := fmt.Sprintf("captures/%s_full_data.json", sessionID)
+	filename := fmt.Sprintf("%s/%s_full_data.json", capturesDir, sessionID)
 	// assuming capture manager initializes "captures/" dir relative to cwd
 	
 	file, err := os.Open(filename)
@@ -706,7 +710,7 @@ func reportDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := fmt.Sprintf("captures/%s_full_data.json", sessionID)
+	filename := fmt.Sprintf("%s/%s_full_data.json", capturesDir, sessionID)
 	file, err := os.Open(filename)
 	if err != nil {
 		http.Error(w, "Session file not found", http.StatusNotFound)
