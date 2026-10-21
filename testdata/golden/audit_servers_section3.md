@@ -303,4 +303,5 @@ graph TD
 | 💠 | Hypervisor |
 | 🟣 | VM |
 | 🟧 | BMC/iLO |
+| 🔶 | Server |
 

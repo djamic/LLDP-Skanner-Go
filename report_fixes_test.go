@@ -341,3 +341,64 @@ func TestReportHypervisorDiagramsMergeHost(t *testing.T) {
 		t.Errorf("non-vNIC links of a hypervisor are drawn or counted as VMs (%s VMs):\n%s", c, relabelled)
 	}
 }
+
+// TestReportAuditListsEveryGroup (F74): section 4 has a table for every
+// group except switch (section 4.1) and unknown, so access points and
+// printers are no longer dropped; the Mermaid colours and the legend cover
+// every group the backend emits.
+func TestReportAuditListsEveryGroup(t *testing.T) {
+	resetState(t)
+	sw := "4c:ae:a3:74:00:01"
+	g := NewDJGraph()
+	addInfoNode(g, sw, "sw-74\n10.0.74.1")
+	nodes := map[string]string{
+		"e4:38:83:74:00:02": "[ENDPOINT] Ubiquiti\n10.0.74.2", // access point
+		"00:26:ab:74:00:03": "[ENDPOINT] Epson\n10.0.74.3",    // printer
+		"00:1b:21:74:00:04": "[ENDPOINT] Intel\n10.0.74.4",    // endpoint
+		"10.0.74.5":         "Linux server\n10.0.74.5",        // server
+		"10.0.74.6":         "edge router\n10.0.74.6",         // router
+		"10.0.74.7":         "",                               // unknown (a switch without a name)
+	}
+	for id, info := range nodes {
+		addInfoNode(g, id, info)
+		g.AddEdge(sw, id, "GE1/0/5|")
+	}
+	SetGlobalGraph(g)
+	data := g.GetGraphData()
+	groups := map[string]string{}
+	for _, n := range data.Nodes {
+		groups[n.ID] = n.Group
+	}
+	if groups["e4:38:83:74:00:02"] != "access_point" || groups["00:26:ab:74:00:03"] != "printer" || groups["10.0.74.7"] != "unknown" {
+		t.Fatalf("precondition: groups = %v", groups)
+	}
+
+	all := []string{"switch", "router", "hub", "endpoint", "access_point", "vm", "hypervisor", "bmc",
+		"camera", "phone", "iot", "wifi_random", "printer", "server", "unknown"}
+	md := generateAuditMD(all)
+	section4 := reportMDSection(md, "## 4.", "## 5.")
+	for id, group := range groups {
+		if group == "switch" || group == "unknown" {
+			continue
+		}
+		if !strings.Contains(section4, "| "+id+" |") {
+			t.Errorf("section 4 does not list %s (group %s)", id, group)
+		}
+	}
+
+	// Every node of the topology gets its group's fill colour.
+	mermaid := GenerateMermaidTopology(g, all)
+	for _, n := range data.Nodes {
+		label := strings.ReplaceAll(n.SysName, "\n", "<br>")
+		if label == "" {
+			label = n.ID
+		}
+		if !strings.Contains(mermaid, "  style "+sanitizeMermaidID(label)+" fill:#") {
+			t.Errorf("Mermaid topology has no colour for %s (group %s)", n.ID, n.Group)
+		}
+	}
+	legend := GenerateTopologyLegend(all)
+	if rows := strings.Count(legend, "\n") - 2; rows != len(all) {
+		t.Errorf("legend has %d rows for %d groups:\n%s", rows, len(all), legend)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"image/draw"
 	"image/png"
 	"log"
+	"maps"
 	"math"
 	"net"
 	"net/http"
@@ -703,6 +704,9 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 		"phone":        {"#3F51B5", "#303F9F"},
 		"iot":          {"#607D8B", "#455A64"},
 		"wifi_random":  {"#00BCD4", "#0097A7"},
+		"printer":      {"#795548", "#5D4037"},
+		"server":       {"#FF5722", "#E64A19"},
+		"unknown":      {"#9E9E9E", "#757575"},
 	}
 
 	var sb strings.Builder
@@ -759,6 +763,9 @@ func GenerateTopologyLegend(groups []string) string {
 		"phone":        {"🔵", "Phone"},
 		"iot":          {"⬜", "IoT"},
 		"wifi_random":  {"🔷", "Random MAC"},
+		"printer":      {"🟤", "Printer"},
+		"server":       {"🔶", "Server"},
+		"unknown":      {"⚪", "Unknown"},
 	}
 
 	var sb strings.Builder
@@ -1318,15 +1325,27 @@ func generateAuditMD(groups []string) string {
 			{"server", "4.10 Serverlar"},
 			{"router", "4.11 Routerlar"},
 			{"wifi_random", "4.12 Wi-Fi / Random MAC"},
+			{"access_point", "4.13 Wi-Fi nuqtalari (Access Point)"},
+			{"printer", "4.14 Printerlar"},
 		}
 
 		// Group nodes
 		grouped := make(map[string][]GraphNode)
 		for _, n := range data.Nodes {
 			if n.Group == "switch" || n.Group == "unknown" {
-				continue // switches already in 4.1
+				continue // switches (and switches without a name) already in 4.1
 			}
 			grouped[n.Group] = append(grouped[n.Group], n)
+		}
+		// A group without a title above still gets a table, after the others
+		titled := make(map[string]bool)
+		for _, gd := range groupOrder {
+			titled[gd.key] = true
+		}
+		for _, group := range slices.Sorted(maps.Keys(grouped)) {
+			if !titled[group] {
+				groupOrder = append(groupOrder, groupDef{group, fmt.Sprintf("4.%d %s", len(groupOrder)+2, group)})
+			}
 		}
 
 		// Build adjacency lookup for "connected to" info
