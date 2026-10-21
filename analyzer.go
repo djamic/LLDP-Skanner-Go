@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -14,6 +16,31 @@ import (
 // NetworkAnalyzer handles analysis of network capture data
 type NetworkAnalyzer struct {
 	Data FullCaptureData
+
+	index *analyzerIndex // Data indexed for the checks, built on first use
+}
+
+// analyzerIndex is the analyzer input in a fixed order.
+type analyzerIndex struct {
+	devices []*DeviceData          // DevicesData in IP order
+	byIP    map[string]*DeviceData // DevicesData by IP
+}
+
+// idx builds the index of na.Data on first use.
+func (na *NetworkAnalyzer) idx() *analyzerIndex {
+	if na.index != nil {
+		return na.index
+	}
+	ix := &analyzerIndex{byIP: make(map[string]*DeviceData)}
+	for i := range na.Data.DevicesData {
+		d := &na.Data.DevicesData[i]
+		ix.byIP[d.IP] = d
+	}
+	for _, ip := range sortedDeviceIPs(ix.byIP) {
+		ix.devices = append(ix.devices, ix.byIP[ip])
+	}
+	na.index = ix
+	return ix
 }
 
 // NewAnalyzer creates a new analyzer instance
@@ -569,90 +596,145 @@ type ShadowITDevice struct {
 	MACAddresses []string `json:"mac_addresses"`
 }
 
-// analyzeShadowIT detects unmanaged switches via Port-MAC Ratio algorithm
+// analyzeShadowIT reports every port that the graph draws as an unmanaged
+// hub (analyzerHubCandidates) as one shadow_<ip>_<port> issue, in device and
+// port order.
 func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
+	ix := na.idx()
+	switchMACs := buildSwitchChassisMACs(ix.byIP)
 
-	// Map: DeviceIP -> PortNumber -> MAC addresses
-	portMACs := make(map[string]map[int][]string)
+	for _, device := range ix.devices {
+		for _, p := range analyzerHubCandidates(device, switchMACs) {
+			if p.Kind != analyzerPortHub {
+				continue
+			}
+			issueID := fmt.Sprintf("shadow_%s_%d", strings.ReplaceAll(device.IP, ".", "_"), p.Port)
 
-	for _, device := range na.Data.DevicesData {
-		if portMACs[device.IP] == nil {
-			portMACs[device.IP] = make(map[int][]string)
-		}
-
-		// Build port to MAC mapping from MAC table
-		for _, macEntry := range device.MACTable {
-			portMACs[device.IP][macEntry.PortNumber] = append(
-				portMACs[device.IP][macEntry.PortNumber],
-				macEntry.MACAddress,
-			)
-		}
-	}
-
-	// Check each port: if MAC count > 1 and not a trunk port -> Shadow IT suspected
-	for deviceIP, ports := range portMACs {
-		for portNum, macs := range ports {
-			// C.2: Filter out random MACs (Wi-Fi devices with randomized addresses)
-			var realMACs []string
-			for _, mac := range macs {
-				if !isRandomMAC(mac) {
-					realMACs = append(realMACs, mac)
-				}
+			// Skip if this issue is ignored
+			if IsIssueIgnored(issueID) {
+				continue
 			}
 
-			if len(realMACs) > 1 {
-				// Check if this is a trunk port (skip if trunk)
-				isTrunk := false
-				for _, device := range na.Data.DevicesData {
-					if device.IP == deviceIP {
-						for _, pv := range device.PortVLANs {
-							if pv.PortIndex == portNum && pv.IsTrunk {
-								isTrunk = true
-								break
-							}
-						}
-					}
-				}
-
-				if !isTrunk {
-					issueID := fmt.Sprintf("shadow_%s_%d", strings.ReplaceAll(deviceIP, ".", "_"), portNum)
-					
-					// Skip if this issue is ignored
-					if IsIssueIgnored(issueID) {
-						continue
-					}
-
-					// Skip if this is a hypervisor port (VMware, Proxmox, KVM, etc.)
-					if isHypervisorPort(macs) {
-						continue
-					}
-					// Also skip if any MAC is a confirmed ESXi host (HTTP-verified)
-					isConfirmedESXi := false
-					for _, mac := range macs {
-						if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(mac)); ok {
-							isConfirmedESXi = true
-							break
-						}
-					}
-					if isConfirmedESXi {
-						continue
-					}
-
-					suggestions = append(suggestions, OptimizationSuggestion{
-						IssueID:     issueID,
-						Type:        "shadow_it",
-						Severity:    "high",
-						Device:      deviceIP,
-						Description: fmt.Sprintf("Port %d has %d MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.", portNum, len(macs)),
-						Value:       fmt.Sprintf("%d MACs on single port", len(macs)),
-					})
-				}
-			}
+			suggestions = append(suggestions, OptimizationSuggestion{
+				IssueID:     issueID,
+				Type:        "shadow_it",
+				Severity:    "high",
+				Device:      device.IP,
+				Description: fmt.Sprintf("Port %d has %d MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.", p.Port, len(p.MACs)),
+				Value:       fmt.Sprintf("%d MACs on single port", len(p.MACs)),
+			})
 		}
 	}
 
 	return suggestions
+}
+
+// analyzerPortKind is the verdict of the per-port rule on a hub candidate.
+type analyzerPortKind int
+
+const (
+	analyzerPortHub  analyzerPortKind = iota // unmanaged switch or hub: Shadow IT
+	analyzerPortVM                           // more than half of the MACs are virtual NICs
+	analyzerPortESXi                         // one of the MACs is an HTTP-confirmed ESXi host
+)
+
+// analyzerPort is one hub candidate port of a switch and the MACs the rule
+// counts there.
+type analyzerPort struct {
+	Port int
+	MACs []string
+	Kind analyzerPortKind
+}
+
+// analyzerHubCandidates is the one per-port rule (Q14) behind the graph's
+// hub nodes, the Shadow-IT alerts and the experiment metrics. It follows
+// buildGraphEdges and returns the hub candidate ports of d in port order:
+//   - a port's MACs leave out NULL0/InLoopBack ports, the chassis ids of d's
+//     LLDP neighbors, d's own chassis MAC, the chassis MACs of the other
+//     polled switches (switchChassisMACs) and invalid MACs;
+//   - a candidate keeps at least 2 MACs, has no LLDP neighbor, is no trunk
+//     and has at most 20 MACs (more is an implicit uplink);
+//   - a candidate is a VM port when most of its MACs are virtual NICs
+//     (isHypervisorPort), an ESXi port when one of them is a confirmed ESXi
+//     host, and a hub otherwise.
+//
+// One list decides, is checked for VMs and ESXi hosts, and is counted.
+func analyzerHubCandidates(d *DeviceData, switchChassisMACs map[string]string) []analyzerPort {
+	knownMACs := make(map[string]bool) // LLDP neighbor chassis ids
+	lldpPorts := make(map[int]bool)
+	for _, neighbor := range d.Neighbors {
+		knownMACs[normalizeMAC(neighbor.RemChassisId)] = true
+		lldpPorts[neighbor.LocalPortNum] = true
+	}
+	ownMAC := normalizeMAC(d.ChassisID)
+
+	portMACs := make(map[int][]string)
+	for _, macEntry := range d.MACTable {
+		mac := normalizeMAC(macEntry.MACAddress)
+		if isNullInterface(getLocalPortName(d, macEntry.PortNumber)) || knownMACs[mac] || mac == ownMAC {
+			continue
+		}
+		if _, isSwitch := switchChassisMACs[mac]; isSwitch || isInvalidID(macEntry.MACAddress) {
+			continue
+		}
+		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], macEntry.MACAddress)
+	}
+
+	trunks := make(map[int]bool)
+	for _, pv := range d.PortVLANs {
+		if pv.IsTrunk {
+			trunks[pv.PortIndex] = true
+		}
+	}
+
+	var ports []analyzerPort
+	for _, port := range slices.Sorted(maps.Keys(portMACs)) {
+		macs := portMACs[port]
+		if len(macs) < 2 || len(macs) > 20 || lldpPorts[port] || trunks[port] {
+			continue
+		}
+		kind := analyzerPortHub
+		if isHypervisorPort(macs) {
+			kind = analyzerPortVM
+		} else if slices.ContainsFunc(macs, func(mac string) bool {
+			_, ok := ConfirmedESXiMACs.Load(normalizeMAC(mac))
+			return ok
+		}) {
+			kind = analyzerPortESXi
+		}
+		ports = append(ports, analyzerPort{Port: port, MACs: macs, Kind: kind})
+	}
+	return ports
+}
+
+// analyzerShadowStats are the experiment report's Shadow-IT numbers, counted
+// with the same per-port rule as the graph and the alerts.
+type analyzerShadowStats struct {
+	Candidates int // hub candidate ports (shadow_it_raw)
+	Hubs       int // candidates drawn as hubs (shadow_it_filtered)
+	VMPorts    int // candidates exempt as VM or ESXi ports (vm_ports_filtered)
+}
+
+// analyzerShadowCounts applies analyzerHubCandidates to every device.
+func analyzerShadowCounts(devices []*DeviceData) analyzerShadowStats {
+	byIP := make(map[string]*DeviceData, len(devices))
+	for _, d := range devices {
+		byIP[d.IP] = d
+	}
+	switchMACs := buildSwitchChassisMACs(byIP)
+	var stats analyzerShadowStats
+	for _, ip := range sortedDeviceIPs(byIP) {
+		for _, p := range analyzerHubCandidates(byIP[ip], switchMACs) {
+			stats.Candidates++
+			if p.Kind == analyzerPortHub {
+				stats.Hubs++
+			} else {
+				stats.VMPorts++
+			}
+		}
+	}
+	return stats
 }
 
 // analyzeLoopback detects network loops (ports looped back to the same switch)

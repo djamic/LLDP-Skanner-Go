@@ -151,26 +151,28 @@
   },
   "shadow_it_rules": {
     "bot_messages": [
-      {"text": "📊 <b>Tarmoq holati:</b> 90/100 (Excellent)\n🔎 Jami topilgan muammolar: 2 ta"},
+      {"text": "📊 <b>Tarmoq holati:</b> 85/100 (Good)\n🔎 Jami topilgan muammolar: 3 ta"},
       {"issue_id": "shadow_10_0_9_23_1", "callbacks": ["ignore|shadow_10_0_9_23_1", "verify|shadow_10_0_9_23_1"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.23\n🔌 <b>Port:</b> 5 MACs on single port\n📊 <b>Holat:</b> Port 1 has 5 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."},
-      {"issue_id": "shadow_10_0_9_23_2", "callbacks": ["ignore|shadow_10_0_9_23_2", "verify|shadow_10_0_9_23_2"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.23\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."}
+      {"issue_id": "shadow_10_0_9_23_2", "callbacks": ["ignore|shadow_10_0_9_23_2", "verify|shadow_10_0_9_23_2"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.23\n🔌 <b>Port:</b> 2 MACs on single port\n📊 <b>Holat:</b> Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."},
+      {"issue_id": "shadow_10_0_9_23_7", "callbacks": ["ignore|shadow_10_0_9_23_7", "verify|shadow_10_0_9_23_7"], "text": "🚨 <b>Tartibsiz tarmoq (Shadow IT) aniqlandi!</b>\n\n🖥 <b>Switch:</b> 10.0.9.23\n🔌 <b>Port:</b> 3 MACs on single port\n📊 <b>Holat:</b> Port 7 has 3 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.\n\n⚠️ Ushbu portga boshqarilmaydigan switch yoki hub ulangan bo'lishi mumkin."}
     ],
-    "health_score": 90,
+    "health_score": 85,
     "last_report": {
-      "anomaly_map": {"10.0.9.23": ["shadow_it", "shadow_it"]},
-      "health_score": 90,
+      "anomaly_map": {"10.0.9.23": ["shadow_it", "shadow_it", "shadow_it"]},
+      "health_score": 85,
       "total_macs": 23
     },
     "stp_device": "",
     "suggestions": [
       {"type": "shadow_it", "severity": "high", "device": "10.0.9.23", "issue_id": "shadow_10_0_9_23_1", "value": "5 MACs on single port", "description": "Port 1 has 5 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
-      {"type": "shadow_it", "severity": "high", "device": "10.0.9.23", "issue_id": "shadow_10_0_9_23_2", "value": "2 MACs on single port", "description": "Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."}
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.23", "issue_id": "shadow_10_0_9_23_2", "value": "2 MACs on single port", "description": "Port 2 has 2 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."},
+      {"type": "shadow_it", "severity": "high", "device": "10.0.9.23", "issue_id": "shadow_10_0_9_23_7", "value": "3 MACs on single port", "description": "Port 7 has 3 MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch."}
     ],
     "summary": {
       "congestion_issues": 0,
       "loopback_issues": 0,
       "path_issues": 0,
-      "shadow_it_issues": 2,
+      "shadow_it_issues": 3,
       "stability_issues": 0,
       "stp_issues": 0
     }

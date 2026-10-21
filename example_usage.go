@@ -2992,10 +2992,12 @@ func generateExperimentReport(devices []*DeviceData, scanDuration, collectionDur
 	stpEnabled := 0
 	uniqueMACs := make(map[string]bool)
 
-	// Shadow IT: raw (no fingerprinting) vs filtered
-	shadowITRaw := 0     // |M_p| > 1, non-trunk
-	shadowITFiltered := 0 // same but VM ports excluded
-	vmPortCount := 0
+	// Shadow IT with the graph's per-port rule (Q14): raw = hub candidates,
+	// filtered = the hubs, vmPortCount = candidates exempt as VM/ESXi ports
+	shadow := analyzerShadowCounts(devices)
+	shadowITRaw := shadow.Candidates
+	shadowITFiltered := shadow.Hubs
+	vmPortCount := shadow.VMPorts
 
 	for _, d := range devices {
 		totalInterfaces += len(d.Interfaces)
@@ -3007,48 +3009,6 @@ func generateExperimentReport(devices []*DeviceData, scanDuration, collectionDur
 		}
 		for _, m := range d.MACTable {
 			uniqueMACs[m.MACAddress] = true
-		}
-
-		// Shadow IT per port analysis
-		portMACs := make(map[int][]string)
-		for _, m := range d.MACTable {
-			portMACs[m.PortNumber] = append(portMACs[m.PortNumber], m.MACAddress)
-		}
-
-		for portNum, macs := range portMACs {
-			if len(macs) <= 1 {
-				continue
-			}
-			// Check if trunk
-			isTrunk := false
-			for _, pv := range d.PortVLANs {
-				if pv.PortIndex == portNum && pv.IsTrunk {
-					isTrunk = true
-					break
-				}
-			}
-			if isTrunk {
-				continue
-			}
-
-			shadowITRaw++ // Raw count (no OS fingerprinting)
-
-			// Check if VM port OR confirmed ESXi port
-			isVM := isHypervisorPort(macs)
-			if !isVM {
-				// Also check if any MAC on this port is a confirmed ESXi host
-				for _, mac := range macs {
-					if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(mac)); ok {
-						isVM = true
-						break
-					}
-				}
-			}
-			if isVM {
-				vmPortCount++
-			} else {
-				shadowITFiltered++ // After OS fingerprinting filter
-			}
 		}
 	}
 
