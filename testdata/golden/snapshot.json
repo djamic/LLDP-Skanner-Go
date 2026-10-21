@@ -4847,8 +4847,8 @@
   "snapshot_summary": {
     "active_hosts": 75,
     "active_macs": 4569,
-    "graph_edges": 927,
-    "graph_nodes": 930,
+    "graph_edges": 1026,
+    "graph_nodes": 1029,
     "health_score": 70,
     "random_macs": 1139
   }

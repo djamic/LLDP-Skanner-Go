@@ -435,3 +435,100 @@ func TestGraphHypervisorPortKey(t *testing.T) {
 		t.Errorf("non-VM hub member lost its edge: %v", g.Edges[hub])
 	}
 }
+
+func graphMACRange(prefix string, from, n int) []string {
+	var out []string
+	for i := from; i < from+n; i++ {
+		out = append(out, fmt.Sprintf("%s:%02x", prefix, i))
+	}
+	return out
+}
+
+// TestGraphFDBEndpoints covers the FDB branches of buildGraphEdges: VM ports
+// on trunks and with more than 20 MACs (F26) unless another switch's MAC is
+// learned there, only virtual NICs get [VM] (F27), no '[T]' on access ports
+// (F28), every hub member gets a node with the BMC/random/DNS checks (F29),
+// a lone virtual NIC is a VM (F30, Q4), DNS names reach the BMC check on the
+// direct, hub and LLDP paths (F31, Q5), and a port with an HTTP-confirmed
+// ESXi MAC is no hub (Q14).
+func TestGraphFDBEndpoints(t *testing.T) {
+	resetState(t)
+	const src = "4c:ae:a3:05:01:00"
+	var fdb []MACEntry
+	fdb = append(fdb, macEntries(18, append(graphMACRange("00:0c:29:05:12", 1, 4), "00:1b:21:05:12:05")...)...)
+	fdb = append(fdb, macEntries(19, append(graphMACRange("00:50:56:05:13", 1, 21), "00:1b:21:05:13:99")...)...)
+	fdb = append(fdb, macEntries(20, append(graphMACRange("00:0c:29:05:14", 1, 5), "4c:ae:a3:05:02:00")...)...)
+	fdb = append(fdb, macEntries(5, "00:0c:29:05:05:01", "00:0c:29:05:05:02", "00:1b:21:05:05:03")...)
+	fdb = append(fdb, macEntries(6, "00:0c:29:05:06:01")...)
+	fdb = append(fdb, macEntries(7, "52:54:00:05:07:01")...)
+	fdb = append(fdb, macEntries(8, "bc:24:11:05:08:01")...)
+	fdb = append(fdb, macEntries(9, append(graphMACRange("00:1b:21:05:09", 1, 6), "da:a1:19:05:09:07", "00:1b:21:05:09:08")...)...)
+	fdb = append(fdb, macEntries(10, graphMACRange("00:1b:21:05:0a", 1, 3)...)...)
+	fdb = append(fdb, macEntries(11, "00:1b:21:05:0b:01")...)
+	devices := map[string]*DeviceData{
+		"10.9.5.1": {
+			IP: "10.9.5.1", SysName: "sw", ChassisID: src, Interfaces: gigabitPorts(24, nil),
+			PortVLANs: []PortVLAN{{PortIndex: 18, PVID: 1, IsTrunk: true}, {PortIndex: 19, PVID: 1, IsTrunk: true},
+				{PortIndex: 20, PVID: 1, IsTrunk: true}, {PortIndex: 5, PVID: 10}},
+			Neighbors: []LLDPNeighbor{{LocalPortNum: 12, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: "00 1B 21 05 0C 01",
+				RemPortIdSubtype: 3, RemPortId: "00 1B 21 05 0C 01"}},
+			MACTable: fdb,
+		},
+		"10.9.5.2": {IP: "10.9.5.2", SysName: "sw2", ChassisID: "4c:ae:a3:05:02:00", Interfaces: gigabitPorts(4, nil)},
+	}
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP = map[string]string{"00:1b:21:05:09:08": "10.0.9.13", "00:1b:21:05:0b:01": "172.20.0.48", "00:1b:21:05:0c:01": "172.16.25.231"}
+	globalMACtoIPMutex.Unlock()
+	ConfirmedESXiMACs.Store("00:1b:21:05:0a:01", true)
+
+	g := buildGraphFromSnapshot(devices)
+	for port, n := range map[string]int{"ge1_0_18": 4, "ge1_0_19": 21, "ge1_0_5": 2} {
+		hyp := "hyp-" + src + "-" + port
+		if !strings.Contains(g.SwitchInfo[hyp], fmt.Sprintf("\n%d VMs on ", n)) || len(g.Edges[hyp]) != n {
+			t.Errorf("%s = %q with %d vNICs, want %d VMs", hyp, g.SwitchInfo[hyp], len(g.Edges[hyp]), n)
+		}
+	}
+	for id := range g.Nodes {
+		if strings.HasPrefix(id, "00:0c:29:05:14:") || strings.HasPrefix(id, "hyp-"+src+"-ge1_0_20") {
+			t.Errorf("switch link port 20 produced node %s", id)
+		}
+	}
+	labels := []struct{ id, prefix, edge string }{
+		{"00:1b:21:05:12:05", "[ENDPOINT]", "GE1/0/18 [T]|"},
+		{"00:1b:21:05:13:99", "[ENDPOINT]", "GE1/0/19 [T]|"},
+		{"00:1b:21:05:05:03", "[ENDPOINT]", "GE1/0/5 [V10]|"},
+		{"00:0c:29:05:06:01", "[VM] 💻 VMware VM VMware", "GE1/0/6|"},
+		{"52:54:00:05:07:01", "[VM] 💻 KVM/Proxmox VM", "GE1/0/7|"},
+		{"bc:24:11:05:08:01", "[VM] 💻 KVM/Proxmox VM", "GE1/0/8|"},
+		{"00:1b:21:05:0a:01", "[HYPERVISOR] VMware ESXi\n[ENDPOINT]", "GE1/0/10|"},
+		{"00:1b:21:05:0a:03", "[ENDPOINT]", "GE1/0/10|"},
+		{"00:1b:21:05:0b:01", "[BMC] Dell iDRAC", "GE1/0/11|"},
+	}
+	for _, c := range labels {
+		if got := g.SwitchInfo[c.id]; !strings.HasPrefix(got, c.prefix) {
+			t.Errorf("%s label = %q, want prefix %q", c.id, got, c.prefix)
+		}
+		if got := g.GetEdgeLabel(src, c.id); got != c.edge {
+			t.Errorf("edge to %s = %q, want %q", c.id, got, c.edge)
+		}
+	}
+	if got := g.SwitchInfo["00:0c:29:05:12:01"]; !strings.HasPrefix(got, "[VM]") {
+		t.Errorf("VM on the trunk port: %q", got)
+	}
+	hub := "hub-" + src + "-p9"
+	if g.SwitchInfo[hub] != "[HUB] Unmanaged\n8 devices" || len(g.Edges[hub]) != 8 {
+		t.Errorf("hub %q has %d members: %v", g.SwitchInfo[hub], len(g.Edges[hub]), g.Edges[hub])
+	}
+	if got := g.SwitchInfo["da:a1:19:05:09:07"]; !strings.HasPrefix(got, "[WiFi]") {
+		t.Errorf("random hub member = %q", got)
+	}
+	if got := g.SwitchInfo["00:1b:21:05:09:08"]; got != "[BMC] Dell iDRAC\n10.0.9.13\n[DNS] srv01-idrac" {
+		t.Errorf("hub member with a BMC DNS name = %q", got)
+	}
+	if g.Nodes["hub-"+src+"-p10"] {
+		t.Errorf("port with a confirmed ESXi host became a hub")
+	}
+	if got := g.SwitchInfo["00:1b:21:05:0c:01"]; got != "[BMC] Fujitsu iRMC\n172.16.25.231" {
+		t.Errorf("LLDP endpoint with a BMC DNS name = %q", got)
+	}
+}

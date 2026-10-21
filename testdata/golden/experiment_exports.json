@@ -1,24 +1,24 @@
 {
   "bfs_depths": {
-    "average_depth": 1.0677966101694916,
+    "average_depth": 1.0833333333333333,
     "core_switch_ip": "4c:ae:a3:a2:15:ec",
     "deep_devices": null,
     "depth_distribution": {
       "0": 1,
       "1": 53,
-      "2": 5
+      "2": 6
     },
     "export_time": "<time>",
     "max_depth": 2,
-    "total_nodes": 59
+    "total_nodes": 60
   },
   "experiment_metrics": {
     "collection_duration": "2.5s",
     "devices_found": 75,
     "discovery_duration": "1.5s",
     "experiment_date": "<time>",
-    "graph_edges": 927,
-    "graph_nodes": 930,
+    "graph_edges": 1026,
+    "graph_nodes": 1029,
     "organization": "TUIT",
     "shadow_it_filtered": 142,
     "shadow_it_raw": 146,

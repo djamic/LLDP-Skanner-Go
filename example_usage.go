@@ -857,6 +857,21 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		graphAddSwitchNode(graph, data)
 	}
 
+	// Build MAC to IP lookup from local ARP table (normalize keys)
+	macToIP := make(map[string]string)
+	for _, arpEntry := range data.ARPTable {
+		macToIP[normalizeMAC(arpEntry.MACAddress)] = arpEntry.IPAddress
+	}
+
+	// Also merge global gateway ARP data (more complete)
+	globalMACtoIPMutex.RLock()
+	for mac, ip := range globalMACtoIP {
+		if _, exists := macToIP[mac]; !exists {
+			macToIP[mac] = ip
+		}
+	}
+	globalMACtoIPMutex.RUnlock()
+
 	// Add LLDP neighbors as edges. knownMACs collects their node ids (the
 	// resolved targets) and lldpPorts the ports they are on; a neighbor that
 	// is rejected counts for neither.
@@ -903,8 +918,14 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 			// Build info from LLDP neighbor data with [LLDP-EP] marker
 			var info string
 
-			// Check BMC/management interface FIRST (OUI → name)
-			if bmcDetected, bmcType := isBMC(targetID, displayName); bmcDetected {
+			// DNS name of the neighbor (when its IP is known), for the BMC check
+			dnsName := ""
+			if ip := macToIP[targetID]; ip != "" {
+				dnsName = resolveHostname(ip)
+			}
+
+			// Check BMC/management interface FIRST (LLDP name, DNS name)
+			if bmcDetected, bmcType := graphIsBMC(targetID, displayName, dnsName); bmcDetected {
 				info = fmt.Sprintf("[BMC] %s", bmcType)
 
 			} else if vendor != "" {
@@ -1000,23 +1021,10 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 	// Process MAC Address Table - create endpoint nodes
 	// (MACs already known via LLDP are in knownMACs)
 
-	// Build MAC to IP lookup from local ARP table (normalize keys)
-	macToIP := make(map[string]string)
-	for _, arpEntry := range data.ARPTable {
-		macToIP[normalizeMAC(arpEntry.MACAddress)] = arpEntry.IPAddress
-	}
-
-	// Also merge global gateway ARP data (more complete)
-	globalMACtoIPMutex.RLock()
-	for mac, ip := range globalMACtoIP {
-		if _, exists := macToIP[mac]; !exists {
-			macToIP[mac] = ip
-		}
-	}
-	globalMACtoIPMutex.RUnlock()
-
-	// Track MACs per port for Virtual Hub detection
+	// Track MACs per port for Virtual Hub detection, and the ports where
+	// another polled switch's MAC is learned (switch links)
 	portMACs := make(map[int][]string)
+	portSeesSwitch := make(map[int]bool)
 
 	for _, macEntry := range data.MACTable {
 		// The canonical MAC is both the node id and the key of every check
@@ -1042,6 +1050,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 
 		// Skip if this MAC belongs to another known switch (handled by MAC cross-ref)
 		if _, isSwitch := switchChassisMACs[normMAC]; isSwitch {
+			portSeesSwitch[macEntry.PortNumber] = true
 			continue
 		}
 
@@ -1059,7 +1068,9 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 	for _, portNum := range slices.Sorted(maps.Keys(portMACs)) {
 		macs := portMACs[portNum]
 		// Skip if this port already has LLDP neighbors (accepted ones)
-		hasLLDPNeighbor := lldpPorts[portNum]
+		if lldpPorts[portNum] {
+			continue
+		}
 
 		portName := getLocalPortName(data, portNum)
 		// Skip NULL0 interface
@@ -1086,103 +1097,121 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 
 		}
 
-		if len(macs) >= 2 && !hasLLDPNeighbor && !isTrunkPort {
-			// Check if this is a hypervisor port (ESXi, Proxmox, KVM)
-			isVM := isHypervisorPort(macs)
+		// Label of a switch→endpoint edge on this port: "GE1/0/5 [V10]|"
+		portLabel := normalizePortName(portName)
+		if vlanStr := getPortVLANLabel(data.PortVLANs, portNum); vlanStr != "" {
+			portLabel = fmt.Sprintf("%s %s", portLabel, vlanStr)
+		}
+		endpointLabel := fmt.Sprintf("%s|", portLabel)
 
-			if isVM {
-				// VM port: add direct switch→MAC edges so detectHypervisors()
-				// can see them and create hyp- nodes correctly.
-				// Do NOT create aggregated vm- node here — that conflicts with detectHypervisors.
+		// A port where most MACs are virtual NICs is a hypervisor host (ESXi,
+		// Proxmox, KVM), also on a VLAN trunk or with more than 20 MACs: ESXi
+		// hosts sit on trunk ports. A trunk or big port where another switch's
+		// MAC is learned is a switch link, though, whatever it carries.
+		vmPort := len(macs) >= 2 && isHypervisorPort(macs) && (!isTrunkPort || !portSeesSwitch[portNum])
 
-				for _, mac := range macs {
-					if !graph.Nodes[mac] {
-						graph.AddNode(mac)
-						osLabel := detectOSFromMAC(mac, macToIP, data)
-						info := fmt.Sprintf("[VM] %s", osLabel)
-						if vendor := getMACVendor(mac); vendor != "" {
-							info = fmt.Sprintf("%s %s", info, vendor)
-						}
-						if ip, ok := macToIP[mac]; ok {
-							info = fmt.Sprintf("%s\n%s", info, ip)
-						}
-						graph.SwitchInfo[mac] = info
-					}
-					portEdgeLabel := fmt.Sprintf("%s [T]", normalizePortName(portName))
-					graph.AddEdge(srcID, mac, portEdgeLabel)
-				}
-			} else {
-				// Non-VM hub: create aggregated hub node
-				nodeID := fmt.Sprintf("hub-%s-p%d", srcID, portNum)
-				nodeLabel := fmt.Sprintf("[HUB] Unmanaged\n%d devices", len(macs))
-				edgeLabel := fmt.Sprintf("%s|Hub", normalizePortName(portName))
+		switch {
+		case vmPort, len(macs) >= 2 && !isTrunkPort && graphPortHasConfirmedESXi(macs):
+			// VM port, or a port with an HTTP-confirmed ESXi host (never a
+			// shadow-IT hub): every MAC is linked to the switch, so
+			// detectHypervisors() can put the VMs under a hyp- node.
+			// Do NOT create aggregated vm- node here — that conflicts with detectHypervisors.
+			for _, mac := range macs {
+				graphAddFDBEndpoint(graph, data, macToIP, srcID, mac, endpointLabel)
+			}
+		case len(macs) >= 2 && !isTrunkPort:
+			// Non-VM hub: create aggregated hub node; every member gets a
+			// node (a hub has at most 20 MACs)
+			nodeID := fmt.Sprintf("hub-%s-p%d", srcID, portNum)
+			nodeLabel := fmt.Sprintf("[HUB] Unmanaged\n%d devices", len(macs))
+			edgeLabel := fmt.Sprintf("%s|Hub", normalizePortName(portName))
 
+			if !graph.Nodes[nodeID] {
+				graph.AddNode(nodeID)
+				graph.SwitchInfo[nodeID] = nodeLabel
+			}
+			graph.AddEdge(srcID, nodeID, edgeLabel)
 
-				if !graph.Nodes[nodeID] {
-					graph.AddNode(nodeID)
-					graph.SwitchInfo[nodeID] = nodeLabel
-				}
-				graph.AddEdge(srcID, nodeID, edgeLabel)
-
-				for i, mac := range macs {
-					if i >= 5 {
-						break
-					}
-					if !graph.Nodes[mac] {
-						graph.AddNode(mac)
-						info := "[ENDPOINT]"
-						if vendor := getMACVendor(mac); vendor != "" {
-							info = fmt.Sprintf("%s %s", info, vendor)
-						}
-						if ip, ok := macToIP[mac]; ok {
-							info = fmt.Sprintf("%s\n%s", info, ip)
-						}
-						graph.SwitchInfo[mac] = info
-					}
-					graph.AddEdge(nodeID, mac, "")
-				} // end for (hub macs)
-			} // end else (hub)
-		} else if len(macs) <= 3 && !hasLLDPNeighbor {
+			for _, mac := range macs {
+				graphAddFDBEndpoint(graph, data, macToIP, nodeID, mac, "")
+			}
+		case len(macs) <= 3:
 			// Few MACs - create direct endpoint nodes
 			for _, mac := range macs {
-				endpointID := mac
-				if !graph.Nodes[endpointID] {
-					graph.AddNode(endpointID)
-					// Build endpoint info with IP and Vendor
-					info := "[ENDPOINT]"
-					// Check BMC first (by OUI)
-					if bmcDetected, bmcType := isBMC(mac, ""); bmcDetected {
-						info = fmt.Sprintf("[BMC] %s", bmcType)
-
-					} else if isRandomMAC(mac) {
-						info = "[WiFi]"
-					}
-					if vendor := getMACVendor(mac); vendor != "" {
-						info = fmt.Sprintf("%s %s", info, vendor)
-					}
-					// DNS reverse lookup for endpoint hostname
-					if ip, ok := macToIP[mac]; ok {
-						info = fmt.Sprintf("%s\n%s", info, ip)
-						if hostname := resolveHostname(ip); hostname != "" {
-							info = fmt.Sprintf("%s\n[DNS] %s", info, hostname)
-						}
-					}
-					graph.SwitchInfo[endpointID] = info
-					logDebug("       [NEW NODE] Created MAC endpoint node: %s", endpointID)
-				}
-				// Add VLAN info to label
-				vlanStr := getPortVLANLabel(data.PortVLANs, portNum)
-				portLabel := normalizePortName(portName)
-				if vlanStr != "" {
-					portLabel = fmt.Sprintf("%s %s", portLabel, vlanStr)
-				}
-				label := fmt.Sprintf("%s|", portLabel)
-				added, _ := graph.AddEdge(srcID, endpointID, label)
-				if added {
-					logDebug("       [NEW EDGE] Added MAC endpoint link: %s -> %s", srcID, endpointID)
-				}
+				graphAddFDBEndpoint(graph, data, macToIP, srcID, mac, endpointLabel)
 			}
 		}
+	}
+}
+
+// graphIsConfirmedESXi reports whether id is the MAC of an ESXi host
+// confirmed by the HTTP probe.
+func graphIsConfirmedESXi(id string) bool {
+	_, ok := ConfirmedESXiMACs.Load(normalizeMAC(id))
+	return ok
+}
+
+// graphPortHasConfirmedESXi reports whether one of a port's MACs is an
+// HTTP-confirmed ESXi host.
+func graphPortHasConfirmedESXi(macs []string) bool {
+	return slices.ContainsFunc(macs, graphIsConfirmedESXi)
+}
+
+// graphIsBMC runs the BMC check with each known name of a device (LLDP
+// display name, DNS name) and finally with no name.
+func graphIsBMC(mac string, names ...string) (bool, string) {
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		if ok, kind := isBMC(mac, name); ok {
+			return ok, kind
+		}
+	}
+	return isBMC(mac, "")
+}
+
+// graphFDBEndpointLabel is the label of a MAC learned from the FDB (direct
+// port, VM port or hub member): "[VM] <os>" for a virtual NIC (checked before
+// the random-MAC rule), else "[BMC] <type>" (DNS name checked too), "[WiFi]"
+// for a random MAC or "[ENDPOINT]"; then the vendor, the IP and the DNS name.
+func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceData) string {
+	ip := macToIP[mac]
+	hostname := ""
+	if ip != "" {
+		hostname = resolveHostname(ip)
+	}
+	info := "[ENDPOINT]"
+	if isHypervisorMAC(mac) {
+		info = fmt.Sprintf("[VM] %s", detectOSFromMAC(mac, macToIP, data))
+	} else if bmcDetected, bmcType := graphIsBMC(mac, hostname); bmcDetected {
+		info = fmt.Sprintf("[BMC] %s", bmcType)
+	} else if isRandomMAC(mac) {
+		info = "[WiFi]"
+	}
+	if vendor := getMACVendor(mac); vendor != "" {
+		info = fmt.Sprintf("%s %s", info, vendor)
+	}
+	if ip != "" {
+		info = fmt.Sprintf("%s\n%s", info, ip)
+		if hostname != "" {
+			info = fmt.Sprintf("%s\n[DNS] %s", info, hostname)
+		}
+	}
+	return info
+}
+
+// graphAddFDBEndpoint creates the node of an FDB MAC unless an earlier port
+// or switch created it (first creator wins) and links it from parent (the
+// switch or a hub node) with label.
+func graphAddFDBEndpoint(graph *DJGraph, data *DeviceData, macToIP map[string]string, parent, mac, label string) {
+	if !graph.Nodes[mac] {
+		graph.AddNode(mac)
+		graph.SwitchInfo[mac] = graphFDBEndpointLabel(mac, macToIP, data)
+		logDebug("       [NEW NODE] Created MAC endpoint node: %s", mac)
+	}
+	if added, _ := graph.AddEdge(parent, mac, label); added {
+		logDebug("       [NEW EDGE] Added MAC endpoint link: %s -> %s", parent, mac)
 	}
 }
 
