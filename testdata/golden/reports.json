@@ -38,12 +38,12 @@
       "hub-f8:f0:82:d8:7e:81-p3": ["shadow_it"]
     },
     "nodes": 1029,
-    "total_macs": 4569
+    "total_macs": 4566
   },
   "report_summary": {
     "health_score": 70,
     "total_switches": 75,
-    "total_macs": 4569,
+    "total_macs": 4566,
     "total_nodes": 1029,
     "total_edges": 1026,
     "anomalies": {

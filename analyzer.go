@@ -59,14 +59,17 @@ func analyzerSwitchIDs(d *DeviceData) []string {
 	return []string{d.IP}
 }
 
-// analyzerUniqueMACs returns the distinct MAC addresses (normalizeMAC) in the
+// analyzerUniqueMACs returns the distinct station MACs (usableMAC) in the
 // FDB tables of devices. Its size is total_macs (Q15): an address learned by
-// several switches, or on several ports, counts once.
+// several switches, or on several ports, counts once. Null, broadcast,
+// multicast and zero-OUI entries do not count (Q11), so total_macs, the
+// experiment's unique_macs and the snapshot's MAC count (InfluxDB
+// network_summary unique_macs) are one number.
 func analyzerUniqueMACs(devices []*DeviceData) map[string]bool {
 	macs := make(map[string]bool)
 	for _, d := range devices {
 		for _, macEntry := range d.MACTable {
-			if mac := normalizeMAC(macEntry.MACAddress); mac != "" {
+			if mac := usableMAC(macEntry.MACAddress); mac != "" {
 				macs[mac] = true
 			}
 		}

@@ -912,7 +912,7 @@
     "total_interfaces": 3332,
     "total_lldp_neighbors": 687,
     "total_mac_entries": 107756,
-    "unique_macs": 4569,
+    "unique_macs": 4566,
     "vm_macs": 110,
     "vm_ports_filtered": 3,
     "workers": 50

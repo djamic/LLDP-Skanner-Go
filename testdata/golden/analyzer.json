@@ -43,7 +43,7 @@
   "last_report": {
     "anomaly_map": {"00:16:e0:5a:5c:e0": ["stp"], "hub-4c:ae:a3:27:76:8a-p48": ["shadow_it"], "hub-4c:ae:a3:27:7e:ca-p3": ["shadow_it"], "hub-4c:ae:a3:27:85:ea-p11": ["shadow_it"], "hub-4c:ae:a3:8d:d5:99-p27": ["shadow_it"], "hub-4c:ae:a3:8d:ec:c1-p28": ["shadow_it"], "hub-4c:ae:a3:8d:ec:c1-p4": ["shadow_it"], "hub-4c:ae:a3:8d:ee:c9-p18": ["shadow_it"], "hub-4c:ae:a3:8e:19:09-p37": ["shadow_it"], "hub-4c:ae:a3:a2:01:ac-p1": ["shadow_it"], "hub-4c:ae:a3:a2:03:2c-p17": ["shadow_it"], "hub-4c:ae:a3:a2:0d:4c-p39": ["shadow_it"], "hub-4c:ae:a3:a2:15:ec-p2": ["shadow_it"], "hub-4c:ae:a3:a2:18:2c-p40": ["shadow_it"], "hub-4c:ae:a3:a2:18:ec-p1": ["shadow_it"], "hub-4c:ae:a3:a2:18:ec-p7": ["shadow_it"], "hub-4c:ae:a3:a2:19:ac-p3": ["shadow_it"], "hub-4c:ae:a3:a2:19:ac-p47": ["shadow_it"], "hub-78:48:59:72:ec:ee-p13": ["shadow_it"], "hub-f8:f0:82:7a:d9:69-p2": ["shadow_it"], "hub-f8:f0:82:7a:d9:69-p48": ["shadow_it"], "hub-f8:f0:82:7c:2c:c7-p2": ["shadow_it"], "hub-f8:f0:82:7c:2c:c7-p27": ["shadow_it"], "hub-f8:f0:82:7c:2d:17-p18": ["shadow_it"], "hub-f8:f0:82:7c:30:cf-p17": ["shadow_it"], "hub-f8:f0:82:7c:f9:58-p24": ["shadow_it"], "hub-f8:f0:82:7c:fa:26-p24": ["shadow_it"], "hub-f8:f0:82:7c:fa:72-p24": ["shadow_it"], "hub-f8:f0:82:7c:fa:ca-p1": ["shadow_it"], "hub-f8:f0:82:7c:fa:ca-p20": ["shadow_it"], "hub-f8:f0:82:d0:22:ce-p48": ["shadow_it"], "hub-f8:f0:82:d0:23:0a-p48": ["shadow_it"], "hub-f8:f0:82:d0:23:92-p48": ["shadow_it"], "hub-f8:f0:82:d8:7e:81-p3": ["shadow_it"]},
     "health_score": 70,
-    "total_macs": 4569
+    "total_macs": 4566
   },
   "report_nodes": 1029,
   "stp_roots": [

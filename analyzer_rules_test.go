@@ -215,7 +215,8 @@ func TestAnalyzerExperimentMetricsFollowGraph(t *testing.T) {
 		}
 	}
 	// Candidates: ports 2, 4, 11-17; VM ports: 11 (VMware) and 15 (KVM).
-	check("rule network", map[string]int{"shadow_it_raw": 9, "shadow_it_filtered": 7, "vm_ports_filtered": 2, "unique_macs": 79, "vm_macs": 7})
+	// unique_macs: 79 FDB addresses minus the broadcast MAC on port 10 (Q11).
+	check("rule network", map[string]int{"shadow_it_raw": 9, "shadow_it_filtered": 7, "vm_ports_filtered": 2, "unique_macs": 78, "vm_macs": 7})
 	ConfirmedESXiMACs.Store("00:1b:21:60:10:01", true)
 	check("rule network with an ESXi host on port 16", map[string]int{"shadow_it_raw": 9, "shadow_it_filtered": 6, "vm_ports_filtered": 3})
 }
@@ -429,28 +430,42 @@ func TestAnalyzerTrafficSuggestionOrder(t *testing.T) {
 }
 
 // TestAnalyzerTotalMACsCountsUniqueAddresses: total_macs is the number of
-// distinct MAC addresses, not the number of FDB rows (F13, Q15).
+// distinct station MACs, not the number of FDB rows (F13, Q15), with the one
+// MAC filter (Q11): null, broadcast, multicast and zero-OUI entries do not
+// count. On the fixture it is the number the snapshot (and the InfluxDB
+// network_summary unique_macs) and the experiment's unique_macs report
+// (MI-1, AC-3: 4569 against 4566, the 3 zero-OUI MACs).
 func TestAnalyzerTotalMACsCountsUniqueAddresses(t *testing.T) {
 	resetState(t)
 	a := &DeviceData{IP: "10.0.9.71", ChassisID: "4c:ae:a3:09:00:71",
 		MACTable: append(macEntries(1, "00:1b:21:09:71:01", "00:1b:21:09:71:02"), macEntries(24, "00:1b:21:09:72:01")...)}
 	b := &DeviceData{IP: "10.0.9.72", ChassisID: "4c:ae:a3:09:00:72",
-		MACTable: append(macEntries(1, "00:1b:21:09:72:01"), macEntries(24, "00:1B:21:09:71:01", "00:1b:21:09:71:02")...)}
+		MACTable: append(macEntries(1, "00:1b:21:09:72:01"), macEntries(24, "00:1B:21:09:71:01", "00:1b:21:09:71:02",
+			"00:00:00:30:00:00", "01:00:5e:00:00:16", "ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00", "desktop-v380chd")...)}
 	NewAnalyzer(FullCaptureData{DevicesData: devicesData(a, b)}).Analyze()
 	lastReportMutex.RLock()
 	got := lastTotalMACs
 	lastReportMutex.RUnlock()
 	if got != 3 {
-		t.Errorf("total_macs = %d for 6 FDB rows of 3 addresses, want 3", got)
+		t.Errorf("total_macs = %d for 6 station FDB rows of 3 addresses and 5 rows that are no station MAC, want 3", got)
 	}
 
 	graph := buildFixtureGraph(t)
-	analyzeFixture(t, graph)
+	report, _ := analyzeFixture(t, graph)
 	lastReportMutex.RLock()
 	got = lastTotalMACs
 	lastReportMutex.RUnlock()
-	if got != 4569 {
-		t.Errorf("fixture total_macs = %d, want the 4569 unique MACs", got)
+	if got != 4566 {
+		t.Errorf("fixture total_macs = %d, want the 4566 unique station MACs", got)
+	}
+	collectedDataMutex.RLock()
+	devices := sortedDevices(collectedData)
+	collectedDataMutex.RUnlock()
+	if snap := len(CreateSnapshot(devices, graph, &report).ActiveMACs); snap != got {
+		t.Errorf("fixture total_macs = %d, the snapshot (network_summary unique_macs) counts %d", got, snap)
+	}
+	if exp := fmt.Sprint(experimentMetrics(t, graph)["unique_macs"]); exp != fmt.Sprint(got) {
+		t.Errorf("fixture total_macs = %d, experiment unique_macs = %s", got, exp)
 	}
 }
 
