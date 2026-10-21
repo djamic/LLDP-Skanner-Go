@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -564,12 +565,9 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 		}
 	}
 
-	// Convert map to slice
-	result := make([]LLDPNeighbor, 0, len(neighborMap))
 	for _, n := range neighborMap {
 		logDebug("  [SNMP-RAW] %s: Neighbor on LocalPort %d -> RemChassis: %s (Subtype: %d), RemPort: %s",
 			ip, n.LocalPortNum, n.RemChassisId, n.RemChassisIdSubtype, n.RemPortId)
-		result = append(result, *n)
 	}
 
 	// Collect Management Addresses and populate RemMgmtIP
@@ -578,8 +576,8 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 		fmt.Printf("Warning: Failed to collect management IPs for %s: %v\n", ip, err)
 	}
 
-	// Re-convert to slice after enrichment
-	result = make([]LLDPNeighbor, 0, len(neighborMap))
+	// Convert map to slice
+	result := make([]LLDPNeighbor, 0, len(neighborMap))
 	for _, n := range neighborMap {
 		result = append(result, *n)
 	}
@@ -590,7 +588,7 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 // enrichWithManagementIPs collects Management IP addresses from lldpRemManAddrTable
 func (s *SNMPObject) enrichWithManagementIPs(ip string, neighborMap map[string]*LLDPNeighbor) error {
 	// Walk lldpRemManAddrTable (.1.0.8802.1.1.2.1.4.2.1)
-	lines, err := s.runSNMPWalk(ip, ".1.0.8802.1.1.2.1.4.2.1")
+	lines, err := s.runSNMPWalk(ip, collectLLDPManAddrOID)
 	if err != nil {
 		return err
 	}
@@ -600,47 +598,71 @@ func (s *SNMPObject) enrichWithManagementIPs(ip string, neighborMap map[string]*
 		if err != nil {
 			continue
 		}
-
-		// OID format: .1.0.8802.1.1.2.1.4.2.1.COLUMN.TimeMark.LocalPort.RemIndex.AddrSubtype.Address
-		// We're interested in column 3 (lldpRemManAddrIfSubtype) which contains the address type
-		// The actual IP is embedded in the OID itself as the last components
-
-		parts := strings.Split(oid, ".")
-		if len(parts) < 18 {
+		// The address is in the index (every accessible column repeats it).
+		// The first IPv4 address in walk order wins.
+		key, mgmtIP, ok := collectLLDPManAddr(oid)
+		if !ok {
 			continue
 		}
-
-		// Extract indices
-		// Last 4 octets are the IP address (for IPv4)
-		// Format: ...TimeMark.LocalPort.RemIndex.1.A.B.C.D
-		// where 1 is IPv4 address subtype
-
-		// Find column number
-		colStr := parts[12] // Column is at fixed position after base OID
-		col, _ := strconv.Atoi(colStr)
-
-		if col != 3 { // We only care about column 3 (lldpRemManAddrIfSubtype)
-			continue
-		}
-
-		// Extract TimeMark, LocalPort, RemIndex
-		localPortStr := parts[14]
-		remIdxStr := parts[15]
-		addrSubtype := parts[16]
-
-		key := fmt.Sprintf("%s.%s", localPortStr, remIdxStr)
-
-		if neighbor, exists := neighborMap[key]; exists {
-			// Check if it's IPv4 (subtype 1)
-			if addrSubtype == "1" && len(parts) >= 20 {
-				// Extract IP from last 4 octets
-				ipAddr := fmt.Sprintf("%s.%s.%s.%s", parts[17], parts[18], parts[19], parts[20])
-				neighbor.RemMgmtIP = ipAddr
-			}
+		if neighbor, exists := neighborMap[key]; exists && neighbor.RemMgmtIP == "" {
+			neighbor.RemMgmtIP = mgmtIP
 		}
 	}
 
 	return nil
+}
+
+// collectLLDPManAddrOID is lldpRemManAddrTable (LLDP-MIB). Its index is
+// lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex.lldpRemManAddrSubtype.
+// lldpRemManAddr, and the address is an OCTET STRING index: its length, then
+// its octets (IPv4: ...<column>.<timeMark>.<localPort>.<remIndex>.1.4.a.b.c.d).
+const collectLLDPManAddrOID = ".1.0.8802.1.1.2.1.4.2.1"
+
+// collectLLDPManAddr decodes one lldpRemManAddrTable OID into the neighbor
+// key ("localPort.remIndex", as in collectLLDPNeighbors) and its IPv4
+// management address. Agents that leave out the length octet are accepted
+// (four octets not starting with 4, which would be a truncated length-4
+// address); other address families give ok=false.
+func collectLLDPManAddr(oid string) (key, ip string, ok bool) {
+	idx, ok := collectOIDIndex(oid, collectLLDPManAddrOID)
+	// column, time mark, local port, remote index, address family, address
+	if !ok || len(idx) < 6 || idx[4] != 1 { // IANA address family 1 = IPv4
+		return "", "", false
+	}
+	addr := idx[5:]
+	switch {
+	case len(addr) == 5 && addr[0] == 4:
+		addr = addr[1:]
+	case len(addr) == 4 && addr[0] != 4:
+	default:
+		return "", "", false
+	}
+	if slices.ContainsFunc(addr, func(b int) bool { return b > 255 }) ||
+		slices.Equal(addr, []int{0, 0, 0, 0}) {
+		return "", "", false
+	}
+	return fmt.Sprintf("%d.%d", idx[2], idx[3]),
+		fmt.Sprintf("%d.%d.%d.%d", addr[0], addr[1], addr[2], addr[3]), true
+}
+
+// collectOIDIndex returns the index components after base in a numeric OID
+// (snmpbulkwalk -On), or ok=false when the OID is not below base or one of
+// the components is not a number.
+func collectOIDIndex(oid, base string) ([]int, bool) {
+	rest, found := strings.CutPrefix(strings.TrimPrefix(oid, "."), strings.TrimPrefix(base, ".")+".")
+	if !found || rest == "" {
+		return nil, false
+	}
+	parts := strings.Split(rest, ".")
+	idx := make([]int, len(parts))
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 0 || p[0] == '+' {
+			return nil, false
+		}
+		idx[i] = n
+	}
+	return idx, true
 }
 
 // parseSNMPLine parses specific snmpwalk output line

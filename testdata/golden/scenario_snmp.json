@@ -59,7 +59,7 @@
     "neighbors": [
       {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 7, "RemChassisIdSubtype": 0, "RemChassisId": "00 00 00 00 00 00", "RemPortIdSubtype": 0, "RemPortId": "", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
       {"TimeMarker": 0, "LocalPortNum": 25, "RemIndex": 2, "RemChassisIdSubtype": 7, "RemChassisId": "\"DESKTOP-V380CHD\"", "RemPortIdSubtype": 3, "RemPortId": "10 7C 61 C0 9E AA", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
-      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
+      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "172.20.0.3", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
     ],
     "mac_table_nil": true,
     "arp_table": [
@@ -99,7 +99,7 @@
     "neighbors": [
       {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 7, "RemChassisIdSubtype": 0, "RemChassisId": "00 00 00 00 00 00", "RemPortIdSubtype": 0, "RemPortId": "", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
       {"TimeMarker": 0, "LocalPortNum": 25, "RemIndex": 2, "RemChassisIdSubtype": 7, "RemChassisId": "\"DESKTOP-V380CHD\"", "RemPortIdSubtype": 3, "RemPortId": "10 7C 61 C0 9E AA", "RemPortDesc": "", "RemSysName": "", "RemSysDesc": "", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
-      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
+      {"TimeMarker": 0, "LocalPortNum": 28, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "F8 F0 82 D1 67 5E", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/26\"", "RemPortDesc": "\"uplink to core\"", "RemSysName": "sw-core", "RemSysDesc": "SNR S2985G-24T", "RemMgmtIP": "172.20.0.3", "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
     ],
     "mac_table_nil": false,
     "mac_table": [
