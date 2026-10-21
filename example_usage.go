@@ -1090,12 +1090,13 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 		}
 	}
 
-	// Process MAC Address Table - create endpoint nodes.
+	// Process MAC Address Table - create endpoint nodes, with the per-port
+	// rule the Shadow-IT alerts, metrics and reports share (fdbPorts).
 	// Ports come in ascending order, so when a MAC is seen on two ports the
 	// node is created (first creator wins) by the same port on every build.
-	for _, p := range graphFDBPorts(data, switchChassisMACs) {
+	for _, p := range fdbPorts(data, switchChassisMACs) {
 		portName := getLocalPortName(data, p.Port)
-		if p.Hub {
+		if p.Kind == fdbHub {
 			// Non-VM hub: create aggregated hub node; every member gets a
 			// node (a hub has at most 20 MACs)
 			nodeID := fmt.Sprintf("hub-%s-p%d", srcID, p.Port)
@@ -1137,23 +1138,42 @@ func graphLLDPNeighborTarget(data *DeviceData, n LLDPNeighbor) (targetID, displa
 	return targetID, displayName, ok
 }
 
-// graphFDBPort is how the graph shows the FDB MACs learned on one port.
-type graphFDBPort struct {
+// fdbPortKind is what the per-port FDB rule (fdbPorts) makes of the MACs a
+// switch learned on one port.
+type fdbPortKind int
+
+const (
+	fdbDirect   fdbPortKind = iota // few MACs: each one is linked to the switch
+	fdbHub                         // an unmanaged switch or hub: Shadow IT
+	fdbVMPort                      // most MACs are virtual NICs: a hypervisor host
+	fdbESXiPort                    // a hub candidate with an HTTP-confirmed ESXi host
+)
+
+// fdbPort is one port of a switch's FDB under the per-port rule.
+type fdbPort struct {
 	Port int
-	MACs []string // canonical, after the graph's filters
-	Hub  bool     // an unmanaged switch (shadow IT); else each MAC is linked to the switch
+	MACs []string // canonical, after the rule's filters
+	Kind fdbPortKind
+	// Candidate: at least 2 MACs on a port that has no accepted LLDP
+	// neighbor and is no trunk or uplink, so a hub unless it is a VM or
+	// ESXi port (the experiment's shadow_it_raw counts these)
+	Candidate bool
 }
 
-// graphFDBPorts is the graph's per-port rule for the FDB of one switch, in
-// port order; ports that get no nodes are left out. The MACs of a port are
-// its FDB entries minus non-MACs, LLDP-known neighbors, the switch's own and
-// other polled switches' chassis MACs and isInvalidID ones. A port with an
-// accepted LLDP neighbor or a NULL0 name gets nothing. A VM-majority port is
-// direct (also on a trunk or with more than 20 MACs, unless another switch's
-// MAC is learned there); a VLAN trunk or a port with more than 20 MACs is
-// otherwise an uplink (nothing, or direct for at most 3 MACs); 2-20 MACs
-// are a hub unless one is an HTTP-confirmed ESXi host (direct, Q14).
-func graphFDBPorts(data *DeviceData, switchChassisMACs map[string]string) []graphFDBPort {
+// fdbPorts is the one per-port Shadow-IT rule (Q14): the graph's hub nodes,
+// the analyzer's Shadow-IT alerts, the experiment metrics and the audit
+// report's Shadow-IT section all come from it, so the map, the alerts, the
+// reports and the UI (which lists the graph's hubs) agree. It returns the
+// FDB ports of one switch in port order; ports that get no nodes are left
+// out. The MACs of a port are its FDB entries minus non-MACs, LLDP-known
+// neighbors, the switch's own and other polled switches' chassis MACs and
+// isInvalidID ones. A port with an accepted LLDP neighbor or a NULL0 name
+// gets nothing. A VM-majority port is direct (also on a trunk or with more
+// than 20 MACs, unless another switch's MAC is learned there); a VLAN trunk
+// or a port with more than 20 MACs is otherwise an uplink (nothing, or
+// direct for at most 3 MACs); 2-20 MACs are a hub unless one is an
+// HTTP-confirmed ESXi host (ESXi exemption).
+func fdbPorts(data *DeviceData, switchChassisMACs map[string]string) []fdbPort {
 	// MACs already known via LLDP, and the ports with an accepted neighbor
 	knownMACs := lldpKnownMACs(data)
 	lldpPorts := make(map[int]bool)
@@ -1161,6 +1181,18 @@ func graphFDBPorts(data *DeviceData, switchChassisMACs map[string]string) []grap
 		if _, _, ok := graphLLDPNeighborTarget(data, n); ok {
 			lldpPorts[n.LocalPortNum] = true
 		}
+	}
+
+	// NULL0/InLoopBack ports, looked up once per port (the alerts run this
+	// rule on every FDB row of every switch)
+	nullPorts := make(map[int]bool)
+	isNullPort := func(port int) bool {
+		null, seen := nullPorts[port]
+		if !seen {
+			null = isNullInterface(getLocalPortName(data, port))
+			nullPorts[port] = null
+		}
+		return null
 	}
 
 	// Track MACs per port for Virtual Hub detection, and the ports where
@@ -1176,7 +1208,7 @@ func graphFDBPorts(data *DeviceData, switchChassisMACs map[string]string) []grap
 		}
 
 		// Skip NULL0 interface — virtual discard port, not a real connection
-		if isNullInterface(getLocalPortName(data, macEntry.PortNumber)) {
+		if isNullPort(macEntry.PortNumber) {
 			continue
 		}
 
@@ -1204,15 +1236,11 @@ func graphFDBPorts(data *DeviceData, switchChassisMACs map[string]string) []grap
 		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], normMAC)
 	}
 
-	var out []graphFDBPort
+	var out []fdbPort
 	for _, portNum := range slices.Sorted(maps.Keys(portMACs)) {
 		macs := portMACs[portNum]
 		// Skip if this port already has LLDP neighbors (accepted ones)
 		if lldpPorts[portNum] {
-			continue
-		}
-		// Skip NULL0 interface
-		if isNullInterface(getLocalPortName(data, portNum)) {
 			continue
 		}
 
@@ -1239,21 +1267,28 @@ func graphFDBPorts(data *DeviceData, switchChassisMACs map[string]string) []grap
 		// hosts sit on trunk ports. A trunk or big port where another switch's
 		// MAC is learned is a switch link, though, whatever it carries.
 		vmPort := len(macs) >= 2 && isHypervisorPort(macs) && (!isTrunkPort || !portSeesSwitch[portNum])
+		candidate := len(macs) >= 2 && !isTrunkPort
 
+		port := fdbPort{Port: portNum, MACs: macs, Candidate: candidate}
 		switch {
-		case vmPort, len(macs) >= 2 && !isTrunkPort && graphPortHasConfirmedESXi(macs):
-			// VM port, or a port with an HTTP-confirmed ESXi host (never a
-			// shadow-IT hub)
-			out = append(out, graphFDBPort{Port: portNum, MACs: macs})
-		case len(macs) >= 2 && !isTrunkPort:
-			out = append(out, graphFDBPort{Port: portNum, MACs: macs, Hub: true})
+		case vmPort:
+			port.Kind = fdbVMPort
+		case candidate && graphPortHasConfirmedESXi(macs):
+			// a port with an HTTP-confirmed ESXi host is never a Shadow-IT hub
+			port.Kind = fdbESXiPort
+		case candidate:
+			port.Kind = fdbHub
 		case len(macs) <= 3:
 			// Few MACs - direct endpoint nodes
-			out = append(out, graphFDBPort{Port: portNum, MACs: macs})
+			port.Kind = fdbDirect
+		default:
+			continue // uplink: no nodes
 		}
+		out = append(out, port)
 	}
 	return out
 }
+
 
 // graphIsConfirmedESXi reports whether id is the MAC of an ESXi host
 // confirmed by the HTTP probe.

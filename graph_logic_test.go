@@ -462,11 +462,11 @@ func TestGraphFDBEndpoints(t *testing.T) {
 
 	// The per-port rule on its own (what Shadow-IT counting can share, Q14)
 	var rule []string
-	for _, p := range graphFDBPorts(devices["10.9.5.1"], buildSwitchChassisMACs(devices)) {
-		rule = append(rule, fmt.Sprintf("%d:%d:%v", p.Port, len(p.MACs), p.Hub))
+	for _, p := range fdbPorts(devices["10.9.5.1"], buildSwitchChassisMACs(devices)) {
+		rule = append(rule, fmt.Sprintf("%d:%d:%v", p.Port, len(p.MACs), p.Kind == fdbHub))
 	}
 	if got, want := strings.Join(rule, " "), "5:3:false 6:1:false 7:1:false 8:1:false 9:8:true 10:3:false 11:1:false 18:5:false 19:22:false"; got != want {
-		t.Errorf("graphFDBPorts = %s, want %s", got, want)
+		t.Errorf("fdbPorts = %s, want %s", got, want)
 	}
 
 	g := buildGraphFromSnapshot(devices)

@@ -52,11 +52,7 @@ func analyzerShadowPorts(t *testing.T, devices []*DeviceData, suggestions []Opti
 	t.Helper()
 	srcID := map[string]string{}
 	for _, d := range devices {
-		id := normalizeID(d.ChassisID, 0)
-		if id == "" {
-			id = d.IP
-		}
-		srcID[d.IP] = id
+		srcID[d.IP] = graphDeviceNodeID(d)
 	}
 	var out []string
 	for _, s := range suggestions {

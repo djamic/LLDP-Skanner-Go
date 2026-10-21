@@ -713,16 +713,16 @@ type ShadowITDevice struct {
 }
 
 // analyzeShadowIT reports every port that the graph draws as an unmanaged
-// hub (analyzerHubCandidates) as one shadow_<ip>_<port> issue, in device and
-// port order.
+// hub (fdbPorts, the one per-port rule, Q14) as one shadow_<ip>_<port>
+// issue, in device and port order.
 func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
 	ix := na.idx()
 	switchMACs := buildSwitchChassisMACs(ix.byIP)
 
 	for _, device := range ix.devices {
-		for _, p := range analyzerHubCandidates(device, switchMACs) {
-			if p.Kind != analyzerPortHub {
+		for _, p := range fdbPorts(device, switchMACs) {
+			if p.Kind != fdbHub {
 				continue
 			}
 			issueID := fmt.Sprintf("shadow_%s_%d", strings.ReplaceAll(device.IP, ".", "_"), p.Port)
@@ -747,93 +747,6 @@ func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 	return suggestions
 }
 
-// analyzerPortKind is the verdict of the per-port rule on a hub candidate.
-type analyzerPortKind int
-
-const (
-	analyzerPortHub  analyzerPortKind = iota // unmanaged switch or hub: Shadow IT
-	analyzerPortVM                           // more than half of the MACs are virtual NICs
-	analyzerPortESXi                         // one of the MACs is an HTTP-confirmed ESXi host
-)
-
-// analyzerPort is one hub candidate port of a switch and the MACs the rule
-// counts there.
-type analyzerPort struct {
-	Port int
-	MACs []string
-	Kind analyzerPortKind
-}
-
-// analyzerHubCandidates is the one per-port rule (Q14) behind the graph's
-// hub nodes, the Shadow-IT alerts and the experiment metrics. It follows
-// buildGraphEdges and returns the hub candidate ports of d in port order:
-//   - a port's MACs leave out NULL0/InLoopBack ports, the chassis ids of d's
-//     LLDP neighbors, d's own chassis MAC, the chassis MACs of the other
-//     polled switches (switchChassisMACs) and invalid MACs;
-//   - a candidate keeps at least 2 MACs, has no LLDP neighbor, is no trunk
-//     and has at most 20 MACs (more is an implicit uplink);
-//   - a candidate is a VM port when most of its MACs are virtual NICs
-//     (isHypervisorPort), an ESXi port when one of them is a confirmed ESXi
-//     host, and a hub otherwise.
-//
-// One list decides, is checked for VMs and ESXi hosts, and is counted.
-func analyzerHubCandidates(d *DeviceData, switchChassisMACs map[string]string) []analyzerPort {
-	knownMACs := make(map[string]bool) // LLDP neighbor chassis ids
-	lldpPorts := make(map[int]bool)
-	for _, neighbor := range d.Neighbors {
-		knownMACs[normalizeMAC(neighbor.RemChassisId)] = true
-		lldpPorts[neighbor.LocalPortNum] = true
-	}
-	ownMAC := normalizeMAC(d.ChassisID)
-	nullPorts := make(map[int]bool) // NULL0/InLoopBack ports, looked up once per port
-	isNullPort := func(port int) bool {
-		null, seen := nullPorts[port]
-		if !seen {
-			null = isNullInterface(getLocalPortName(d, port))
-			nullPorts[port] = null
-		}
-		return null
-	}
-
-	portMACs := make(map[int][]string)
-	for _, macEntry := range d.MACTable {
-		mac := normalizeMAC(macEntry.MACAddress)
-		if isNullPort(macEntry.PortNumber) || knownMACs[mac] || mac == ownMAC {
-			continue
-		}
-		if _, isSwitch := switchChassisMACs[mac]; isSwitch || isInvalidID(macEntry.MACAddress) {
-			continue
-		}
-		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], macEntry.MACAddress)
-	}
-
-	trunks := make(map[int]bool)
-	for _, pv := range d.PortVLANs {
-		if pv.IsTrunk {
-			trunks[pv.PortIndex] = true
-		}
-	}
-
-	var ports []analyzerPort
-	for _, port := range slices.Sorted(maps.Keys(portMACs)) {
-		macs := portMACs[port]
-		if len(macs) < 2 || len(macs) > 20 || lldpPorts[port] || trunks[port] {
-			continue
-		}
-		kind := analyzerPortHub
-		if isHypervisorPort(macs) {
-			kind = analyzerPortVM
-		} else if slices.ContainsFunc(macs, func(mac string) bool {
-			_, ok := ConfirmedESXiMACs.Load(normalizeMAC(mac))
-			return ok
-		}) {
-			kind = analyzerPortESXi
-		}
-		ports = append(ports, analyzerPort{Port: port, MACs: macs, Kind: kind})
-	}
-	return ports
-}
-
 // analyzerShadowStats are the experiment report's Shadow-IT numbers, counted
 // with the same per-port rule as the graph and the alerts.
 type analyzerShadowStats struct {
@@ -842,7 +755,8 @@ type analyzerShadowStats struct {
 	VMPorts    int // candidates exempt as VM or ESXi ports (vm_ports_filtered)
 }
 
-// analyzerShadowCounts applies analyzerHubCandidates to every device.
+// analyzerShadowCounts applies the per-port rule (fdbPorts) to every device
+// and counts its hub candidates.
 func analyzerShadowCounts(devices []*DeviceData) analyzerShadowStats {
 	byIP := make(map[string]*DeviceData, len(devices))
 	for _, d := range devices {
@@ -851,9 +765,12 @@ func analyzerShadowCounts(devices []*DeviceData) analyzerShadowStats {
 	switchMACs := buildSwitchChassisMACs(byIP)
 	var stats analyzerShadowStats
 	for _, ip := range sortedDeviceIPs(byIP) {
-		for _, p := range analyzerHubCandidates(byIP[ip], switchMACs) {
+		for _, p := range fdbPorts(byIP[ip], switchMACs) {
+			if !p.Candidate {
+				continue
+			}
 			stats.Candidates++
-			if p.Kind == analyzerPortHub {
+			if p.Kind == fdbHub {
 				stats.Hubs++
 			} else {
 				stats.VMPorts++

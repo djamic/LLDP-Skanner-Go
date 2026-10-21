@@ -793,6 +793,12 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 	}
 
 	data := reportGraphData(graph)
+	members := make(map[string][]string) // hub id -> member node ids
+	for _, link := range data.Links {
+		if strings.HasPrefix(link.Source, "hub-") {
+			members[link.Source] = append(members[link.Source], link.Target)
+		}
+	}
 
 	// Find all hub nodes
 	type hubInfo struct {
@@ -804,8 +810,9 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 		if n.Group != "hub" {
 			continue
 		}
-		// Q14: a port with a confirmed ESXi host is a hypervisor, not Shadow IT
-		if reportHubOnESXiPort(graph, n.ID) {
+		// Q14: the per-port rule of the alerts decides (a port with a
+		// confirmed ESXi host is a hypervisor, not Shadow IT)
+		if !reportHubIsShadowIT(graph, n.ID, members[n.ID]) {
 			continue
 		}
 		label := n.SysName
@@ -929,36 +936,30 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 	return md.String()
 }
 
-// reportHubOnESXiPort reports whether the port behind a hub node carries an
-// HTTP-confirmed ESXi host. It checks the hub's member nodes and every MAC
-// the switch's FDB holds for that port: the graph draws at most 5 members,
-// and a host can be confirmed after the graph was built.
-func reportHubOnESXiPort(g *DJGraph, hubID string) bool {
-	for member := range g.Edges[hubID] {
-		if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(member)); ok {
-			return true
-		}
-	}
-	switchID, port, ok := reportParseHubID(hubID)
-	if !ok {
-		return false
-	}
-	collectedDataMutex.RLock()
-	defer collectedDataMutex.RUnlock()
-	for _, d := range collectedData {
-		if reportDeviceNode(g, d) != switchID {
-			continue
-		}
-		for _, entry := range d.MACTable {
-			if entry.PortNumber != port {
+// reportHubIsShadowIT reports whether the port behind a hub node is a
+// Shadow-IT hub under the per-port rule the alerts use (fdbPorts), applied
+// to the polled switch's FDB with the current ESXi confirmations: a hub
+// whose port carries an HTTP-confirmed ESXi host is left out even when the
+// host was confirmed after the graph was built (Q14). For a hub whose switch
+// is not in collectedData, only its member nodes can be checked.
+func reportHubIsShadowIT(g *DJGraph, hubID string, members []string) bool {
+	if switchID, port, ok := reportParseHubID(hubID); ok {
+		collectedDataMutex.RLock()
+		defer collectedDataMutex.RUnlock()
+		for _, ip := range sortedDeviceIPs(collectedData) {
+			d := collectedData[ip]
+			if reportDeviceNode(g, d) != switchID {
 				continue
 			}
-			if _, ok := ConfirmedESXiMACs.Load(normalizeMAC(entry.MACAddress)); ok {
-				return true
+			for _, p := range fdbPorts(d, buildSwitchChassisMACs(collectedData)) {
+				if p.Port == port {
+					return p.Kind == fdbHub
+				}
 			}
+			return false
 		}
 	}
-	return false
+	return !slices.ContainsFunc(members, graphIsConfirmedESXi)
 }
 
 // reportParseHubID splits a hub node id, "hub-<switch node>-p<FDB port>" as
