@@ -164,22 +164,20 @@ func answeredGateways() []gatewayNode {
 // gatewayARP is the result of one gateway's ARP walk in a run.
 type gatewayARP struct {
 	IP      string
-	Rows    int   // ARP rows read
-	Updated int   // new or changed MAC-IP mappings
-	Err     error // the walk failed: the gateway did not answer
+	Rows    int        // ARP rows read
+	Updated int        // new or changed MAC-IP mappings
+	Err     error      // the walk failed: the gateway did not answer
+	entries []ARPEntry // the rows read
 }
 
-// collectGatewaysARP walks the ARP table of every configured gateway at the
-// same time (gateways that do not answer cost one timeout together, not one
-// each), reads the sysName of each one that answered, and then merges the
-// tables into globalMACtoIP one gateway after the other in gateway_ip order,
-// with the policy of every ARP collector (collectMergeMACIP: last write
-// wins, so a later gateway's row for a MAC replaces an earlier one's). Each
-// walk is recorded: recordGatewayPoll for the router node, recordGatewayARP
-// for the cache expiry (any gateway with rows counts) and the one warning
-// per start of a gateway that does not answer. Returns the walks in
-// gateway_ip order.
-func collectGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
+// walkGatewaysARP walks the ARP table of every configured gateway at the
+// same time (gateways that do not answer cost one timeout together, not
+// one each) and reads the sysName of each one that answered. Each walk is
+// recorded: recordGatewayPoll for the router node, recordGatewayARP for
+// the gateway's expiry clock and the one warning per start of a gateway
+// that does not answer. Nothing is merged. Returns the walks in gateway_ip
+// order.
+func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 	type walk struct {
 		entries []ARPEntry
 		err     error
@@ -206,15 +204,26 @@ func collectGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 	results := make([]gatewayARP, len(gateways))
 	for i, ip := range gateways {
 		w := walks[i]
-		now := macIPClock()
-		res := gatewayARP{IP: ip, Rows: len(w.entries), Err: w.err}
-		if w.err == nil {
-			added, changed := collectMergeMACIP(w.entries, now)
-			res.Updated = added + changed
-		}
+		results[i] = gatewayARP{IP: ip, Rows: len(w.entries), Err: w.err, entries: w.entries}
 		recordGatewayPoll(ip, w.err == nil, w.sysName)
-		recordGatewayARP(ip, res.Rows, w.err, now) // warns once per gateway when it fails
-		results[i] = res
+		recordGatewayARP(ip, len(w.entries), w.err, macIPClock()) // warns once per gateway when it fails
+	}
+	return results
+}
+
+// collectGatewaysARP walks the ARP table of every gateway
+// (walkGatewaysARP) and merges the tables into globalMACtoIP in gateway_ip
+// order with the policy of every ARP collector (collectMergeARPTables: a
+// later gateway's row for a MAC replaces an earlier one's, each MAC merged
+// once). Returns the walks in gateway_ip order.
+func collectGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
+	results := walkGatewaysARP(snmpObj)
+	tables := make([][]ARPEntry, len(results))
+	for i, res := range results {
+		tables[i] = res.entries
+	}
+	for i, n := range collectMergeARPTables(tables, macIPClock()) {
+		results[i].Updated = n
 	}
 	return results
 }

@@ -163,7 +163,7 @@ func TestLoadGatewayIPs(t *testing.T) {
 // gateway's sysName is noted for its router node, a gateway that does not
 // answer is warned about once per start however many sweeps run, the SVI
 // IPs of every gateway that answered are walked, and cache entries expire
-// once any gateway answered.
+// only once every gateway answered (TestGatewayExpiryPerGateway).
 func TestGatewayARPEveryGateway(t *testing.T) {
 	resetState(t)
 	collectResetCache(t)
@@ -193,8 +193,10 @@ func TestGatewayARPEveryGateway(t *testing.T) {
 		}
 	}
 
-	// Two sweeps: no second warning; an entry not seen for 10 days expires
-	// (two gateways answered); the FortiGate's SVI 172.17.1.1 is walked
+	// Two sweeps: no second warning; the FortiGate's SVI 172.17.1.1 is
+	// walked; an entry not seen for 10 days stays while the third gateway
+	// has not answered (it may be one of its hosts, F1 of the review), and
+	// expires once all three answered
 	globalMACtoIPMutex.Lock()
 	globalMACtoIP["00:1b:21:40:00:99"] = "172.20.40.99"
 	collectMACIPSeen["00:1b:21:40:00:99"] = testClock.Now().Add(-10 * 24 * time.Hour)
@@ -208,8 +210,16 @@ func TestGatewayARPEveryGateway(t *testing.T) {
 		t.Errorf("want one warning, naming %s, got %d in:\n%s", silent, n, out)
 	}
 	want["00:1b:21:40:00:09"] = "172.17.1.9"
+	want["00:1b:21:40:00:99"] = "172.20.40.99"
 	if got := collectCacheMap(); !maps.Equal(got, want) {
-		t.Errorf("after the sweeps: cache %v, want %v (the 10-day-old entry expired, the SVI's entry added)", got, want)
+		t.Errorf("after the sweeps: cache %v, want %v (the SVI's entry added, the 10-day-old entry kept)", got, want)
+	}
+	fakeSNMP.set(silent, map[string][]string{oidARP: {arpRow(7, "172.20.40.250", "00:1b:21:40:00:fa")}})
+	captureStdout(t, collectARPFromAllSwitches)
+	delete(want, "00:1b:21:40:00:99")
+	want["00:1b:21:40:00:fa"] = "172.20.40.250"
+	if got := collectCacheMap(); !maps.Equal(got, want) {
+		t.Errorf("once every gateway answered: cache %v, want %v (the 10-day-old entry expired)", got, want)
 	}
 
 	// The order of gateway_ip decides which row of a MAC both list wins
@@ -289,6 +299,119 @@ func TestGatewayARPNoGatewayAnswers(t *testing.T) {
 	}
 	if got := answeredGateways(); len(got) != 0 {
 		t.Errorf("answered gateways %+v, want none", got)
+	}
+}
+
+// TestGatewayExpiryPerGateway (F1 of the gateway review) checks the cache
+// expiry with one silent and one answering gateway. The two route
+// different subnets, so the FortiGate's answers say nothing about a host
+// only the Debian knows: while the Debian has not answered in this run no
+// entry expires; once both answered, an entry neither shows expires; when
+// the Debian falls silent again, its host does not expire however long
+// the FortiGate keeps answering, and it does once the Debian answers
+// without it.
+func TestGatewayExpiryPerGateway(t *testing.T) {
+	resetState(t)
+	collectResetCache(t)
+	macIPCacheFile = filepath.Join(t.TempDir(), "mac_ip_cache.json")
+	const debianOnly, gone, fortiOnly = "00:1b:21:42:00:01", "00:1b:21:42:00:02", "00:1b:21:42:00:03"
+	setGatewayIPs([]string{debianGW, fortiGW})
+	fakeSNMP.set(fortiGW, fortiGateGateway(arpRow(41, "172.16.4.20", fortiOnly)))
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP[debianOnly] = "10.20.4.1" // a host of the Debian's 10.20.0.0/16
+	globalMACtoIP[gone] = "10.20.4.2"
+	collectMACIPSeen[debianOnly] = testClock.Now().Add(-8 * 24 * time.Hour)
+	collectMACIPSeen[gone] = testClock.Now().Add(-8 * 24 * time.Hour)
+	globalMACtoIPMutex.Unlock()
+	cached := func(mac string) bool { _, ok := collectCacheMap()[mac]; return ok }
+	sweep := func(after time.Duration) {
+		testClock.advance(after)
+		captureStdout(t, collectARPFromAllSwitches)
+	}
+
+	sweep(0) // the Debian does not answer
+	if !cached(debianOnly) || !cached(gone) {
+		t.Errorf("an entry expired while the Debian had not answered: %v", collectCacheMap())
+	}
+	fakeSNMP.set(debianGW, debianGateway(arpRow(65, "10.20.4.1", debianOnly)))
+	sweep(5 * time.Minute)
+	if !cached(debianOnly) || cached(gone) || !cached(fortiOnly) {
+		t.Errorf("both gateways answered: cache %v, want the 8-day-old entry neither shows expired", collectCacheMap())
+	}
+	fakeSNMP.set(debianGW, nil) // the Debian falls silent, the FortiGate answers for 8 days
+	sweep(4 * 24 * time.Hour)
+	sweep(4 * 24 * time.Hour)
+	if !cached(debianOnly) {
+		t.Errorf("the Debian's host expired while the Debian was silent: %v", collectCacheMap())
+	}
+	fakeSNMP.set(debianGW, debianGateway()) // it answers again, without the host
+	sweep(5 * time.Minute)
+	if cached(debianOnly) || !cached(fortiOnly) {
+		t.Errorf("the Debian answered without its host 8 days after it last showed it: cache %v, want it expired", collectCacheMap())
+	}
+}
+
+// TestGatewaySVIMergeOrder (F3 of the gateway review) checks the merge
+// order of the sweeps with the live Debian, which answers SNMP on its other
+// addresses too. The Debian and the FortiGate map one MAC to different
+// IPs: after the startup walk and after every sweep it maps to the
+// FortiGate's IP (the later gateway), because each gateway's SVIs merge
+// right after it and each MAC is merged once per sweep. A sweep logs only
+// real changes (it used to flip the MAC twice per sweep and log both), an
+// SVI that answers with its gateway's own table is left out for an hour,
+// and an SVI with rows of its own is walked in every sweep.
+func TestGatewaySVIMergeOrder(t *testing.T) {
+	resetState(t)
+	collectResetCache(t)
+	macIPCacheFile = filepath.Join(t.TempDir(), "mac_ip_cache.json")
+	const shared, own = "00:1b:21:43:00:01", "00:1b:21:43:00:02"
+	debian := gatewayAgent("debian216", "Linux debian216", []string{arpRow(2, fortiGW, fortiMAC), arpRow(2, "172.20.43.1", shared)},
+		gwAddr{debianGW, "255.255.0.0", 2}, gwAddr{"10.20.5.1", "255.255.0.0", 65}, gwAddr{"192.168.0.213", "255.255.255.0", 2})
+	fakeSNMP.set(debianGW, debian)
+	fakeSNMP.set("10.20.5.1", debian) // the same agent on another address
+	// An SVI with a table of its own
+	fakeSNMP.set("192.168.0.213", map[string][]string{oidARP: {arpRow(2, "172.20.43.1", shared), arpRow(2, "192.168.0.50", own)}})
+	fakeSNMP.set(fortiGW, fortiGateGateway(arpRow(33, "172.20.43.11", shared)))
+	fakeSNMP.set("172.17.1.1", map[string][]string{oidARP: {arpRow(52, "172.17.1.9", "00:1b:21:43:00:09")}})
+	setGatewayIPs([]string{debianGW, fortiGW})
+
+	captureStdout(t, collectGatewayARP)
+	if got := collectCacheMap()[shared]; got != "172.20.43.11" {
+		t.Fatalf("after the startup walk %s maps to %s, want the FortiGate's 172.20.43.11", shared, got)
+	}
+	var outs []string
+	var walks [][3]int
+	for _, after := range []time.Duration{0, 5 * time.Minute, 5 * time.Minute, 51 * time.Minute} {
+		testClock.advance(after)
+		fakeSNMP.walkCounts()
+		outs = append(outs, captureStdout(t, collectARPFromAllSwitches))
+		c := fakeSNMP.walkCounts()
+		walks = append(walks, [3]int{c["10.20.5.1 "+oidARP], c["192.168.0.213 "+oidARP], c["172.17.1.1 "+oidARP]})
+		if got := collectCacheMap()[shared]; got != "172.20.43.11" {
+			t.Errorf("after sweep %d %s maps to %s, want the FortiGate's 172.20.43.11", len(outs), shared, got)
+		}
+	}
+	if want := [][3]int{{1, 1, 1}, {0, 1, 1}, {0, 1, 1}, {1, 1, 1}}; !slices.Equal(walks, want) {
+		t.Errorf("ARP walks of the SVIs 10.20.5.1, 192.168.0.213 and 172.17.1.1 at 0, 5, 10 and 61 minutes: %v, want %v", walks, want)
+	}
+	for i, out := range outs {
+		var changes []string
+		for _, line := range strings.Split(out, "\n") {
+			if strings.Contains(line, " new/changed MAC-IP entries") {
+				changes = append(changes, line)
+			}
+		}
+		var want []string
+		if i == 0 {
+			want = []string{"🌐 [MacIPService] Gateway SVI 192.168.0.213: +1 new/changed MAC-IP entries",
+				"🌐 [MacIPService] Gateway SVI 172.17.1.1: +1 new/changed MAC-IP entries"}
+		}
+		if !slices.Equal(changes, want) {
+			t.Errorf("sweep %d logged changes %q, want %q", i+1, changes, want)
+		}
+	}
+	if n := strings.Count(strings.Join(outs, ""), "Gateway SVI 10.20.5.1 answers with the ARP table of gateway 172.20.1.254"); n != 1 {
+		t.Errorf("%d lines about the SVI that repeats the Debian's table, want 1", n)
 	}
 }
 
@@ -802,5 +925,60 @@ func TestGatewaySysNameAloneNotMerged(t *testing.T) {
 	g := buildGraphFromSnapshot(snapshotCollectedData())
 	if !g.Nodes["68:cc:ae:99:00:01"] {
 		t.Error("another FortiGate-600F (same sysName, other port, no IP) was merged into the gateway's router node")
+	}
+}
+
+// pathAnomalies counts the new path anomalies of a snapshot diff.
+func pathAnomalies(diff *SnapshotDiff) int {
+	n := 0
+	for _, a := range diff.NewAnomalies {
+		if a.AnomalyType == "path" {
+			n++
+		}
+	}
+	return n
+}
+
+// TestMonitorFirstCycleWaitsForGraph (F2 of the gateway review): in
+// monitor24h, restarted every day at 05:00, the first cycle ran before the
+// startup graph was published and analysed the empty graph main() puts up
+// first, which has no core; the second cycle, on the graph with the
+// gateways' router nodes, reported every path anomaly as new. A cycle now
+// takes no snapshot before a graph with nodes is published (and
+// runMonitor24h waits for the startup graph), so the first diff of a run
+// reports no path anomaly.
+func TestMonitorFirstCycleWaitsForGraph(t *testing.T) {
+	_, graph, _ := fixtureWithGateways(t)
+	collectedDataMutex.RLock()
+	devices := sortedDevices(collectedData)
+	collectedDataMutex.RUnlock()
+
+	SetGlobalGraph(NewDJGraph()) // what main() publishes at start
+	var first *NetworkSnapshot
+	out := captureStdout(t, func() { first = monitorCycle(nil) })
+	if first != nil || !strings.Contains(out, "No graph yet") {
+		t.Fatalf("a cycle on the empty graph took a snapshot (%v), output %q", first != nil, out)
+	}
+
+	SetGlobalGraph(graph) // the startup graph is published
+	var second *NetworkSnapshot
+	captureStdout(t, func() {
+		first = monitorCycle(nil)
+		second = monitorCycle(first)
+	})
+	if first == nil || second == nil {
+		t.Fatal("no snapshot once the startup graph was published")
+	}
+	if n := pathAnomalies(CompareSnapshots(first, second)); n != 0 {
+		t.Errorf("the first diff of the run reports %d new path anomalies, want none", n)
+	}
+
+	// The diff the old first cycle gave: the empty graph's snapshot against
+	// the real one
+	var report Report
+	captureStdout(t, func() { report = NewAnalyzer(captureData("monitor24h", devices, NewDJGraph())).Analyze() })
+	empty := CreateSnapshot(devices, NewDJGraph(), &report)
+	if n := pathAnomalies(CompareSnapshots(empty, second)); n == 0 {
+		t.Error("against a snapshot of the empty graph no path anomaly is new: the test does not reproduce the burst")
 	}
 }

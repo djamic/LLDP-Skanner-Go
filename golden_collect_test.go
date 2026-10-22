@@ -432,7 +432,7 @@ func cacheAging(t *testing.T, path string) []map[string]any {
 	globalMACtoIPMutex.Lock()
 	globalMACtoIP = map[string]string{}
 	collectMACIPSeen = map[string]time.Time{}
-	macIPGatewayOK = time.Time{} // no gateway answer yet in this run
+	macIPGatewayOK = make(map[string]time.Time) // no gateway answer yet in this run
 	globalMACtoIPMutex.Unlock()
 	esxiJobs.reset()
 	obj := &SNMPObject{Community: "public", Port: 161, Timeout: 10 * time.Second, Retries: 1}

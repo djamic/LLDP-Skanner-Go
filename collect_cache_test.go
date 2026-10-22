@@ -25,9 +25,9 @@ func collectResetCache(t *testing.T) {
 		globalMACtoIPMutex.Lock()
 		globalMACtoIP = make(map[string]string)
 		collectMACIPSeen = make(map[string]time.Time)
-		macIPGatewayOK = time.Time{}
+		macIPGatewayOK = make(map[string]time.Time)
 		macIPGatewayWarned = make(map[string]bool)
-		macIPSVISilent = make(map[string]time.Time)
+		macIPSVIWait = make(map[string]time.Time)
 		globalMACtoIPMutex.Unlock()
 		collectESXiMu.Lock()
 		collectESXiChecked = make(map[string]string)
@@ -131,9 +131,12 @@ func TestCollectGatewayARPPolicy(t *testing.T) {
 // only when a successful gateway ARP walk came more than the TTL after its
 // last sighting; while the gateway has not answered in this run nothing
 // expires, however old. Entries of unknown age count as seen at the prune.
+// (TestGatewayExpiryPerGateway has two gateways.)
 func TestCollectMACIPTTL(t *testing.T) {
 	resetState(t)
 	collectResetCache(t)
+	setGatewayIPs([]string{"10.7.2.254"})
+	t.Cleanup(func() { setGatewayIPs([]string{fixedGatewayIP}) })
 	now := time.Now()
 	globalMACtoIPMutex.Lock()
 	globalMACtoIP = map[string]string{
@@ -179,6 +182,44 @@ func TestCollectMACIPTTL(t *testing.T) {
 	recordGatewayARP("10.7.2.254", 5, nil, later)
 	if dropped := collectPruneMACIP(later); dropped != 2 {
 		t.Errorf("dropped %d once the gateway answered again, want 2", dropped)
+	}
+}
+
+// TestCollectMergeARPTables checks the merge of one round of ARP walks
+// (collectMergeARPTables): the cache ends as if the tables merged one after
+// the other (a later table's row for a MAC wins, within a table the later
+// row), but each MAC is merged once: a MAC that two tables map to
+// different IPs counts as a change only when the winner differs from the
+// cache, a table that repeats an earlier one's mapping gets no credit for
+// it, unusable rows are skipped, and each MAC is queued for the ESXi check
+// once, at the IP that won.
+func TestCollectMergeARPTables(t *testing.T) {
+	resetState(t)
+	collectResetCache(t)
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP["00:1b:21:44:00:01"] = "10.44.0.11" // as the last round left it: the second gateway's IP
+	globalMACtoIPMutex.Unlock()
+	row := func(ip, mac string) ARPEntry { return ARPEntry{IPAddress: ip, MACAddress: mac} }
+	gatewayA := []ARPEntry{row("10.44.0.1", "00:1b:21:44:00:01"), row("10.44.0.2", "00:1b:21:44:00:02"), row("10.44.0.3", "ff:ff:ff:ff:ff:ff")}
+	sviA := []ARPEntry{row("10.44.0.2", "00:1b:21:44:00:02"), row("10.44.0.5", "00:1b:21:44:00:05")}
+	gatewayB := []ARPEntry{row("10.44.0.11", "00:1b:21:44:00:01"), row("10.44.0.6", "00:1b:21:44:00:06"), row("10.44.0.7", "00:1b:21:44:00:06")}
+	esxiJobs.reset()
+	got := collectMergeARPTables([][]ARPEntry{gatewayA, sviA, gatewayB}, testClock.Now())
+	if want := []int{1, 1, 1}; !slices.Equal(got, want) {
+		t.Errorf("new or changed per table %v, want %v", got, want)
+	}
+	want := map[string]string{"00:1b:21:44:00:01": "10.44.0.11", "00:1b:21:44:00:02": "10.44.0.2", "00:1b:21:44:00:05": "10.44.0.5", "00:1b:21:44:00:06": "10.44.0.7"}
+	if cache := collectCacheMap(); !maps.Equal(cache, want) {
+		t.Errorf("cache %v, want %v", cache, want)
+	}
+	if jobs, want := esxiJobs.taken(), []string{"00:1b:21:44:00:01 10.44.0.11", "00:1b:21:44:00:02 10.44.0.2", "00:1b:21:44:00:05 10.44.0.5", "00:1b:21:44:00:06 10.44.0.7"}; !slices.Equal(jobs, want) {
+		t.Errorf("ESXi jobs %v, want one per MAC at the IP that won: %v", jobs, want)
+	}
+	globalMACtoIPMutex.RLock()
+	stamped := len(collectMACIPSeen)
+	globalMACtoIPMutex.RUnlock()
+	if stamped != 4 {
+		t.Errorf("%d MACs marked seen, want the 4 merged", stamped)
 	}
 }
 

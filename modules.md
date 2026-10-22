@@ -596,7 +596,7 @@ flowchart TD
 
 | Funksiya | Qatorlar | Tavsif |
 |----------|----------|--------|
-| `runMonitor24h()` | 1390-1523 | Har 60s: Analyze → Snapshot → Diff → InfluxDB write. Panic recovery har tsikl. Yakunida `monitor_summary.json` |
+| `runMonitor24h()` | 1390-1523 | Har 60s (`monitorCycle`): Analyze → Snapshot → Diff → InfluxDB write. Birinchi tsikl startup grafini kutadi; bo'sh graf bo'yicha snapshot olinmaydi. Panic recovery har tsikl. Yakunida `monitor_summary.json` |
 | `startPeriodicAnalysis()` | 1204-1279 | Har 60s: Analyze + Snapshot Diff + InfluxDB (summary, events). **Deadlock-free:** snapshot pattern |
 | `runBenchmark()` | 1285-1373 | W=1,10,25,50,100 ketma-ket scan → `benchmark_results.json` |
 | `handleRescanRequests()` | 2815-2924 | UI "Rescan" tugmasi → clear data → scan → rebuild → save |

@@ -181,9 +181,9 @@ func resetState(t *testing.T) {
 	globalMACtoIPMutex.Lock()
 	globalMACtoIP = make(map[string]string)
 	collectMACIPSeen = make(map[string]time.Time)
-	macIPGatewayOK = time.Time{}
+	macIPGatewayOK = make(map[string]time.Time)
 	macIPGatewayWarned = make(map[string]bool)
-	macIPSVISilent = make(map[string]time.Time)
+	macIPSVIWait = make(map[string]time.Time)
 	globalMACtoIPMutex.Unlock()
 	gatewayPollsMu.Lock()
 	gatewayPolls = make(map[string]gatewayPoll)

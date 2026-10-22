@@ -207,8 +207,9 @@ func main() {
 		startRescueScanner(snmpObj) // Phase 15: Dead Node Recovery
 		// No startPeriodicAnalysis here: runMonitor24h runs the same analysis
 		// and snapshot diff every minute, and two loops wrote every event and
-		// network summary twice (F52).
-		runMonitor24h()
+		// network summary twice (F52). Its first cycle waits for the startup
+		// graph.
+		runMonitor24h(startupGraphDone)
 		os.Exit(0)
 	}
 	// Note: if monitor24h but no saved data, normal scan runs first,
@@ -407,7 +408,7 @@ func main() {
 					// Save data so subsequent cycles have collectedData
 					settings := GetCurrentSettings()
 					SaveData(collectedData, settings)
-					runMonitor24h()
+					runMonitor24h(startupGraphDone) // closed: no saved hosts, no startup graph
 					os.Exit(0)
 				}
 				
@@ -1747,8 +1748,80 @@ func parseDurationFlag(s string) time.Duration {
 	return d
 }
 
-// runMonitor24h runs continuous monitoring for specified duration
-func runMonitor24h() {
+// waitStartupGraph returns once ready is closed, and says so when it has
+// to wait.
+func waitStartupGraph(ready <-chan struct{}) {
+	select {
+	case <-ready:
+		return
+	default:
+	}
+	fmt.Println("📡 Monitor24h: waiting for the startup graph before the first cycle...")
+	<-ready
+}
+
+// monitorCycle is one cycle of runMonitor24h: it analyses the devices and
+// the published graph, takes a snapshot, records its diff against prev
+// (recordSnapshotDiff: event log and InfluxDB) and returns it. Without
+// devices, or before a graph with nodes is published (main() publishes
+// an empty one until the startup graph is built), it analyses nothing and
+// returns prev: a snapshot of the empty graph has no core and no path
+// suggestion, and the diff against it reported every path anomaly of the
+// real graph as new.
+func monitorCycle(prev *NetworkSnapshot) *NetworkSnapshot {
+	// 1. Collect current data — snapshot under SHORT RLock to avoid nested lock deadlock
+	collectedDataMutex.RLock()
+	if len(collectedData) == 0 {
+		collectedDataMutex.RUnlock()
+		fmt.Println("   No data yet, waiting...")
+		return prev
+	}
+
+	var devicesValueSlice []DeviceData
+	var devicesPtrSlice []*DeviceData
+	for _, ptr := range collectedData {
+		devicesValueSlice = append(devicesValueSlice, *ptr)
+		devicesPtrSlice = append(devicesPtrSlice, ptr)
+	}
+	collectedDataMutex.RUnlock()
+
+	// Get global graph AFTER releasing collectedDataMutex (avoids lock ordering deadlock)
+	currentGlobalGraph := GetGlobalGraph()
+	if currentGlobalGraph == nil || len(currentGlobalGraph.Nodes) == 0 {
+		fmt.Println("   No graph yet, waiting...")
+		return prev
+	}
+
+	// 2. Analyze
+	fullData := FullCaptureData{
+		Session:     CaptureSession{ID: "monitor24h", Name: "24h Monitoring", StartTime: time.Now()},
+		DevicesData: devicesValueSlice,
+		Topology:    currentGlobalGraph.GetGraphData(),
+	}
+
+	analyzer := NewAnalyzer(fullData)
+	report := analyzer.Analyze()
+
+	// 3. Snapshot + Diff
+	currentSnapshot := CreateSnapshot(devicesPtrSlice, currentGlobalGraph, &report)
+	fmt.Printf("   📸 Snapshot: %d MACs, %d hosts, health=%d\n",
+		len(currentSnapshot.ActiveMACs), len(currentSnapshot.ActiveHosts), currentSnapshot.HealthScore)
+
+	if prev != nil {
+		// Log the diff and write it to InfluxDB
+		recordSnapshotDiff(prev, currentSnapshot, &report)
+	}
+	return currentSnapshot
+}
+
+// runMonitor24h runs continuous monitoring for the --duration flag: one
+// analysis and snapshot diff per minute (monitorCycle). The first cycle
+// waits until ready is closed, that is until the startup graph is
+// published (startStartupGraph builds it in the background): a cycle on
+// the empty graph main() publishes until then found no core and no path
+// suggestion, so the next cycle reported every path anomaly as new after
+// each daily restart (F2 of the gateway review).
+func runMonitor24h(ready <-chan struct{}) {
 	duration := parseDurationFlag(*durationFlag)
 	startTime := time.Now()
 	endTime := startTime.Add(duration)
@@ -1758,6 +1831,8 @@ func runMonitor24h() {
 
 	// Ensure output directory exists
 	os.MkdirAll(*outputFlag, 0755)
+
+	waitStartupGraph(ready)
 
 	var prevSnapshot *NetworkSnapshot
 	cycleCount := 0
@@ -1775,52 +1850,8 @@ func runMonitor24h() {
 					fmt.Printf("⚠️ [Monitor24h] Cycle #%d panic recovered: %v\n", cycleCount, r)
 				}
 			}()
-
-		// 1. Collect current data — snapshot under SHORT RLock to avoid nested lock deadlock
-		collectedDataMutex.RLock()
-		if len(collectedData) == 0 {
-			collectedDataMutex.RUnlock()
-			fmt.Println("   No data yet, waiting...")
-			return
-		}
-
-		var devicesValueSlice []DeviceData
-		var devicesPtrSlice []*DeviceData
-		for _, ptr := range collectedData {
-			devicesValueSlice = append(devicesValueSlice, *ptr)
-			devicesPtrSlice = append(devicesPtrSlice, ptr)
-		}
-		collectedDataMutex.RUnlock()
-
-		// Get global graph AFTER releasing collectedDataMutex (avoids lock ordering deadlock)
-		currentGlobalGraph := GetGlobalGraph()
-		if currentGlobalGraph == nil {
-			fmt.Println("   No graph yet, waiting...")
-			return
-		}
-
-		// 2. Analyze
-		fullData := FullCaptureData{
-			Session:     CaptureSession{ID: "monitor24h", Name: "24h Monitoring", StartTime: time.Now()},
-			DevicesData: devicesValueSlice,
-			Topology:    currentGlobalGraph.GetGraphData(),
-		}
-
-		analyzer := NewAnalyzer(fullData)
-		report := analyzer.Analyze()
-
-		// 3. Snapshot + Diff
-		currentSnapshot := CreateSnapshot(devicesPtrSlice, currentGlobalGraph, &report)
-		fmt.Printf("   📸 Snapshot: %d MACs, %d hosts, health=%d\n",
-			len(currentSnapshot.ActiveMACs), len(currentSnapshot.ActiveHosts), currentSnapshot.HealthScore)
-
-		if prevSnapshot != nil {
-			// Log the diff and write it to InfluxDB
-			recordSnapshotDiff(prevSnapshot, currentSnapshot, &report)
-		}
-		prevSnapshot = currentSnapshot
-
-		}() // End of panic recovery wrapper
+			prevSnapshot = monitorCycle(prevSnapshot)
+		}()
 
 		// 4. Wait 60s (minus scan time)
 		elapsed := time.Since(cycleStart)
