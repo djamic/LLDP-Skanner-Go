@@ -766,7 +766,7 @@ graph TD
 | 324 | 58:11:22:3b:73:0e | [LLDP-EP] ASUSTek COMPUTER INC. | 172.16.35.196 | F-7(1) (Eth1/0/13 [V1632] 100M) |
 | 325 | 58:11:22:d5:6a:c6 | [LLDP-EP] ASUSTek COMPUTER INC. | 172.16.6.18 | D - 1 (GE1/0/16 [V164] 1G) |
 | 326 | 58:8f:cf:4f:18:89 | [ENDPOINT] Hangzhou Ezviz Software Co.,Ltd. | 172.16.32.33 | F-5 (Eth1/0/19 [V1632]) |
-| 327 | 58:94:80:00:be:61 | [LLDP-EP] |  | HPE (GE1/0/36 [V1992] 1G) |
+| 327 | 58:94:80:00:be:61 | [LLDP-EP] PiXiETECH |  | HPE (GE1/0/36 [V1992] 1G) |
 | 328 | 5c:28:86:1c:c3:b0 | [ENDPOINT] Inventec(Chongqing) Corporation | 172.16.34.141 | F-3(1) (Eth1/0/9 [V1632]) |
 | 329 | 5c:60:ba:5e:f9:06 | [LLDP-EP] HP Inc. | 172.16.0.10 | HPE (GE1/0/14 [V160] 1G) |
 | 330 | 5c:60:ba:5e:f9:7b | [LLDP-EP] HP Inc. | 172.16.18.250 | C 424/a (GE1/0/7 [V1616] 100M) |

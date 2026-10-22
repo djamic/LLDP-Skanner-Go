@@ -44,7 +44,7 @@ var ouiTestSameCompany = map[string][]string{
 	"HP Aruba": {"hewlett", "aruba"}, "Aruba": {"hewlett", "aruba"}, "Ubiquiti": {"ubiquiti"},
 	"Cisco": {"cisco"}, "Dell": {"dell"}, "MikroTik": {"routerboard", "mikrotik"},
 	"Huawei": {"huawei"}, "ZTE": {"zte"}, "TP-Link": {"tp-link"}, "D-Link": {"d-link"},
-	"Eltex": {"eltex"}, "BizLink": {"bizlink"}, "Fortinet": {"fortinet"},
+	"Eltex": {"eltex"}, "BizLink": {"bizlink"}, "Fortinet": {"fortinet"}, "PiXiETECH": {"pixie"},
 	"VMware": {"vmware"}, "Hyper-V": {"microsoft"}, "VirtualBox": {"pcs systemtechnik", "oracle"},
 	"Xen": {"xensource"}, "Proxmox": {"proxmox"}, "QEMU/KVM": nil,
 	"Dahua": {"dahua"}, "Hikvision": {"hikvision"}, "Lengda": {"lengda"},
@@ -60,8 +60,10 @@ var ouiTestSameCompany = map[string][]string{
 }
 
 // ouiTestUnlisted are curated OUIs that oui.txt does not list at all. IEEE
-// does not contradict them, so they keep their curated name.
-var ouiTestUnlisted = map[string]bool{"00:cf:e0": true, "88:44:36": true, "5c:69:60": true}
+// does not contradict them, so they keep their curated name. 58:94:80 is
+// PiXiETECH by the LLDP sysDescr of 58:94:80:00:be:61, a switch of this
+// network.
+var ouiTestUnlisted = map[string]bool{"00:cf:e0": true, "88:44:36": true, "5c:69:60": true, "58:94:80": true}
 
 // ouiTestNamelessIEEE are curated OUIs whose IEEE record has an empty name.
 var ouiTestNamelessIEEE = map[string]bool{"52:54:00": true}
@@ -175,7 +177,9 @@ func TestOUICategorizeVendor(t *testing.T) {
 // networkMakerWords or categorizeVendor; PCs, phones, cameras, virtual
 // NICs, random and special addresses and look-alike company names do not.
 // Each IEEE case names the organization oui.txt registers, so the test
-// fails when the database moves an OUI elsewhere.
+// fails when the database moves an OUI elsewhere. The MACs of this
+// network's PiXiETECH, UTEPO and 3Com switches count too (F1 of the final
+// review: they did not; TestNetworkMakersOfFixtureSwitches).
 func TestNetworkMakerMAC(t *testing.T) {
 	ieee := ouiTestIEEENames(t)
 	for _, c := range []struct {
@@ -190,6 +194,8 @@ func TestNetworkMakerMAC(t *testing.T) {
 		{"00:0c:42:11:22:33", "", true},  // MikroTik
 		{"e0:d9:e3:11:22:33", "", true},  // Eltex
 		{"84:39:8f:11:22:33", "", true},  // Fortinet
+		{"58:94:80:00:be:61", "", true},  // PiXiETECH (oui.txt does not list it): the PXT-S2790G-24FX on port 36 of 172.20.230.2
+		{"58:94:80:01:01:27", "", true},  // PiXiETECH: the switch 172.20.230.44
 		{"a4:bb:6d:11:22:33", "", true},  // Dell, curated "network"
 		{"00:0b:86:11:22:33", "", true},  // Aruba (curated access point)
 		{"18:e8:29:11:22:33", "", true},  // Ubiquiti (curated access point)
@@ -222,6 +228,8 @@ func TestNetworkMakerMAC(t *testing.T) {
 		{"04:0e:3c:11:22:33", "HP Inc.", true},
 		{"a8:f9:4b:11:22:33", "Eltex Enterprise Ltd.", true},
 		{"00:18:0a:11:22:33", "Cisco Meraki", true},
+		{"c4:08:80:02:7b:ff", "Shenzhen UTEPO Tech Co., Ltd.", true}, // the switch 172.20.230.17
+		{"00:16:e0:5a:5c:e0", "3Com Ltd", true},                      // the STP root bridge of six polled switches
 		{"0c:05:35:11:22:33", "Juniper Systems", false},
 		{"00:17:3c:11:22:33", "Extreme Engineering Solutions", false},
 		{"60:34:57:11:22:33", "HP Tuners LLC", false},
@@ -246,6 +254,68 @@ func TestNetworkMakerMAC(t *testing.T) {
 		if got := isNetworkMakerMAC(c.mac); got != c.want {
 			t.Errorf("isNetworkMakerMAC(%q) (vendor %q) = %v, want %v", c.mac, lookupVendor(c.mac), got, c.want)
 		}
+	}
+}
+
+// TestNetworkMakersOfFixtureSwitches (F1 of the final review): every switch
+// of this network that the fixture shows has a network-equipment maker's
+// MAC (isNetworkMakerMAC), so subnet discovery would probe it at an IP that
+// nothing else polls: each stored switch by one of the MACs the cache maps
+// to its IP (74 of the 75; 172.20.230.76 has no cache entry) and by its
+// chassis MAC, each switch the polled ones see over LLDP (sysDescr of
+// Comware, of a "Switch" software, of the PiXiETECH or the Aruba 6300) by
+// its chassis MAC, and each STP root bridge by its MAC. isNetworkMakerMAC
+// used to reject the PiXiETECH switches (58:94:80, an OUI oui.txt does not
+// list: 172.20.230.40, .44 and the PXT-S2790G-24FX on port 36 of
+// 172.20.230.2), the UTEPO switch 172.20.230.17 and the 3Com STP root
+// bridge 00:16:e0:5a:5c:e0.
+func TestNetworkMakersOfFixtureSwitches(t *testing.T) {
+	devices := fixtureDevices(t)
+	byIP := map[string][]string{}
+	for mac, ip := range fixtureCache(t) {
+		byIP[ip] = append(byIP[ip], mac)
+	}
+	switchDescr := regexp.MustCompile(`(?i)comware|switch|pixietech|^aruba jl`)
+	neighbors, roots := map[string]bool{}, map[string]bool{}
+	withARP, chassis := 0, 0
+	for _, ip := range sortedDeviceIPs(devices) {
+		d := devices[ip]
+		if macs := byIP[ip]; len(macs) > 0 {
+			withARP++
+			maker := false
+			for _, mac := range macs {
+				maker = maker || isNetworkMakerMAC(mac)
+			}
+			if !maker {
+				t.Errorf("stored switch %s: no MAC the cache maps to it is a maker's: %v (vendor %q)", ip, macs, lookupVendor(macs[0]))
+			}
+		}
+		if mac := graphChassisKey(d.ChassisID); mac != "" {
+			chassis++
+			if !isNetworkMakerMAC(mac) {
+				t.Errorf("stored switch %s: chassis %s (vendor %q) is no maker's MAC", ip, mac, lookupVendor(mac))
+			}
+		}
+		for _, n := range d.Neighbors {
+			mac := usableMAC(n.RemChassisId)
+			if mac == "" || !switchDescr.MatchString(n.RemSysDesc) || neighbors[mac] {
+				continue
+			}
+			neighbors[mac] = true
+			if !isNetworkMakerMAC(mac) {
+				t.Errorf("LLDP neighbor of %s %q: chassis %s (vendor %q) is no maker's MAC", ip, n.RemSysDesc, mac, lookupVendor(mac))
+			}
+		}
+		if mac := usableMAC(d.STPInfo.RootBridgeID); mac != "" && !roots[mac] {
+			roots[mac] = true
+			if !isNetworkMakerMAC(mac) {
+				t.Errorf("STP root bridge %s of %s (vendor %q) is no maker's MAC", mac, ip, lookupVendor(mac))
+			}
+		}
+	}
+	got := [5]int{len(devices), withARP, chassis, len(neighbors), len(roots)}
+	if want := [5]int{75, 74, 71, 50, 41}; got != want {
+		t.Errorf("checked %v (stored, with a cache MAC, with a chassis MAC, LLDP switch neighbors, STP roots), want %v", got, want)
 	}
 }
 
@@ -318,9 +388,9 @@ func TestOUIRegistry(t *testing.T) {
 			t.Errorf("%s: hypervisor type or VM OS without a virtual NIC: %+v", prefix, role)
 		}
 	}
-	want := map[string]int{"Vendor": 225, "VirtNIC": 9, "HypType": 9, "VMOS": 9, "ServerNIC": 34, "BMC": 33}
-	if fmt.Sprint(counts) != fmt.Sprint(want) || len(ouiRegistry) != 272 {
-		t.Errorf("%d OUIs with roles %v, want 272 with %v", len(ouiRegistry), counts, want)
+	want := map[string]int{"Vendor": 226, "VirtNIC": 9, "HypType": 9, "VMOS": 9, "ServerNIC": 34, "BMC": 33}
+	if fmt.Sprint(counts) != fmt.Sprint(want) || len(ouiRegistry) != 273 {
+		t.Errorf("%d OUIs with roles %v, want 273 with %v", len(ouiRegistry), counts, want)
 	}
 }
 

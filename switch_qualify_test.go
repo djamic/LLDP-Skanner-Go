@@ -611,6 +611,52 @@ func TestSubnetDiscoveryBounded(t *testing.T) {
 	}
 }
 
+// TestSubnetDiscoveryThisNetworksMakers (F1 of the final review): on the
+// fixture, with the gateway's 172.20.0.0/16 and the swich_ips ranges,
+// switches of this network's makers PiXiETECH, UTEPO and 3Com at
+// ARP-known IPs outside the ranges are candidates, like an HPE one: the
+// PiXiETECH PXT-S2790G-24FX on port 36 of 172.20.230.2 (chassis
+// 58:94:80:00:be:61, an OUI oui.txt does not list; it advertises no LLDP
+// capabilities, so LLDP discovery does not add it), a UTEPO switch like
+// 172.20.230.17 and the 3Com STP root bridge. Only the HPE one was. The
+// stored PiXiETECH and UTEPO switches 172.20.230.40, .44 and .17 now count
+// as makers' IPs that are known (stored and listed), not as candidates.
+func TestSubnetDiscoveryThisNetworksMakers(t *testing.T) {
+	useFixture(t)
+	unpolled := map[string]string{
+		"172.20.5.61": "58:94:80:00:be:61", // the PiXiETECH nobody polls
+		"172.20.5.62": "4c:ae:a3:99:00:62", // an HPE switch
+		"172.20.5.63": "c4:08:80:99:00:63", // a UTEPO switch
+		"172.20.5.64": "00:16:e0:5a:5c:e0", // the 3Com STP root bridge
+	}
+	globalMACtoIPMutex.Lock()
+	for ip, mac := range unpolled {
+		globalMACtoIP[mac] = ip
+	}
+	globalMACtoIPMutex.Unlock()
+	rows := []SubnetInfo{{IP: fixedGatewayIP, Prefix: 16, Net: "172.20.0.0"}}
+	ranges := []string{"172.20.0.0/24", "172.20.254.0/24", "172.20.253.0/24", "172.20.230.0/24", "172.20.240.0/24"}
+	plan := planSubnetDiscovery(rows, ranges)
+	candidates := map[string]string{}
+	for _, c := range plan.Candidates {
+		candidates[c.IP] = c.MAC
+	}
+	for _, ip := range slices.Sorted(maps.Keys(unpolled)) {
+		if candidates[ip] != unpolled[ip] {
+			t.Errorf("%s (%s, vendor %q) is no candidate", ip, unpolled[ip], lookupVendor(unpolled[ip]))
+		}
+	}
+	for _, ip := range []string{"172.20.230.17", "172.20.230.40", "172.20.230.44"} {
+		if mac, ok := candidates[ip]; ok {
+			t.Errorf("the stored switch %s (%s) is a candidate", ip, mac)
+		}
+	}
+	// Before: 132 makers' IPs, 91 of them known, 41 candidates
+	if got, want := [4]int{plan.ARPIPs, plan.Makers, plan.Known, len(plan.Candidates)}, [4]int{710, 138, 94, 44}; got != want {
+		t.Errorf("ARP-known IPs, makers' IPs, known ones, candidates %v, want %v", got, want)
+	}
+}
+
 // TestSNMPWalkTiming checks that the timing of an SNMP object reaches
 // snmpbulkwalk (it used to run every walk with -t 5 -r 1, whatever
 // SNMPObject.Timeout said): -t in whole seconds, at least 1, and -r; an

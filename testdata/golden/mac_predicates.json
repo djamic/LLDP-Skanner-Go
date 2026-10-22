@@ -21,7 +21,7 @@
     "srv01-idrac": "true:Dell iDRAC"
   },
   "network_makers": {
-    "values_by_vendor": {"Aruba": 6, "Cisco": 10, "Cisco Systems, Inc": 22, "Cisco-Linksys, LLC": 1, "D-Link": 7, "D-Link International": 1, "Dell": 32, "Dell EMC": 2, "Dell Inc.": 134, "Eltex": 10, "Eltex Enterprise Ltd.": 9, "Fortinet": 4, "Fortinet, Inc.": 17, "H3C": 2, "HP": 25, "HP Aruba": 27, "HP Inc.": 311, "HPE": 188, "HUAWEI TECHNOLOGIES CO.,LTD": 107, "Hewlett Packard": 115, "Hewlett Packard Enterprise": 28, "Huawei": 16, "Huawei Device Co., Ltd.": 11, "Huawei Symantec Technologies Co.,Ltd.": 1, "MikroTik": 11, "NETGEAR": 1, "New H3C Technologies Co., Ltd": 3, "Routerboard.com": 3, "SNR": 102, "TP-LINK TECHNOLOGIES CO.,LTD.": 42, "TP-Link": 34, "TP-Link Systems Inc": 75, "TP-Link Systems Inc.": 23, "Ubiquiti": 178, "Ubiquiti Inc": 38, "Zyxel Communications Corporation": 11},
+    "values_by_vendor": {"3Com Ltd": 2, "Aruba": 6, "Cisco": 10, "Cisco Systems, Inc": 22, "Cisco-Linksys, LLC": 1, "D-Link": 7, "D-Link International": 1, "Dell": 32, "Dell EMC": 2, "Dell Inc.": 134, "Eltex": 10, "Eltex Enterprise Ltd.": 9, "Fortinet": 4, "Fortinet, Inc.": 17, "H3C": 2, "HP": 25, "HP Aruba": 27, "HP Inc.": 311, "HPE": 188, "HUAWEI TECHNOLOGIES CO.,LTD": 107, "Hewlett Packard": 115, "Hewlett Packard Enterprise": 28, "Huawei": 16, "Huawei Device Co., Ltd.": 11, "Huawei Symantec Technologies Co.,Ltd.": 1, "MikroTik": 11, "NETGEAR": 1, "New H3C Technologies Co., Ltd": 3, "PiXiETECH": 5, "Routerboard.com": 3, "SNR": 102, "Shenzhen UTEPO Tech Co., Ltd.": 1, "TP-LINK TECHNOLOGIES CO.,LTD.": 42, "TP-Link": 34, "TP-Link Systems Inc": 75, "TP-Link Systems Inc.": 23, "Ubiquiti": 178, "Ubiquiti Inc": 38, "Zyxel Communications Corporation": 11},
     "vendor_names": ["Aruba", "Aruba, a Hewlett Packard Enterprise Company", "Cisco", "Cisco Systems, Inc", "D-Link", "D-Link International", "Dell", "Dell Inc.", "Eltex Enterprise Ltd.", "Fortinet", "Fortinet, Inc.", "HP", "HP Aruba", "HP Inc.", "HPE", "HUAWEI", "HUAWEI TECHNOLOGIES", "HUAWEI TECHNOLOGIES CO.,LTD", "Hangzhou H3C Technologies Co., Limited", "Hewlett Packard", "Hewlett Packard Enterprise", "Huawei", "MikroTik", "NAGTECH LLC", "New H3C Technologies Co., Ltd", "Routerboard.com", "SNR", "TP-LINK TECHNOLOGIES CO.,LTD.", "TP-Link", "TP-Link Systems Inc", "Ubiquiti", "Ubiquiti Inc"]
   },
   "omitted_defaults": {
@@ -15873,8 +15873,8 @@
     "56:ff:17:31:d3:ba": {"random": true, "src": "cache"},
     "58 11 22 3B 73 0E": {"lookupVendor": "ASUSTek COMPUTER INC.", "normalizeID": {"3": "58:11:22:3b:73:0e"}, "normalizeMAC": "58:11:22:3b:73:0e", "src": "lldp_port/3"},
     "58 11 22 D5 6A C6": {"lookupVendor": "ASUSTek COMPUTER INC.", "normalizeID": {"3": "58:11:22:d5:6a:c6", "4": "58:11:22:d5:6a:c6"}, "normalizeMAC": "58:11:22:d5:6a:c6", "src": "lldp_chassis/4,lldp_port/3"},
-    "58 94 80 00 BE 61": {"normalizeID": {"4": "58:94:80:00:be:61"}, "normalizeMAC": "58:94:80:00:be:61", "src": "lldp_chassis/4"},
-    "5894.8000.f7a3": {"normalizeID": {"0": "5894.8000.f7a3", "2": "5894.8000.f7a3", "3": "5894.8000.f7a3", "4": "58:94:80:00:f7:a3", "5": "", "7": "58:94:80:00:f7:a3"}, "src": "edge"},
+    "58 94 80 00 BE 61": {"category": "network", "lookupVendor": "PiXiETECH", "normalizeID": {"4": "58:94:80:00:be:61"}, "normalizeMAC": "58:94:80:00:be:61", "src": "lldp_chassis/4"},
+    "5894.8000.f7a3": {"category": "network", "lookupVendor": "PiXiETECH", "normalizeID": {"0": "5894.8000.f7a3", "2": "5894.8000.f7a3", "3": "5894.8000.f7a3", "4": "58:94:80:00:f7:a3", "5": "", "7": "58:94:80:00:f7:a3"}, "src": "edge"},
     "58:00:e3:58:9a:bf": {"lookupVendor": "Liteon Technology Corporation", "src": "cache"},
     "58:00:e3:5e:63:dd": {"lookupVendor": "Liteon Technology Corporation", "src": "cache"},
     "58:02:05:09:1f:ee": {"lookupVendor": "AzureWave Technology Inc.", "src": "cache"},
@@ -15985,9 +15985,9 @@
     "58:91:cf:2f:e2:e8": {"lookupVendor": "Intel Corporate", "src": "cache"},
     "58:91:cf:40:b5:be": {"lookupVendor": "Intel Corporate", "src": "cache"},
     "58:91:cf:5c:df:05": {"lookupVendor": "Intel Corporate", "src": "cache,fdb"},
-    "58:94:80:00:be:61": {"src": "fdb"},
-    "58:94:80:00:f7:a3": {"src": "arp,cache,fdb"},
-    "58:94:80:01:01:27": {"src": "arp,cache,fdb"},
+    "58:94:80:00:be:61": {"category": "network", "lookupVendor": "PiXiETECH", "src": "fdb"},
+    "58:94:80:00:f7:a3": {"category": "network", "lookupVendor": "PiXiETECH", "src": "arp,cache,fdb"},
+    "58:94:80:01:01:27": {"category": "network", "lookupVendor": "PiXiETECH", "src": "arp,cache,fdb"},
     "58:96:1d:a6:27:87": {"lookupVendor": "Intel Corporate", "src": "cache"},
     "58:96:71:9a:bf:96": {"lookupVendor": "WNC Corporation", "src": "cache"},
     "58:96:71:a2:d5:1e": {"lookupVendor": "WNC Corporation", "src": "cache"},

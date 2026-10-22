@@ -275,11 +275,16 @@ type ouiRole struct {
 
 // ouiRegistry is the one OUI table: every role of an OUI on one line.
 // Curated vendor names are the company oui.txt registers the OUI to
-// (TestOUICuratedVendorsAgreeWithIEEE). Category "vm" goes with VirtNIC.
+// (TestOUICuratedVendorsAgreeWithIEEE); the few OUIs it does not list keep
+// their curated name. Category "vm" goes with VirtNIC.
 var ouiRegistry = map[string]ouiRole{
-	// Switches of this network: SNR (NAGTECH) and H3C
+	// Switches of this network: SNR (NAGTECH), H3C and PiXiETECH. oui.txt
+	// does not list 58:94:80: it is the LLDP chassis MAC of the
+	// "PiXiETECH(tm) PXT-S2790G-24FX" on port 36 of 172.20.230.2 and the
+	// ARP MAC of the switches 172.20.230.40 and .44.
 	"f8:f0:82": {Vendor: "SNR", Category: "network"},
 	"00:0f:e2": {Vendor: "H3C", Category: "network"},
+	"58:94:80": {Vendor: "PiXiETECH", Category: "network"},
 
 	// HP / HPE / Aruba: switches, ProLiant NICs, iLO
 	"00:26:55": {ServerNIC: "HPE"},
@@ -856,16 +861,20 @@ func ouiWordByte(b byte) bool {
 // curated or IEEE vendor name (lowercase, ouiHasWord): the IEEE names of
 // this network's switch makers and of the other common ones, the routers,
 // firewalls and access points of the same makers included. They come on
-// top of the category "network" (the curated SNR, H3C, HPE, HP, Cisco,
-// Dell, MikroTik, TP-Link, D-Link, Eltex and Fortinet OUIs, and the IEEE
-// names categorizeVendor files there), which covers some of them already.
-// "juniper networks" and "extreme networks" leave out Juniper Systems and
-// Extreme Engineering Solutions; "SNR Inc." (00:1d:c6) is not the SNR of
-// the switches here, whose OUIs are NAGTECH's.
+// top of the category "network" (the curated SNR, H3C, PiXiETECH, HPE, HP,
+// Cisco, Dell, MikroTik, TP-Link, D-Link, Eltex and Fortinet OUIs, and the
+// IEEE names categorizeVendor files there), which covers some of them
+// already. Of this network's makers, UTEPO (c4:08:80, the ARP MAC of the
+// switch 172.20.230.17) and 3Com (00:16:e0:5a:5c:e0, the STP root bridge
+// of six polled switches) have only their IEEE names. "juniper networks"
+// and "extreme networks" leave out Juniper Systems and Extreme Engineering
+// Solutions; "SNR Inc." (00:1d:c6) is not the SNR of the switches here,
+// whose OUIs are NAGTECH's.
 var networkMakerWords = []string{
 	"hewlett packard", "hp inc", "procurve", "aruba", // HPE, HP, Aruba
-	"cisco", "huawei", "h3c",
+	"cisco", "huawei", "h3c", "3com",
 	"nagtech", // SNR
+	"utepo",   // Shenzhen UTEPO Tech
 	"mikrotik", "routerboard",
 	"eltex", "d-link", "tp-link",
 	"juniper networks", "extreme networks", "zyxel", "netgear",
