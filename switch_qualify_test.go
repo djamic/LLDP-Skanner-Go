@@ -335,12 +335,31 @@ func TestLLDPDiscoveryQualifies(t *testing.T) {
 	}
 }
 
+// setARPCache sets globalMACtoIP (MAC → IP) as the ARP sources left it.
+func setARPCache(cache map[string]string) {
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP = maps.Clone(cache)
+	globalMACtoIPMutex.Unlock()
+}
+
+// subnetTestLimits are the production limits with workers at a time and no
+// time budget.
+func subnetTestLimits(workers int) subnetDiscoveryLimits {
+	limits := subnetDiscoveryDefaults
+	limits.Workers, limits.Budget = workers, 0
+	return limits
+}
+
 // TestSubnetDiscoveryAddsOnlySwitches checks subnet discovery (A): of the
-// devices in the gateway's subnets that answer sysDescr (all IPs of a small
-// subnet, the ARP-known ones of a /16), only switches are appended to
-// swich_ips; the access points, the FortiGate and the ESXi host are named
-// in the summary, a host without SNMP is not probed further, a collected
-// switch is not probed at all, and none of them becomes an ARP source.
+// ARP-known IPs in the gateway's subnets only those whose MAC is a
+// network-equipment maker's are probed (no subnet is swept: a switch agent
+// behind a PC's MAC, behind a random MAC or without an ARP entry is never
+// asked), and of those only switches are appended to swich_ips. The access
+// points, the FortiGate, the ESXi host and the candidate that does not
+// answer are named in the run's one log line, the stored switch is not
+// probed, collectedData is not changed and no ARP source is made. The
+// probes run with the short probe timing, everything else with the poll
+// timing.
 func TestSubnetDiscoveryAddsOnlySwitches(t *testing.T) {
 	resetState(t)
 	fakeSNMP.set(fixedGatewayIP, map[string][]string{".1.3.6.1.2.1.4.20.1.3": {
@@ -353,37 +372,65 @@ func TestSubnetDiscoveryAddsOnlySwitches(t *testing.T) {
 	fakeSNMP.set("10.9.25.4", esxiAgent())
 	fakeSNMP.set("10.9.25.5", bridgeSwitchAgent(24))
 	fakeSNMP.set("10.9.25.6", lldpSwitchAgent(6))
-	fakeSNMP.set("10.9.25.7", lldpSwitchAgent(7)) // collected already
+	fakeSNMP.set("10.9.25.7", lldpSwitchAgent(7))    // collected already
+	fakeSNMP.set("10.9.25.8", bridgeSwitchAgent(2))  // a Linux bridge behind a PC's NIC
+	fakeSNMP.set("10.9.25.9", lldpSwitchAgent(9))    // no ARP entry
+	fakeSNMP.set("10.9.25.10", bridgeSwitchAgent(8)) // behind a random MAC
 	collectedDataMutex.Lock()
 	collectedData["10.9.25.7"] = &DeviceData{IP: "10.9.25.7", SysName: "sw-7"}
 	collectedDataMutex.Unlock()
-	// The /16: probed through the ARP-known IPs only
 	fakeSNMP.set("10.26.5.5", accessPointAgent("C45"))
 	fakeSNMP.set("10.26.5.6", bridgeSwitchAgent(48))
-	fakeSNMP.set("10.26.5.7", lldpSwitchAgent(0x57)) // not in the ARP cache
-	globalMACtoIPMutex.Lock()
-	globalMACtoIP = map[string]string{"00:1b:21:1a:05:05": "10.26.5.5", "00:1b:21:1a:05:06": "10.26.5.6"}
-	globalMACtoIPMutex.Unlock()
+	fakeSNMP.set("10.26.5.7", lldpSwitchAgent(0x57)) // no ARP entry
+	setARPCache(map[string]string{
+		"18:e8:29:19:25:02": "10.9.25.2",  // Ubiquiti: the access point
+		"84:39:8f:19:25:03": "10.9.25.3",  // Fortinet
+		"5c:ed:8c:19:25:04": "10.9.25.4",  // HPE: a ProLiant NIC of the ESXi host
+		"00:e0:fc:19:25:05": "10.9.25.5",  // Huawei
+		"4c:ae:a3:19:25:06": "10.9.25.6",  // HPE
+		"4c:ae:a3:19:25:07": "10.9.25.7",  // HPE, stored
+		"00:1b:21:19:25:08": "10.9.25.8",  // Intel: a PC
+		"da:a1:19:19:25:0a": "10.9.25.10", // random
+		"18:e8:29:1a:05:05": "10.26.5.5",  // Ubiquiti
+		"00:0f:e2:1a:05:06": "10.26.5.6",  // H3C
+		"00:1a:a1:1a:05:08": "10.26.5.8",  // Cisco, no SNMP agent
+		"00:1b:21:1a:05:09": "10.26.5.9",  // Intel
+		"00:1a:a1:1b:00:01": "10.27.0.1",  // Cisco, outside the gateway's subnets
+	})
 
 	obj := &SNMPObject{Community: "public", Port: 161}
 	var added []string
-	out := captureStdout(t, func() { added = subnetDiscovery(obj, nil, subnetProbeWorkers, appendSwitchIP) })
+	out := captureStdout(t, func() {
+		added = subnetDiscovery(obj, nil, subnetTestLimits(subnetDiscoveryDefaults.Workers), appendSwitchIP)
+	})
 	if want := []string{"10.9.25.5", "10.9.25.6", "10.26.5.6"}; !slices.Equal(added, want) {
 		t.Errorf("subnetDiscovery added %v, want %v", added, want)
 	}
 	if got, want := switchIPAdds.taken(), []string{"10.26.5.6", "10.9.25.5", "10.9.25.6"}; !slices.Equal(got, want) {
 		t.Errorf("appended to swich_ips = %v, want %v", got, want)
 	}
-	// Every host of the /28 but the gateway's own address and the stored
-	// switch, and the ARP-known IPs of the /16
-	wantProbes := append(subnetHostStrings(t, "10.9.25.0/28", "10.9.25.1", "10.9.25.7"), "10.26.5.5", "10.26.5.6")
-	if got := snmpProbes.taken(); !slices.Equal(sortedStrings(got), sortedStrings(wantProbes)) {
-		t.Errorf("probed %v, want %v", sortedStrings(got), sortedStrings(wantProbes))
+	candidates := []string{"10.9.25.2", "10.9.25.3", "10.9.25.4", "10.9.25.5", "10.9.25.6", "10.26.5.5", "10.26.5.6", "10.26.5.8"}
+	if got := snmpProbes.taken(); !slices.Equal(sortedStrings(got), sortedStrings(candidates)) {
+		t.Errorf("probed %v, want the network makers' IPs %v", sortedStrings(got), sortedStrings(candidates))
 	}
-	want := "🚫 [SubnetDisc] Not added: 4 devices without BRIDGE-MIB ports or lldpLocChassisId (no switch): " +
-		"10.9.25.2 (Sportzal3, U6-Pro 6.8.2.15592), 10.9.25.3 (FortiGate-600F), 10.9.25.4 (localhost, VMware ESXi 6.5.0 build-4887370 VMware, Inc. x86_64) and 1 more\n"
-	if !strings.Contains(out, want) {
-		t.Errorf("output lacks the summary\n%s\nin\n%s", want, out)
+	want := "🔍 [SubnetDisc] 2 subnets of 172.20.1.254, 12 ARP-known IPs in them, " +
+		"9 with a network-equipment maker's MAC (1 of them stored, a gateway's address or in swich_ips), 8 probed, " +
+		"3 switches added: 10.9.25.5, 10.9.25.6, 10.26.5.6; not added: 4 devices without BRIDGE-MIB ports or lldpLocChassisId (no switch): " +
+		"10.9.25.2 (Sportzal3, U6-Pro 6.8.2.15592), 10.9.25.3 (FortiGate-600F), 10.9.25.4 (localhost, VMware ESXi 6.5.0 build-4887370 VMware, Inc. x86_64) and 1 more; " +
+		"1 host did not answer SNMP: 10.26.5.8\n"
+	if out != want {
+		t.Errorf("output =\n%s\nwant the one summary line\n%s", out, want)
+	}
+	timings := fakeSNMP.walkTimings()
+	for _, ip := range candidates {
+		if key := ip + " " + oidSysDescr + " 2s/0"; timings[key] != 1 {
+			t.Errorf("%d probes %q, want 1 with the probe timing 2s/0", timings[key], key)
+		}
+	}
+	for key, n := range timings {
+		if !strings.HasSuffix(key, " 2s/0") && !strings.HasSuffix(key, " 5s/1") || strings.HasSuffix(key, " 2s/0") && !strings.Contains(key, " "+oidSysDescr+" ") {
+			t.Errorf("%d walks %q: want the probe timing 2s/0 for the sysDescr probes only, the poll timing 5s/1 for the rest", n, key)
+		}
 	}
 	if got := collectedIPs(); !slices.Equal(got, []string{"10.9.25.7"}) {
 		t.Errorf("subnet discovery changed collectedData: %v", got)
@@ -393,61 +440,53 @@ func TestSubnetDiscoveryAddsOnlySwitches(t *testing.T) {
 	}
 }
 
-// subnetHostStrings lists the host IPs of cidr (subnetHosts) without the
-// IPs given.
-func subnetHostStrings(t *testing.T, cidr string, without ...string) []string {
-	t.Helper()
-	var ips []string
-	for _, a := range subnetHosts(netip.MustParsePrefix(cidr)) {
-		if !slices.Contains(without, a.String()) {
-			ips = append(ips, a.String())
-		}
-	}
-	return ips
-}
-
 // sortedStrings returns a sorted copy of s.
 func sortedStrings(s []string) []string { return slices.Sorted(slices.Values(s)) }
 
-// TestSubnetHosts checks the small-subnet host lists: a /22 to /30 without
-// its network and broadcast addresses, both addresses of a point-to-point
-// /31, the one of a /32 (generateSubnetIPs made room for 2^32-1 strings
-// there, a 64 GiB allocation), and none for a subnet larger than a /22.
-func TestSubnetHosts(t *testing.T) {
-	cases := []struct {
-		cidr        string
-		n           int
-		first, last string
-	}{
-		{"10.9.32.0/22", 1022, "10.9.32.1", "10.9.35.254"},
-		{"10.9.36.7/24", 254, "10.9.36.1", "10.9.36.254"},
-		{"10.190.47.58/30", 2, "10.190.47.57", "10.190.47.58"},
-		{"10.9.37.4/31", 2, "10.9.37.4", "10.9.37.5"},
-		{"10.9.38.1/32", 1, "10.9.38.1", "10.9.38.1"},
-		{"10.9.40.0/21", 0, "", ""},
+// TestSubnetDiscoverySubnets checks which gateway subnets subnet discovery
+// searches (it sweeps none: TestSubnetHosts checked the host lists of the
+// sweeps it made until 2026-10-22). Each prefix once, also when two
+// gateways have it; a subnet inside another stays (its IPs count once,
+// TestSubnetDiscoveryEveryGateway); left out are the subnets that are not
+// all private (the FortiGate's WAN, the Wi-Fi 172.15.0.0/16 the Debian
+// routes, link-local, a /7 reaching past 10.0.0.0/8) and the /31 and /32
+// links.
+func TestSubnetDiscoverySubnets(t *testing.T) {
+	row := func(ip string, bits int) SubnetInfo {
+		p := netip.PrefixFrom(netip.MustParseAddr(ip), bits).Masked()
+		return SubnetInfo{IP: ip, Prefix: bits, Net: p.Addr().String()}
 	}
-	for _, c := range cases {
-		hosts := subnetHosts(netip.MustParsePrefix(c.cidr))
-		if len(hosts) != c.n {
-			t.Errorf("%s: %d hosts, want %d", c.cidr, len(hosts), c.n)
-			continue
-		}
-		if c.n > 0 && (hosts[0].String() != c.first || hosts[c.n-1].String() != c.last) {
-			t.Errorf("%s: hosts %s … %s, want %s … %s", c.cidr, hosts[0], hosts[c.n-1], c.first, c.last)
-		}
+	search, skipped := subnetDiscoveryPrefixes([]SubnetInfo{
+		row("172.20.1.254", 16), row("172.15.1.253", 16), row("195.158.2.221", 27),
+		row("10.190.47.58", 30), row("10.190.47.61", 31), row("10.9.38.1", 32),
+		row("172.17.1.254", 22), row("172.17.1.1", 21), row("172.20.0.1", 16),
+		row("192.168.0.213", 24), row("169.254.1.1", 16), row("10.0.0.1", 7),
+	})
+	var got []string
+	for _, p := range search {
+		got = append(got, p.String())
+	}
+	if want := []string{"172.20.0.0/16", "10.190.47.56/30", "172.17.0.0/22", "172.17.0.0/21", "192.168.0.0/24"}; !slices.Equal(got, want) {
+		t.Errorf("searched %v, want %v", got, want)
+	}
+	if want := []string{"172.15.0.0/16 not private", "195.158.2.192/27 not private", "10.190.47.60/31 a link",
+		"10.9.38.1/32 a link", "169.254.0.0/16 not private", "10.0.0.0/7 not private"}; !slices.Equal(skipped, want) {
+		t.Errorf("left out %v, want %v", skipped, want)
 	}
 }
 
-// TestSubnetDiscoveryBounded (F2) checks the bounds of a discovery run on a
-// gateway shaped like 172.20.1.254 (a client /16 full of random MACs, a /16
-// with the swich_ips ranges, small subnets, a /32, a /31, a /12): the
-// subnet that overlaps swich_ips is probed first; a /16 is probed only at
-// the ARP-known IPs that a MAC which is not random maps to, each once; the
-// IPs swich_ips lists (alone or in a range), the stored devices and the
-// gateway's own addresses are not probed; a /32 does not end the run. With
-// one worker the probes run in plan order and a switch is appended as soon
-// as it is found, before the next host is probed; with subnetProbeWorkers
-// the same hosts are probed, each once.
+// TestSubnetDiscoveryBounded (F2, and F4 of the gateway review) checks the
+// bounds of a run on a gateway shaped like the live ones: a client /16
+// full of random MACs and PCs, a /16 with the swich_ips ranges, /30, /31
+// and /32 links, the Wi-Fi /16 that is not private, the WAN and the
+// loopback. Only the ARP-known IPs with a network maker's MAC are
+// candidates, each IP once although two MACs map to it; the gateway's own
+// address, the IPs swich_ips lists alone or in a range, a stored switch
+// and an interface MAC of it at another IP are not probed; the subnet that
+// overlaps swich_ips comes first. With one worker the probes follow the
+// plan and a switch is appended as soon as it is found; with the
+// production worker count each candidate is probed once; once the time
+// budget is spent no probe starts, and the run's one line says so.
 func TestSubnetDiscoveryBounded(t *testing.T) {
 	resetState(t)
 	fakeSNMP.set(fixedGatewayIP, map[string][]string{".1.3.6.1.2.1.4.20.1.3": {
@@ -456,87 +495,156 @@ func TestSubnetDiscoveryBounded(t *testing.T) {
 		".1.3.6.1.2.1.4.20.1.3.10.32.0.1 = IpAddress: 255.255.255.252",
 		".1.3.6.1.2.1.4.20.1.3.10.33.0.1 = IpAddress: 255.255.255.255",
 		".1.3.6.1.2.1.4.20.1.3.10.34.0.0 = IpAddress: 255.255.255.254",
-		".1.3.6.1.2.1.4.20.1.3.10.35.0.1 = IpAddress: 255.240.0.0",
 		".1.3.6.1.2.1.4.20.1.3.127.0.0.1 = IpAddress: 255.0.0.0",
+		".1.3.6.1.2.1.4.20.1.3.172.15.1.253 = IpAddress: 255.255.0.0",
 		".1.3.6.1.2.1.4.20.1.3.172.20.1.254 = IpAddress: 255.255.0.0",
+		".1.3.6.1.2.1.4.20.1.3.195.158.2.221 = IpAddress: 255.255.255.224",
 	}})
 	cache := map[string]string{
-		"00:0c:29:98:7b:c2": fixedGatewayIP, // the gateway itself
-		"00:1b:21:1e:00:01": "10.30.0.1",    // the gateway's address in the client /16
-		"da:a1:19:1e:00:02": "10.30.1.2",    // the same IP behind a random MAC
-		"00:1b:21:1e:01:02": "10.30.1.2",    // and a maker's MAC: probed once
-		"00:1b:21:1e:01:03": "10.30.1.3",
-		"00:1b:21:1e:01:04": "10.30.1.4",
-		"00:1b:21:1f:05:20": "10.31.5.20", // inside the listed range 10.31.5.0/24
-		"00:1b:21:1f:09:09": "10.31.9.9",  // listed alone
-		"00:1b:21:1f:07:07": "10.31.7.7",  // a switch
-		"00:1b:21:1f:07:08": "10.31.7.8",  // stored already
+		"00:0c:29:98:7b:c2": fixedGatewayIP,  // the gateway itself, a VMware VM
+		"00:1a:a1:1e:00:01": "10.30.0.1",     // the gateway's address in the client /16, a Cisco MAC
+		"da:a1:19:1e:00:02": "10.30.1.2",     // the same IP behind a random MAC
+		"00:1a:a1:1e:01:02": "10.30.1.2",     // and a Cisco MAC: probed once
+		"18:e8:29:1e:01:03": "10.30.1.3",     // a Ubiquiti access point
+		"00:1a:a1:1e:01:04": "10.30.1.4",     // Cisco, no SNMP agent
+		"00:1b:21:1e:01:05": "10.30.1.5",     // Intel: a PC (its agent has a bridge)
+		"4c:ae:a3:1f:05:20": "10.31.5.20",    // inside the listed range 10.31.5.0/24
+		"4c:ae:a3:1f:09:09": "10.31.9.9",     // listed alone
+		"00:0f:e2:1f:07:07": "10.31.7.7",     // an H3C switch
+		"4c:ae:a3:1f:07:08": "10.31.7.8",     // stored already
+		"4c:ae:a3:1f:07:89": "10.31.7.9",     // an interface MAC of the stored switch, at an SVI
+		"00:10:db:20:00:02": "10.32.0.2",     // Juniper, the /30's peer
+		"00:10:db:22:00:01": "10.34.0.1",     // Juniper, the /31's peer: links are not searched
+		"18:e8:29:0f:01:50": "172.15.1.80",   // an access point in the Wi-Fi /16
+		"00:1a:a1:c3:02:c1": "195.158.2.193", // the ISP's router on the WAN
+		"4c:ae:a3:14:e6:32": "172.20.230.50", // an HPE switch nobody listed
 	}
 	for i := range 30 { // phones and laptops of the client /16
 		cache[fmt.Sprintf("de:ad:00:1e:02:%02x", i)] = fmt.Sprintf("10.30.2.%d", i+1)
 	}
-	globalMACtoIPMutex.Lock()
-	globalMACtoIP = cache
-	globalMACtoIPMutex.Unlock()
+	setARPCache(cache)
 	collectedDataMutex.Lock()
-	collectedData["10.31.7.8"] = &DeviceData{IP: "10.31.7.8", SysName: "sw-8"}
+	collectedData["10.31.7.8"] = &DeviceData{IP: "10.31.7.8", SysName: "sw-8", ChassisID: "4c:ae:a3:1f:07:08",
+		Interfaces: []InterfaceData{{IfIndex: 1, IfPhysAddress: "4C AE A3 1F 07 89"}}}
 	collectedDataMutex.Unlock()
 	fakeSNMP.set("10.31.7.7", bridgeSwitchAgent(24))
 	fakeSNMP.set("10.31.5.20", lldpSwitchAgent(0x20)) // the rescue scan's, not probed here
+	fakeSNMP.set("10.31.7.9", lldpSwitchAgent(0x79))  // the stored switch at its SVI
 	fakeSNMP.set("10.30.1.3", accessPointAgent("C46"))
-	fakeSNMP.set("10.34.0.1", lldpSwitchAgent(0x34)) // the peer of the /31
+	fakeSNMP.set("10.30.1.5", bridgeSwitchAgent(2))
+	fakeSNMP.set("10.32.0.2", lldpSwitchAgent(0x32))
+	fakeSNMP.set("10.34.0.1", lldpSwitchAgent(0x34))
+	fakeSNMP.set("172.15.1.80", accessPointAgent("C80"))
+	fakeSNMP.set("195.158.2.193", lldpSwitchAgent(0xc1))
+	fakeSNMP.set("172.20.230.50", lldpSwitchAgent(0x50))
 	ranges := []string{"10.31.5.0/24", "10.31.9.9"}
 
 	obj := &SNMPObject{Community: "public", Port: 161}
 	plan := planSubnetDiscovery(discoverGatewaySubnets(obj, fixedGatewayIP), ranges)
-	type planned struct {
-		subnet string
-		listed bool
-		ips    []string
-		random int
+	var subnets, order []string
+	var listed []bool
+	for _, p := range plan.Subnets {
+		subnets = append(subnets, p.String())
 	}
-	var got []planned
-	var order []string
-	for _, p := range plan {
-		got = append(got, planned{fmt.Sprintf("%s/%d", p.Net, p.Prefix), p.Listed, p.IPs, p.Random})
-		order = append(order, p.IPs...)
+	for _, c := range plan.Candidates {
+		order = append(order, c.IP)
+		listed = append(listed, c.Listed)
 	}
-	want := []planned{
-		{"10.31.0.0/16", true, []string{"10.31.7.7"}, 0},
-		{"10.30.0.0/16", false, []string{"10.30.1.2", "10.30.1.3", "10.30.1.4"}, 30},
-		{"10.32.0.0/30", false, []string{"10.32.0.2"}, 0},
-		{"10.33.0.1/32", false, nil, 0},
-		{"10.34.0.0/31", false, []string{"10.34.0.1"}, 0},
-		{"172.20.0.0/16", false, nil, 0},
+	if want := []string{"10.30.0.0/16", "10.31.0.0/16", "10.32.0.0/30", "172.20.0.0/16"}; !slices.Equal(subnets, want) {
+		t.Errorf("subnets %v, want %v", subnets, want)
 	}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("plan =\n%v\nwant\n%v", got, want)
+	if want := []string{"10.33.0.1/32 a link", "10.34.0.0/31 a link", "172.15.0.0/16 not private", "195.158.2.192/27 not private"}; !slices.Equal(plan.Skipped, want) {
+		t.Errorf("left out %v, want %v", plan.Skipped, want)
+	}
+	if got, want := [3]int{plan.ARPIPs, plan.Makers, plan.Known}, [3]int{43, 11, 5}; got != want {
+		t.Errorf("ARP-known IPs, makers' IPs, known ones %v, want %v", got, want)
+	}
+	if want := []string{"10.31.7.7", "10.30.1.2", "10.30.1.3", "10.30.1.4", "10.32.0.2", "172.20.230.50"}; !slices.Equal(order, want) ||
+		!slices.Equal(listed, []bool{true, false, false, false, false, false}) {
+		t.Errorf("candidates %v (in a listed subnet: %v), want %v with the first one listed", order, listed, want)
+	}
+	if c := plan.Candidates[1]; c.MAC != "00:1a:a1:1e:01:02" {
+		t.Errorf("10.30.1.2 is probed for the MAC %s, want the Cisco one", c.MAC)
 	}
 
-	// One worker: the probes follow the plan, and the switch of the first
-	// subnet is appended right after its own probe
+	// One worker: the probes follow the plan, and each switch is appended
+	// right after its own probe
 	var adds []string
-	added := subnetDiscovery(obj, ranges, 1, func(ip string) bool {
+	added := subnetDiscovery(obj, ranges, subnetTestLimits(1), func(ip string) bool {
 		adds = append(adds, fmt.Sprintf("%s after %d probes", ip, snmpProbes.count()))
 		return true
 	})
 	if probed := snmpProbes.taken(); !slices.Equal(probed, order) {
 		t.Errorf("probed %v, want the plan order %v", probed, order)
 	}
-	if want := []string{"10.31.7.7 after 1 probes", "10.34.0.1 after 6 probes"}; !slices.Equal(adds, want) {
+	if want := []string{"10.31.7.7 after 1 probes", "10.32.0.2 after 5 probes", "172.20.230.50 after 6 probes"}; !slices.Equal(adds, want) {
 		t.Errorf("appended %v, want %v", adds, want)
 	}
-	if want := []string{"10.31.7.7", "10.34.0.1"}; !slices.Equal(added, want) {
+	if want := []string{"10.31.7.7", "10.32.0.2", "172.20.230.50"}; !slices.Equal(added, want) {
 		t.Errorf("subnetDiscovery returned %v, want %v", added, want)
 	}
 
 	// The production worker count probes the same hosts, each once
-	added = subnetDiscovery(obj, ranges, subnetProbeWorkers, appendSwitchIP)
+	added = subnetDiscovery(obj, ranges, subnetTestLimits(subnetDiscoveryDefaults.Workers), appendSwitchIP)
 	if probed := snmpProbes.taken(); !slices.Equal(sortedStrings(probed), sortedStrings(order)) {
-		t.Errorf("with %d workers probed %v, want %v", subnetProbeWorkers, sortedStrings(probed), sortedStrings(order))
+		t.Errorf("with %d workers probed %v, want %v", subnetDiscoveryDefaults.Workers, sortedStrings(probed), sortedStrings(order))
 	}
-	if got, want := switchIPAdds.taken(), []string{"10.31.7.7", "10.34.0.1"}; !slices.Equal(got, want) || !slices.Equal(added, want) {
-		t.Errorf("with %d workers appended %v (returned %v), want %v", subnetProbeWorkers, got, added, want)
+	if got, want := switchIPAdds.taken(), []string{"10.31.7.7", "10.32.0.2", "172.20.230.50"}; !slices.Equal(got, want) || !slices.Equal(added, want) {
+		t.Errorf("with %d workers appended %v (returned %v), want %v", subnetDiscoveryDefaults.Workers, got, added, want)
+	}
+
+	// A budget of one minute, each probe taking 30 s: the probes that start
+	// at 0, 30 and 60 s run, the rest do not
+	limits := subnetTestLimits(1)
+	limits.Budget = time.Minute
+	limits.Now = func() time.Time { return fixedTime.Add(time.Duration(snmpProbes.count()) * 30 * time.Second) }
+	out := captureStdout(t, func() { added = subnetDiscovery(obj, ranges, limits, appendSwitchIP) })
+	if probed := snmpProbes.taken(); !slices.Equal(probed, order[:3]) || !slices.Equal(added, order[:1]) {
+		t.Errorf("with the budget probed %v and added %v, want %v and %v", probed, added, order[:3], order[:1])
+	}
+	want := "🔍 [SubnetDisc] 4 subnets of 172.20.1.254 (4 left out: 10.33.0.1/32 a link, 10.34.0.0/31 a link, 172.15.0.0/16 not private, 195.158.2.192/27 not private), " +
+		"43 ARP-known IPs in them, 11 with a network-equipment maker's MAC (5 of them stored, a gateway's address or in swich_ips), " +
+		"3 probed (time budget of 1m0s spent: 3 not probed), 1 switch added: 10.31.7.7; " +
+		"not added: 1 device without BRIDGE-MIB ports or lldpLocChassisId (no switch): 10.30.1.3 (C46, U6-Pro 6.8.2.15592); 1 host did not answer SNMP: 10.30.1.2\n"
+	if out != want {
+		t.Errorf("output with the budget =\n%s\nwant\n%s", out, want)
+	}
+}
+
+// TestSNMPWalkTiming checks that the timing of an SNMP object reaches
+// snmpbulkwalk (it used to run every walk with -t 5 -r 1, whatever
+// SNMPObject.Timeout said): -t in whole seconds, at least 1, and -r; an
+// object without a timeout, and NewSNMPObject, use the poll timing.
+func TestSNMPWalkTiming(t *testing.T) {
+	resetState(t)
+	for _, c := range []struct {
+		timing walkTiming
+		t, r   string
+	}{
+		{pollTiming, "5", "1"},
+		{subnetDiscoveryDefaults.Probe, "2", "0"},
+		{walkTiming{Timeout: 1500 * time.Millisecond}, "2", "0"},
+		{walkTiming{Timeout: 200 * time.Millisecond, Retries: -1}, "1", "0"},
+	} {
+		want := []string{"-v2c", "-c", "public", "-On", "-Cr25", "-t", c.t, "-r", c.r, "10.9.27.1", oidSysDescr}
+		if got := snmpBulkWalkArgs("public", "10.9.27.1", oidSysDescr, c.timing); !slices.Equal(got, want) {
+			t.Errorf("snmpBulkWalkArgs(%+v) = %q, want %q", c.timing, got, want)
+		}
+	}
+	for _, c := range []struct {
+		obj  *SNMPObject
+		want string
+	}{
+		{&SNMPObject{Community: "public"}, "5s/1"},
+		{NewSNMPObject(nil, nil), "5s/1"},
+		{&SNMPObject{Community: "public", Timeout: 3 * time.Second}, "3s/0"},
+		{&SNMPObject{Community: "public", Timeout: 2 * time.Second, Retries: 2}, "2s/2"},
+	} {
+		fakeSNMP.walkTimings()
+		c.obj.runSNMPWalk("10.9.27.1", oidSysName)
+		if got := fakeSNMP.walkTimings(); !maps.Equal(got, map[string]int{"10.9.27.1 " + oidSysName + " " + c.want: 1}) {
+			t.Errorf("walk of %+v: %v, want the timing %s", c.obj, got, c.want)
+		}
 	}
 }
 

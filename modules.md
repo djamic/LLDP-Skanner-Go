@@ -413,11 +413,12 @@ flowchart TD
 
 | Funksiya | Tavsif |
 |----------|--------|
-| `discoverGatewaySubnets()` | `ipAdEntAddr` + `ipAdEntNetMask` → `SubnetInfo{Net, Prefix, SVIIP}` ro'yxati |
+| `discoverGatewaySubnets()` | `ipAdEntNetMask` → `SubnetInfo{Net, Prefix, IP}` ro'yxati (har gateway uchun) |
 | `collectGatewaySVIIPs()` | Gateway SVI interfeyslarning IP'larini olish |
-| `probeSubnetForSwitches()` | Subnetdagi barcha IP'larni SNMP bilan tekshirish |
-| `RunSubnetDiscovery()` | To'liq kashfiyot zanjiri |
-| `isIPInSubnet()`, `generateSubnetIPs()`, `countBits()`, `parseIPv4()` | Yordamchi funksiyalar |
+| `planSubnetDiscovery()` | Xususiy subnetlardagi (/31, /32 emas) ARP-ma'lum IP'lardan MAC'i tarmoq uskunasi ishlab chiqaruvchisiniki bo'lganlari (`isNetworkMakerMAC`), har IP bir marta |
+| `probeSubnetCandidates()` | 8 ta parallel: sysDescr (2 s, qayta urinishsiz), keyin `checkSwitch`; 5 daqiqalik vaqt chegarasi |
+| `RunSubnetDiscovery()` | To'liq kashfiyot zanjiri, bitta xulosa qatori |
+| `countBits()`, `parseIPv4()`, `switchIPPrefixes()` | Yordamchi funksiyalar |
 
 ---
 

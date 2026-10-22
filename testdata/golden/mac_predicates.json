@@ -20,6 +20,10 @@
     "server-imm": "true:Lenovo IMM",
     "srv01-idrac": "true:Dell iDRAC"
   },
+  "network_makers": {
+    "values_by_vendor": {"Aruba": 6, "Cisco": 10, "Cisco Systems, Inc": 22, "Cisco-Linksys, LLC": 1, "D-Link": 7, "D-Link International": 1, "Dell": 32, "Dell EMC": 2, "Dell Inc.": 134, "Eltex": 10, "Eltex Enterprise Ltd.": 9, "Fortinet": 4, "Fortinet, Inc.": 17, "H3C": 2, "HP": 25, "HP Aruba": 27, "HP Inc.": 311, "HPE": 188, "HUAWEI TECHNOLOGIES CO.,LTD": 107, "Hewlett Packard": 115, "Hewlett Packard Enterprise": 28, "Huawei": 16, "Huawei Device Co., Ltd.": 11, "Huawei Symantec Technologies Co.,Ltd.": 1, "MikroTik": 11, "NETGEAR": 1, "New H3C Technologies Co., Ltd": 3, "Routerboard.com": 3, "SNR": 102, "TP-LINK TECHNOLOGIES CO.,LTD.": 42, "TP-Link": 34, "TP-Link Systems Inc": 75, "TP-Link Systems Inc.": 23, "Ubiquiti": 178, "Ubiquiti Inc": 38, "Zyxel Communications Corporation": 11},
+    "vendor_names": ["Aruba", "Aruba, a Hewlett Packard Enterprise Company", "Cisco", "Cisco Systems, Inc", "D-Link", "D-Link International", "Dell", "Dell Inc.", "Eltex Enterprise Ltd.", "Fortinet", "Fortinet, Inc.", "HP", "HP Aruba", "HP Inc.", "HPE", "HUAWEI", "HUAWEI TECHNOLOGIES", "HUAWEI TECHNOLOGIES CO.,LTD", "Hangzhou H3C Technologies Co., Limited", "Hewlett Packard", "Hewlett Packard Enterprise", "Huawei", "MikroTik", "NAGTECH LLC", "New H3C Technologies Co., Ltd", "Routerboard.com", "SNR", "TP-LINK TECHNOLOGIES CO.,LTD.", "TP-Link", "TP-Link Systems Inc", "Ubiquiti", "Ubiquiti Inc"]
+  },
   "omitted_defaults": {
     "bmc": "isBMC(value, \"\") is false",
     "bmcWithNames": "isBMC(value, name) equals bmc_name_baseline for every name",

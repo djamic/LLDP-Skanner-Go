@@ -273,8 +273,22 @@ func TestGoldenMACPredicates(t *testing.T) {
 	}
 
 	categories := map[string]string{}
+	var makerNames []string
 	for _, name := range readListFile(t, "vendor_names.txt") {
 		categories[name] = categorizeVendor(name)
+		if isNetworkMakerVendor(name) {
+			makerNames = append(makerNames, name)
+		}
+	}
+	slices.Sort(makerNames)
+
+	// isNetworkMakerMAC (subnet discovery's candidates) by vendor: how many
+	// of the values it accepts
+	makerValues := map[string]int{}
+	for v := range corpus {
+		if isNetworkMakerMAC(v) {
+			makerValues[lookupVendor(v)]++
+		}
 	}
 
 	ouiInfo := map[string]any{"loaded": ouiDBOk}
@@ -312,8 +326,12 @@ func TestGoldenMACPredicates(t *testing.T) {
 		},
 		"bmc_name_baseline": baseline,
 		"vendor_categories": categories,
-		"value_count":       len(values),
-		"values":            values,
+		"network_makers": map[string]any{
+			"vendor_names":     makerNames,
+			"values_by_vendor": makerValues,
+		},
+		"value_count": len(values),
+		"values":      values,
 	}
 	checkGolden(t, "mac_predicates.json", goldenJSON(t, rec, 2))
 }

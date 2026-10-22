@@ -2197,8 +2197,8 @@ func collectGatewayARP() {
 	snmpObj := &SNMPObject{
 		Community: "public",
 		Port:      161,
-		Timeout:   10 * time.Second,
-		Retries:   2,
+		Timeout:   pollTiming.Timeout, // the walks ran with -t 5 -r 1 whatever this said
+		Retries:   pollTiming.Retries,
 	}
 
 	for _, res := range collectGatewaysARP(snmpObj) {

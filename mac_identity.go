@@ -849,6 +849,61 @@ func ouiWordByte(b byte) bool {
 }
 
 // ============================================================
+// Network equipment makers
+// ============================================================
+
+// networkMakerWords name the makers of switches, as whole words of a
+// curated or IEEE vendor name (lowercase, ouiHasWord): the IEEE names of
+// this network's switch makers and of the other common ones, the routers,
+// firewalls and access points of the same makers included. They come on
+// top of the category "network" (the curated SNR, H3C, HPE, HP, Cisco,
+// Dell, MikroTik, TP-Link, D-Link, Eltex and Fortinet OUIs, and the IEEE
+// names categorizeVendor files there), which covers some of them already.
+// "juniper networks" and "extreme networks" leave out Juniper Systems and
+// Extreme Engineering Solutions; "SNR Inc." (00:1d:c6) is not the SNR of
+// the switches here, whose OUIs are NAGTECH's.
+var networkMakerWords = []string{
+	"hewlett packard", "hp inc", "procurve", "aruba", // HPE, HP, Aruba
+	"cisco", "huawei", "h3c",
+	"nagtech", // SNR
+	"mikrotik", "routerboard",
+	"eltex", "d-link", "tp-link",
+	"juniper networks", "extreme networks", "zyxel", "netgear",
+	"allied telesis", "edgecore", "accton", "ruijie", "arista",
+	"brocade", "ruckus", "ubiquiti", "fortinet",
+}
+
+// isNetworkMakerVendor reports whether vendor, a curated or IEEE vendor
+// name, is a maker of network equipment: its category is "network"
+// (categorizeVendor), or it has a word of networkMakerWords.
+func isNetworkMakerVendor(vendor string) bool {
+	if vendor == "" {
+		return false
+	}
+	if categorizeVendor(vendor) == "network" {
+		return true
+	}
+	v := strings.ToLower(vendor)
+	for _, w := range networkMakerWords {
+		if ouiHasWord(v, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// isNetworkMakerMAC reports whether mac can be a switch by its maker: a
+// station MAC that is not random (a random address names no maker) whose
+// vendor, curated or IEEE (IdentifyMAC, whose category is categorizeVendor
+// of that vendor), makes network equipment (isNetworkMakerVendor). It is
+// the one MAC test of subnet discovery: only the ARP-known IPs whose MAC
+// passes it are probed for SNMP.
+func isNetworkMakerMAC(mac string) bool {
+	id := IdentifyMAC(mac)
+	return id.Valid && !id.Special && !id.Random && isNetworkMakerVendor(id.Vendor)
+}
+
+// ============================================================
 // IdentifyMAC
 // ============================================================
 

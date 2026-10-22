@@ -168,6 +168,111 @@ func TestOUICategorizeVendor(t *testing.T) {
 	}
 }
 
+// TestNetworkMakerMAC checks the one decision of subnet discovery's
+// candidates: a MAC whose maker makes network equipment. The curated
+// category "network" counts (with Dell, as curated), the curated access
+// point and Huawei OUIs count by their maker, IEEE names count by
+// networkMakerWords or categorizeVendor; PCs, phones, cameras, virtual
+// NICs, random and special addresses and look-alike company names do not.
+// Each IEEE case names the organization oui.txt registers, so the test
+// fails when the database moves an OUI elsewhere.
+func TestNetworkMakerMAC(t *testing.T) {
+	ieee := ouiTestIEEENames(t)
+	for _, c := range []struct {
+		mac, ieee string // ieee: the oui.txt organization, "" for a curated or no OUI
+		want      bool
+	}{
+		// curated OUIs
+		{"4c:ae:a3:27:84:cb", "", true},  // HPE
+		{"f8:f0:82:7a:d9:69", "", true},  // SNR (NAGTECH)
+		{"00:0f:e2:11:22:33", "", true},  // H3C
+		{"00:1a:a1:11:22:33", "", true},  // Cisco
+		{"00:0c:42:11:22:33", "", true},  // MikroTik
+		{"e0:d9:e3:11:22:33", "", true},  // Eltex
+		{"84:39:8f:11:22:33", "", true},  // Fortinet
+		{"a4:bb:6d:11:22:33", "", true},  // Dell, curated "network"
+		{"00:0b:86:11:22:33", "", true},  // Aruba (curated access point)
+		{"18:e8:29:11:22:33", "", true},  // Ubiquiti (curated access point)
+		{"00:25:68:11:22:33", "", true},  // Huawei (curated endpoint)
+		{"00:50:56:aa:bb:cc", "", false}, // VMware VM NIC
+		{"08:54:11:11:22:33", "", false}, // Hikvision camera
+		{"00:03:93:11:22:33", "", false}, // Apple
+		{"00:e0:4c:11:22:33", "", false}, // Realtek
+		{"00:00:5e:00:01:14", "", false}, // VRRP virtual router
+		// IEEE organizations
+		{"00:10:db:11:22:33", "Juniper Networks", true},
+		{"00:e0:2b:11:22:33", "Extreme Networks Headquarters", true},
+		{"00:a0:c5:11:22:33", "Zyxel Communications Corporation", true},
+		{"00:09:5b:11:22:33", "NETGEAR", true},
+		{"00:00:f4:11:22:33", "Allied Telesis, Inc.", true},
+		{"cc:37:ab:11:22:33", "Edgecore Networks Corporation", true},
+		{"00:10:b5:11:22:33", "Accton Technology Corp", true},
+		{"14:14:4b:11:22:33", "Ruijie Networks Co.,LTD", true},
+		{"00:1c:73:11:22:33", "Arista Networks", true},
+		{"00:60:69:11:22:33", "Brocade Communications Systems LLC", true},
+		{"00:13:92:11:22:33", "Ruckus Wireless", true},
+		{"1c:af:f7:11:22:33", "D-Link International", true},
+		{"00:0a:eb:11:22:33", "TP-LINK TECHNOLOGIES CO.,LTD.", true},
+		{"00:15:6d:11:22:33", "Ubiquiti Inc", true},
+		{"00:09:0f:11:22:33", "Fortinet, Inc.", true},
+		{"00:e0:fc:11:22:33", "HUAWEI TECHNOLOGIES CO.,LTD", true},
+		{"1c:ab:34:11:22:33", "New H3C Technologies Co., Ltd", true},
+		{"8c:ae:db:11:22:33", "NAGTECH LLC", true},
+		{"00:16:b9:11:22:33", "ProCurve Networking by HP", true},
+		{"04:0e:3c:11:22:33", "HP Inc.", true},
+		{"a8:f9:4b:11:22:33", "Eltex Enterprise Ltd.", true},
+		{"00:18:0a:11:22:33", "Cisco Meraki", true},
+		{"0c:05:35:11:22:33", "Juniper Systems", false},
+		{"00:17:3c:11:22:33", "Extreme Engineering Solutions", false},
+		{"60:34:57:11:22:33", "HP Tuners LLC", false},
+		{"00:1d:c6:11:22:33", "SNR Inc.", false},
+		{"00:12:f0:11:22:33", "Intel Corporate", false},
+		{"00:05:02:11:22:33", "Apple, Inc.", false},
+		{"00:90:9c:11:22:33", "Commscope", false},
+		// no maker
+		{"da:a1:19:00:00:01", "", false}, // random (locally administered)
+		{"02:00:5e:10:00:01", "", false}, // locally administered
+		{"01:80:c2:00:00:0e", "", false}, // multicast
+		{"00:00:00:12:34:56", "", false}, // zero OUI
+		{"ff:ff:ff:ff:ff:ff", "", false},
+		{"B-318/1", "", false},
+		{"", "", false},
+	} {
+		if c.ieee != "" {
+			if got := ieee[ouiKey(c.mac)]; got != c.ieee {
+				t.Errorf("%s: oui.txt names %q, the case expects %q", c.mac, got, c.ieee)
+			}
+		}
+		if got := isNetworkMakerMAC(c.mac); got != c.want {
+			t.Errorf("isNetworkMakerMAC(%q) (vendor %q) = %v, want %v", c.mac, lookupVendor(c.mac), got, c.want)
+		}
+	}
+}
+
+// TestNetworkMakerWordsReachable: every word of networkMakerWords names the
+// maker of at least one OUI, curated or in oui.txt, so none is dead.
+func TestNetworkMakerWordsReachable(t *testing.T) {
+	var vendors []string
+	for _, name := range ouiTestIEEENames(t) {
+		vendors = append(vendors, strings.ToLower(name))
+	}
+	for _, role := range ouiRegistry {
+		vendors = append(vendors, strings.ToLower(role.Vendor))
+	}
+	for _, w := range networkMakerWords {
+		found := false
+		for _, v := range vendors {
+			if ouiHasWord(v, w) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("no vendor name has the word %q", w)
+		}
+	}
+}
+
 // TestOUICuratedCategories: every curated vendor has an explicit category,
 // one per vendor name, and "vm" belongs exactly to the virtual-NIC OUIs.
 func TestOUICuratedCategories(t *testing.T) {

@@ -681,8 +681,8 @@ func collectARPFromAllSwitches() {
 	snmpObj := &SNMPObject{
 		Community: "public",
 		Port:      161,
-		Timeout:   10 * time.Second,
-		Retries:   1,
+		Timeout:   pollTiming.Timeout, // the walks ran with -t 5 -r 1 whatever this said
+		Retries:   pollTiming.Retries,
 	}
 
 	totalNew := 0
@@ -850,7 +850,10 @@ type SubnetInfo struct {
 	Net    string // network address e.g. "172.20.0.0"
 }
 
-// discoverGatewaySubnets reads gateway ipAddrTable + netmask, returns all subnets
+// discoverGatewaySubnets reads the ipAddrTable masks of gateway gwIP and
+// returns one subnet per address (loopback left out); nil when the gateway
+// does not answer. Subnet discovery prints one line per run, so this
+// prints nothing.
 func discoverGatewaySubnets(snmpObj *SNMPObject, gwIP string) []SubnetInfo {
 	// Get IP list from ipAddrTable (.1.3.6.1.2.1.4.20.1.1)
 	maskLines, err := snmpObj.runSNMPWalk(gwIP, ".1.3.6.1.2.1.4.20.1.3")
@@ -898,7 +901,6 @@ func discoverGatewaySubnets(snmpObj *SNMPObject, gwIP string) []SubnetInfo {
 		}
 		netStr := strings.Join(netParts, ".")
 		subnets = append(subnets, SubnetInfo{IP: ipStr, Prefix: bits, Net: netStr})
-		fmt.Printf("📡 [SubnetDisc] Found subnet: %s/%d (gateway SVI: %s)\n", netStr, bits, ipStr)
 	}
 	return subnets
 }
@@ -913,42 +915,69 @@ func countBits(n int) int {
 	return count
 }
 
-// Subnet discovery probes. Subnet discovery runs once after each start, and
-// the gateway 172.20.1.254 answered SNMP at none of them (the log since
-// 2026-10-13 has no subnet): it answers since 2026-10-22, after that day's
-// start. With its ipAddrTable (ten subnets) and the MAC-IP cache of that
-// day the old probe loop would have probed about 33,000 hosts one at a
-// time: every host of the seven small subnets and every ARP-known IP of
-// the three /16s (28,380 in 172.15.0.0/16 alone, mostly Wi-Fi clients),
-// each one without SNMP costing the 10 s of a poll walk (5 s, one retry).
-// That is about 92 hours while a process lives 24, the first host of
-// 172.20.0.0/16 came 32,044th, and the switches found were appended only
-// at the end: nothing would ever have been appended, and Wi-Fi clients
-// would have been probed all day, every day. Now:
+// Subnet discovery runs once after each start (runMacIPCollector) and looks
+// for switches no other path knows of: the rescue scan polls the owner's
+// swich_ips ranges, LLDP discovery the management addresses that the
+// polled switches' neighbors advertise. It used to probe every host of the
+// gateway's small subnets and every ARP-known IP of its large ones, one
+// after the other at the 10 s of a poll walk: with the gateway table and
+// the MAC-IP cache of 2026-10-22 that was about 33,000 probes, 92 hours
+// for a process that lives 24, mostly of Wi-Fi clients. As the owner
+// approved, a run now probes only hosts that can be switches:
 //
-//   - the subnets that overlap a line of swich_ips come first;
-//   - a large subnet's candidates leave out the IPs that only random MACs
-//     map to (phones and laptops; a switch has its maker's MAC), and no IP
-//     is probed twice in a run;
-//   - the IPs swich_ips lists, alone or in a range, are left to the rescue
-//     scan, and the gateway's own addresses and the stored devices are not
-//     probed;
-//   - subnetProbeWorkers hosts are probed at once, each with one try and a
-//     1 s timeout (snmpProbeWalk);
-//   - a switch is appended to swich_ips as soon as it is found, and the
-//     rescue scan polls it from there.
-//
-// The same table and cache give about 11,400 probes, 6 minutes.
+//   - the subnets of every gateway's ipAddrTable, each prefix once; a
+//     subnet that is not private (RFC 1918: the FortiGate's WAN
+//     195.158.2.192/27) or is a /31 or /32 link is left out;
+//   - in them, only the ARP-known IPs (globalMACtoIP, which every ARP
+//     source feeds: the gateways, their SVIs, the switches and the ARP
+//     sources, kept across restarts) whose MAC is a network-equipment
+//     maker's (isNetworkMakerMAC), each IP once however many subnets hold
+//     it;
+//   - never a stored device (by IP, chassis MAC or interface MAC), a
+//     gateway or one of its addresses, or an IP that swich_ips lists alone
+//     or in a range (the rescue scan's);
+//   - the candidates in subnets that overlap swich_ips first, then in IP
+//     order, Workers at a time: sysDescr first with the short Probe
+//     timing, then checkSwitch for a host that answers, and a switch is
+//     appended to swich_ips at once (the rescue scan polls it from there);
+//   - no probe starts once the run's Budget is spent;
+//   - one summary line per run (subnetDiscoveryRun.summary).
 
-// subnetProbeWorkers is how many hosts subnet discovery probes at once.
-const subnetProbeWorkers = 32
+// subnetDiscoveryLimits bounds one subnet discovery run.
+type subnetDiscoveryLimits struct {
+	Workers int              // candidates probed at once
+	Probe   walkTiming       // the sysDescr probe: does the host run SNMP at all
+	Budget  time.Duration    // no probe starts once this much has passed (0: no limit)
+	Now     func() time.Time // the run's clock
+}
 
-// subnetProbe is one subnet of a discovery run with the hosts to probe.
-type subnetProbe struct {
-	SubnetInfo
-	Listed bool     // the subnet overlaps a line of swich_ips
-	IPs    []string // the hosts to probe, in IP order
-	Random int      // ARP-known IPs left out: only random MACs map to them
+// subnetDiscoveryDefaults are the limits of the production runs: 8
+// workers, a 2 s probe without retry (a host without SNMP costs 2 s, not
+// the 10 s of a poll walk) and 5 minutes, room for 1,200 silent
+// candidates. The fixture's cache with the two gateways' subnets of
+// 2026-10-22 gives 634 candidates (of 6,666 ARP-known IPs; most are HP
+// and Dell PCs and printers), 160 s if none of them answered.
+var subnetDiscoveryDefaults = subnetDiscoveryLimits{
+	Workers: 8,
+	Probe:   walkTiming{Timeout: 2 * time.Second},
+	Budget:  5 * time.Minute,
+	Now:     time.Now,
+}
+
+// subnetCandidate is an IP that subnet discovery probes.
+type subnetCandidate struct {
+	IP, MAC string
+	Listed  bool // in a subnet that overlaps a line of swich_ips: probed first
+}
+
+// subnetPlan is what one subnet discovery run searches and probes.
+type subnetPlan struct {
+	Subnets    []netip.Prefix    // the gateway subnets searched, in ipAddrTable order
+	Skipped    []string          // the subnets left out, with the reason
+	ARPIPs     int               // ARP-known IPs in the subnets
+	Makers     int               // of those, the IPs a network-equipment maker's MAC maps to
+	Known      int               // makers not probed: stored, a gateway's, listed in swich_ips
+	Candidates []subnetCandidate // the IPs to probe, in probe order
 }
 
 // prefix is the subnet as a netip.Prefix; false for a subnet that is not
@@ -975,128 +1004,156 @@ func switchIPPrefixes(lines []string) []netip.Prefix {
 	return prefixes
 }
 
-// planSubnetDiscovery returns the subnets of a discovery run in probe order
-// with the hosts to probe in each (see the subnet discovery probes above);
-// ranges are the lines of swich_ips. Subnets larger than a /16 are left
-// out.
-func planSubnetDiscovery(subnets []SubnetInfo, ranges []string) []subnetProbe {
-	listed := switchIPPrefixes(ranges)
-	inListed := func(a netip.Addr) bool {
-		return slices.ContainsFunc(listed, func(p netip.Prefix) bool { return p.Contains(a) })
-	}
-	skip := make(map[string]bool)
-	for _, gw := range gatewayIPs {
-		skip[gw] = true // a gateway is no switch: drawn as a router
-	}
-	var plan []subnetProbe
-	for _, s := range subnets {
-		skip[s.IP] = true // the gateways' own addresses
-		p, ok := s.prefix()
-		if !ok || s.Prefix < 16 {
-			continue // skip /8, /12 etc — too large, no use
-		}
-		plan = append(plan, subnetProbe{SubnetInfo: s,
-			Listed: slices.ContainsFunc(listed, p.Overlaps)})
-	}
-	slices.SortStableFunc(plan, func(a, b subnetProbe) int {
-		switch {
-		case a.Listed == b.Listed:
-			return 0
-		case a.Listed:
-			return -1
-		}
-		return 1
-	})
+// privateIPv4 are the RFC 1918 blocks.
+var privateIPv4 = []netip.Prefix{
+	netip.MustParsePrefix("10.0.0.0/8"),
+	netip.MustParsePrefix("172.16.0.0/12"),
+	netip.MustParsePrefix("192.168.0.0/16"),
+}
 
+// subnetPrivate reports whether all of p lies in an RFC 1918 block.
+func subnetPrivate(p netip.Prefix) bool {
+	return slices.ContainsFunc(privateIPv4, func(b netip.Prefix) bool {
+		return b.Bits() <= p.Bits() && b.Contains(p.Addr())
+	})
+}
+
+// subnetDiscoveryPrefixes returns the distinct subnets of the gateways'
+// ipAddrTable rows that subnet discovery searches, in row order, and the
+// ones it leaves out with the reason: not private (a WAN subnet), or a /31
+// or /32 link.
+func subnetDiscoveryPrefixes(subnets []SubnetInfo) (search []netip.Prefix, skipped []string) {
+	seen := make(map[netip.Prefix]bool)
+	for _, s := range subnets {
+		p, ok := s.prefix()
+		if !ok || seen[p] {
+			continue
+		}
+		seen[p] = true
+		switch {
+		case !subnetPrivate(p):
+			skipped = append(skipped, p.String()+" not private")
+		case p.Bits() >= 31:
+			skipped = append(skipped, p.String()+" a link")
+		default:
+			search = append(search, p)
+		}
+	}
+	return search, skipped
+}
+
+// planSubnetDiscovery returns the subnets, counts and candidates of a
+// discovery run over the gateways' ipAddrTable rows subnets (see the
+// subnet discovery doc above); ranges are the lines of swich_ips.
+func planSubnetDiscovery(subnets []SubnetInfo, ranges []string) subnetPlan {
+	var plan subnetPlan
+	plan.Subnets, plan.Skipped = subnetDiscoveryPrefixes(subnets)
+	in := func(prefixes []netip.Prefix, a netip.Addr) bool {
+		return slices.ContainsFunc(prefixes, func(p netip.Prefix) bool { return p.Contains(a) })
+	}
+	listed := switchIPPrefixes(ranges)
+	var listedSubnets []netip.Prefix
+	for _, p := range plan.Subnets {
+		if slices.ContainsFunc(listed, p.Overlaps) {
+			listedSubnets = append(listedSubnets, p)
+		}
+	}
+
+	known := make(map[string]bool) // IPs that are no candidates
+	for _, gw := range gatewayIPs {
+		known[gw] = true // a gateway is no switch: drawn as a router
+	}
+	for _, s := range subnets {
+		known[s.IP] = true // the gateways' own addresses
+	}
+	knownMACs := make(map[string]bool) // the stored devices' own MACs
 	collectedDataMutex.RLock()
-	for ip := range collectedData {
-		skip[ip] = true
+	for ip, d := range collectedData {
+		known[ip] = true
+		if mac := graphChassisKey(d.ChassisID); mac != "" {
+			knownMACs[mac] = true
+		}
+		for _, iface := range d.Interfaces {
+			if mac := usableMAC(iface.IfPhysAddress); mac != "" {
+				knownMACs[mac] = true
+			}
+		}
 	}
 	collectedDataMutex.RUnlock()
 
-	// The ARP-known IPs, each with whether a MAC that is not random maps
-	// to it
+	// The ARP-known IPs in the subnets with the MACs that map to them
+	arpMACs := make(map[netip.Addr][]string)
 	globalMACtoIPMutex.RLock()
-	arpIPs := make(map[netip.Addr]bool, len(globalMACtoIP))
 	for mac, ip := range globalMACtoIP {
-		if a, err := netip.ParseAddr(ip); err == nil && a.Is4() {
-			arpIPs[a] = arpIPs[a] || !isRandomMAC(mac)
+		if a, err := netip.ParseAddr(ip); err == nil && a.Is4() && in(plan.Subnets, a) {
+			arpMACs[a] = append(arpMACs[a], mac)
 		}
 	}
 	globalMACtoIPMutex.RUnlock()
 
-	for i := range plan {
-		probe := &plan[i]
-		p, _ := probe.prefix()
-		var hosts []netip.Addr
-		if probe.Prefix < 22 {
-			// Large subnet: the ARP-known IPs
-			for a, stable := range arpIPs {
-				switch {
-				case !p.Contains(a):
-				case !stable:
-					probe.Random++
-				default:
-					hosts = append(hosts, a)
-				}
-			}
-			slices.SortFunc(hosts, netip.Addr.Compare)
-		} else {
-			// Small subnet: every host
-			hosts = subnetHosts(p)
+	for _, a := range slices.SortedFunc(maps.Keys(arpMACs), netip.Addr.Compare) {
+		plan.ARPIPs++
+		macs := slices.Sorted(slices.Values(arpMACs[a]))
+		i := slices.IndexFunc(macs, isNetworkMakerMAC)
+		if i < 0 {
+			continue
 		}
-		for _, a := range hosts {
-			ip := a.String()
-			if skip[ip] || inListed(a) {
-				continue
-			}
-			skip[ip] = true // each IP once per run
-			probe.IPs = append(probe.IPs, ip)
+		plan.Makers++
+		ip := a.String()
+		if known[ip] || knownMACs[macs[i]] || in(listed, a) {
+			plan.Known++
+			continue
 		}
+		plan.Candidates = append(plan.Candidates, subnetCandidate{IP: ip, MAC: macs[i], Listed: in(listedSubnets, a)})
 	}
+	slices.SortStableFunc(plan.Candidates, func(x, y subnetCandidate) int {
+		switch {
+		case x.Listed == y.Listed:
+			return 0
+		case x.Listed:
+			return -1
+		}
+		return 1
+	})
 	return plan
 }
 
-// subnetHosts returns the host addresses of a subnet of /22 or smaller:
-// without the network and broadcast addresses, except in a /31 (two hosts
-// on a point-to-point link) and a /32. A larger subnet has none here. (The
-// old generateSubnetIPs made room for 2^32-1 strings for a /32, a 64 GiB
-// allocation.)
-func subnetHosts(p netip.Prefix) []netip.Addr {
-	p = p.Masked()
-	if !p.Addr().Is4() || p.Bits() < 22 {
-		return nil
+// probeSubnetCandidates probes candidates in order, limits.Workers at a
+// time, and starts no probe once limits.Budget is spent: a candidate that
+// answers the sysDescr probe (snmpProbeWalk with limits.Probe) is asked
+// checkSwitch, found is called for each switch as soon as it is found (one
+// call at a time), and the others are recorded in skips (the SNMP devices
+// that are no switches, the hosts that did not answer). Returns how many
+// candidates the budget left unprobed.
+func probeSubnetCandidates(snmpObj *SNMPObject, candidates []subnetCandidate, limits subnetDiscoveryLimits, skips *switchSkips, found func(switchCheck)) (late int) {
+	now := limits.Now
+	if now == nil {
+		now = time.Now
 	}
-	first, n := p.Addr(), 1<<(32-p.Bits())
-	if n > 2 {
-		first, n = first.Next(), n-2
+	var deadline time.Time
+	if limits.Budget > 0 {
+		deadline = now().Add(limits.Budget)
 	}
-	hosts := make([]netip.Addr, 0, n)
-	for a := first; len(hosts) < n; a = a.Next() {
-		hosts = append(hosts, a)
-	}
-	return hosts
-}
-
-// probeSwitches probes ips in order, workers at a time: a host that
-// answers the sysDescr probe (snmpProbeWalk) is asked checkSwitch, found is
-// called for each switch as soon as it is found (one call at a time), and
-// the other SNMP devices (access points, firewalls, hypervisors) are
-// recorded in skips.
-func probeSwitches(snmpObj *SNMPObject, ips []string, workers int, skips *switchSkips, found func(switchCheck)) {
-	jobs := make(chan string)
+	jobs := make(chan subnetCandidate)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for range min(max(workers, 1), len(ips)) {
+	for range min(max(limits.Workers, 1), len(candidates)) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for ip := range jobs {
-				if lines, err := snmpProbeWalk(snmpObj.Community, ip, oidSysDescr); err != nil || len(lines) == 0 {
-					continue // no SNMP agent: most hosts
+			for c := range jobs {
+				if !deadline.IsZero() && now().After(deadline) {
+					mu.Lock()
+					late++
+					mu.Unlock()
+					continue
+				}
+				if lines, err := snmpProbeWalk(snmpObj.Community, c.IP, oidSysDescr, limits.Probe); err != nil || len(lines) == 0 {
+					skips.add(switchCheck{IP: c.IP}) // no SNMP agent
+					continue
 				}
 				// An SNMP device: a switch only with a switch MIB
-				check := snmpObj.checkSwitch(ip)
+				check := snmpObj.checkSwitch(c.IP)
 				if !check.isSwitch() {
 					skips.add(check)
 					continue
@@ -1107,83 +1164,107 @@ func probeSwitches(snmpObj *SNMPObject, ips []string, workers int, skips *switch
 			}
 		}()
 	}
-	for _, ip := range ips {
-		jobs <- ip
+	for _, c := range candidates {
+		jobs <- c
 	}
 	close(jobs)
 	wg.Wait()
+	return late
 }
 
-// subnetDiscovery is one discovery run over the subnets of every gateway
-// (the ipAddrTable of each one; a subnet two gateways share is probed
-// once; see the subnet discovery probes above), workers hosts at a time:
-// add is called for each switch as soon as it is found; ranges are the
-// lines of swich_ips. Returns the IPs add took, in IP order.
-func subnetDiscovery(snmpObj *SNMPObject, ranges []string, workers int, add func(ip string) bool) []string {
+// subnetDiscoveryRun is what one discovery run did, for its summary line.
+type subnetDiscoveryRun struct {
+	Gateways []string // the gateways whose ipAddrTable answered
+	Plan     subnetPlan
+	Late     int // candidates the budget left unprobed
+	Budget   time.Duration
+	Added    []string // the switches appended to swich_ips, in IP order
+	Skips    *switchSkips
+}
+
+// subnetDiscoverySummaryExamples is how many subnets and switches the
+// summary line names.
+const subnetDiscoverySummaryExamples = 5
+
+// summary is the one line of a discovery run: the subnets searched (and
+// left out), the ARP-known IPs in them, the network-equipment makers'
+// IPs, the candidates probed, the switches added, and the devices not
+// added with a few examples (switchSkips).
+func (r subnetDiscoveryRun) summary() string {
+	p := r.Plan
+	var b strings.Builder
+	fmt.Fprintf(&b, "🔍 [SubnetDisc] %s of %s", switchSkipCount(len(p.Subnets), "subnet"), strings.Join(r.Gateways, ", "))
+	if n := len(p.Skipped); n > 0 {
+		fmt.Fprintf(&b, " (%d left out: %s)", n, switchSkipList(p.Skipped[:min(n, subnetDiscoverySummaryExamples)], n))
+	}
+	fmt.Fprintf(&b, ", %s in them, %d with a network-equipment maker's MAC", switchSkipCount(p.ARPIPs, "ARP-known IP"), p.Makers)
+	if p.Known > 0 {
+		fmt.Fprintf(&b, " (%d of them stored, a gateway's address or in swich_ips)", p.Known)
+	}
+	fmt.Fprintf(&b, ", %d probed", len(p.Candidates)-r.Late)
+	if r.Late > 0 {
+		fmt.Fprintf(&b, " (time budget of %s spent: %d not probed)", r.Budget, r.Late)
+	}
+	switch n := len(r.Added); n {
+	case 0:
+		b.WriteString(", no switch added")
+	case 1:
+		fmt.Fprintf(&b, ", 1 switch added: %s", r.Added[0])
+	default:
+		fmt.Fprintf(&b, ", %d switches added: %s", n, switchSkipList(r.Added[:min(n, subnetDiscoverySummaryExamples)], n))
+	}
+	if detail := r.Skips.detail(); detail != "" {
+		b.WriteString("; not added: " + detail)
+	}
+	return b.String()
+}
+
+// subnetDiscovery is one discovery run (see the subnet discovery doc
+// above) over the subnets of every gateway, within limits: add is called
+// for each switch as soon as it is found; ranges are the lines of
+// swich_ips. It prints the run's one summary line and returns the IPs add
+// took, in IP order.
+func subnetDiscovery(snmpObj *SNMPObject, ranges []string, limits subnetDiscoveryLimits, add func(ip string) bool) []string {
+	run := subnetDiscoveryRun{Budget: limits.Budget, Skips: &switchSkips{}}
 	var subnets []SubnetInfo
-	seen := make(map[string]bool)
 	for _, gw := range gatewayIPs {
-		for _, s := range discoverGatewaySubnets(snmpObj, gw) {
-			if key := fmt.Sprintf("%s/%d", s.Net, s.Prefix); !seen[key] {
-				seen[key] = true
-				subnets = append(subnets, s)
-			}
+		if rows := discoverGatewaySubnets(snmpObj, gw); len(rows) > 0 {
+			run.Gateways = append(run.Gateways, gw)
+			subnets = append(subnets, rows...)
 		}
 	}
 	if len(subnets) == 0 {
+		fmt.Printf("🔍 [SubnetDisc] No subnet to search: no gateway answered the ipAddrTable walk (%s)\n", gatewayListText())
 		return nil
 	}
 
-	plan := planSubnetDiscovery(subnets, ranges)
-	var ips []string
-	for _, p := range plan {
-		what := "every host"
-		if p.Prefix < 22 {
-			what = fmt.Sprintf("ARP-known IPs, %d with only random MACs left out", p.Random)
-		}
-		if p.Listed {
-			what += "; overlaps swich_ips, probed first"
-		}
-		fmt.Printf("📡 [SubnetDisc] Subnet %s/%d — probing %d IPs (%s)\n", p.Net, p.Prefix, len(p.IPs), what)
-		ips = append(ips, p.IPs...)
-	}
-	fmt.Printf("📡 [SubnetDisc] Probing %d IPs, %d at a time\n", len(ips), workers)
-
-	skips := &switchSkips{}
-	var added []string
-	probeSwitches(snmpObj, ips, workers, skips, func(c switchCheck) {
+	run.Plan = planSubnetDiscovery(subnets, ranges)
+	run.Late = probeSubnetCandidates(snmpObj, run.Plan.Candidates, limits, run.Skips, func(c switchCheck) {
 		if add(c.IP) {
-			fmt.Printf("✅ [SubnetDisc] New switch found: %s (%s) — added to swich_ips\n", c.IP, c.switchMIBs)
-			added = append(added, c.IP)
+			run.Added = append(run.Added, c.IP)
 		}
 	})
-	skips.print("SubnetDisc")
-
-	if len(added) == 0 {
-		fmt.Println("📡 [SubnetDisc] No new switches found in gateway subnets")
-		return nil
-	}
-	fmt.Printf("✅ [SubnetDisc] Added %d new switches to swich_ips\n", len(added))
-	slices.SortFunc(added, compareIPs)
-	return added
+	slices.SortFunc(run.Added, compareIPs)
+	fmt.Println(run.summary())
+	return run.Added
 }
 
 // RunSubnetDiscovery discovers new switches in the subnets of every gateway
 // and appends each one to swich_ips as soon as it is found, for the rescue
-// scan to poll (subnetDiscovery). Only devices that pass checkSwitch are
-// added; one line names the SNMP devices skipped, and the gateways
-// themselves are never probed. swich_ips is the owner's configuration:
-// entries are only ever appended (appendSwitchIP, which skips an IP that is
-// listed already), never removed or rewritten. Returns the IPs appended.
+// scan to poll (subnetDiscovery, with subnetDiscoveryDefaults). Only
+// devices that pass checkSwitch are added, and the gateways themselves are
+// never probed. swich_ips is the owner's configuration: entries are only
+// ever appended (appendSwitchIP, which skips an IP that is listed
+// already), never removed or rewritten. Returns the IPs appended.
 func RunSubnetDiscovery() []string {
 	snmpObj := &SNMPObject{
 		Community: "public",
 		Port:      161,
-		Timeout:   3 * time.Second,
-		Retries:   0,
+		Timeout:   pollTiming.Timeout, // the gateways' ipAddrTable and checkSwitch
+		Retries:   pollTiming.Retries,
 	}
 	ranges, _ := readSwitchIPsFile()
-	return subnetDiscovery(snmpObj, ranges, subnetProbeWorkers, appendSwitchIP)
+	return subnetDiscovery(snmpObj, ranges, subnetDiscoveryDefaults, appendSwitchIP)
 }
 
 // ─── Graph Enrichment ──────────────────────────────────────────────────────────
@@ -1298,8 +1379,7 @@ func runMacIPCollector() {
 	// Discover new SNMP devices from gateway subnets (one-time after first ARP)
 	go func() {
 		time.Sleep(10 * time.Second) // wait for ARP cache to populate
-		fmt.Println("🔍 [SubnetDisc] Starting gateway subnet discovery...")
-		RunSubnetDiscovery()
+		RunSubnetDiscovery()         // one summary line
 	}()
 
 	ticker := time.NewTicker(5 * time.Minute)

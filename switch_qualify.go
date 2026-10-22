@@ -227,6 +227,15 @@ func (k *switchSkips) count() int {
 // SNMP without a switch MIB, a few of them with sysName and sysDescr
 // (different device types first), and how many did not answer SNMP.
 func (k *switchSkips) summary(tag string) string {
+	if detail := k.detail(); detail != "" {
+		return fmt.Sprintf("🚫 [%s] Not added: %s", tag, detail)
+	}
+	return ""
+}
+
+// detail is the body of the summary line ("" when there are none), for
+// lines that hold more than the devices not added (subnet discovery's).
+func (k *switchSkips) detail() string {
 	k.mu.Lock()
 	checks := slices.Clone(k.checks)
 	k.mu.Unlock()
@@ -256,10 +265,7 @@ func (k *switchSkips) summary(tag string) string {
 		parts = append(parts, fmt.Sprintf("%s did not answer SNMP: %s",
 			switchSkipCount(len(silent), "host"), switchSkipList(ips, len(silent))))
 	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return fmt.Sprintf("🚫 [%s] Not added: %s", tag, strings.Join(parts, "; "))
+	return strings.Join(parts, "; ")
 }
 
 // print writes the summary line of the run, if there is one.

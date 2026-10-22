@@ -206,22 +206,45 @@ type STPData struct {
 type SNMPObject struct {
 	Community string
 	Port      uint16
-	Timeout   time.Duration // Not directly used by snmpwalk command unless via -t
+	// Timeout and Retries are the -t and -r of every walk of the object
+	// (walkTiming); a zero Timeout means pollTiming. (They were not passed
+	// on until 2026-10-22: every walk ran with -t 5 -r 1.)
+	Timeout   time.Duration
 	Retries   int
 	OnSuccess func(data *DeviceData)
 	OnFailure func(ip string, err error)
 }
 
-// NewSNMPObject creates a new SNMPObject
+// NewSNMPObject creates a new SNMPObject with the poll timing (pollTiming)
 func NewSNMPObject(onSuccess func(*DeviceData), onFailure func(string, error)) *SNMPObject {
 	return &SNMPObject{
 		Community: "public",
 		Port:      161,
-		Timeout:   5 * time.Second,
-		Retries:   2,
+		Timeout:   pollTiming.Timeout,
+		Retries:   pollTiming.Retries,
 		OnSuccess: onSuccess,
 		OnFailure: onFailure,
 	}
+}
+
+// walkTiming is how long one snmpbulkwalk waits for the agent: Timeout per
+// request (-t, in whole seconds, at least 1) and Retries (-r).
+type walkTiming struct {
+	Timeout time.Duration
+	Retries int
+}
+
+// pollTiming is the timing of the polls, the ARP sweeps and checkSwitch: 5 s
+// and one retry, so an agent that does not answer costs 10 s per walk.
+var pollTiming = walkTiming{Timeout: 5 * time.Second, Retries: 1}
+
+// timing is the walk timing of s: its Timeout and Retries, or pollTiming
+// when Timeout is not set.
+func (s *SNMPObject) timing() walkTiming {
+	if s.Timeout <= 0 {
+		return pollTiming
+	}
+	return walkTiming{Timeout: s.Timeout, Retries: max(s.Retries, 0)}
 }
 
 // CollectData starts the data collection process
@@ -403,34 +426,34 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 	}
 }
 
-// snmpWalk runs one SNMP walk for runSNMPWalk. Tests replace it with a fake
-// agent so no SNMP request is sent.
+// snmpWalk runs one SNMP walk for runSNMPWalk, with the object's timing.
+// Tests replace it with a fake agent so no SNMP request is sent.
 var snmpWalk = snmpBulkWalk
 
 // snmpProbeWalk runs the walk that asks a host whether it runs SNMP at all
-// (subnet discovery's sysDescr probe): one try with a 1 s timeout, so a host
-// without SNMP costs 1 s instead of the 10 s of a poll walk (5 s, one
-// retry). Tests replace it like snmpWalk.
-var snmpProbeWalk = func(community, ip, oid string) ([]string, error) {
-	return snmpBulkWalkTimed(community, ip, oid, 1, 0)
-}
+// (subnet discovery's sysDescr probe, with the run's short probe timing,
+// subnetDiscoveryLimits.Probe). Tests replace it like snmpWalk.
+var snmpProbeWalk = snmpBulkWalk
 
-// runSNMPWalk executes snmpbulkwalk command with 30s timeout and returns lines
+// runSNMPWalk runs one snmpbulkwalk of oid on ip with the timing of s
+// (killed after 30s) and returns its lines.
 func (s *SNMPObject) runSNMPWalk(ip, oid string) ([]string, error) {
-	return snmpWalk(s.Community, ip, oid)
+	return snmpWalk(s.Community, ip, oid, s.timing())
 }
 
-// snmpBulkWalk runs snmpbulkwalk with the poll timeouts (5 s, one retry;
-// killed after 30s) and returns its lines.
-func snmpBulkWalk(community, ip, oid string) ([]string, error) {
-	return snmpBulkWalkTimed(community, ip, oid, 5, 1)
+// snmpBulkWalkArgs are the snmpbulkwalk arguments of one walk: SNMP v2c,
+// numeric OIDs, 25 repetitions per request, and timing as -t (whole
+// seconds, at least 1) and -r.
+func snmpBulkWalkArgs(community, ip, oid string, timing walkTiming) []string {
+	seconds := max(int(timing.Timeout.Round(time.Second)/time.Second), 1)
+	return []string{"-v2c", "-c", community, "-On", "-Cr25",
+		"-t", strconv.Itoa(seconds), "-r", strconv.Itoa(max(timing.Retries, 0)), ip, oid}
 }
 
-// snmpBulkWalkTimed runs snmpbulkwalk with timeout seconds per request and
-// retries retries (killed after 30s) and returns its lines.
-func snmpBulkWalkTimed(community, ip, oid string, timeout, retries int) ([]string, error) {
-	cmd := exec.Command("snmpbulkwalk", "-v2c", "-c", community, "-On", "-Cr25",
-		"-t", strconv.Itoa(timeout), "-r", strconv.Itoa(retries), ip, oid)
+// snmpBulkWalk runs snmpbulkwalk with timing (snmpBulkWalkArgs; killed
+// after 30s) and returns its lines.
+func snmpBulkWalk(community, ip, oid string, timing walkTiming) ([]string, error) {
+	cmd := exec.Command("snmpbulkwalk", snmpBulkWalkArgs(community, ip, oid, timing)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var out bytes.Buffer
 	cmd.Stdout = &out

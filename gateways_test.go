@@ -339,43 +339,55 @@ func TestSweepWalksEachIPOnce(t *testing.T) {
 }
 
 // TestSubnetDiscoveryEveryGateway checks that subnet discovery reads the
-// ipAddrTable of every gateway: a subnet both gateways have is probed once,
-// the subnet only the second gateway has is probed too, only switches are
-// appended (checkSwitch), and the gateways themselves are never probed.
+// ipAddrTable of every gateway: a subnet both gateways have is searched
+// once and each of its IPs probed once, the subnet only the second gateway
+// has is searched too and its WAN subnet is not, only switches are
+// appended (checkSwitch), and the gateways and their addresses are never
+// probed, although the FortiGate's MACs are a network maker's.
 func TestSubnetDiscoveryEveryGateway(t *testing.T) {
 	resetState(t)
 	const debianLike, fortiLike = "10.9.45.1", "10.9.45.2"
 	fakeSNMP.set(debianLike, gatewayAgent("debian216", "Linux debian216", nil,
 		gwAddr{debianLike, "255.255.255.240", 2}, gwAddr{"127.0.0.1", "255.0.0.0", 1}))
 	fakeSNMP.set(fortiLike, gatewayAgent("FortiGate-600F", "", nil,
-		gwAddr{fortiLike, "255.255.255.240", 33}, gwAddr{"10.9.46.1", "255.255.255.240", 52}))
+		gwAddr{fortiLike, "255.255.255.240", 33}, gwAddr{"10.9.46.1", "255.255.255.240", 52}, gwAddr{"195.158.2.221", "255.255.255.224", 40}))
 	fakeSNMP.set("10.9.45.5", bridgeSwitchAgent(24))
 	fakeSNMP.set("10.9.45.6", accessPointAgent("C46"))
 	fakeSNMP.set("10.9.46.5", lldpSwitchAgent(0x46))
 	fakeSNMP.set("10.9.46.6", esxiAgent())
+	fakeSNMP.set("195.158.2.193", lldpSwitchAgent(0xc1)) // the ISP's router: the WAN is not searched
 	setGatewayIPs([]string{debianLike, fortiLike})
+	setARPCache(map[string]string{
+		debianMAC:           debianLike,      // a VMware VM
+		"84:39:8f:2d:00:02": fortiLike,       // Fortinet: a maker's MAC, but a gateway
+		"84:39:8f:2e:00:01": "10.9.46.1",     // the FortiGate's other address
+		"00:e0:fc:2d:00:05": "10.9.45.5",     // Huawei
+		"18:e8:29:2d:00:06": "10.9.45.6",     // Ubiquiti
+		"4c:ae:a3:2e:00:05": "10.9.46.5",     // HPE
+		"5c:ed:8c:2e:00:06": "10.9.46.6",     // HPE: the ESXi host's NIC
+		"00:1a:a1:c3:02:c1": "195.158.2.193", // Cisco
+	})
 	switchIPAdds.taken()
 
 	var added []string
-	out := captureStdout(t, func() { added = RunSubnetDiscovery() })
-	slices.SortFunc(added, compareIPs)
+	out := captureStdout(t, func() {
+		added = subnetDiscovery(&SNMPObject{Community: "public", Port: 161}, nil, subnetDiscoveryDefaults, appendSwitchIP)
+	})
 	if want := []string{"10.9.45.5", "10.9.46.5"}; !slices.Equal(added, want) {
 		t.Errorf("added %v, want %v", added, want)
 	}
 	if got := switchIPAdds.taken(); !slices.Equal(got, []string{"10.9.45.5", "10.9.46.5"}) {
 		t.Errorf("appended to swich_ips: %v", got)
 	}
-	if n := strings.Count(out, "Subnet 10.9.45.0/28 —"); n != 1 {
-		t.Errorf("the shared subnet was probed %d times, want once:\n%s", n, out)
+	if got, want := sortedStrings(snmpProbes.taken()), []string{"10.9.45.5", "10.9.45.6", "10.9.46.5", "10.9.46.6"}; !slices.Equal(got, want) {
+		t.Errorf("probed %v, want each candidate once and no gateway or WAN address: %v", got, want)
 	}
-	if !strings.Contains(out, "Subnet 10.9.46.0/28 —") {
-		t.Errorf("the second gateway's subnet was not probed:\n%s", out)
-	}
-	if !strings.Contains(out, "10.9.45.6 (C46") || !strings.Contains(out, "10.9.46.6 (localhost") {
-		t.Errorf("the summary does not name the access point and the ESXi host:\n%s", out)
-	}
-	if strings.Contains(out, debianLike+" (") || strings.Contains(out, fortiLike+" (") {
-		t.Errorf("a gateway was probed as a switch candidate:\n%s", out)
+	want := "🔍 [SubnetDisc] 2 subnets of 10.9.45.1, 10.9.45.2 (1 left out: 195.158.2.192/27 not private), 7 ARP-known IPs in them, " +
+		"6 with a network-equipment maker's MAC (2 of them stored, a gateway's address or in swich_ips), 4 probed, " +
+		"2 switches added: 10.9.45.5, 10.9.46.5; not added: 2 devices without BRIDGE-MIB ports or lldpLocChassisId (no switch): " +
+		"10.9.45.6 (C46, U6-Pro 6.8.2.15592), 10.9.46.6 (localhost, VMware ESXi 6.5.0 build-4887370 VMware, Inc. x86_64)\n"
+	if out != want {
+		t.Errorf("output =\n%s\nwant\n%s", out, want)
 	}
 }
 

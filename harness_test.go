@@ -755,17 +755,22 @@ type fakeAgents struct {
 	mu     sync.Mutex
 	agents map[string]map[string][]string // ip → OID → lines
 	walks  map[string]int                 // "ip oid" → walks
+	timed  map[string]int                 // "ip oid timeout/retries" → walks
 }
 
 var fakeSNMP = &fakeAgents{}
 
-func (f *fakeAgents) walk(_, ip, oid string) ([]string, error) {
+func (f *fakeAgents) walk(_, ip, oid string, timing walkTiming) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.walks == nil {
 		f.walks = map[string]int{}
 	}
 	f.walks[ip+" "+oid]++
+	if f.timed == nil {
+		f.timed = map[string]int{}
+	}
+	f.timed[fmt.Sprintf("%s %s %s/%d", ip, oid, timing.Timeout, timing.Retries)]++
 	if lines, ok := f.agents[ip][oid]; ok {
 		return slices.Clone(lines), nil
 	}
@@ -782,6 +787,16 @@ func (f *fakeAgents) walkCounts() map[string]int {
 	return counts
 }
 
+// walkTimings returns the walks since the last call (or reset) by "ip oid
+// timeout/retries" (the timing snmpbulkwalk would get) and clears them.
+func (f *fakeAgents) walkTimings() map[string]int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	counts := f.timed
+	f.timed = nil
+	return counts
+}
+
 func (f *fakeAgents) set(ip string, walks map[string][]string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -795,6 +810,7 @@ func (f *fakeAgents) reset() {
 	f.mu.Lock()
 	f.agents = nil
 	f.walks = nil
+	f.timed = nil
 	f.mu.Unlock()
 }
 
@@ -807,11 +823,11 @@ type probeRecorder struct {
 
 var snmpProbes = &probeRecorder{}
 
-func (r *probeRecorder) walk(community, ip, oid string) ([]string, error) {
+func (r *probeRecorder) walk(community, ip, oid string, timing walkTiming) ([]string, error) {
 	r.mu.Lock()
 	r.ips = append(r.ips, ip)
 	r.mu.Unlock()
-	return fakeSNMP.walk(community, ip, oid)
+	return fakeSNMP.walk(community, ip, oid, timing)
 }
 
 // count is the number of probes recorded.

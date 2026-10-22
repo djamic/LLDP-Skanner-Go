@@ -238,11 +238,13 @@ Har 5 daqiqada `collectARPFromAllSwitches()`:
 3. Natijalarni `macIPCache` (global map) ga birlashtiradi
 4. `mac_ip_cache.json` ga saqlaydi
 
-### 9.2. Gateway Subnet Discovery (`discoverGatewaySubnets`)
-`gateway_ip` dagi har bir gateway'dan SNMP orqali (umumiy subnet bir marta):
-1. `ipAdEntAddr` (1.3.6.1.2.1.4.20.1.1) → SVI IP'lar ro'yxati
-2. `ipAdEntNetMask` (1.3.6.1.2.1.4.20.1.3) → subnet maskalari
-3. `SubnetInfo{Net, Prefix, SVIIP}` strukturasi qaytariladi
+### 9.2. Gateway Subnet Discovery (`RunSubnetDiscovery`)
+Har ishga tushishda bir marta. `gateway_ip` dagi har bir gateway'ning `ipAdEntNetMask` (1.3.6.1.2.1.4.20.1.3) jadvalidan subnetlar olinadi (`discoverGatewaySubnets`, umumiy subnet bir marta). Subnetlar to'liq skanerlanmaydi:
+1. Faqat xususiy (RFC 1918) subnetlar; WAN (masalan 195.158.2.192/27), 172.15.0.0/16 kabi xususiy bo'lmaganlar va /31, /32 tashlab ketiladi
+2. Nomzodlar — shu subnetlardagi ARP orqali ma'lum IP'lar (`globalMACtoIP`), MAC'i tarmoq uskunasi ishlab chiqaruvchisiniki bo'lsa (`isNetworkMakerMAC`, `mac_identity.go`); har IP bir marta
+3. Saqlangan qurilmalar (IP yoki MAC bo'yicha), gateway manzillari va `swich_ips` dagi IP'lar (rescue scan'niki) tekshirilmaydi
+4. 8 ta parallel: sysDescr so'rovi 2 s (qayta urinishsiz), javob bergan bo'lsa `checkSwitch`; switch darhol `swich_ips` ga qo'shiladi; umumiy vaqt chegarasi 5 daqiqa
+5. Har ishga tushishda bitta xulosa qatori (`[SubnetDisc]`)
 
 ### 9.3. ESXi HTTP Validatsiya (`queueESXiValidation`)
 - 100 ta parallel goroutine (`esxiCheckWorker`) `esxiQueue` kanalidan ish olinadi
