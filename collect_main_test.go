@@ -159,3 +159,38 @@ func TestCollectRescanObjectStoresData(t *testing.T) {
 		t.Error("LastSeen not set")
 	}
 }
+
+// TestCollectSysName: a poll without a name from its caller (the rescue
+// scan and LLDP discovery poll with "") reads sysName.0 and stores it; a
+// poll with a name keeps that name and reads none; when the read gives no
+// name (the walk fails, or the agent has none) the stored name stays, as it
+// does for the periodic rescan, which passes the stored name.
+func TestCollectSysName(t *testing.T) {
+	resetState(t)
+	const ip = "10.9.2.4"
+	obj := newRescanSNMPObject()
+	agent := collectTestAgent()
+	agent[oidSysName] = []string{oidSysName + ` = STRING: "sw-named"`}
+	fakeSNMP.set(ip, agent)
+	sysNameWalks := func() int { return fakeSNMP.walkCounts()[ip+" "+oidSysName] }
+
+	obj.CollectData(ip, "")
+	if got, n := collectStored(ip).SysName, sysNameWalks(); got != "sw-named" || n != 1 {
+		t.Errorf("poll without a name: SysName %q after %d sysName walks, want %q after 1", got, n, "sw-named")
+	}
+	obj.CollectData(ip, "sw-caller")
+	if got, n := collectStored(ip).SysName, sysNameWalks(); got != "sw-caller" || n != 0 {
+		t.Errorf("poll with a name: SysName %q after %d sysName walks, want %q after none", got, n, "sw-caller")
+	}
+	for _, answer := range [][]string{nil, {oidSysName + ` = ""`}} {
+		agent := collectTestAgent()
+		if answer != nil {
+			agent[oidSysName] = answer
+		}
+		fakeSNMP.set(ip, agent)
+		obj.CollectData(ip, "")
+		if got := collectStored(ip).SysName; got != "sw-caller" {
+			t.Errorf("poll without a name whose sysName read gives none (%q): SysName %q, want the stored %q", answer, got, "sw-caller")
+		}
+	}
+}

@@ -2,6 +2,7 @@
   "172.20.230.40": {
     "callback": "success",
     "chassis_id": "58:94:80:00:f7:a3",
+    "sys_name": "Switch",
     "neighbors": [
       {"TimeMarker": 0, "LocalPortNum": 1, "RemIndex": 2, "RemChassisIdSubtype": 4, "RemChassisId": "\"AC8B.A970.A966\"", "RemPortIdSubtype": 3, "RemPortId": "\"AC8B.A970.A966\"", "RemPortDesc": "\"eth0\"", "RemSysName": "Sportzal", "RemSysDesc": "UAP-AC-Mesh-Pro, 6.8.2.15592", "RemMgmtIP": "", "RemSysCapEnabled": 56, "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
       {"TimeMarker": 0, "LocalPortNum": 1, "RemIndex": 3, "RemChassisIdSubtype": 4, "RemChassisId": "\"7845.5873.0F69\"", "RemPortIdSubtype": 3, "RemPortId": "\"7845.5873.0F69\"", "RemPortDesc": "\"eth0\"", "RemSysName": "Sportzal", "RemSysDesc": "UAP-AC-Mesh-Pro, 6.8.2.15592", "RemMgmtIP": "", "RemSysCapEnabled": 56, "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
@@ -186,6 +187,7 @@
   "172.20.230.44": {
     "callback": "success",
     "chassis_id": "58:94:80:01:01:27",
+    "sys_name": "Switch",
     "neighbors": [
       {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 2, "RemChassisIdSubtype": 4, "RemChassisId": "\"F4E2.C6F7.2381\"", "RemPortIdSubtype": 3, "RemPortId": "\"F4E2.C6F7.2381\"", "RemPortDesc": "\"eth0\"", "RemSysName": "Sportzal2", "RemSysDesc": "U6-Pro, 6.2.49.14111", "RemMgmtIP": "", "RemSysCapEnabled": 56, "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
       {"TimeMarker": 0, "LocalPortNum": 3, "RemIndex": 4, "RemChassisIdSubtype": 4, "RemChassisId": "\"F4E2.C6F7.1FC1\"", "RemPortIdSubtype": 3, "RemPortId": "\"F4E2.C6F7.1FC1\"", "RemPortDesc": "\"eth0\"", "RemSysName": "Sportzal1", "RemSysDesc": "U6-Pro, 6.8.2.15592", "RemMgmtIP": "", "RemSysCapEnabled": 56, "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},

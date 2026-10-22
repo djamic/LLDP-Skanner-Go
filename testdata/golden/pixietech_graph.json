@@ -11,8 +11,8 @@
       {"source": "58:94:80:01:01:27", "target": "f8:f0:82:d1:67:5e", "label": "GigaEth0/28 [T] 1G|Eth1/0/24", "sourceLabel": "GigaEth0/28 [T] 1G", "targetLabel": "Eth1/0/24"}
     ],
     "nodes": [
-      {"id": "58:94:80:00:f7:a3", "group": "switch", "type": "switch", "label": "\n172.20.230.40\n58:94:80:00:f7:a3", "sysName": "\n172.20.230.40"},
-      {"id": "58:94:80:01:01:27", "group": "switch", "type": "switch", "label": "\n172.20.230.44\n58:94:80:01:01:27", "sysName": "\n172.20.230.44"},
+      {"id": "58:94:80:00:f7:a3", "group": "switch", "type": "switch", "label": "Switch\n172.20.230.40\n58:94:80:00:f7:a3", "sysName": "Switch\n172.20.230.40"},
+      {"id": "58:94:80:01:01:27", "group": "switch", "type": "switch", "label": "Switch\n172.20.230.44\n58:94:80:01:01:27", "sysName": "Switch\n172.20.230.44"},
       {"id": "78:45:58:73:0f:69", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal\nUAP-AC-Mesh-Pro, 6.8.2.15592\n172.15.121.114\n78:45:58:73:0f:69", "sysName": "[LLDP-EP] Ubiquiti\nSportzal\nUAP-AC-Mesh-Pro, 6.8.2.15592\n172.15.121.114"},
       {"id": "9c:05:d6:31:6b:ad", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal4\nU6-Pro, 6.8.2.15592\n172.15.1.71\n9c:05:d6:31:6b:ad", "sysName": "[LLDP-EP] Ubiquiti\nSportzal4\nU6-Pro, 6.8.2.15592\n172.15.1.71"},
       {"id": "9c:05:d6:31:8d:59", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal3\nU6-Pro, 6.8.2.15592\n172.15.1.70\n9c:05:d6:31:8d:59", "sysName": "[LLDP-EP] Ubiquiti\nSportzal3\nU6-Pro, 6.8.2.15592\n172.15.1.70"},

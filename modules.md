@@ -166,7 +166,7 @@ flowchart TD
 | Funksiya | Tavsif |
 |----------|--------|
 | `NewSNMPObject()` | OnSuccess/OnFailure callback'lar bilan SNMP ob'ekt yaratish |
-| `CollectData(ip, sysName)` | To'liq yig'ish zanjiri: `snmpbulkwalk → parse → DeviceData` |
+| `CollectData(ip, sysName)` | To'liq yig'ish zanjiri: `snmpbulkwalk → parse → DeviceData`. Chaqiruvchida nom bo'lmasa (rescue scan, LLDP discovery `""` beradi) sysName.0 o'qiladi; o'qib bo'lmasa saqlangan nom qoladi (`keepPreviousSysName`) |
 | `collectLocalChassisID()` | LLDP-MIB `1.0.8802.1.1.2.1.3` dan ChassisID olish; "No Such Instance" yoki bo'sh javobda ustun (`…3.2`) yana bir marta o'qiladi (PiXiETECH 172.20.230.40/.44), "No Such Object" — yakuniy |
 | `collectInterfaces()` | IF-MIB: ifDescr, ifSpeed, ifOperStatus, ifHCInOctets, ifAlias, ifInErrors |
 | `collectLLDPNeighbors()` | LLDP RemTable: RemChassisId, RemPortId, RemSysName, RemSysDesc, RemMgmtAddr. Indeks: standart 3 qism (TimeMark.LocalPort.RemIndex) yoki PiXiETECH 2 qism (RemIndex.LocalPort; agent bergan lldpRemLocalPortNum/lldpRemIndex ustunlari ustun), ManAddr ham shu 2 qismli shaklda (manzil 2-ustunda) |

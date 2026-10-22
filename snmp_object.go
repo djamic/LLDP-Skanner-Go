@@ -293,6 +293,25 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		mu.Unlock()
 	}()
 
+	// The sysName, when the caller has none: the rescue scan and LLDP
+	// discovery poll with "", and the periodic rescan passes the stored
+	// name, so a switch they added kept no name (172.20.230.40, .44, .47,
+	// .76, .77, .81, .253 and 172.20.254.203 in the saved data of
+	// 2026-10-20; their agents answer sysName.0: "Switch", "SNR-S2985G-24TC",
+	// "HPE", "6300"...). A name the caller has is kept as it is. Optional
+	// like the port count: when it gives none, storeCollectedDevice keeps
+	// the stored name (keepPreviousSysName).
+	if sysName == "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			name := s.collectSysText(ip, oidSysName)
+			mu.Lock()
+			data.SysName = name
+			mu.Unlock()
+		}()
+	}
+
 	// 2. Collect Interface Data (Full walk of IF-MIB)
 	// Minimally implemented for speed since LLDP is priority
 	wg.Add(1)

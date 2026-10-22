@@ -556,6 +556,7 @@ func storeCollectedDevice(data *DeviceData) bool {
 	}
 	collectKeepPrevious(data, prev)
 	keepPreviousChassisID(data, prev)
+	keepPreviousSysName(data, prev)
 	collectedData[data.IP] = data
 	collectedDataMutex.Unlock()
 	if !data.collectWalkFailed(collectWalkInterfaces) {
@@ -589,6 +590,15 @@ func keepPreviousChassisID(data, prev *DeviceData) {
 	}
 	if graphChassisKey(prev.ChassisID) != "" {
 		data.ChassisID = prev.ChassisID
+	}
+}
+
+// keepPreviousSysName keeps a switch's name when this poll has none (the
+// caller had none and the sysName read gave none, CollectData) and the
+// stored data of the same IP has one.
+func keepPreviousSysName(data, prev *DeviceData) {
+	if prev != nil && prev != data && data.SysName == "" {
+		data.SysName = prev.SysName
 	}
 }
 
