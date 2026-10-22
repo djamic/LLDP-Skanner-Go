@@ -145,8 +145,9 @@ func TestGoldenUIApp(t *testing.T) {
 // TestGoldenUITree runs testdata/ui/tree_probe.js, the Node tests of the
 // Tree tab: static/tree.js's builder on a synthetic graph and on the fixture
 // graph (testdata/golden/graph.json), and the tab itself (static/app.js and
-// static/tree.js, unmodified, with a stub DOM and jsTree). A failed check
-// fails the test. It pins the checks and the fixture's tree with the default
+// static/tree.js, unmodified, with a stub DOM and a model of jsTree): among
+// others the device search typed key by key and the info panel's list of
+// connected devices. A failed check fails the test. It pins the checks and the fixture's tree with the default
 // filters and with only 'vm' shown. graph.json is TestGoldenGraph's golden,
 // which runs first, so one -update run rewrites both. Skipped when Node.js
 // is not installed.

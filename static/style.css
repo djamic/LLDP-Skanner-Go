@@ -1282,6 +1282,8 @@ button:active {
     font-size: 11px;
     font-weight: 500;
     border-radius: 4px;
+    flex-shrink: 0; /* a long note shrinks instead */
+    white-space: nowrap;
 }
 
 .tree-toolbar .tree-btn:hover {
@@ -1300,6 +1302,9 @@ button:active {
     font-size: 11px;
     color: #FFD54F;
     white-space: nowrap;
+    min-width: 0; /* a long note is cut; its tooltip has it all */
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tree-status {
@@ -1309,6 +1314,23 @@ button:active {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* A device of the info panel's "Connected Devices" list that the Tree tab
+   does not have (tree.js treeOnPanelClick): the reason instead of its group. */
+.info-peer-item.tv-not-in-tree > span:first-child {
+    opacity: 0.55;
+}
+
+.info-peer-item.tv-not-in-tree > span:last-child {
+    display: none;
+}
+
+.info-peer-item.tv-not-in-tree::after {
+    content: attr(data-tree-note);
+    color: #FFD54F;
+    font-size: 10px;
+    white-space: nowrap;
 }
 
 #topologyTree {

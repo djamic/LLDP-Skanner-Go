@@ -13,9 +13,13 @@
 //    filter keeps the visible devices in place, and the outlines the golden
 //    pins (default filters and only 'vm').
 // 3. The tab itself: app.js and tree.js, unmodified, with a stub DOM, jQuery
-//    and jsTree. Nothing is built while the tab is hidden, the filter
-//    checkboxes and the device search reach the tree, a click opens the info
-//    panel, a double-click focuses the graph.
+//    and a model of jsTree (jsTreeModel). Nothing is built while the tab is
+//    hidden, the filter checkboxes and the device search reach the tree, a
+//    click opens the info panel, a double-click focuses the graph. The search
+//    typed key by key opens rows only while it is shown and keeps the device
+//    found in sight (finding F1), and a click in the info panel's list of
+//    connected devices selects the device in the tree, not in the hidden
+//    graph (finding F2).
 //
 // It sends nothing anywhere: fetch answers only what the probe hands it, and
 // timers run when the probe says so. Every failed check is printed to stderr
@@ -432,26 +436,41 @@ function hops(data, root) {
 }
 
 // ---------------------------------------------------------------------------
-// Part 3: the tab, with app.js, a stub DOM and a stub jsTree
+// Part 3: the tab, with app.js, a stub DOM and a model of jsTree
 
 function element(id) {
   const classes = new Set();
   const attrs = {};
-  const listeners = {};
+  const listeners = {}; // bubble phase
+  const captures = {};  // capture phase
+  const phase = (options) => (options === true || !!(options && options.capture) ? captures : listeners);
   return {
     id, style: {}, dataset: {}, innerHTML: '', textContent: '', value: '', checked: true, hidden: false, disabled: false,
-    clientWidth: 1200, clientHeight: 800, tagName: 'DIV', listeners,
+    clientWidth: 1200, clientHeight: 800, tagName: 'DIV', listeners, captures, scrolled: 0,
     classList: {
       add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c),
       toggle: (c, on) => { const v = on === undefined ? !classes.has(c) : !!on; if (v) classes.add(c); else classes.delete(c); return v; },
     },
-    addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
-    removeEventListener(type, fn) { listeners[type] = (listeners[type] || []).filter(f => f !== fn); },
+    addEventListener(type, fn, options) { const l = phase(options); (l[type] = l[type] || []).push(fn); },
+    removeEventListener(type, fn, options) { const l = phase(options); l[type] = (l[type] || []).filter(f => f !== fn); },
     appendChild(c) { return c; }, removeChild() {},
     setAttribute(k, v) { attrs[k] = String(v); }, getAttribute(k) { return k in attrs ? attrs[k] : null; },
     contains() { return false; }, querySelector() { return null; }, querySelectorAll() { return []; }, closest() { return null; },
-    focus() {}, click() {}, scrollIntoView() {}, getBoundingClientRect() { return { left: 0, top: 0, width: 1200, height: 800 }; },
+    focus() {}, click() {}, scrollIntoView() { this.scrolled++; },
+    getBoundingClientRect() { return { left: 0, top: 0, width: 1200, height: 800 }; },
   };
+}
+// dispatch delivers an event on a descendant of el (event.target) to el's
+// listeners as a browser does: the capture listeners first, then, unless
+// one of them stopped the event, the bubble listeners.
+function dispatch(el, event) {
+  let stopped = false, immediate = false;
+  const ev = Object.assign({
+    stopPropagation() { stopped = true; },
+    stopImmediatePropagation() { stopped = immediate = true; },
+  }, event);
+  for (const fn of el.captures[ev.type] || []) if (!immediate) fn(ev);
+  if (!stopped) for (const fn of el.listeners[ev.type] || []) if (!immediate) fn(ev);
 }
 // d3, mermaid and xterm stand-ins: every property and call gives the stand-in back.
 function standIn() {
@@ -469,40 +488,13 @@ function standIn() {
   return proxy;
 }
 
-// A jQuery with a jsTree stand-in: it records what tree.js asks of it; the
-// instances it makes go to trees.
+// A jQuery whose jstree() makes a model of a jsTree 3.3.16 instance
+// (jsTreeModel); the instances it makes go to trees.
 function jQueryStub(trees) {
   const $ = (el) => ({
     jstree(arg) {
       if (arg === true) return el.jstreeInstance || null;
-      const handlers = {};
-      const inst = {
-        options: arg, handlers, calls: [], selected: null,
-        settings: { core: { data: arg.core.data } },
-        // jsTree hands the state it saved (open rows, scroll, selection)
-        // to a forget_state function and restores what that returns.
-        refresh(skipLoading, forgetState) {
-          const saved = { core: { open: [...(this.openNow || [])], scroll: { left: 0, top: 0 }, selected: [] } };
-          this.restored = typeof forgetState === 'function' ? forgetState(saved) : saved;
-          this.calls.push(['refresh', skipLoading]);
-          fire(this, 'refresh.jstree');
-        },
-        clear_search() { this.calls.push(['clear_search']); },
-        search(q) { this.calls.push(['search', q]); },
-        toggle_node(n) { this.calls.push(['toggle_node', n.id]); },
-        open_all() { this.calls.push(['open_all']); },
-        close_all() { this.calls.push(['close_all']); },
-        deselect_all() { this.selected = null; },
-        select_node(id) { this.selected = id; this.calls.push(['select_node', id]); },
-        get_selected() { return this.selected ? [this.get_node(this.selected)] : []; },
-        get_node(x) {
-          const id = x && typeof x === 'object' ? x.nodeId : x;
-          let found = false;
-          const walk = (list) => list.forEach(n => { if (n.id === id) found = n; walk(n.children || []); });
-          walk(this.settings.core.data);
-          return found;
-        },
-      };
+      const inst = jsTreeModel(arg);
       el.jstreeInstance = inst;
       trees.push(inst);
       this.inst = inst;
@@ -514,23 +506,229 @@ function jQueryStub(trees) {
       return this;
     },
   });
-  $.jstree = { version: 'stub' };
+  $.jstree = { version: 'stub', root: '#' };
   return $;
+}
+
+// jsTreeModel stands in for a jsTree 3.3.16 instance: the methods tree.js
+// calls and the events they fire, as jstree.js (core and search plugin)
+// does. A row opens and closes with an open_node or close_node event, only
+// when it changes (a row without children does not open). A search matches
+// with search_callback, opens the rows above what it finds, keeps them as
+// the rows it opened, shows only the rows found, those above them and those
+// below them (show_only_matches, show_only_matches_children) and closes the
+// rows it opened when it is replaced or cleared if close_opened_onclear is
+// on. A refresh rebuilds the rows from settings.core.data and restores what
+// its forget_state function returns: the open rows that still exist, then
+// the selection, without opening rows. calls logs what tree.js asks;
+// user.click and user.toggle are the user's clicks, which jsTree handles
+// itself (not logged); model reads the rows' state for the checks.
+function jsTreeModel(options) {
+  const ROOT = '#';
+  const inst = { options, handlers: {}, calls: [], restored: null };
+  inst.settings = {
+    core: Object.assign({}, options.core),
+    search: Object.assign({ close_opened_onclear: true, show_only_matches: false, show_only_matches_children: false }, options.search),
+  };
+  let rows = new Map(); // id -> node, the root first, then depth first
+  let sel = [];
+  const search = { str: '', res: [], opn: [], hdn: [], som: false, smc: false };
+  const emit = (ev, data) => fire(inst, ev + '.jstree', null, data);
+
+  function load(data) {
+    rows = new Map([[ROOT, { id: ROOT, parent: null, parents: [], children: [], children_d: [], state: { loaded: true } }]]);
+    sel = [];
+    const add = (json, parent) => {
+      if (rows.has(json.id)) throw new Error(`jsTree model: duplicate id ${json.id}`);
+      const n = { id: json.id, text: json.text, data: json.data, parent: parent.id, parents: [parent.id, ...parent.parents],
+        children: [], children_d: [], state: { opened: !!(json.state && json.state.opened), selected: false, hidden: false } };
+      rows.set(n.id, n);
+      parent.children.push(n.id);
+      (json.children || []).forEach(c => add(c, n));
+    };
+    (data || []).forEach(json => add(json, rows.get(ROOT)));
+    const below = (n) => n.children.reduce((all, c) => all.concat(c, below(rows.get(c))), []);
+    rows.forEach(n => { n.children_d = below(n); });
+  }
+  const node = (x) => {
+    if (x && typeof x === 'object') x = x.nodeId !== undefined ? x.nodeId : x.id; // a node, or an anchor
+    return rows.get(x) || false;
+  };
+  const ids = (x) => (Array.isArray(x) ? x.map(y => node(y).id) : node(x).id);
+  const isClosed = (n) => !!n && n.id !== ROOT && n.children.length > 0 && !n.state.opened;
+  function open(x) {
+    if (Array.isArray(x)) { x.slice().forEach(open); return true; }
+    const n = node(x);
+    if (!n || n.id === ROOT || !isClosed(n)) return false;
+    n.state.opened = true;
+    emit('open_node', { node: n });
+    return true;
+  }
+  function close(x) {
+    if (Array.isArray(x)) { x.slice().forEach(close); return true; }
+    const n = node(x);
+    if (!n || n.id === ROOT || isClosed(n)) return false;
+    n.state.opened = false;
+    emit('close_node', { node: n });
+    return true;
+  }
+  function show(x) {
+    if (Array.isArray(x)) { x.slice().forEach(show); return true; }
+    const n = node(x);
+    if (!n || n.id === ROOT || !n.state.hidden) return false;
+    n.state.hidden = false;
+    return true;
+  }
+  function select(x, suppress, preventOpen, e) {
+    const n = node(x);
+    if (!n || n.id === ROOT) return false;
+    if (!n.state.selected) {
+      n.state.selected = true;
+      sel.push(n.id);
+      if (!preventOpen) n.parents.forEach(open); // _open_to
+      emit('select_node', { node: n, selected: sel, event: e });
+      if (!suppress) emit('changed', { action: 'select_node', node: n, selected: sel.slice(), event: e });
+    }
+    return true;
+  }
+  function deselectAll(suppress) {
+    const old = sel;
+    sel = [];
+    old.forEach(id => { if (rows.has(id)) rows.get(id).state.selected = false; });
+    emit('deselect_all', { selected: [], node: old });
+    if (!suppress) emit('changed', { action: 'deselect_all', selected: [], old_selection: old });
+  }
+  function clearSearch() {
+    if (inst.settings.search.close_opened_onclear) close(search.opn);
+    if (search.som && search.res.length) show(search.hdn); // the plugin's own handler runs first
+    emit('clear_search', { nodes: [], str: search.str, res: search.res });
+    Object.assign(search, { str: '', res: [], opn: [] });
+  }
+  function find(str) {
+    if (String(str).trim() === '') return clearSearch();
+    if (search.res.length) clearSearch();
+    const s = inst.settings.search;
+    Object.assign(search, { str: String(str), res: [], opn: [], som: s.show_only_matches, smc: s.show_only_matches_children });
+    const res = [], above = [];
+    rows.get(ROOT).children_d.forEach(id => {
+      const v = rows.get(id);
+      if (v.text && !v.state.hidden && s.search_callback(String(str), v)) {
+        res.push(id);
+        above.push(...v.parents);
+      }
+    });
+    if (res.length) {
+      [...new Set(above)].forEach(id => { if (id !== ROOT && open(id) === true) search.opn.push(id); });
+      search.res = res;
+    }
+    if (search.som && res.length) { // the plugin's own handler runs first
+      const shown = new Set();
+      res.forEach(id => {
+        const v = rows.get(id);
+        [id, ...v.parents, ...(search.smc ? v.children_d : [])].forEach(x => shown.add(x));
+      });
+      search.hdn = [];
+      rows.forEach(n => { if (n.id !== ROOT && !n.state.hidden) { n.state.hidden = true; search.hdn.push(n.id); } });
+      shown.forEach(x => { if (x !== ROOT) rows.get(x).state.hidden = false; });
+    }
+    emit('search', { nodes: [], str: String(str), res: search.res, show_only_matches: search.som });
+  }
+  const getState = () => {
+    const all = [...rows.values()].filter(n => n.id !== ROOT);
+    return { core: { open: all.filter(n => n.state.opened).map(n => n.id), loaded: [], scroll: { left: 0, top: 0 },
+      selected: all.filter(n => n.state.selected).map(n => n.id) } };
+  };
+  const log = (...call) => inst.calls.push(call);
+
+  Object.assign(inst, {
+    get_node: node,
+    get_selected: (full) => (full ? sel.map(node) : sel.slice()),
+    is_open: (x) => !!node(x) && !!node(x).state.opened,
+    is_hidden: (x) => node(x).state.hidden === true,
+    search(str) { log('search', str); find(str); },
+    clear_search() { log('clear_search'); clearSearch(); },
+    open_node(x) { log('open_node', ids(x)); return open(x); },
+    close_node(x) { log('close_node', ids(x)); return close(x); },
+    toggle_node(x) {
+      const n = node(x);
+      log('toggle_node', n.id);
+      if (isClosed(n)) return open(n);
+      if (n.state.opened) return close(n);
+    },
+    open_all() {
+      log('open_all');
+      rows.forEach(n => open(n));
+      emit('open_all', { node: rows.get(ROOT) });
+    },
+    close_all() {
+      log('close_all');
+      [...rows.values()].reverse().forEach(n => { if (n.state.opened) close(n); });
+      emit('close_all', { node: rows.get(ROOT) });
+    },
+    show_node(x) { log('show_node', ids(x)); return show(x); },
+    select_node(x, suppress, preventOpen, e) { log('select_node', ids(x)); return select(x, suppress, preventOpen, e); },
+    deselect_all(suppress) { log('deselect_all'); deselectAll(suppress); },
+    refresh(skipLoading, forgetState) {
+      log('refresh', skipLoading);
+      let state = forgetState === true ? {} : getState();
+      if (typeof forgetState === 'function') state = forgetState.call(inst, state);
+      inst.restored = JSON.parse(JSON.stringify(state));
+      load(inst.settings.core.data);
+      const core = state.core || {};
+      if (Array.isArray(core.open)) open(core.open.filter(id => rows.has(id)));
+      if (Array.isArray(core.selected)) {
+        deselectAll(false);
+        core.selected.forEach(id => select(id, false, true));
+      }
+      emit('set_state', {});
+      emit('refresh', {});
+    },
+    user: {
+      // a click on a row: activate_node (one selection, no reselect)
+      click(id) {
+        const n = node(id), e = { type: 'click' };
+        if (!(n.state.selected && sel.length === 1)) {
+          deselectAll(true);
+          select(n, false, false, e);
+        }
+        emit('activate_node', { node: n, event: e });
+      },
+      // a click on a row's open/close icon
+      toggle(id) {
+        const n = node(id);
+        if (isClosed(n)) open(n);
+        else if (n.state.opened) close(n);
+      },
+    },
+    model: {
+      openIds: () => [...rows.values()].filter(n => n.id !== ROOT && n.state.opened).map(n => n.id),
+      parentIds: () => [...rows.values()].filter(n => n.id !== ROOT && n.children.length).map(n => n.id),
+      selected: () => sel.slice(),
+      hidden: (id) => !!rows.get(id) && rows.get(id).state.hidden,
+      // inSight: drawn, not hidden by a search and below open rows only
+      inSight: (id) => {
+        const n = rows.get(id);
+        return !!n && !n.state.hidden && n.parents.every(p => p === ROOT || rows.get(p).state.opened);
+      },
+    },
+  });
+  load(options.core.data);
+  return inst;
 }
 function fire(inst, ev, thisArg, ...args) {
   (inst.handlers[ev] || []).forEach(h => h.fn.apply(thisArg || null, [{ type: ev }, ...args]));
 }
 
 // page loads app.js and tree.js into a fresh page: its own elements, filter
-// checkboxes (as index.html has them), timers, jsTree stand-ins and the
-// /api/graph answer (page.graph; none until it is set).
+// checkboxes (as index.html has them), timers (with their delays), jsTree
+// models and the /api/graph answer (page.graph; none until it is set).
 function page() {
   const elements = new Map();
   const byId = (id) => { if (!elements.has(id)) elements.set(id, element(id)); return elements.get(id); };
   const boxes = checkboxes.map(c => ({ checked: c.checked, dataset: { group: c.dataset.group } }));
   const trees = [];
   const timers = [];
-  const p = { byId, boxes, trees, graph: null };
+  const p = { byId, boxes, trees, timers, graph: null };
   const sandbox = {
     document: {
       getElementById: byId,
@@ -545,7 +743,7 @@ function page() {
     jQuery: jQueryStub(trees),
     fetch: (url) => (url === '/api/graph' && p.graph ? Promise.resolve({ json: () => Promise.resolve(p.graph) }) : new Promise(() => {})),
     setInterval: () => 0, clearInterval() {},
-    setTimeout: (fn) => { timers.push({ fn, done: false }); return timers.length; },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, done: false }); return timers.length; },
     clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].done = true; },
     alert() {}, confirm: () => false, prompt: () => null,
     localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
@@ -625,31 +823,34 @@ async function viewChecks() {
   check('view: back on the tab the new data is built once, and the same tree is not refreshed',
     s.spans === 2 && s.projects === 2 && !tree.calls.slice(callsBefore).some(c => c[0] === 'refresh'), [s, tree.calls.slice(callsBefore)]);
 
-  // The user opens the hypervisor row and selects a VM below it; jsTree
-  // reports both. A filter that hides them must not forget them.
-  const yId = T.treeSafeId(Y), vm1Id = T.treeSafeId(VM1);
-  fire(tree, 'open_node.jstree', null, { node: { id: yId } });
-  fire(tree, 'changed.jstree', null, { action: 'select_node', selected: [vm1Id], event: { type: 'click' } });
+  // The user opens the rows down to the hypervisor and selects a VM below
+  // it; jsTree reports both. A filter that hides them must not forget them.
+  const r1Id = T.treeSafeId(R1), s1Id = T.treeSafeId(S1), s3Id = T.treeSafeId(S3), yId = T.treeSafeId(Y), vm1Id = T.treeSafeId(VM1);
+  const sameSet = (a, b) => JSON.stringify([...new Set(a)].sort()) === JSON.stringify([...new Set(b)].sort());
+  [s1Id, s3Id, yId].forEach(id => tree.user.toggle(id));
+  tree.user.click(vm1Id);
+  runTimers(); // the click's info panel
+  run('closeInfoPanel()');
   fire(tree, 'changed.jstree', null, { action: 'select_node', selected: [], node: {} }); // jsTree's own, no event
-  check('view: opened rows and the selection a user makes are remembered', run('treeState.open.has(' + JSON.stringify(yId) + ') && treeState.selected') === vm1Id);
-  tree.openNow = [T.treeSafeId(R1), yId];
+  check('view: opened rows and the selection a user makes are remembered',
+    sameSet(run('[...treeState.open]'), [r1Id, s1Id, s3Id, yId]) && run('treeState.selected') === vm1Id, run('[...treeState.open]'));
 
   const vmBox = P.boxes.find(c => c.dataset.group === 'vm');
   const hypBox = P.boxes.find(c => c.dataset.group === 'hypervisor');
   vmBox.checked = false;
   hypBox.checked = false;
+  const k0 = tree.calls.length;
   run('applyFilters()');
   s = state();
-  const after = tree.calls.slice(callsBefore);
+  const after = tree.calls.slice(k0);
   const shownIds = rows(tree.settings.core.data).map(r => r.row.id);
   check('view: unchecking filters while the tab is shown refreshes the tree, without rebuilding the spanning tree',
     s.spans === 2 && s.projects === 3 && JSON.stringify(after) === JSON.stringify([['refresh', true]]) &&
     ![VM1, VM2, VM9, Y].some(id => shownIds.includes(id)) && shownIds.includes(S3), after);
   check('view: the refreshed data opens nothing itself', tree.settings.core.data.every(n => !n.state));
   check('view: a refresh restores the remembered open rows and selection, also those the filter hides now',
-    JSON.stringify(tree.restored.core.open) === JSON.stringify([T.treeSafeId(R1), yId]) &&
+    sameSet(tree.restored.core.open, [r1Id, s1Id, s3Id, yId]) && sameSet(tree.model.openIds(), [r1Id, s1Id, s3Id]) &&
     JSON.stringify(tree.restored.core.selected) === JSON.stringify([vm1Id]) && tree.restored.core.scroll.top === 0, tree.restored);
-  tree.openNow = [T.treeSafeId(R1)];
 
   search.value = 'Dist-10 ';
   typed();
@@ -661,13 +862,15 @@ async function viewChecks() {
   run('applyFilters()');
   check('view: checking them again brings the rows back, opened and selected as before',
     rows(tree.settings.core.data).some(r => r.row.id === VM1) && tree.restored.core.open.includes(yId) &&
-    JSON.stringify(tree.restored.core.selected) === JSON.stringify([vm1Id]), tree.restored);
+    JSON.stringify(tree.restored.core.selected) === JSON.stringify([vm1Id]) &&
+    sameSet(tree.model.openIds(), [r1Id, s1Id, s3Id, yId]) && JSON.stringify(tree.model.selected()) === JSON.stringify([vm1Id]), tree.restored);
+  const searchCalls = tree.calls.slice(k).filter(c => ['search', 'clear_search', 'refresh'].includes(c[0]));
   check('view: a refresh under a search clears it first and applies it again on the new rows',
-    JSON.stringify(tree.calls.slice(k)) === JSON.stringify([['clear_search'], ['refresh', true], ['search', 'dist-10']]), tree.calls.slice(k));
-  fire(tree, 'close_node.jstree', null, { node: { id: yId } });
+    JSON.stringify(searchCalls) === JSON.stringify([['clear_search'], ['refresh', true], ['search', 'dist-10']]), tree.calls.slice(k));
+  tree.user.toggle(yId);
   check('view: a row the user closes is forgotten', !run('treeState.open.has(' + JSON.stringify(yId) + ')'));
-  fire(tree, 'close_all.jstree', null, { node: { id: '#' } });
-  check('view: "Collapse all" forgets every open row', run('treeState.open.size') === 0);
+  run('treeCollapseAll()');
+  check('view: "Collapse all" forgets every open row', run('treeState.open.size') === 0 && tree.model.openIds().length === 0);
 
   run("selectViewTab('graph')");
   const n = tree.calls.length;
@@ -683,8 +886,7 @@ async function viewChecks() {
   check('view: an empty search box clears the search', JSON.stringify(tree.calls.slice(-1)) === '[["clear_search"]]');
 
   const swRow = tree.get_node(T.treeSafeId(S2));
-  tree.selected = swRow.id;
-  fire(tree, 'activate_node.jstree', null, { node: swRow });
+  tree.user.click(swRow.id);
   check('view: a click toggles the row', JSON.stringify(tree.calls.slice(-1)) === JSON.stringify([['toggle_node', swRow.id]]));
   check('view: the info panel waits for a possible double-click', byId('infoPanel').style.display !== 'block');
   runTimers();
@@ -693,8 +895,7 @@ async function viewChecks() {
   check('view: "Show in graph" is enabled for a selected device', byId('treeShowInGraph').disabled === false);
 
   const vmRow = tree.get_node(T.treeSafeId(VM1));
-  tree.selected = vmRow.id;
-  fire(tree, 'activate_node.jstree', null, { node: vmRow });
+  tree.user.click(vmRow.id);
   const anchor = { nodeId: vmRow.id };
   (tree.handlers.dblclick || []).forEach(h => h.selector === '.jstree-anchor' && h.fn.call(anchor, { type: 'dblclick' }));
   runTimers();
@@ -741,13 +942,212 @@ async function earlyChecks() {
   fire(tree, 'clear_search.jstree', null, {});
   check('view: clearing the search clears the note', byId('treeSearchStatus').textContent === '');
 
-  fire(tree, 'activate_node.jstree', null, { node: tree.get_node(T.treeSafeId(S2)) });
+  tree.user.click(T.treeSafeId(S2));
   run("selectViewTab('graph')");
   P.runTimers();
   check('view: a click\'s info panel does not open once the graph tab is shown', byId('infoPanel').style.display !== 'block');
 }
 
-viewChecks().then(earlyChecks).then(() => {
+// A third page: the device search on the tab, typed one key at a time as a
+// user types it (finding F1: the rows each search opened stayed open, and
+// were remembered as the user's, so the tree ended up nearly all open).
+async function searchChecks() {
+  const P = page();
+  const { byId, run, runTimers, trees } = P;
+  P.graph = synthetic();
+  await run('loadNetworkData()');
+  run("selectViewTab('tree')");
+  const tree = trees[0];
+  fire(tree, 'ready.jstree');
+  const id = T.treeSafeId;
+  const search = byId('deviceSearch');
+  const type = (text) => { search.value = text; search.listeners.input.forEach(fn => fn({ target: search })); runTimers(); };
+  const typeKeys = (text) => { for (let i = 1; i <= text.length; i++) type(text.slice(0, i)); };
+  const sameSet = (a, b) => JSON.stringify([...new Set(a)].sort()) === JSON.stringify([...new Set(b)].sort());
+  const remembered = () => run('[...treeState.open]');
+  const searched = () => tree.calls.filter(c => c[0] === 'search').map(c => c[1]);
+  const above = (dev) => tree.get_node(id(dev)).parents.filter(p => p !== '#');
+  const note = () => byId('treeSearchStatus').textContent;
+  const folder = treeConst('treeFolderId');
+
+  check('search: the tab starts with its top level open', sameSet(tree.model.openIds(), [id(R1)]) && sameSet(remembered(), [id(R1)]));
+  type('d');
+  check('search: a 1-character query does not search the tree, and the note says so',
+    searched().length === 0 && note() === 'type 2 or more characters to search the tree', [searched(), note()]);
+  const delays = P.timers.filter(t => t.ms !== undefined).map(t => t.ms);
+  check('search: the tree waits for a pause in the typing longer than a key takes (400 ms)',
+    run('typeof treeSearchDelay !== "undefined" && treeSearchDelay') === 400 && delays[delays.length - 1] === 400, delays.slice(-1));
+
+  // many found and nothing selected: clearing closes all the search opened
+  typeKeys('dist');
+  check('search: every query of 2 or more characters is searched, the rows above what it finds opened',
+    JSON.stringify(searched()) === JSON.stringify(['di', 'dis', 'dist']) && tree.model.inSight(id(S2)) && tree.model.inSight(id(S3)) &&
+    tree.model.openIds().includes(id(S1)) && note() === '2 found', [searched(), tree.model.openIds(), note()]);
+  check('search: the rows a search opens are not remembered as the user\'s', sameSet(remembered(), [id(R1)]), remembered());
+  type('');
+  check('search: clearing it closes every row it opened (2 found, none selected)',
+    sameSet(tree.model.openIds(), [id(R1)]) && sameSet(remembered(), [id(R1)]) && note() === '', tree.model.openIds());
+
+  // typed key by key: "wi" finds the switches and opens the folder of the
+  // lost one, "win" only the Windows VM: the folder closes again, and the
+  // one device found stays in sight when the box is cleared.
+  typeKeys('win-22');
+  check('search: each new search closes the rows the one before opened',
+    JSON.stringify(searched().slice(3)) === JSON.stringify(['wi', 'win', 'win-', 'win-2', 'win-22']) &&
+    !tree.model.openIds().includes(folder) && sameSet(tree.model.openIds(), [id(R1), ...above(VM2)]) && note() === '1 found', tree.model.openIds());
+  type('');
+  check('search: when it is cleared, the one device found stays in sight, its rows the user\'s now, and the tree scrolls to it',
+    tree.model.inSight(id(VM2)) && sameSet(tree.model.openIds(), [id(R1), ...above(VM2)]) && sameSet(remembered(), tree.model.openIds()) &&
+    byId(id(VM2) + '_anchor').scrolled === 1, [tree.model.openIds(), remembered(), byId(id(VM2) + '_anchor').scrolled]);
+
+  const endpoints = P.boxes.find(c => c.dataset.group === 'endpoint');
+  endpoints.checked = false;
+  run('applyFilters()');
+  endpoints.checked = true;
+  run('applyFilters()');
+  check('search: a filter change afterwards opens the user\'s rows only',
+    sameSet(tree.restored.core.open, [id(R1), ...above(VM2)]) && sameSet(tree.model.openIds(), [id(R1), ...above(VM2)]), tree.restored.core.open);
+
+  // a refresh under a search: the rows the search opened are not restored
+  run('treeCollapseAll()');
+  type('win-22');
+  const hubs = P.boxes.find(c => c.dataset.group === 'hub');
+  hubs.checked = false;
+  run('applyFilters()');
+  check('search: a refresh under a search restores none of its rows as the user\'s, and searches again',
+    tree.restored.core.open.length === 0 && remembered().length === 0 && tree.model.inSight(id(VM2)) &&
+    sameSet(run('[...(treeState.searchOpen || [])]'), above(VM2)), [tree.restored.core.open, remembered()]);
+  hubs.checked = true;
+  run('applyFilters()');
+  run('treeCollapseAll()');
+  type('');
+  check('search: rows the user closed during a search stay closed when it is cleared',
+    tree.model.openIds().length === 0 && remembered().length === 0, tree.model.openIds());
+
+  // the device the user selects among those found stays in sight
+  type('dist');
+  tree.user.click(id(S3)); // the click opens dist-10 too
+  runTimers();
+  run('closeInfoPanel()');
+  type('');
+  check('search: the device the user selected during a search stays in sight when it is cleared, nothing else opened',
+    tree.model.inSight(id(S3)) && sameSet(tree.model.openIds(), [...above(S3), id(S3)]) && sameSet(remembered(), tree.model.openIds()) &&
+    byId(id(S3) + '_anchor').scrolled === 1, tree.model.openIds());
+  run('treeCollapseAll()');
+  type('dist'); // dist-10 is still selected
+  tree.user.toggle(id(S1)); // the user closes core-sw: dist-10 goes out of sight
+  type('');
+  check('search: a selected device the user put out of sight during a search keeps no row open',
+    tree.model.openIds().length === 0 && remembered().length === 0, tree.model.openIds());
+  type('gw'); // gw-1 and gw-2: opens gw-1, core-sw and dist-2 above gw-2
+  tree.user.toggle(id(S2));
+  tree.user.toggle(id(S2)); // the user closes dist-2 and opens it again: it is the user's now
+  type('');
+  check('search: a row the search opened that the user closed and opened again stays open when it is cleared',
+    tree.model.openIds().includes(id(S2)) && remembered().includes(id(S2)), tree.model.openIds());
+
+  // "Expand all" during a search: every row is the user's, none closes
+  run('treeCollapseAll()');
+  type('gw');
+  run('treeExpandAll()');
+  type('');
+  check('search: after "Expand all" during a search, clearing it leaves every row open',
+    sameSet(tree.model.openIds(), tree.model.parentIds()) && sameSet(remembered(), tree.model.parentIds()), tree.model.openIds());
+
+  type('di');
+  type('d');
+  check('search: back to 1 character, the search is cleared', JSON.stringify(tree.calls.slice(-1)) === '[["clear_search"]]' &&
+    note() === 'type 2 or more characters to search the tree', [tree.calls.slice(-2), note()]);
+}
+
+// A fourth page: the info panel's list of connected devices on the Tree tab
+// (finding F2: a click there switched the hidden graph to that device's
+// neighbourhood and its zoom, and nothing happened in the tree).
+async function panelChecks() {
+  const P = page();
+  const { byId, run, runTimers, trees } = P;
+  P.graph = synthetic();
+  await run('loadNetworkData()');
+  run(`var __highlighted = [];
+    const __highlight = highlightNodeFromPanel;
+    highlightNodeFromPanel = function (id) { __highlighted.push(id); return __highlight(id); };`);
+  run("selectViewTab('tree')");
+  const tree = trees[0];
+  fire(tree, 'ready.jstree');
+  const id = T.treeSafeId;
+  const list = byId('infoNeighbors');
+  const listed = () => [...list.innerHTML.matchAll(/data-node-id="([^"]*)"/g)].map(m => decodeEntities(m[1]));
+  // clickListed clicks the line of a device in the list (row, a stand-in of
+  // the line's element, which a second click may reuse) and returns it.
+  const clickListed = (dev, row) => {
+    row = row || element('peer');
+    row.setAttribute('data-node-id', dev);
+    dispatch(list, { type: 'click', target: { closest: (sel) => (sel === '[data-node-id]' ? row : null) } });
+    return row;
+  };
+  const graph = () => run('({ mode: filterState.mode, selected: filterState.selectedNodeId, drawn: currentNodes.size, highlighted: __highlighted.slice() })');
+  const note = () => byId('treeSearchStatus').textContent;
+  const search = byId('deviceSearch');
+  const type = (text) => { search.value = text; search.listeners.input.forEach(fn => fn({ target: search })); runTimers(); };
+
+  // dist-2 is open; the user clicks it, which closes it and opens its panel
+  tree.user.toggle(id(S1));
+  tree.user.toggle(id(S2));
+  tree.user.click(id(S2));
+  runTimers();
+  check('panel: a click on a row closes it and opens its info panel with the devices connected to it',
+    byId('infoPanelTitle').textContent === 'dist-2' && [S1, S3, R2, H].every(x => listed().includes(x)) && !tree.model.inSight(id(R2)), listed());
+  const before = graph();
+  clickListed(R2);
+  const after = graph();
+  check('panel: on the Tree tab a click on a connected device does not reach app.js, which would switch the graph to it',
+    after.highlighted.length === 0, after);
+  check('panel: ... the graph keeps its filter mode and its devices', after.mode === 'ALL' && after.selected === null && after.drawn === before.drawn, [before, after]);
+  check('panel: ... the device is selected in the tree, in sight and scrolled to',
+    JSON.stringify(tree.model.selected()) === JSON.stringify([id(R2)]) && run('treeState.selected') === id(R2) &&
+    tree.model.inSight(id(R2)) && byId(id(R2) + '_anchor').scrolled === 1, [tree.model.selected(), tree.model.openIds()]);
+  check('panel: ... and the panel stays open on its device', byId('infoPanel').style.display === 'block' && byId('infoPanelTitle').textContent === 'dist-2');
+
+  run("selectViewTab('graph')");
+  clickListed(S1);
+  check('panel: on the graph tab the same click still shows that device with its neighbours', graph().highlighted.join() === S1 &&
+    graph().mode === 'CONNECTED' && graph().selected === S1, graph());
+  run('resetView()');
+  run("selectViewTab('tree')");
+
+  const hubs = P.boxes.find(c => c.dataset.group === 'hub');
+  hubs.checked = false;
+  run('applyFilters()');
+  const hubLine = clickListed(H);
+  check('panel: a connected device the filters hide: the tree says so and nothing else changes',
+    note() === 'Unmanaged is not in the tree: its group (hub) is filtered out' && byId('treeSearchStatus').title === note() &&
+    graph().highlighted.length === 1 && graph().mode === 'ALL' && JSON.stringify(tree.model.selected()) === JSON.stringify([id(R2)]),
+    [note(), tree.model.selected()]);
+  check('panel: ... and its line in the list says why, where the user clicked',
+    hubLine.classList.contains('tv-not-in-tree') && hubLine.getAttribute('data-tree-note') === 'filtered out (hub)', hubLine.getAttribute('data-tree-note'));
+  hubs.checked = true;
+  run('applyFilters()');
+  clickListed(H, hubLine);
+  check('panel: once the filter shows it again, a click on that line selects it and the line is plain again',
+    JSON.stringify(tree.model.selected()) === JSON.stringify([id(H)]) && !hubLine.classList.contains('tv-not-in-tree'), tree.model.selected());
+  run('closeInfoPanel()');
+
+  tree.user.click(id(S1));
+  runTimers();
+  const lost = clickListed('no-such-node'); // a link to a node the graph does not have
+  check('panel: a connected device the graph does not have: the tree says so', note() === 'no-such-node is not in the tree' &&
+    lost.getAttribute('data-tree-note') === 'not in the tree', note());
+  type('dist-2');
+  check('panel: a search for dist-2 hides dist-10', tree.model.hidden(id(S3)) && listed().includes(S3));
+  clickListed(S3);
+  check('panel: a connected device the search hides is shown, selected and in sight',
+    !tree.model.hidden(id(S3)) && tree.model.inSight(id(S3)) && JSON.stringify(tree.model.selected()) === JSON.stringify([id(S3)]) &&
+    graph().mode === 'ALL', [tree.model.selected(), tree.model.hidden(id(S3))]);
+  type('');
+  check('panel: ... and it stays in sight when the search is cleared', tree.model.inSight(id(S3)) && !tree.model.hidden(id(S3)));
+}
+
+viewChecks().then(earlyChecks).then(searchChecks).then(panelChecks).then(() => {
   if (failed.length) {
     process.stderr.write(failed.map(f => 'FAIL ' + f).join('\n') + '\n');
     process.exit(1);

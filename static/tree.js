@@ -431,6 +431,17 @@ function buildTopologyTree(data, shown, options) {
 
 // ==================== Part 2: the Tree tab (browser) ====================
 
+// jsTree's invisible root ($.jstree.root): the last of every row's parents.
+const treeRootId = '#';
+
+// The device search reaches the tree from 2 characters on, once the typing
+// pauses: 1 character matches nearly every device, and each search redraws
+// every row it shows (in Chrome, for the 1029 devices of the fixture, about
+// 200 ms while the first characters of an IP match nearly all of them,
+// 10 to 50 ms once the query picks a few).
+const treeSearchMinLength = 2;
+const treeSearchDelay = 400;
+
 const treeState = {
     tab: 'graph',      // the visible tab: 'graph' or 'tree'
     stale: true,       // data or filters changed since the tree was last built
@@ -444,6 +455,12 @@ const treeState = {
     selected: null,
     seeded: false,     // the first devices' top level was opened
     query: '',         // the device search applied to the tree ('' none)
+    found: [],         // the rows that search found
+    // The rows that search opened, which close again when it is replaced or
+    // cleared (treeDropSearchRows). They are not in open, and leave this set
+    // when the user closes them or opens every row.
+    searchOpen: new Set(),
+    searching: false,  // a jsTree search call is running (treeBySearch)
     loading: false,    // jsTree is (re)loading: the search waits for 'ready' or 'refresh'
     panelTimer: 0,     // a click's info panel waits for a possible double-click
     searchTimer: 0,
@@ -513,7 +530,10 @@ function treeRender() {
     const tree = treeState.instance;
     if (tree) {
         // A search hides and opens nodes; it is applied again on 'refresh'.
-        if (treeState.query) tree.clear_search();
+        if (treeState.query) {
+            treeDropSearchRows(tree, []);
+            treeBySearch(() => tree.clear_search());
+        }
         treeState.query = '';
         treeState.loading = true;
         tree.settings.core.data = json;
@@ -541,7 +561,11 @@ function treeRender() {
             case_sensitive: false,
             show_only_matches: true,
             show_only_matches_children: true,
-            close_opened_onclear: false, // a found device stays in sight
+            // The rows a search opened close again when it is replaced or
+            // cleared, but tree.js closes them (treeDropSearchRows): jsTree
+            // would close the rows above the device that stays in sight as
+            // well, and after "Expand all" rows the user has open.
+            close_opened_onclear: false,
             search_callback: treeSearchMatch,
         },
     });
@@ -555,15 +579,24 @@ function treeRender() {
     });
     // jsTree hides nothing when a search finds nothing: say so.
     $host.on('search.jstree', (e, d) => {
-        const n = d && d.res ? d.res.length : 0;
+        treeState.found = d && Array.isArray(d.res) ? d.res.slice() : [];
+        const n = treeState.found.length;
         treeShowSearchResult(n ? `${n} found` : `no device matches "${d ? d.str : ''}"`);
     });
-    $host.on('clear_search.jstree', () => treeShowSearchResult(''));
-    $host.on('open_node.jstree', (e, d) => treeState.open.add(d.node.id));
-    $host.on('close_node.jstree', (e, d) => treeState.open.delete(d.node.id));
+    $host.on('clear_search.jstree', () => {
+        treeState.found = [];
+        treeShowSearchResult('');
+    });
+    // A row opened by a search is the search's, any other the user's.
+    $host.on('open_node.jstree', (e, d) => (treeState.searching ? treeState.searchOpen : treeState.open).add(d.node.id));
+    $host.on('close_node.jstree', (e, d) => treeForgetOpen([d.node.id]));
     $host.on('close_all.jstree', (e, d) => {
-        if (!d.node || d.node.id === '#') treeState.open.clear();
-        else [d.node.id, ...(d.node.children_d || [])].forEach(id => treeState.open.delete(id));
+        if (!d.node || d.node.id === treeRootId) {
+            treeState.open.clear();
+            treeState.searchOpen.clear();
+        } else {
+            treeForgetOpen([d.node.id, ...(d.node.children_d || [])]);
+        }
     });
     $host.on('changed.jstree', (e, d) => {
         if (d && d.event) treeState.selected = (d.selected && d.selected[0]) || null; // a user's click
@@ -595,9 +628,14 @@ function treeShowStatus(json, loaded) {
     el.textContent = text;
 }
 
+// treeShowSearchResult writes the note next to the toolbar's buttons (the
+// search's count, or why a device is not in the tree); a long one is cut,
+// its tooltip has it all.
 function treeShowSearchResult(text) {
     const el = document.getElementById('treeSearchStatus');
-    if (el) el.textContent = text;
+    if (!el) return;
+    el.textContent = text;
+    el.title = text;
 }
 
 // treeRowCount is the number of devices in a JSON row (the folder is none).
@@ -615,15 +653,87 @@ function treeSearchMatch(str, node) {
 // treeApplySearch filters the tree by the device search box (Tree tab
 // only), unless that search is already applied: a search redraws the tree.
 // While jsTree loads, 'ready' or 'refresh' applies it once the rows are in.
+// A search opens the rows above the devices it finds; they close again
+// when the next search replaces it or the box is cleared, except that a
+// cleared search leaves the selected device and the only device found in
+// sight, if they are in sight then, and scrolls to the first.
 function treeApplySearch() {
     const tree = treeState.instance;
     if (!tree || treeState.loading || treeState.tab !== 'tree') return;
     const input = document.getElementById('deviceSearch');
-    const q = input ? input.value.trim().toLowerCase() : '';
-    if (q === treeState.query) return;
-    treeState.query = q;
-    if (q) tree.search(q);
-    else tree.clear_search();
+    const typed = input ? input.value.trim().toLowerCase() : '';
+    const q = typed.length >= treeSearchMinLength ? typed : '';
+    if (q !== treeState.query) {
+        const kept = q ? [] : treeSearchKept(tree);
+        treeDropSearchRows(tree, kept);
+        treeState.query = q;
+        treeBySearch(() => {
+            if (q) tree.search(q);
+            else tree.clear_search();
+        });
+        if (kept.length) treeScrollTo(kept[0]);
+    }
+    if (!q) treeShowSearchResult(typed ? `type ${treeSearchMinLength} or more characters to search the tree` : '');
+}
+
+// treeBySearch runs a jsTree search call: the rows it opens go to
+// searchOpen, not to the user's open rows (the open_node handler).
+function treeBySearch(call) {
+    treeState.searching = true;
+    try {
+        call();
+    } finally {
+        treeState.searching = false;
+    }
+}
+
+// treeDropSearchRows closes the rows the shown search opened, before it is
+// replaced or cleared. The rows above a kept row stay open, as the user's.
+function treeDropSearchRows(tree, kept) {
+    const keep = new Set();
+    kept.forEach(id => {
+        const node = tree.get_node(id);
+        if (node) node.parents.forEach(p => keep.add(p));
+    });
+    const close = [];
+    treeState.searchOpen.forEach(id => {
+        if (keep.has(id)) treeState.open.add(id);
+        else close.push(id);
+    });
+    treeState.searchOpen.clear();
+    if (close.length) tree.close_node(close, 0);
+}
+
+// treeForgetOpen: rows closed, by the user or by a search.
+function treeForgetOpen(ids) {
+    ids.forEach(id => {
+        treeState.open.delete(id);
+        treeState.searchOpen.delete(id);
+    });
+}
+
+// treeSearchKept lists the rows that stay in sight when the search is
+// cleared: the selected row and the only row the search found, each when it
+// is in sight now.
+function treeSearchKept(tree) {
+    const ids = tree.get_selected();
+    if (treeState.found.length === 1) ids.push(treeState.found[0]);
+    return [...new Set(ids)].filter(id => treeInSight(tree, id));
+}
+
+// treeInSight tells whether a row is drawn: a search does not hide it and
+// the rows above it are open.
+function treeInSight(tree, id) {
+    const node = tree.get_node(id);
+    if (!node || node.state.hidden) return false;
+    return node.parents.every(p => p === treeRootId || tree.is_open(p));
+}
+
+// treeScrollTo scrolls the tree to a row's own line, its anchor (the row's
+// element holds the rows below it as well).
+function treeScrollTo(id) {
+    const el = document.getElementById(id + '_anchor') || document.getElementById(id);
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
 }
 
 // treeGraphNode is the /api/graph node of a jsTree node, or null.
@@ -682,8 +792,13 @@ function treeFocusInGraph(id) {
     }
 }
 
+// treeExpandAll opens every row. Every row is the user's then, also those
+// the shown search had opened: they stay open when it is cleared.
 function treeExpandAll() {
-    if (treeState.instance) treeState.instance.open_all();
+    if (!treeState.instance) return;
+    treeState.instance.open_all();
+    treeState.searchOpen.forEach(id => treeState.open.add(id));
+    treeState.searchOpen.clear();
 }
 
 function treeCollapseAll() {
@@ -698,17 +813,49 @@ function treeUpdateToolbar() {
 }
 
 // treeReveal selects a device in the tree and scrolls to it (a click in the
-// device list while the Tree tab is shown).
+// device list, or in the info panel's list, while the Tree tab is shown):
+// the rows above it open, and a search that hides it shows it. It is false
+// when the tree does not have the device.
 function treeReveal(id) {
     const tree = treeState.instance;
-    if (!tree || id === undefined || id === null) return;
+    if (!tree || id === undefined || id === null) return false;
     const tid = treeSafeId(id);
-    if (!tree.get_node(tid)) return;
+    const node = tree.get_node(tid);
+    if (!node) return false;
+    const hidden = [tid, ...node.parents].filter(p => p !== treeRootId && tree.is_hidden(p));
+    if (hidden.length) tree.show_node(hidden);
     tree.deselect_all(true);
     tree.select_node(tid); // opens its parents
     treeState.selected = tid;
-    const el = document.getElementById(tid);
-    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    treeScrollTo(tid);
+    return true;
+}
+
+// treeOnPanelClick takes a click on a device in the info panel's "Connected
+// Devices" list while the Tree tab is shown. The panel is the graph's, and
+// app.js's listener on that list (uiOnNodeClick) shows the device's
+// neighbourhood in the graph (highlightNodeFromPanel: "Show Connected" mode
+// and a zoom), a graph the tab hides. This listener runs first (capture, on
+// the same list) and stops the click: the device is selected in the tree
+// instead, the graph's filter mode and zoom stay as they are, and the
+// panel stays open, as on the graph. A device the tree does not have (a
+// filter hides it) gets the reason in its line of the list (style.css
+// tv-not-in-tree), which the panel may not leave the tree's toolbar room
+// to show.
+function treeOnPanelClick(event) {
+    if (treeState.tab !== 'tree') return;
+    const row = event.target && event.target.closest ? event.target.closest('[data-node-id]') : null;
+    if (!row) return;
+    event.stopPropagation();
+    const id = row.getAttribute('data-node-id');
+    const revealed = treeReveal(id);
+    row.classList.toggle('tv-not-in-tree', !revealed);
+    if (revealed) return;
+    const info = treeState.span ? treeState.span.infos.get(String(id)) : undefined;
+    const filtered = !!info && !uiGroupShown(info.node);
+    row.setAttribute('data-tree-note', filtered ? `filtered out (${info.group})` : 'not in the tree');
+    treeShowSearchResult(`${info ? info.label : id} is not in the tree` +
+        (filtered ? `: its group (${info.group}) is filtered out` : ''));
 }
 
 if (typeof document !== 'undefined' && typeof window !== 'undefined') {
@@ -718,7 +865,7 @@ if (typeof document !== 'undefined' && typeof window !== 'undefined') {
         search.addEventListener('input', () => {
             if (treeState.tab !== 'tree') return;
             clearTimeout(treeState.searchTimer);
-            treeState.searchTimer = setTimeout(treeApplySearch, 200);
+            treeState.searchTimer = setTimeout(treeApplySearch, treeSearchDelay);
         });
     }
     const list = document.getElementById('deviceList');
@@ -729,4 +876,6 @@ if (typeof document !== 'undefined' && typeof window !== 'undefined') {
             if (item) treeReveal(item.dataset.deviceId);
         });
     }
+    const neighbours = document.getElementById('infoNeighbors');
+    if (neighbours) neighbours.addEventListener('click', treeOnPanelClick, true);
 }
