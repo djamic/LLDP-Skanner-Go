@@ -388,10 +388,10 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		}
 	}()
 
-	// 6. Collect Port VLAN Configuration
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	// 6. Collect Port VLAN Configuration: with the other walks, or after
+	// them for an agent whose VLAN egress walk failed in its last poll
+	// (collectVLANLast)
+	vlanJob := func() {
 		portVLANs, err := s.collectPortVLANs(ip)
 		if err != nil {
 			mu.Lock()
@@ -403,7 +403,15 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 			data.PortVLANs = portVLANs
 			mu.Unlock()
 		}
-	}()
+	}
+	vlanLast := collectVLANLast(ip)
+	if !vlanLast {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vlanJob()
+		}()
+	}
 
 	// 7. Collect STP Information
 	wg.Add(1)
@@ -425,6 +433,9 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 
 
 	wg.Wait()
+	if vlanLast {
+		vlanJob()
+	}
 
 	// Phase 8: Count total parallel SNMP jobs (ChassisID, Interfaces, LLDP, MAC, ARP, VLAN, STP)
 	const totalJobs = 7
@@ -684,12 +695,20 @@ func (s *SNMPObject) collectInterfaces(ip string) ([]InterfaceData, error) {
 		wg.Wait()
 	}
 
-	// Group 1: Speed + Status (independent, can run together)
+	// Group 1: Speed + Status (independent, can run together). ifSpeed and
+	// ifHighSpeed walk at the same time and either may finish first: ifSpeed
+	// does not replace a speed ifHighSpeed set with a lower one or with its
+	// 4294967295 "faster than 32 bits" value. It used to, whenever it
+	// finished last, and 10G ports showed "4G" (94 of the 197 interfaces at
+	// either speed in the saved data of 2026-10-20 kept 4294967295, on 22
+	// switches; 81 in the live data of 2026-10-22, partly on others).
 	runWalkJobs([]walkJob{
 		{".1.3.6.1.2.1.2.2.1.5", func(iface *InterfaceData, val string) {
 			val = strings.TrimPrefix(val, "Gauge32: ")
 			speed, _ := strconv.ParseUint(val, 10, 64)
-			iface.IfSpeed = speed
+			if iface.IfSpeed == 0 || (speed > iface.IfSpeed && speed != 4294967295) {
+				iface.IfSpeed = speed
+			}
 		}},
 		{".1.3.6.1.2.1.31.1.1.1.15", func(iface *InterfaceData, val string) {
 			val = strings.TrimPrefix(val, "Gauge32: ")
@@ -1313,6 +1332,58 @@ func (s *SNMPObject) collectSTPInfo(ip string) (STPData, error) {
 	return data, nil
 }
 
+// collectVLANEgressOID is dot1qVlanCurrentEgressPorts (Q-BRIDGE-MIB): the
+// ports of each VLAN as a bitmap, the trunk detection of collectPortVLANs.
+const collectVLANEgressOID = ".1.3.6.1.2.1.17.7.1.4.2.1.4"
+
+// The agents whose VLAN egress walk failed in their last poll: CollectData
+// walks their VLAN table (dot1qPvid, then the egress ports) after the other
+// walks of the poll, not with them. The Aruba 6300 172.20.230.253 (JL658A,
+// FL.10.13.1040) has no row in dot1qVlanCurrentTable, and its agent takes
+// 10.8 s to answer a GETNEXT into it (its answer is cached for a short
+// while: slow again 73 s later, and the polls are 5 minutes apart), so the
+// walk times out after its two 5 s attempts. While the agent works on it,
+// it answers no other request of the switch: a sysUpTime GET and a
+// dot1dTpFdbPort GETBULK sent 1 s after it were answered 9.8 and 10.2 s
+// later (read-only snmpgetnext, snmpget and snmpbulkget, one at a time,
+// 2026-10-22 20:41-20:43). The walk started about 1 s into a poll, after
+// dot1qPvid, while the FDB walk was still in flight: 164 round trips (the
+// agent puts at most 10 varbinds into a response, -Cr25 or not) between
+// the slow requests of the other walks (STP about 0.95 s, dot1qPvid 0.33
+// s, dot1dBaseNumPorts 0.3 s each). So the FDB walk failed in every poll
+// since the switch answered SNMP on 2026-10-20 (cron_monitor.log: one "mac
+// table err" per rescan, 180 on 2026-10-22) and the ifDescr walk in half
+// of them or more, although alone the FDB gives its 1,619-1,638 rows in
+// 0.26-0.83 s, and the agent answered every request it received, late
+// (snmpInPkts minus snmpOutPkts is its 44 bad community names,
+// snmpSilentDrops 0). A switch whose egress walk answers keeps its timing:
+// the HPE, SNR and PiXiETECH agents give their 4,094 rows in 2.5-5.3 s. A
+// walk that answers again clears the mark.
+var (
+	collectVLANLastMu  sync.Mutex
+	collectVLANLastIPs = make(map[string]bool)
+)
+
+// collectVLANLast reports whether CollectData walks the VLAN table of ip
+// after its other walks: the last egress walk of ip failed.
+func collectVLANLast(ip string) bool {
+	collectVLANLastMu.Lock()
+	defer collectVLANLastMu.Unlock()
+	return collectVLANLastIPs[ip]
+}
+
+// collectNoteEgressWalk records the outcome of an egress walk of ip
+// (collectVLANLast).
+func collectNoteEgressWalk(ip string, err error) {
+	collectVLANLastMu.Lock()
+	defer collectVLANLastMu.Unlock()
+	if err != nil {
+		collectVLANLastIPs[ip] = true
+	} else {
+		delete(collectVLANLastIPs, ip)
+	}
+}
+
 // collectPortVLANs collects VLAN configuration for ports
 // Uses Q-BRIDGE-MIB (dot1qPvid) for PVID and port mode detection
 func (s *SNMPObject) collectPortVLANs(ip string) ([]PortVLAN, error) {
@@ -1363,9 +1434,10 @@ func (s *SNMPObject) collectPortVLANs(ip string) ([]PortVLAN, error) {
 	}
 
 	// Now check for trunk ports by looking at dot1qVlanCurrentEgressPorts
-	// A trunk port will have multiple VLANs
-	vlanEgressOID := ".1.3.6.1.2.1.17.7.1.4.2.1.4"
-	vlanLines, _ := s.runSNMPWalk(ip, vlanEgressOID)
+	// A trunk port will have multiple VLANs. Its failure is no failed walk,
+	// but the next poll asks it last (collectVLANLast)
+	vlanLines, egressErr := s.runSNMPWalk(ip, collectVLANEgressOID)
+	collectNoteEgressWalk(ip, egressErr)
 
 	portVLANCount := make(map[int]int)
 	if len(vlanLines) > 0 {

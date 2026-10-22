@@ -1,0 +1,69 @@
+{
+  "after_polls": {
+    "links": [
+      {"source": "88:22:5b:88:e2:40", "target": "4c:ae:a3:8d:ec:c1", "label": "1/1/1 10G|TGE1/0/52", "sourceLabel": "1/1/1 10G", "targetLabel": "TGE1/0/52"},
+      {"source": "88:22:5b:88:e2:40", "target": "4c:ae:a3:8d:ee:c9", "label": "1/1/28 10G|TGE1/0/51", "sourceLabel": "1/1/28 10G", "targetLabel": "TGE1/0/51"},
+      {"source": "88:22:5b:88:e2:40", "target": "68:cc:ae:96:e5:e8", "label": "1/1/27 10G|x8", "sourceLabel": "1/1/27 10G", "targetLabel": "x8"}
+    ],
+    "node": {
+      "id": "88:22:5b:88:e2:40",
+      "group": "switch",
+      "type": "switch",
+      "label": "6300\n172.20.230.253\n172.20.7.227\n88:22:5b:88:e2:40",
+      "sysName": "6300\n172.20.230.253\n172.20.7.227"
+    }
+  },
+  "before_polls": {
+    "links": [
+      {"source": "88:22:5b:88:e2:40", "target": "4c:ae:a3:8d:ee:c9", "label": "Port28|TGE1/0/51", "sourceLabel": "Port28", "targetLabel": "TGE1/0/51"}
+    ],
+    "node": {
+      "id": "88:22:5b:88:e2:40",
+      "group": "switch",
+      "type": "switch",
+      "label": "\n172.20.230.253\n172.20.7.227\n88:22:5b:88:e2:40",
+      "sysName": "\n172.20.230.253\n172.20.7.227"
+    }
+  },
+  "graph_changes": {
+    "edges_added": [
+      "88:22:5b:88:e2:40 -> 4c:ae:a3:8d:ec:c1 : \"1/1/1 10G|TGE1/0/52\"",
+      "88:22:5b:88:e2:40 -> 4c:ae:a3:8d:ee:c9 : \"1/1/28 10G|TGE1/0/51\"",
+      "88:22:5b:88:e2:40 -> 68:cc:ae:96:e5:e8 : \"1/1/27 10G|x8\""
+    ],
+    "edges_removed": [
+      "88:22:5b:88:e2:40 -> 4c:ae:a3:8d:ee:c9 : \"Port28|TGE1/0/51\""
+    ],
+    "nodes_added": null,
+    "nodes_removed": null
+  },
+  "polls": [
+    {
+      "vlan_walk_last_before": false,
+      "vlan_walk_last_after": true,
+      "fdb_walk_failed": true
+    },
+    {
+      "vlan_walk_last_before": true,
+      "vlan_walk_last_after": true,
+      "fdb_walk_failed": false,
+      "fdb_rows_by_port": {"1": 30, "27": 1, "28": 1588},
+      "interfaces": 30,
+      "lldp_neighbors": 3,
+      "port_vlans": 26,
+      "stp_root_port": 28,
+      "sys_name": "6300"
+    },
+    {
+      "vlan_walk_last_before": true,
+      "vlan_walk_last_after": true,
+      "fdb_walk_failed": false,
+      "fdb_rows_by_port": {"1": 30, "27": 1, "28": 1588},
+      "interfaces": 30,
+      "lldp_neighbors": 3,
+      "port_vlans": 26,
+      "stp_root_port": 28,
+      "sys_name": "6300"
+    }
+  ]
+}

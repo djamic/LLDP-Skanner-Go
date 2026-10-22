@@ -201,6 +201,9 @@ func resetState(t *testing.T) {
 	collectESXiRetry = make(map[string]collectESXiRetryJob)
 	collectESXiInflight = make(map[string]string)
 	collectESXiMu.Unlock()
+	collectVLANLastMu.Lock()
+	collectVLANLastIPs = make(map[string]bool)
+	collectVLANLastMu.Unlock()
 
 	interfaceTrafficMapMutex.Lock()
 	interfaceTrafficMap = make(map[string]map[int]*InterfaceTraffic)
@@ -755,20 +758,39 @@ func (r *switchIPsRecorder) taken() []string {
 // A walk with no canned answer fails like an agent that does not respond.
 // Every walk is counted by IP and OID. The walks of an agent marked with
 // checkOrder fail like net-snmp's when its rows come out of OID order and
-// the walk is not unordered (-Cc, walkTiming.Unordered).
+// the walk is not unordered (-Cc, walkTiming.Unordered). An agent with a
+// stall (fakeStall) takes time to answer and stalls on one table.
 type fakeAgents struct {
 	mu      sync.Mutex
 	agents  map[string]map[string][]string // ip → OID → lines
 	walks   map[string]int                 // "ip oid" → walks
 	timed   map[string]int                 // "ip oid timeout/retries" → walks
 	ordered map[string]bool                // ip → net-snmp's OID order check (checkOrder)
+	stalls  map[string]*fakeStall          // ip → its stall
+}
+
+// fakeStall makes an agent behave as the Aruba 6300 172.20.230.253 did on
+// 2026-10-22 (snmp_object.go, collectVLANLastIPs): every walk is in flight
+// for perRequest per request (the agent puts at most 10 varbinds into a
+// response, so a walk of n rows takes n/10+1 requests: 163 for the 1,619
+// FDB rows of testdata/agents/aruba_253.walks), a
+// walk of oid (dot1qVlanCurrentEgressPorts) keeps the agent busy for hold
+// and fails like a timeout (the agent's 10.8 s are more than the walk's
+// two 5 s attempts), and while the agent is busy no other walk is answered:
+// a walk that is in flight when the stall begins, or starts during it,
+// fails like a timeout too. victims lists the OIDs of those walks.
+type fakeStall struct {
+	oid              string
+	perRequest, hold time.Duration
+	busy             bool
+	next             chan struct{} // closed when the next stall begins
+	victims          []string
 }
 
 var fakeSNMP = &fakeAgents{}
 
 func (f *fakeAgents) walk(_, ip, oid string, timing walkTiming) ([]string, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if f.walks == nil {
 		f.walks = map[string]int{}
 	}
@@ -777,15 +799,86 @@ func (f *fakeAgents) walk(_, ip, oid string, timing walkTiming) ([]string, error
 		f.timed = map[string]int{}
 	}
 	f.timed[fmt.Sprintf("%s %s %s/%d", ip, oid, timing.Timeout, timing.Retries)]++
-	if lines, ok := f.agents[ip][oid]; ok {
-		if f.ordered[ip] && !timing.Unordered {
-			if err := netsnmpOrderCheck(lines, 25); err != nil {
-				return nil, fmt.Errorf("fake snmp: %s for %s: %w", ip, oid, err)
-			}
+	lines, ok := f.agents[ip][oid]
+	var err error
+	switch {
+	case !ok:
+		err = fmt.Errorf("fake snmp: timeout from %s for %s", ip, oid)
+	case f.ordered[ip] && !timing.Unordered:
+		if orderErr := netsnmpOrderCheck(lines, 25); orderErr != nil {
+			err = fmt.Errorf("fake snmp: %s for %s: %w", ip, oid, orderErr)
+		}
+	}
+	stall := f.stalls[ip]
+	if stall == nil {
+		f.mu.Unlock()
+		if err != nil {
+			return nil, err
 		}
 		return slices.Clone(lines), nil
 	}
-	return nil, fmt.Errorf("fake snmp: timeout from %s for %s", ip, oid)
+	if oid == stall.oid {
+		close(stall.next) // the walks in flight get no answer
+		stall.next, stall.busy = make(chan struct{}), true
+		f.mu.Unlock()
+		time.Sleep(stall.hold)
+		f.mu.Lock()
+		stall.busy = false
+		f.mu.Unlock()
+		return nil, fmt.Errorf("fake snmp: timeout from %s for %s (the agent works on it longer than the walk waits)", ip, oid)
+	}
+	if stall.busy {
+		stall.victims = append(stall.victims, oid)
+		f.mu.Unlock()
+		return nil, fmt.Errorf("fake snmp: timeout from %s for %s (the agent is busy)", ip, oid)
+	}
+	rows := 0
+	for _, line := range lines {
+		if strings.Contains(line, " = ") {
+			rows++
+		}
+	}
+	next, flight := stall.next, stall.perRequest*time.Duration(rows/10+1)
+	f.mu.Unlock()
+	timer := time.NewTimer(flight)
+	defer timer.Stop()
+	select {
+	case <-next:
+		f.mu.Lock()
+		stall.victims = append(stall.victims, oid)
+		f.mu.Unlock()
+		return nil, fmt.Errorf("fake snmp: timeout from %s for %s (the agent stalled meanwhile)", ip, oid)
+	case <-timer.C:
+	}
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(lines), nil
+}
+
+// stall gives the agent at ip a stall on oid (fakeStall).
+func (f *fakeAgents) stall(ip, oid string, perRequest, hold time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.stalls == nil {
+		f.stalls = map[string]*fakeStall{}
+	}
+	f.stalls[ip] = &fakeStall{oid: oid, perRequest: perRequest, hold: hold, next: make(chan struct{})}
+}
+
+// stallVictims returns the OIDs of the walks of ip that its stall failed
+// since the last call, sorted, and clears them.
+func (f *fakeAgents) stallVictims(ip string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s := f.stalls[ip]
+	if s == nil {
+		return nil
+	}
+	victims := s.victims
+	s.victims = nil
+	slices.Sort(victims)
+	return victims
 }
 
 // checkOrder makes the walks of ip check OID order as snmpbulkwalk does
@@ -909,6 +1002,7 @@ func (f *fakeAgents) reset() {
 	f.walks = nil
 	f.timed = nil
 	f.ordered = nil
+	f.stalls = nil
 	f.mu.Unlock()
 }
 

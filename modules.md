@@ -166,9 +166,9 @@ flowchart TD
 | Funksiya | Tavsif |
 |----------|--------|
 | `NewSNMPObject()` | OnSuccess/OnFailure callback'lar bilan SNMP ob'ekt yaratish |
-| `CollectData(ip, sysName)` | To'liq yig'ish zanjiri: `snmpbulkwalk → parse → DeviceData`. Chaqiruvchida nom bo'lmasa (rescue scan, LLDP discovery `""` beradi) sysName.0 o'qiladi; o'qib bo'lmasa saqlangan nom qoladi (`keepPreviousSysName`) |
+| `CollectData(ip, sysName)` | To'liq yig'ish zanjiri: `snmpbulkwalk → parse → DeviceData`. Chaqiruvchida nom bo'lmasa (rescue scan, LLDP discovery `""` beradi) sysName.0 o'qiladi; o'qib bo'lmasa saqlangan nom qoladi (`keepPreviousSysName`). Oxirgi so'rovda VLAN egress walk'i (dot1qVlanCurrentEgressPorts) muvaffaqiyatsiz bo'lgan agentda VLAN walk'lari boshqa walk'lardan keyin bajariladi (`collectVLANLast`): Aruba 6300 172.20.230.253 bu jadvalni ~10.8 s hisoblaydi va shu vaqtda boshqa so'rovlarga javob bermaydi, natijada parallel FDB walk'i har safar timeout bo'lardi |
 | `collectLocalChassisID()` | LLDP-MIB `1.0.8802.1.1.2.1.3` dan ChassisID olish; "No Such Instance" yoki bo'sh javobda ustun (`…3.2`) yana bir marta o'qiladi (PiXiETECH 172.20.230.40/.44), "No Such Object" — yakuniy |
-| `collectInterfaces()` | IF-MIB: ifDescr, ifSpeed, ifOperStatus, ifHCInOctets, ifAlias, ifInErrors |
+| `collectInterfaces()` | IF-MIB: ifDescr, ifSpeed, ifOperStatus, ifHCInOctets, ifAlias, ifInErrors. ifSpeed va ifHighSpeed parallel o'qiladi; qaysi biri oldin tugashidan qat'i nazar 10G port 10G bo'ladi (oldin ifSpeed keyin tugasa 4294967295 → "4G" qolardi) |
 | `collectLLDPNeighbors()` | LLDP RemTable: RemChassisId, RemPortId, RemSysName, RemSysDesc, RemMgmtAddr. Indeks: standart 3 qism (TimeMark.LocalPort.RemIndex) yoki PiXiETECH 2 qism (RemIndex.LocalPort; agent bergan lldpRemLocalPortNum/lldpRemIndex ustunlari ustun), ManAddr ham shu 2 qismli shaklda (manzil 2-ustunda) |
 | `collectMACTable()` | BRIDGE-MIB: dot1dTpFdbAddress → MAC + port mapping (dot1dBasePort→ifIndex). Walk `-Cc` bilan (tartibsiz): PiXiETECH FDB'ni hash tartibida beradi, oddiy walk "OID not increasing" bilan 1 kod qaytarib, jadval bo'sh qolardi; OID takrorlansa walk to'xtatiladi |
 | `collectARPTable()` | IP-ARP: ipNetToMediaPhysAddress → MAC↔IP mapping |
