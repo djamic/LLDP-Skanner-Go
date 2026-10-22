@@ -6,8 +6,8 @@
   "all_filter": {
     "fixture": {
       "kept_by_group": {"access_point": 98, "bmc": 4, "camera": 56, "endpoint": 668, "hub": 33, "hypervisor": 13, "switch": 75, "vm": 65, "wifi_random": 17},
-      "kept_links": 1025,
-      "links": 1025,
+      "kept_links": 1026,
+      "links": 1026,
       "nodes_by_group": {"access_point": 98, "bmc": 4, "camera": 56, "endpoint": 668, "hub": 33, "hypervisor": 13, "switch": 75, "vm": 65, "wifi_random": 17}
     },
     "rule": {

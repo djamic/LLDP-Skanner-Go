@@ -3,15 +3,15 @@
     "bfs_depths": {
       "core_found": true,
       "core_switch_ip": "00:0c:29:98:7b:c2",
-      "deep_devices": 884,
-      "deep_switches": ["172.20.254.249", "4c:ae:a3:27:53:aa", "4c:ae:a3:27:5f:aa", "4c:ae:a3:27:6d:8a", "4c:ae:a3:27:70:2a", "4c:ae:a3:27:76:8a", "4c:ae:a3:27:79:ea", "4c:ae:a3:27:85:ea", "4c:ae:a3:27:8b:2a", "4c:ae:a3:27:8b:8a", "4c:ae:a3:8d:b3:79", "4c:ae:a3:8d:e0:91", "4c:ae:a3:8e:19:09", "4c:ae:a3:8e:42:11", "4c:ae:a3:a1:ff:6c", "4c:ae:a3:a2:01:ac", "4c:ae:a3:a2:03:2c", "4c:ae:a3:a2:06:2c", "4c:ae:a3:a2:06:ec", "4c:ae:a3:a2:09:ec", "4c:ae:a3:a2:0d:4c", "4c:ae:a3:a2:0d:ac", "4c:ae:a3:a2:10:4c", "4c:ae:a3:a2:12:ec", "4c:ae:a3:a2:13:4c", "4c:ae:a3:a2:15:ec", "4c:ae:a3:a2:18:2c", "4c:ae:a3:a2:18:ec", "4c:ae:a3:a2:19:ac", "78:48:59:72:ec:ee", "bc:ea:fa:46:47:ac", "e0:d9:e3:ee:19:c0", "f8:f0:82:7a:d9:5b", "f8:f0:82:7a:d9:5d", "f8:f0:82:7a:d9:69", "f8:f0:82:7a:d9:71", "f8:f0:82:7a:f7:9b", "f8:f0:82:7c:2a:03", "f8:f0:82:7c:2c:ff", "f8:f0:82:7c:2d:17", "f8:f0:82:7c:30:cf", "f8:f0:82:7c:f9:58", "f8:f0:82:7c:f9:84", "f8:f0:82:7c:f9:cc", "f8:f0:82:7c:fa:20", "f8:f0:82:7c:fa:26", "f8:f0:82:7c:fa:72", "f8:f0:82:7c:fa:ca", "f8:f0:82:7c:fb:0e", "f8:f0:82:d0:22:ce", "f8:f0:82:d0:23:0a", "f8:f0:82:d0:23:92", "f8:f0:82:d8:7d:07"],
-      "depth_distribution": {"0": 1, "1": 1, "2": 25, "3": 71, "4": 153, "5": 191, "6": 243, "7": 260, "8": 37},
+      "deep_devices": 883,
+      "deep_switches": ["4c:ae:a3:27:53:aa", "4c:ae:a3:27:5f:aa", "4c:ae:a3:27:6d:8a", "4c:ae:a3:27:70:2a", "4c:ae:a3:27:76:8a", "4c:ae:a3:27:79:ea", "4c:ae:a3:27:85:ea", "4c:ae:a3:27:8b:2a", "4c:ae:a3:27:8b:8a", "4c:ae:a3:8d:b3:79", "4c:ae:a3:8d:e0:91", "4c:ae:a3:8e:19:09", "4c:ae:a3:8e:42:11", "4c:ae:a3:a1:ff:6c", "4c:ae:a3:a2:01:ac", "4c:ae:a3:a2:03:2c", "4c:ae:a3:a2:06:2c", "4c:ae:a3:a2:06:ec", "4c:ae:a3:a2:09:ec", "4c:ae:a3:a2:0d:4c", "4c:ae:a3:a2:0d:ac", "4c:ae:a3:a2:10:4c", "4c:ae:a3:a2:12:ec", "4c:ae:a3:a2:13:4c", "4c:ae:a3:a2:15:ec", "4c:ae:a3:a2:18:2c", "4c:ae:a3:a2:18:ec", "4c:ae:a3:a2:19:ac", "78:48:59:72:ec:ee", "bc:ea:fa:46:47:ac", "e0:d9:e3:ee:19:c0", "f8:f0:82:7a:d9:5b", "f8:f0:82:7a:d9:5d", "f8:f0:82:7a:d9:69", "f8:f0:82:7a:d9:71", "f8:f0:82:7a:f7:9b", "f8:f0:82:7c:2a:03", "f8:f0:82:7c:2c:ff", "f8:f0:82:7c:2d:17", "f8:f0:82:7c:30:cf", "f8:f0:82:7c:f9:58", "f8:f0:82:7c:f9:84", "f8:f0:82:7c:f9:cc", "f8:f0:82:7c:fa:20", "f8:f0:82:7c:fa:26", "f8:f0:82:7c:fa:72", "f8:f0:82:7c:fa:ca", "f8:f0:82:7c:fb:0e", "f8:f0:82:d0:22:ce", "f8:f0:82:d0:23:0a", "f8:f0:82:d0:23:92", "f8:f0:82:d8:7d:07"],
+      "depth_distribution": {"0": 1, "1": 1, "2": 25, "3": 72, "4": 153, "5": 190, "6": 243, "7": 260, "8": 37},
       "max_depth": 8,
       "total_nodes": 982
     },
     "bot_messages": {
       "repeated_within_hour": 0,
-      "summary": "📊 <b>Tarmoq holati:</b> 60/100 (Fair)\n🔎 Jami topilgan muammolar: 87 ta",
+      "summary": "📊 <b>Tarmoq holati:</b> 60/100 (Fair)\n🔎 Jami topilgan muammolar: 86 ta",
       "with_gateways": {"shadow": 33, "summary": 1},
       "without_gateways": {"shadow": 33, "summary": 1}
     },
@@ -40,7 +40,6 @@
       "🌐 [Gateway] FortiGate-600F 172.20.0.1 drawn as router 68:cc:ae:96:e6:08, linked from 172.20.254.203 TGE1/0/52 (1 MAC on the port), by its existing link; in place of node(s) 68:cc:ae:96:e5:e8"
     ],
     "path_suggestions": [
-      {"device": "HUAWEI (172.20.254.249)", "node": "172.20.254.249", "value": "4+ hops"},
       {"device": "A Mobil\n172.20.230.50 (4c:ae:a3:27:53:aa)", "node": "4c:ae:a3:27:53:aa", "value": "4+ hops"},
       {"device": "D - 1\n172.20.230.3 (4c:ae:a3:27:5f:aa)", "node": "4c:ae:a3:27:5f:aa", "value": "4+ hops"},
       {"device": "A 220\n172.20.230.49 (4c:ae:a3:27:6d:8a)", "node": "4c:ae:a3:27:6d:8a", "value": "4+ hops"},
@@ -105,7 +104,7 @@
     "summary_with_gateways": {
       "congestion_issues": 0,
       "loopback_issues": 0,
-      "path_issues": 53,
+      "path_issues": 52,
       "shadow_it_issues": 33,
       "stability_issues": 0,
       "stp_issues": 1

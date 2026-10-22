@@ -1,8 +1,8 @@
 {
   "summary": {
     "nodes": 1029,
-    "links": 1025,
-    "edges": 1025,
+    "links": 1026,
+    "edges": 1026,
     "groups": {"access_point": 98, "bmc": 4, "camera": 56, "endpoint": 668, "hub": 33, "hypervisor": 13, "switch": 75, "vm": 65, "wifi_random": 17},
     "unreachable_nodes": 2
   },
@@ -1038,7 +1038,6 @@
     {"id": "hyp-4c:ae:a3:8d:ee:c9-ge1_0_35", "group": "hypervisor", "type": "hypervisor", "label": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/35\nVMs: 172.20.1.253, 172.20.1.219, 172.20.11.130\nhyp-4c:ae:a3:8d:ee:c9-ge1_0_35", "sysName": "[HYPERVISOR] VMware ESXi\n3 VMs on ge1/0/35\nVMs: 172.20.1.253, 172.20.1.219, 172.20.11.130"}
   ],
   "links": [
-    {"source": "172.20.254.249", "target": "4c:ae:a3:a2:01:ac", "label": "GE0/0/14 [MAC-REF]|", "sourceLabel": "GE0/0/14 [MAC-REF]", "unreachable": true},
     {"source": "44:31:92:ac:20:b6", "target": "70:a7:41:aa:11:6d", "label": "GE1/0/4 [V1500] 1G|eth0", "sourceLabel": "GE1/0/4 [V1500] 1G", "targetLabel": "eth0"},
     {"source": "4c:ae:a3:27:53:aa", "target": "00:e0:4c:50:dd:4c", "label": "GE1/0/22 [V1620] 1G|", "sourceLabel": "GE1/0/22 [V1620] 1G"},
     {"source": "4c:ae:a3:27:53:aa", "target": "00:e0:4c:50:dd:92", "label": "GE1/0/40 [V1620] 100M|", "sourceLabel": "GE1/0/40 [V1620] 100M"},
@@ -1280,6 +1279,7 @@
     {"source": "4c:ae:a3:8d:ec:c1", "target": "e4:a8:df:87:18:27", "label": "GE1/0/3 [V160]|", "sourceLabel": "GE1/0/3 [V160]"},
     {"source": "4c:ae:a3:8d:ec:c1", "target": "e4:a8:df:89:b5:81", "label": "GE1/0/13 [V160]|", "sourceLabel": "GE1/0/13 [V160]"},
     {"source": "4c:ae:a3:8d:ec:c1", "target": "e8:c6:e6:74:87:eb", "label": "GE1/0/17 [V160]|", "sourceLabel": "GE1/0/17 [V160]"},
+    {"source": "4c:ae:a3:8d:ec:c1", "target": "f8:f0:82:d8:62:67", "label": "GE1/0/48 [MAC-REF]|", "sourceLabel": "GE1/0/48 [MAC-REF]"},
     {"source": "4c:ae:a3:8d:ec:c1", "target": "hub-4c:ae:a3:8d:ec:c1-p28", "label": "GE1/0/28|Hub", "sourceLabel": "GE1/0/28", "targetLabel": "Hub"},
     {"source": "4c:ae:a3:8d:ec:c1", "target": "hub-4c:ae:a3:8d:ec:c1-p4", "label": "GE1/0/4|Hub", "sourceLabel": "GE1/0/4", "targetLabel": "Hub"},
     {"source": "4c:ae:a3:8d:ee:c9", "target": "00:4e:35:cb:43:a0", "label": "GE1/0/19 [V1500] 1G|eth0", "sourceLabel": "GE1/0/19 [V1500] 1G", "targetLabel": "eth0"},
@@ -1787,6 +1787,7 @@
     {"source": "f8:f0:82:d1:3c:12", "target": "f8:f0:82:7c:fa:ca", "label": "Eth1/0/8 [T] 1G|", "sourceLabel": "Eth1/0/8 [T] 1G"},
     {"source": "f8:f0:82:d1:3c:12", "target": "f8:f0:82:d0:22:ce", "label": "Eth1/0/22 [T] 1G|", "sourceLabel": "Eth1/0/22 [T] 1G"},
     {"source": "f8:f0:82:d1:3c:12", "target": "f8:f0:82:d0:23:0a", "label": "Eth1/0/14 [T] 1G|", "sourceLabel": "Eth1/0/14 [T] 1G"},
+    {"source": "f8:f0:82:d1:67:5e", "target": "172.20.230.17", "label": "Eth1/0/23 [MAC-REF]|", "sourceLabel": "Eth1/0/23 [MAC-REF]", "unreachable": true},
     {"source": "f8:f0:82:d1:67:5e", "target": "44:31:92:ac:20:b6", "label": "Eth1/0/9 [T] 1G|GE1/0/28", "sourceLabel": "Eth1/0/9 [T] 1G", "targetLabel": "GE1/0/28"},
     {"source": "f8:f0:82:d1:67:5e", "target": "4c:ae:a3:27:83:4a", "label": "Eth1/0/2 [V40] 1G|469932484", "sourceLabel": "Eth1/0/2 [V40] 1G", "targetLabel": "469932484"},
     {"source": "f8:f0:82:d1:67:5e", "target": "4c:ae:a3:8d:ee:c9", "label": "Eth1/0/1 [T] 1G|GE1/0/25", "sourceLabel": "Eth1/0/1 [T] 1G", "targetLabel": "GE1/0/25"},

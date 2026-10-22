@@ -84,7 +84,7 @@ Har bir qurilma uchun:
 4. **VM Detection** → `isHypervisorPort()` True bo'lsa, har VM MAC alohida node qilib switch→MAC edge yaratiladi (keyin `detectHypervisors` guruhlaydi).
 
 ### 3.2. `addMACCrossRefEdges()` (qator 2518-2596)
-LLDP qo'llab-quvvatlamaydigan switchlar uchun: Switch A ning MACTable'ida Switch B ning ChassisID MAC ko'rinsa, va bu port faqat **1 ta** switch MAC tutgan bo'lsa → to'g'ridan-to'g'ri ulanish (`[MAC-REF]` label). 2+ switch MAC = transit port, o'tkazib yuboriladi.
+LLDP qo'llab-quvvatlamaydigan switchlar uchun: Switch A ning MACTable'ida Switch B ning o'z MAC'i (`buildSwitchOwnMACs`: ChassisID MAC yoki ARP alias — B ning boshqaruv IP'siga ARP bog'lagan VLAN interfeys MAC'i) ko'rinsa, va bu portda faqat **1 ta** boshqa switch bo'lsa → to'g'ridan-to'g'ri ulanish (`[MAC-REF]` label). 2+ switch = transit port, o'tkazib yuboriladi; LLDP qo'shnisi so'ralgan switch bo'lgan port ham. Har switch bitta portdan ulanadi: nomzod portlar ichida eng kam MAC'li port (minglab MAC'li uplink emas).
 
 ### 3.3. `rebuildGraph()` (qator 2598-2652)
 `collectedData` dan snapshot olib, qisqa RLock ichida nusxa ko'chiradi. Keyin:

@@ -3,8 +3,8 @@
     "core": "00:0c:29:98:7b:c2",
     "health_with_lldp": 60,
     "health_without_lldp": 60,
-    "path_issues_with_lldp": 53,
-    "path_issues_without_lldp": 53
+    "path_issues_with_lldp": 52,
+    "path_issues_without_lldp": 52
   },
   "fortigate_lldp": {
     "neighbor_ports": {

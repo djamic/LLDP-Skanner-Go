@@ -20,7 +20,7 @@ import (
 func holdFixtureDNS(t *testing.T, n int) []string {
 	t.Helper()
 	snapshot := snapshotCollectedData()
-	ips := graphHostnameIPs(snapshot, buildSwitchChassisMACs(snapshot))
+	ips := graphHostnameIPs(snapshot, buildSwitchOwnMACs(snapshot))
 	if len(ips) <= 2*n {
 		t.Fatalf("precondition: the fixture build looks up %d names, want more than %d", len(ips), 2*n)
 	}

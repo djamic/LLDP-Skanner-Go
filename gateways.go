@@ -456,13 +456,15 @@ type gatewayLink struct {
 
 // gatewayPort picks the port the router node with this MAC is linked from,
 // with the rule addMACCrossRefEdges applies to a switch seen in another
-// switch's FDB: a port of a polled switch where the MAC is learned as the
-// only infrastructure MAC (switch chassis MACs and gateway MACs, other than
-// the switch's own; two or more make a transit port), NULL0 ports left out.
-// Of those the port with the fewest MACs wins, then the first switch in IP
-// order, then the lower port: the FortiGate's MAC is the only MAC on
-// 172.20.254.203 Ten-GigabitEthernet1/0/52.
-func gatewayPort(snapshot map[string]*DeviceData, mac string, infra map[string]bool) (gatewayLink, bool) {
+// switch's FDB: a port of a polled switch where the MAC's device is the only
+// infrastructure device learned (infra maps the own MACs of the switches,
+// buildSwitchOwnMACs, to their node ids and each gateway MAC to itself; a
+// device other than the switch itself counts once whatever number of its
+// MACs is learned there, and two or more make a transit port), NULL0 ports
+// left out. Of those the port with the fewest MACs wins, then the first
+// switch in IP order, then the lower port: the FortiGate's MAC is the only
+// MAC on 172.20.254.203 Ten-GigabitEthernet1/0/52.
+func gatewayPort(snapshot map[string]*DeviceData, mac string, infra map[string]string) (gatewayLink, bool) {
 	var best gatewayLink
 	found := false
 	for _, ip := range sortedDeviceIPs(snapshot) {
@@ -483,19 +485,19 @@ func gatewayPort(snapshot map[string]*DeviceData, mac string, infra map[string]b
 				}
 			}
 		}
-		own := graphChassisKey(d.ChassisID)
+		own := graphDeviceNodeID(d)
 		for _, port := range slices.Sorted(maps.Keys(ports)) {
 			if isNullInterface(getFDBPortName(d, port)) {
 				continue
 			}
 			macs := ports[port]
-			infraMACs := 0
+			devices := make(map[string]bool) // the infrastructure devices learned there
 			for m := range macs {
-				if infra[m] && m != own {
-					infraMACs++
+				if id, ok := infra[m]; ok && id != own {
+					devices[id] = true
 				}
 			}
-			if infraMACs != 1 {
+			if len(devices) != 1 {
 				continue // another switch or gateway is learned there too
 			}
 			if !found || len(macs) < best.macs {
@@ -607,7 +609,7 @@ func graphMergeNode(graph *DJGraph, from, into string) {
 // drawn; that, and where each router node is linked, is logged once per
 // start. Runs after the LLDP, FDB and MAC cross-reference links and before
 // detectHypervisors and enrichGraphWithIPs, which leave router nodes alone.
-func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchChassisMACs map[string]string, gateways []gatewayNode) {
+func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMACs map[string]string, gateways []gatewayNode) {
 	// The MAC of each gateway, and the gateways of each MAC in gateway_ip order
 	var macOrder []string
 	byMAC := make(map[string][]gatewayNode)
@@ -621,7 +623,7 @@ func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchChas
 			gatewayNotice("⚠️ [Gateway] %s (%s) answered SNMP but its MAC is unknown: no switch ARP table and no MAC-IP cache entry has %s, so no router node is drawn", gw.IP, gatewayName(gw), gw.IP)
 			continue
 		}
-		if switchID, isSwitch := switchChassisMACs[mac]; isSwitch {
+		if switchID, isSwitch := switchMACs[mac]; isSwitch {
 			gatewayNotice("🌐 [Gateway] %s has the chassis MAC %s of the polled switch %s: drawn as that switch, no router node", gw.IP, mac, switchID)
 			continue
 		}
@@ -632,14 +634,14 @@ func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchChas
 		gatewayNotice("🌐 [Gateway] %s (%s): MAC %s from the %s", gw.IP, gatewayName(gw), mac, source)
 	}
 
-	// Switch chassis MACs and gateway MACs: a port where two of them are
-	// learned is a transit port
-	infra := make(map[string]bool, len(switchChassisMACs)+len(macOrder))
-	for m := range switchChassisMACs {
-		infra[m] = true
+	// The own MACs of the switches and the gateway MACs, by device: a port
+	// where two of these devices are learned is a transit port
+	infra := make(map[string]string, len(switchMACs)+len(macOrder))
+	for m, id := range switchMACs {
+		infra[m] = id
 	}
 	for _, m := range macOrder {
-		infra[m] = true
+		infra[m] = m
 	}
 
 	for _, mac := range macOrder {

@@ -990,7 +990,7 @@ func reportHubIsShadowIT(g *DJGraph, hubID string, members []string) bool {
 			if reportDeviceNode(g, d) != switchID {
 				continue
 			}
-			for _, p := range fdbPorts(d, buildSwitchChassisMACs(collectedData)) {
+			for _, p := range fdbPorts(d, buildSwitchOwnMACs(collectedData)) {
 				if p.Port == port {
 					return p.Kind == fdbHub
 				}

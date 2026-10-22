@@ -369,7 +369,7 @@ func TestMACRefLLDPSwitchPort(t *testing.T) {
 	for _, ip := range sortedDeviceIPs(devices) {
 		graphAddSwitchNode(g, devices[ip])
 	}
-	addMACCrossRefEdges(g, devices, buildSwitchChassisMACs(devices))
+	addMACCrossRefEdges(g, devices, buildSwitchOwnMACs(devices))
 	if got := graphEdgeLines(g); !slices.Equal(got, []string{
 		macA + " -> " + macC + ` : "GE1/0/2 [MAC-REF]|"`,
 	}) {
@@ -380,7 +380,7 @@ func TestMACRefLLDPSwitchPort(t *testing.T) {
 	for _, ip := range sortedDeviceIPs(devices) {
 		graphAddSwitchNode(g2, devices[ip])
 	}
-	addMACCrossRefEdges(g2, devices, buildSwitchChassisMACs(devices))
+	addMACCrossRefEdges(g2, devices, buildSwitchOwnMACs(devices))
 	if got := graphEdgeLines(g2); !slices.Equal(got, []string{macA + " -> " + macC + ` : "GE1/0/3 [MAC-REF]|"`}) {
 		t.Errorf("MAC-REF links %q, want the AP port's (an LLDP neighbor that is no polled switch)", got)
 	}

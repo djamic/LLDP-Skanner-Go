@@ -1,7 +1,7 @@
 {
   "api_graph": {
     "health_score": 70,
-    "links": 1025,
+    "links": 1026,
     "node_anomalies": {
       "hub-4c:ae:a3:27:76:8a-p48": ["shadow_it"],
       "hub-4c:ae:a3:27:7e:ca-p3": ["shadow_it"],
@@ -45,7 +45,7 @@
     "total_switches": 75,
     "total_macs": 4566,
     "total_nodes": 1029,
-    "total_edges": 1025,
+    "total_edges": 1026,
     "anomalies": {
       "shadow_it": 33,
       "stp": 1

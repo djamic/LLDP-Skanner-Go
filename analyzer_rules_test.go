@@ -563,8 +563,10 @@ func TestPathCoreOneRule(t *testing.T) {
 		// the switch that learned the gateway's MAC; 32 since the MAC-REF
 		// link 172.20.230.47 Eth1/0/25 -> Aruba 88:22:5b:88:e2:40 is gone
 		// (LLDP names 4c:ae:a3:27:8b:2a on that port): .47 and 8b:2a are 4+
-		// hops without that shortcut
-		{"172.20.254.202", "4c:ae:a3:8d:ee:c9", 32, 60},
+		// hops without that shortcut; 31 since the Huawei 172.20.254.249 is
+		// no longer linked from its uplink GE0/0/14 to 172.20.230.23 (53
+		// switches are learned there by their VLAN MACs) and is unreached
+		{"172.20.254.202", "4c:ae:a3:8d:ee:c9", 31, 60},
 		{"172.20.230.48", "4c:ae:a3:a2:15:ec", 61, 60}, // the old guessed root, an access switch
 	} {
 		setGatewayIPs([]string{c.gateway})

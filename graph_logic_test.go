@@ -177,9 +177,9 @@ func TestGraphSwitchIdentityBuild(t *testing.T) {
 	if !g.GetEdge("10.9.7.1", "00:1b:21:07:01:01") || !g.GetEdge("10.9.7.2", "00:1b:21:07:02:01") {
 		t.Errorf("FDB endpoints are not attached to their own switch: %v", g.Edges)
 	}
-	switchMACs := buildSwitchChassisMACs(devices)
+	switchMACs := buildSwitchOwnMACs(devices)
 	if len(switchMACs) != 3 || switchMACs["58:94:80:00:f7:a3"] != "58:94:80:00:f7:a3" {
-		t.Errorf("buildSwitchChassisMACs = %v", switchMACs)
+		t.Errorf("buildSwitchOwnMACs = %v", switchMACs)
 	}
 }
 
@@ -494,7 +494,7 @@ func TestGraphFDBEndpoints(t *testing.T) {
 
 	// The per-port rule on its own (what Shadow-IT counting can share, Q14)
 	var rule []string
-	for _, p := range fdbPorts(devices["10.9.5.1"], buildSwitchChassisMACs(devices)) {
+	for _, p := range fdbPorts(devices["10.9.5.1"], buildSwitchOwnMACs(devices)) {
 		rule = append(rule, fmt.Sprintf("%d:%d:%v", p.Port, len(p.MACs), p.Kind == fdbHub))
 	}
 	if got, want := strings.Join(rule, " "), "5:3:false 6:1:false 7:1:false 8:1:false 9:8:true 10:3:false 11:1:false 18:5:false 19:22:false"; got != want {

@@ -234,9 +234,9 @@ flowchart TD
 | Funksiya | Joyi | Tavsif |
 |----------|------|--------|
 | `buildGraphEdges()` | example_usage:677-1043 | 1 ta qurilma uchun: LLDP→edge, MAC→endpoint/hub/VM node yaratish |
-| `addMACCrossRefEdges()` | example_usage:2518-2596 | LLDP bo'lmagan switchlarni MAC jadval orqali aniqlash (1 port=1 switch MAC → direct link); LLDP qo'shnisi so'ralgan switch bo'lgan portdan MAC-REF chizilmaydi |
+| `addMACCrossRefEdges()` | example_usage:2518-2596 | LLDP bo'lmagan switchlarni MAC jadval orqali aniqlash: switchning o'z MAC'i (chassis yoki ARP alias) yolg'iz turgan port (1 port = 1 boshqa switch, chassis+alias bitta switch hisoblanadi) → direct link; har switch bitta portdan, eng kam MAC'li portdan (teng bo'lsa IP tartibida birinchi switch, keyin kichik port) ulanadi; 2+ switch = transit; LLDP qo'shnisi so'ralgan switch bo'lgan portdan MAC-REF chizilmaydi |
 | `rebuildGraph()` | example_usage:2598-2652 | To'liq graf qayta qurish: snapshot → nodes → edges → MAC-ref → hypervisor → enrich → atomic swap |
-| `buildSwitchChassisMACs()` | example_usage:2501-2516 | Switch MAC → nodeID mapping (switch MAC'larni endpoint'dan ajratish uchun) |
+| `buildSwitchOwnMACs()` | example_usage:2501-2516 | Switchlarning o'z MAC'lari → nodeID: chassis MAC + ARP alias'lar (`switchARPAliases`: ARP ma'lumoti — switch ARP jadvallari va `globalMACtoIP` — switch boshqaruv IP'siga bog'lagan MAC, faqat bitta IP'ga bog'langan va boshqa qurilmaning chassis MAC'i bo'lmasa; switch ma'lumotisiz saqlangan gateway alias olmaydi). `fdbPorts` (o'z MAC'i va boshqa switch MAC'i filtri), MAC-REF va router port qoidasi shu xaritadan foydalanadi. 172.20.230.76 chassis MAC'idan hech qachon yubormaydi, Vlan-interface1 MAC'i 4c:ae:a3:8d:ec:cb dan yuboradi |
 | `detectHypervisors()` | example_usage:2654-2806 | **Faza 1:** VM MAC'larni port bo'yicha guruhlash → `hyp-` node qo'yish. **Faza 2:** Server NIC OUI → `[HYPERVISOR]` tag |
 | `DJGraph.AddNode()` | dj_graph | Node qo'shish (unique) |
 | `DJGraph.AddEdge()` | dj_graph | Edge qo'shish (duplicate tekshiruv: A→B yoki B→A) |

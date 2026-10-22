@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -949,8 +950,9 @@ func lldpKnownMACs(data *DeviceData) map[string]bool {
 }
 
 // buildGraphEdges builds graph edges using ChassisID as the primary key
-// switchChassisMACs maps normalized MAC -> switch node ID (to exclude switch MACs from endpoint creation)
-func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[string]string) {
+// switchMACs maps the own MACs of the polled switches to their node ids
+// (buildSwitchOwnMACs), so switch MACs get no endpoint nodes
+func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]string) {
 	logDebug("Analyzing Edges for Host: %s (%s) [Chassis: %s]", data.IP, data.SysName, data.ChassisID)
 
 	// Source Node: the switch's chassis MAC, or its IP (graphDeviceNodeID)
@@ -1050,7 +1052,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 	// rule the Shadow-IT alerts, metrics and reports share (fdbPorts).
 	// Ports come in ascending order, so when a MAC is seen on two ports the
 	// node is created (first creator wins) by the same port on every build.
-	for _, p := range fdbPorts(data, switchChassisMACs) {
+	for _, p := range fdbPorts(data, switchMACs) {
 		portName := getFDBPortName(data, p.Port)
 		if p.Kind == fdbHub {
 			// Non-VM hub: create aggregated hub node; every member gets a
@@ -1197,14 +1199,15 @@ type fdbPort struct {
 // reports and the UI (which lists the graph's hubs) agree. It returns the
 // FDB ports of one switch in port order; ports that get no nodes are left
 // out. The MACs of a port are its FDB entries minus non-MACs, LLDP-known
-// neighbors, the switch's own and other polled switches' chassis MACs and
+// neighbors, the own MACs of the switch and of the other polled switches
+// (switchMACs, buildSwitchOwnMACs: chassis MACs and ARP aliases) and
 // isInvalidID ones. A port with an accepted LLDP neighbor or a NULL0 name
 // gets nothing. A VM-majority port is direct (also on a trunk or with more
 // than 20 MACs, unless another switch's MAC is learned there); a VLAN trunk
 // or a port with more than 20 MACs is otherwise an uplink (nothing, or
 // direct for at most 3 MACs); 2-20 MACs are a hub unless one is an
 // HTTP-confirmed ESXi host (ESXi exemption).
-func fdbPorts(data *DeviceData, switchChassisMACs map[string]string) []fdbPort {
+func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 	// MACs already known via LLDP, and the ports with an accepted neighbor
 	knownMACs := lldpKnownMACs(data)
 	lldpPorts := make(map[int]bool)
@@ -1230,7 +1233,7 @@ func fdbPorts(data *DeviceData, switchChassisMACs map[string]string) []fdbPort {
 	// another polled switch's MAC is learned (switch links)
 	portMACs := make(map[int][]string)
 	portSeesSwitch := make(map[int]bool)
-	ownMAC := graphChassisKey(data.ChassisID)
+	ownMAC, selfID := graphChassisKey(data.ChassisID), graphDeviceNodeID(data)
 	for _, macEntry := range data.MACTable {
 		// The canonical MAC is both the node id and the key of every check
 		normMAC := canonicalMAC(macEntry.MACAddress)
@@ -1248,13 +1251,15 @@ func fdbPorts(data *DeviceData, switchChassisMACs map[string]string) []fdbPort {
 			continue
 		}
 
-		// Skip switch's own MACs (usually ports have their own MACs)
-		if normMAC == ownMAC {
+		// Skip switch's own MACs (usually ports have their own MACs): the
+		// chassis MAC and the ARP aliases of its node
+		switchID, isSwitch := switchMACs[normMAC]
+		if normMAC == ownMAC || (isSwitch && switchID == selfID) {
 			continue
 		}
 
 		// Skip if this MAC belongs to another known switch (handled by MAC cross-ref)
-		if _, isSwitch := switchChassisMACs[normMAC]; isSwitch {
+		if isSwitch {
 			portSeesSwitch[macEntry.PortNumber] = true
 			continue
 		}
@@ -2148,7 +2153,7 @@ func dnsLookupName(ip string) string {
 // snapshot uses: the IPs (the switch's ARP table first, then the MAC-IP
 // cache, as buildGraphEdges looks them up) of the LLDP neighbors and of the
 // FDB MACs that get nodes (fdbPorts), in IP order of the devices.
-func graphHostnameIPs(snapshot map[string]*DeviceData, switchChassisMACs map[string]string) []string {
+func graphHostnameIPs(snapshot map[string]*DeviceData, switchMACs map[string]string) []string {
 	globalMACtoIPMutex.RLock()
 	defer globalMACtoIPMutex.RUnlock()
 	seen := make(map[string]bool)
@@ -2174,7 +2179,7 @@ func graphHostnameIPs(snapshot map[string]*DeviceData, switchChassisMACs map[str
 				add(targetID)
 			}
 		}
-		for _, p := range fdbPorts(data, switchChassisMACs) {
+		for _, p := range fdbPorts(data, switchMACs) {
 			for _, mac := range p.MACs {
 				add(mac)
 			}
@@ -2187,8 +2192,8 @@ func graphHostnameIPs(snapshot map[string]*DeviceData, switchChassisMACs map[str
 // snapshot will use, waiting at most graphDNSWait: the build itself only
 // reads the cache, so a slow DNS server delays a build by graphDNSWait at
 // most instead of 2 s per name.
-func graphResolveHostnames(snapshot map[string]*DeviceData, switchChassisMACs map[string]string) {
-	resolveHostnames(graphHostnameIPs(snapshot, switchChassisMACs), graphDNSWait)
+func graphResolveHostnames(snapshot map[string]*DeviceData, switchMACs map[string]string) {
+	resolveHostnames(graphHostnameIPs(snapshot, switchMACs), graphDNSWait)
 }
 
 // countEdges counts total edges in graph
@@ -2841,37 +2846,123 @@ func graphIsSwitchNode(graph *DJGraph, id string) bool {
 	return slices.ContainsFunc(graphSwitchSysMarkers, func(m string) bool { return strings.Contains(sys, m) })
 }
 
-// buildSwitchChassisMACs creates a map of normalized switch MACs -> node IDs
-// Used to identify switch-to-switch connections via MAC table cross-reference
-func buildSwitchChassisMACs(devices map[string]*DeviceData) map[string]string {
+// buildSwitchOwnMACs maps every own MAC of the polled switches to the node
+// id of its switch (graphDeviceNodeID). It is the one answer to "is this MAC
+// a switch, and which one" for the FDB rule (fdbPorts: a switch's own MACs
+// get no node, another switch's mark a switch port), the MAC cross-reference
+// links (addMACCrossRefEdges) and the router nodes (addGatewayNodes). A
+// switch's own MACs are its chassis MAC (graphChassisKey; none for exception
+// text or a non-MAC chassis id) and its ARP aliases (switchARPAliases). Of
+// two devices with one chassis MAC the last in IP order keeps it.
+func buildSwitchOwnMACs(devices map[string]*DeviceData) map[string]string {
 	switchMACs := make(map[string]string)
 	for _, ip := range sortedDeviceIPs(devices) {
 		d := devices[ip]
-		// Add ChassisID MAC (none for exception text or a non-MAC chassis id)
 		if mac := graphChassisKey(d.ChassisID); mac != "" && !isInvalidID(mac) {
 			switchMACs[mac] = graphDeviceNodeID(d)
 		}
 	}
+	for mac, id := range switchARPAliases(devices, switchMACs) {
+		switchMACs[mac] = id
+	}
 	return switchMACs
 }
 
-// addMACCrossRefEdges discovers switch-to-switch connections via MAC table
-// For switches that don't support LLDP, this finds which port on another switch
-// their ChassisID MAC appears, creating an edge between them.
-// Key filter: only creates edges for ports with EXACTLY 1 switch MAC (direct connection).
-// Ports with 2+ switch MACs are transit/uplink — those MACs arrived via routing.
-// A port whose accepted LLDP neighbor is a polled switch gets no edge either:
-// LLDP names the switch on that port, so a switch MAC learned there is behind
-// it. 172.20.230.40 has 172.20.230.44 on port 25 and learns the chassis MAC of
-// the Aruba 6300 172.20.230.253 there, not .44's (.44 sends from its VLAN MAC
-// 58:94:80:01:01:42); once its FDB was read, that made a direct .40-Aruba
-// link, as 172.20.230.47 Eth1/0/25 (LLDP neighbor 4c:ae:a3:27:8b:2a) did in
-// the saved data of 2026-10-20.
-func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, switchChassisMACs map[string]string) {
-	// Devices and ports are visited in order, so which side of a switch pair
-	// creates the edge (and with which port label) is the same on every build.
+// switchARPAliases gives the ARP aliases of the polled switches, each with
+// the node id of its switch: the MACs the ARP data maps to a switch's
+// management IP. A switch answers ARP from the MAC of the VLAN interface
+// that holds the IP, which is not always its chassis MAC, and a switch that
+// never sends from its chassis MAC is learned in the FDBs by that MAC only.
+// The HPE 5130 172.20.230.76 (chassis 4c:ae:a3:8d:ec:c1, LLDP off) holds its
+// IP on Vlan-interface1, MAC 4c:ae:a3:8d:ec:cb, and the SNR 172.20.230.77
+// (chassis f8:f0:82:d8:62:67) on a VLAN interface with MAC f8:f0:82:d8:62:66
+// (live SNMP, 2026-10-22). No FDB of the saved data of 2026-10-20 has either
+// chassis MAC, while .77's VLAN MAC is the only switch MAC on .76
+// GigabitEthernet1/0/48, the port .77 hangs on. The ARP data is the ARP
+// tables of the polled devices and globalMACtoIP (the gateways' ARP tables
+// and the MAC-IP cache). A MAC is an alias only when all of it maps the MAC
+// to one IP, that IP is a polled device's, and the MAC is no polled device's
+// chassis MAC (chassis): a MAC with two IPs (a router answering for others,
+// an address that moved, a stale cache entry: the fixture cache still maps
+// .76's VLAN MAC to 172.20.230.247) is nobody's alias. A configured gateway
+// stored without switch data (graphKnownSwitch) gets no alias: its MAC is
+// its router node's (addGatewayNodes). It reads globalMACtoIP under
+// globalMACtoIPMutex, so a caller may hold collectedDataMutex but never
+// globalMACtoIPMutex.
+func switchARPAliases(devices map[string]*DeviceData, chassis map[string]string) map[string]string {
+	ips := make(map[string]map[string]bool) // MAC -> the IPs the ARP data maps it to
+	add := func(mac, ip string) {
+		if ips[mac] == nil {
+			ips[mac] = make(map[string]bool)
+		}
+		ips[mac][ip] = true
+	}
+	for _, d := range devices {
+		for _, e := range d.ARPTable {
+			if mac, ip := usableMAC(e.MACAddress), parseIPv4(e.IPAddress); mac != "" && ip != "" {
+				add(mac, ip)
+			}
+		}
+	}
+	// The cache entries of the polled IPs, and of the MACs the ARP tables
+	// name (whose cache IP may be a second IP); cache keys are canonical
+	globalMACtoIPMutex.RLock()
+	for mac, ip := range globalMACtoIP {
+		if _, polled := devices[ip]; polled || ips[mac] != nil {
+			add(mac, ip)
+		}
+	}
+	globalMACtoIPMutex.RUnlock()
+
+	aliases := make(map[string]string)
+	for mac, mapped := range ips {
+		if len(mapped) != 1 || usableMAC(mac) != mac || isInvalidID(mac) {
+			continue
+		}
+		if _, isChassis := chassis[mac]; isChassis {
+			continue
+		}
+		for ip := range mapped {
+			if d, polled := devices[ip]; polled && (graphKnownSwitch(d) || !isGatewayIP(ip)) {
+				aliases[mac] = graphDeviceNodeID(d)
+			}
+		}
+	}
+	return aliases
+}
+
+// addMACCrossRefEdges links the switches that LLDP does not link (LLDP off,
+// or no LLDP between them) through the FDBs: a switch whose own MAC
+// (buildSwitchOwnMACs: its chassis MAC or an ARP alias) another switch learned
+// on a port where no other switch is learned is linked from that port
+// ("GE1/0/48 [MAC-REF]|"). A port where two or more other switches are
+// learned is a transit port (an uplink: those switches arrived through
+// further switches); a switch learned there by its chassis MAC and by an
+// alias counts once. A port whose accepted LLDP neighbor is a polled switch
+// gets no edge either: LLDP names the switch on that port, so a switch MAC
+// learned there is behind it. 172.20.230.40 has 172.20.230.44 on port 25 and
+// learns the chassis MAC of the Aruba 6300 172.20.230.253 there; once its FDB
+// was read, that made a direct .40-Aruba link, as 172.20.230.47 Eth1/0/25
+// (LLDP neighbor 4c:ae:a3:27:8b:2a) did in the saved data of 2026-10-20. And
+// 172.20.254.202 Ten-GigabitEthernet1/0/51 learns the VLAN MAC of the HPE
+// 172.20.230.76 behind its LLDP neighbor, the Aruba, whose port 1/1/1 has it
+// (live SNMP, 2026-10-22). A switch gets one such link, from the port of all
+// these with the fewest MACs, then the first switch in IP order, then the
+// lower port (the rule gatewayPort places a router node with): a switch
+// learned alone on an uplink with thousands of MACs is not linked from
+// there when a port closer to it has it too. No link is added where the two
+// are linked already.
+func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, switchMACs map[string]string) {
+	type macRefPort struct {
+		src  int // index of the switch in deviceIPs
+		port int // FDB bridge port
+		macs int // MACs learned on the port
+	}
+	// Devices and ports are visited in order, so the port a switch is linked
+	// from (and its label) is the same on every build.
+	best := make(map[string]macRefPort) // switch node id -> the port it is linked from
 	deviceIPs := sortedDeviceIPs(allDevices)
-	for _, srcIP := range deviceIPs {
+	for srcIndex, srcIP := range deviceIPs {
 		srcDevice := allDevices[srcIP]
 		srcID := graphDeviceNodeID(srcDevice)
 
@@ -2879,76 +2970,84 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 		lldpSwitchPorts := make(map[int]bool)
 		for _, n := range srcDevice.Neighbors {
 			if target, _, ok := graphLLDPNeighborTarget(srcDevice, n); ok {
-				if _, polled := switchChassisMACs[target]; polled {
+				if _, polled := switchMACs[target]; polled {
 					lldpSwitchPorts[n.LocalPortNum] = true
 				}
 			}
 		}
 
-		// Phase 1: Count switch MACs per port
-		portSwitchMACs := make(map[int][]string) // portNum -> list of switch node IDs
+		// The MACs and the other switches learned on each port. NULL0
+		// interfaces (virtual discard ports, also when only the normalized
+		// name tells) are no connection.
+		portMACs := make(map[int]map[string]bool)
+		portSwitches := make(map[int]map[string]bool)
+		nullPorts := make(map[int]bool)
 		for _, macEntry := range srcDevice.MACTable {
-			// Skip NULL0 interface — virtual discard port, not a real connection
-			if isNullInterface(getFDBPortName(srcDevice, macEntry.PortNumber)) {
+			port := macEntry.PortNumber
+			null, seen := nullPorts[port]
+			if !seen {
+				name := getFDBPortName(srcDevice, port)
+				null = isNullInterface(name) || isNullInterface(normalizePortName(name))
+				nullPorts[port] = null
+			}
+			if null || lldpSwitchPorts[collectFDBIfIndex(srcDevice, port)] {
+				continue // no connection, or LLDP names the switch on this port
+			}
+			mac := usableMAC(macEntry.MACAddress)
+			if mac == "" {
 				continue
 			}
-			if lldpSwitchPorts[collectFDBIfIndex(srcDevice, macEntry.PortNumber)] {
-				continue // LLDP names the switch on this port
+			if portMACs[port] == nil {
+				portMACs[port] = make(map[string]bool)
 			}
-			normMAC := normalizeMAC(macEntry.MACAddress)
-			targetID, isSwitch := switchChassisMACs[normMAC]
-			if !isSwitch || targetID == srcID {
-				continue
+			portMACs[port][mac] = true
+			if targetID, isSwitch := switchMACs[mac]; isSwitch && targetID != srcID {
+				if portSwitches[port] == nil {
+					portSwitches[port] = make(map[string]bool)
+				}
+				portSwitches[port][targetID] = true
 			}
-			portSwitchMACs[macEntry.PortNumber] = append(portSwitchMACs[macEntry.PortNumber], targetID)
 		}
 
-		// Phase 2: Only create edges for ports with exactly 1 switch MAC (direct connection)
-		for _, portNum := range slices.Sorted(maps.Keys(portSwitchMACs)) {
-			targetIDs := portSwitchMACs[portNum]
-			if len(targetIDs) != 1 {
-				// 2+ switch MACs on same port = transit/uplink, skip
-				continue
+		// A port with exactly one other switch (a direct connection) is a
+		// candidate for that switch's link
+		for _, port := range slices.Sorted(maps.Keys(portSwitches)) {
+			if len(portSwitches[port]) != 1 {
+				continue // 2+ switches on the port: transit/uplink
 			}
-
-			targetID := targetIDs[0]
-
-			// Skip if LLDP edge already exists between these two switches
-			if graph.Edges[srcID] != nil && graph.Edges[srcID][targetID] != "" {
-				continue
-			}
-			if graph.Edges[targetID] != nil && graph.Edges[targetID][srcID] != "" {
-				continue
-			}
-
-			// Find the port name and MAC (portNum is a bridge port)
-			portName := getFDBPortName(srcDevice, portNum)
-
-			// Double-check: skip NULL0 (may pass first filter if Interfaces was empty during scan)
-			if isNullInterface(portName) {
-				continue
-			}
-
-			label := fmt.Sprintf("%s [MAC-REF]|", normalizePortName(portName))
-
-			// Final safety net: skip if normalized port name is still a null interface
-			if isNullInterface(normalizePortName(portName)) {
-				continue
-			}
-
-			// Ensure target node exists in graph
-			if !graph.Nodes[targetID] {
-				for _, tdIP := range deviceIPs {
-					if td := allDevices[tdIP]; graphDeviceNodeID(td) == targetID {
-						graphAddSwitchNode(graph, td)
-						break
-					}
+			for targetID := range portSwitches[port] {
+				c := macRefPort{src: srcIndex, port: port, macs: len(portMACs[port])}
+				if b, found := best[targetID]; !found || c.macs < b.macs {
+					best[targetID] = c
 				}
 			}
-
-			added, _ := graph.AddEdge(srcID, targetID, label)
-			_ = added
 		}
+	}
+
+	// The links in switch and port order: of two switches that each picked
+	// a port of the other, the first in IP order draws the link
+	targets := slices.Collect(maps.Keys(best))
+	slices.SortFunc(targets, func(a, b string) int {
+		return cmp.Or(cmp.Compare(best[a].src, best[b].src), cmp.Compare(best[a].port, best[b].port), strings.Compare(a, b))
+	})
+	for _, targetID := range targets {
+		c := best[targetID]
+		srcDevice := allDevices[deviceIPs[c.src]]
+		srcID := graphDeviceNodeID(srcDevice)
+		if graph.GetEdge(srcID, targetID) {
+			continue // an LLDP link (or this rule from the other side) has the pair
+		}
+		// Ensure target node exists in graph
+		if !graph.Nodes[targetID] {
+			for _, tdIP := range deviceIPs {
+				if td := allDevices[tdIP]; graphDeviceNodeID(td) == targetID {
+					graphAddSwitchNode(graph, td)
+					break
+				}
+			}
+		}
+		portName := normalizePortName(getFDBPortName(srcDevice, c.port))
+		graph.AddEdge(srcID, targetID, fmt.Sprintf("%s [MAC-REF]|", portName))
 	}
 }
 
@@ -3031,12 +3130,12 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	newGraph := NewDJGraph()
 	deviceIPs := sortedDeviceIPs(snapshot)
 
-	// 0. Build switchChassisMACs map
-	switchChassisMACs := buildSwitchChassisMACs(snapshot)
+	// 0. The own MACs of the switches: chassis MACs and ARP aliases
+	switchMACs := buildSwitchOwnMACs(snapshot)
 
 	// The reverse DNS names the labels use, looked up before the build and
 	// waited for at most graphDNSWait (RC-1)
-	graphResolveHostnames(snapshot, switchChassisMACs)
+	graphResolveHostnames(snapshot, switchMACs)
 
 	// 1. Add all Nodes (two switches with the same node id: the last one in
 	// IP order sets the label)
@@ -3053,15 +3152,15 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	// 2. Build Edges (with switch MAC exclusion); a node seen by several
 	// switches gets its label from the first one in IP order
 	for _, ip := range deviceIPs {
-		buildGraphEdges(newGraph, snapshot[ip], switchChassisMACs)
+		buildGraphEdges(newGraph, snapshot[ip], switchMACs)
 	}
 
 	// 3. MAC cross-reference edges (for LLDP-disabled switches)
-	addMACCrossRefEdges(newGraph, snapshot, switchChassisMACs)
+	addMACCrossRefEdges(newGraph, snapshot, switchMACs)
 
 	// 3b. One router node per gateway that answered SNMP, linked where its
 	// MAC is learned (gateways.go)
-	addGatewayNodes(newGraph, snapshot, switchChassisMACs, answeredGateways())
+	addGatewayNodes(newGraph, snapshot, switchMACs, answeredGateways())
 
 	// 4. Detect hypervisors (per-port VM MAC concentration) — BEFORE making graph global
 	detectHypervisors(newGraph)

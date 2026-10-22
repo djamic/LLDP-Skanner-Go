@@ -808,14 +808,15 @@ func TestGatewayRouterNodeCases(t *testing.T) {
 }
 
 // TestGatewayPortRule checks the port a router node is linked from (the
-// MAC-REF rule): the gateway's MAC must be the only switch or gateway MAC
-// learned on the port, and of those ports the one with the fewest MACs
-// wins, then the first switch in IP order, then the lower port; NULL0 is
-// never a port.
+// MAC-REF rule): the gateway must be the only switch or gateway learned on
+// the port (a switch by any of its own MACs, the switch itself not
+// counted), and of those ports the one with the fewest MACs wins, then the
+// first switch in IP order, then the lower port; NULL0 is never a port.
 func TestGatewayPortRule(t *testing.T) {
 	resetState(t)
 	const gw, otherGW, sw2MAC = "00:1b:21:49:00:01", "00:1b:21:49:00:02", "4c:ae:a3:49:00:02"
-	infra := map[string]bool{gw: true, otherGW: true, sw2MAC: true, "4c:ae:a3:49:00:01": true}
+	const sw1MAC, sw1Alias, sw2Alias = "4c:ae:a3:49:00:01", "4c:ae:a3:49:00:1b", "4c:ae:a3:49:00:1c"
+	infra := map[string]string{gw: gw, otherGW: otherGW, sw2MAC: sw2MAC, sw2Alias: sw2MAC, sw1MAC: sw1MAC, sw1Alias: sw1MAC}
 	dev := func(ip, chassis string, table ...[]MACEntry) *DeviceData {
 		return &DeviceData{IP: ip, ChassisID: chassis, Interfaces: gigabitPorts(30, map[int]string{30: "NULL0"}), MACTable: slices.Concat(table...)}
 	}
@@ -838,6 +839,12 @@ func TestGatewayPortRule(t *testing.T) {
 		{"the switch's own MAC does not count", map[string]*DeviceData{
 			"10.9.49.1": dev("10.9.49.1", "4c:ae:a3:49:00:01", macEntries(3, gw, "4c:ae:a3:49:00:01")),
 		}, "10.9.49.1", 3, true},
+		{"nor does the switch's own ARP alias", map[string]*DeviceData{
+			"10.9.49.1": dev("10.9.49.1", sw1MAC, macEntries(3, gw, sw1Alias)),
+		}, "10.9.49.1", 3, true},
+		{"another switch's ARP alias makes a transit port", map[string]*DeviceData{
+			"10.9.49.1": dev("10.9.49.1", sw1MAC, macEntries(3, gw, sw2Alias), macEntries(4, gw, "00:1b:21:49:04:01", "00:1b:21:49:04:02")),
+		}, "10.9.49.1", 4, true},
 		{"a tie goes to the first switch in IP order, then the lower port", map[string]*DeviceData{
 			"10.9.49.12": dev("10.9.49.12", "4c:ae:a3:49:00:0c", macEntries(2, gw)),
 			"10.9.49.2":  dev("10.9.49.2", sw2MAC, macEntries(9, gw), macEntries(5, gw)),

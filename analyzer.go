@@ -843,7 +843,7 @@ type ShadowITDevice struct {
 func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
 	ix := na.idx()
-	switchMACs := buildSwitchChassisMACs(ix.byIP)
+	switchMACs := buildSwitchOwnMACs(ix.byIP)
 
 	for _, device := range ix.devices {
 		for _, p := range fdbPorts(device, switchMACs) {
@@ -887,7 +887,7 @@ func analyzerShadowCounts(devices []*DeviceData) analyzerShadowStats {
 	for _, d := range devices {
 		byIP[d.IP] = d
 	}
-	switchMACs := buildSwitchChassisMACs(byIP)
+	switchMACs := buildSwitchOwnMACs(byIP)
 	var stats analyzerShadowStats
 	for _, ip := range sortedDeviceIPs(byIP) {
 		for _, p := range fdbPorts(byIP[ip], switchMACs) {

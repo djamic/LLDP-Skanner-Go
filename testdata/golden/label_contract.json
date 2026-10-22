@@ -34,7 +34,7 @@
     "[HUB]": {"graph_nodes": 33, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false, "tree_js": true},
     "[HYPERVISOR]": {"graph_nodes": 25, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false, "tree_js": true},
     "[LLDP-EP]": {"graph_nodes": 544, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false, "tree_js": true},
-    "[MAC-REF]": {"graph_nodes": 0, "graph_edges": 1, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false, "tree_js": true},
+    "[MAC-REF]": {"graph_nodes": 0, "graph_edges": 2, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false, "tree_js": true},
     "[T]": {"graph_nodes": 0, "graph_edges": 103, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false, "tree_js": true},
     "[VM]": {"graph_nodes": 65, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false, "tree_js": true},
     "[WiFi]": {"graph_nodes": 17, "graph_edges": 0, "app_js": true, "app_js_lowercase": false, "index_html": false, "index_html_lowercase": false, "tree_js": true},

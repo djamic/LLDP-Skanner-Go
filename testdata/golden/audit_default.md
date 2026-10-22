@@ -133,7 +133,6 @@ graph TD
   HUB_Unmanagedbr6_devices_5(("[HUB] Unmanaged<br>6 devices"))
   HUB_Unmanagedbr6_devices_6(("[HUB] Unmanaged<br>6 devices"))
   HUB_Unmanagedbr3_devices_4(("[HUB] Unmanaged<br>3 devices"))
-  HUAWEI-- "GE0/0/14 [MAC-REF] ↔ " -->TTJ_34br172_20_230_23
   D_1br172_20_230_3-- "TGE1/0/52 [T] 1G ↔ TGE1/0/49" -->HPEbr172_20_253_10
   D_1br172_20_230_3-- "TGE1/0/51 [T] 1G ↔ TGE1/0/52" -->D_1_2br172_20_230_48
   F_9br172_20_240_12-- "GE1/0/48 ↔ Hub" -->HUB_Unmanagedbr7_devices
@@ -155,6 +154,7 @@ graph TD
   HPEbr172_20_253_11-- "GE1/0/26 [T] 1G ↔ " -->Jamicbr172_20_254_226
   HPEbr172_20_253_11-- "GE1/0/27 ↔ Hub" -->HUB_Unmanagedbr3_devices
   HPEbr172_20_253_10-- "GE1/0/47 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_253_11
+  br172_20_230_76-- "GE1/0/48 [MAC-REF] ↔ " -->br172_20_230_77
   br172_20_230_76-- "GE1/0/28 ↔ Hub" -->HUB_Unmanagedbr2_devices_2
   br172_20_230_76-- "GE1/0/4 ↔ Hub" -->HUB_Unmanagedbr2_devices_3
   HPEbr172_20_254_202-- "TGE1/0/49 [T] 10G ↔ TGE1/0/50" -->br172_20_254_203
@@ -230,6 +230,7 @@ graph TD
   F_4_glavniybr172_20_240_3-- "Eth1/0/8 [T] 1G ↔ " -->F_1br172_20_240_13
   F_4_glavniybr172_20_240_3-- "Eth1/0/22 [T] 1G ↔ " -->F_8br172_20_240_4
   F_4_glavniybr172_20_240_3-- "Eth1/0/14 [T] 1G ↔ " -->F_5br172_20_240_5
+  SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/23 [MAC-REF] ↔ " -->Huawe
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/9 [T] 1G ↔ GE1/0/28" -->HPbr172_20_254_247
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/1 [T] 1G ↔ GE1/0/25" -->HPEbr172_20_254_202
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/25 [T] 1G ↔ " -->F_4_glavniybr172_20_240_3
