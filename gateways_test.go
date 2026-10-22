@@ -220,6 +220,48 @@ func TestGatewayARPEveryGateway(t *testing.T) {
 	}
 }
 
+// TestGatewaySVISilentRetry checks the SVI walks of the sweep. The
+// FortiGate answers SNMP on 172.20.0.1 only (172.17.1.1, 172.16.0.1,
+// 10.255.1.1 and 192.168.0.254 timed out on 2026-10-22), so an SVI IP that
+// does not answer is left out of the sweeps for an hour instead of costing
+// a timeout in each, with one line per start; one that answers is walked
+// in every sweep, and the SVI list is logged once per start.
+func TestGatewaySVISilentRetry(t *testing.T) {
+	resetState(t)
+	collectResetCache(t)
+	macIPCacheFile = filepath.Join(t.TempDir(), "mac_ip_cache.json")
+	forti := fortiGateGateway()
+	forti[oidIPAdEntIfIndex] = append(forti[oidIPAdEntIfIndex], oidIPAdEntIfIndex+".172.16.0.1 = INTEGER: 41")
+	fakeSNMP.set(fortiGW, forti)
+	fakeSNMP.set("172.17.1.1", map[string][]string{oidARP: {arpRow(52, "172.17.1.9", "00:1b:21:40:00:09")}})
+	setGatewayIPs([]string{fortiGW}) // 172.16.0.1 has no agent: it does not answer
+
+	var counts []map[string]int
+	out := captureStdout(t, func() {
+		for _, after := range []time.Duration{0, 5 * time.Minute, 56 * time.Minute} {
+			testClock.advance(after)
+			fakeSNMP.walkCounts()
+			collectARPFromAllSwitches()
+			counts = append(counts, fakeSNMP.walkCounts())
+		}
+	})
+	silent, answering := "172.16.0.1 "+oidARP, "172.17.1.1 "+oidARP
+	for i, want := range [][2]int{{1, 1}, {0, 1}, {1, 1}} { // at 0, 5 and 61 minutes
+		if got := [2]int{counts[i][silent], counts[i][answering]}; got != want {
+			t.Errorf("sweep %d: ARP walks of the silent and the answering SVI %v, want %v", i+1, got, want)
+		}
+	}
+	if n := strings.Count(out, "Gateway SVI 172.16.0.1 does not answer SNMP"); n != 1 {
+		t.Errorf("%d lines about the silent SVI, want 1:\n%s", n, out)
+	}
+	if n := strings.Count(out, "Found gateway SVI IP: 172.17.1.1"); n != 1 {
+		t.Errorf("the SVI was logged %d times in three sweeps, want once:\n%s", n, out)
+	}
+	if got := collectCacheMap()["00:1b:21:40:00:09"]; got != "172.17.1.9" {
+		t.Errorf("the answering SVI's entry maps to %q", got)
+	}
+}
+
 // TestGatewayARPNoGatewayAnswers checks the expiry rule with several
 // gateways: while none of them answers, no entry expires however old, and
 // each one is warned about once per start.

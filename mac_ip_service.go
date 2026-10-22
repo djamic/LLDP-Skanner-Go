@@ -362,6 +362,41 @@ var macIPGatewayOK time.Time
 // one per sweep.
 var macIPGatewayWarned = make(map[string]bool)
 
+// macIPSVISilent holds the gateway SVI IPs whose ARP walk got no answer,
+// with the time to try each one again (guarded by globalMACtoIPMutex). The
+// FortiGate answers SNMP on 172.20.0.1 only: its 15 other interface IPs
+// would cost a 10-second timeout each in every sweep.
+var macIPSVISilent = make(map[string]time.Time)
+
+// collectSVIRetry is how long a gateway SVI IP that did not answer is left
+// out of the sweeps.
+const collectSVIRetry = time.Hour
+
+// collectSVIWanted reports whether the sweep at now walks the ARP table of
+// gateway SVI svi: not while it waits for its retry after no answer.
+func collectSVIWanted(svi string, now time.Time) bool {
+	globalMACtoIPMutex.RLock()
+	defer globalMACtoIPMutex.RUnlock()
+	retry, silent := macIPSVISilent[svi]
+	return !silent || !now.Before(retry)
+}
+
+// recordSVIWalk notes the ARP walk of gateway SVI svi at now: no answer
+// leaves it out for collectSVIRetry (one line per start names it), an
+// answer brings it back.
+func recordSVIWalk(svi string, err error, now time.Time) {
+	globalMACtoIPMutex.Lock()
+	if err == nil {
+		delete(macIPSVISilent, svi)
+	} else {
+		macIPSVISilent[svi] = now.Add(collectSVIRetry)
+	}
+	globalMACtoIPMutex.Unlock()
+	if err != nil {
+		gatewayNotice("📡 [MacIPService] Gateway SVI %s does not answer SNMP: left out of the sweeps, tried again every %d minutes", svi, int(collectSVIRetry.Minutes()))
+	}
+}
+
 // macIPClock is the time source of the MAC-IP cache (last-seen times, TTL)
 // and of the ESXi check retries. Tests replace it with a clock they control.
 var macIPClock = time.Now
@@ -667,14 +702,19 @@ func collectARPFromAllSwitches() {
 
 	// 2. Gateway SVI IPs — a gateway may route multiple VLANs (172.20.x.x, 10.20.x.x...)
 	//    Query the ipAddrTable of each gateway that answered to find all its
-	//    interface IPs and collect ARP from each (an IP once per sweep)
+	//    interface IPs and collect ARP from each (an IP once per sweep; one
+	//    that did not answer only once an hour)
 	for _, gw := range answered {
 		for _, svi := range collectGatewaySVIIPs(snmpObj, gw) {
 			if walked[svi] {
 				continue // already done above
 			}
 			walked[svi] = true
-			n, rows, _ := collectARPMerge(snmpObj, svi)
+			if !collectSVIWanted(svi, macIPClock()) {
+				continue
+			}
+			n, rows, err := collectARPMerge(snmpObj, svi)
+			recordSVIWalk(svi, err, macIPClock())
 			totalRows += rows
 			if n > 0 {
 				fmt.Printf("🌐 [MacIPService] Gateway SVI %s: +%d new/changed MAC-IP entries\n", svi, n)
@@ -752,7 +792,7 @@ func collectGatewaySVIIPs(snmpObj *SNMPObject, gwIP string) []string {
 				net != "0.0.0.0" {
 				ips = append(ips, net)
 				seen[net] = true
-				fmt.Printf("📡 [MacIPService] Found gateway SVI IP: %s\n", net)
+				gatewayNotice("📡 [MacIPService] Found gateway SVI IP: %s (gateway %s)", net, gwIP) // once per start
 			}
 		}
 	}

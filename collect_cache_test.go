@@ -27,6 +27,7 @@ func collectResetCache(t *testing.T) {
 		collectMACIPSeen = make(map[string]time.Time)
 		macIPGatewayOK = time.Time{}
 		macIPGatewayWarned = make(map[string]bool)
+		macIPSVISilent = make(map[string]time.Time)
 		globalMACtoIPMutex.Unlock()
 		collectESXiMu.Lock()
 		collectESXiChecked = make(map[string]string)
