@@ -46,6 +46,19 @@ function uiEscapeHTML(value) {
     return String(value ?? '').replace(/[&<>"']/g, ch => uiHTMLEntities[ch]);
 }
 
+// Other views of the graph data (the Tree tab, static/tree.js) add a
+// callback here; it runs after every /api/graph load and filter change.
+const uiViewListeners = [];
+function uiNotifyViews(reason) {
+    uiViewListeners.forEach(listener => {
+        try {
+            listener(reason);
+        } catch (err) {
+            console.error('view update failed:', err);
+        }
+    });
+}
+
 // Fetch and render network data
 async function loadNetworkData() {
     try {
@@ -62,6 +75,7 @@ async function loadNetworkData() {
         updateStats(data);
         updateDeviceList();
         hideLoading();
+        uiNotifyViews('data');
 
     } catch (error) {
         showError('Failed to load network data: ' + error.message);
@@ -254,6 +268,7 @@ function applyFilters() {
         updateTopology(rawData);
         updateStats(rawData);
     }
+    uiNotifyViews('filters');
 }
 
 // Render the network (incremental)
@@ -1353,6 +1368,7 @@ function cleanHosts() {
                 rawData = { nodes: [], links: [] };
                 updateTopology(rawData);
                 updateStats(rawData);
+                uiNotifyViews('data');
             } else {
                 alert('❌ Failed to clear hosts');
             }

@@ -14,9 +14,10 @@ package main
 // The fixtures are frozen gzip copies of network_data.json and
 // mac_ip_cache.json in testdata/. Time-dependent code that has a clock seam
 // (eventClock) runs on testClock, which stands still unless a test moves it.
-// TestGoldenUIApp also starts Node.js, when it is installed, to run
-// static/app.js against a stub DOM (testdata/ui/app_probe.js); that script
-// sends nothing either.
+// TestGoldenUIApp and TestGoldenUITree also start Node.js, when it is
+// installed, to run static/app.js and static/tree.js against a stub DOM
+// (testdata/ui/app_probe.js, testdata/ui/tree_probe.js); those scripts send
+// nothing either.
 
 import (
 	"bufio"

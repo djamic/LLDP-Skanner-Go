@@ -1197,3 +1197,232 @@ button:active {
 .status-bar .sb-health span {
     color: #4CAF50;
 }
+
+/* ===== View tabs: Graph | Tree (static/tree.js) ===== */
+
+.view-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.view-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 4px 8px 0;
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+    flex-shrink: 0;
+}
+
+.view-tabs .view-tab {
+    background: transparent;
+    color: #8a9bae;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    padding: 4px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.view-tabs .view-tab:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e0e0e0;
+    transform: none;
+    box-shadow: none;
+}
+
+.view-tabs .view-tab.active {
+    background: #0d1b2a;
+    color: #e0e0e0;
+    border-color: #0f3460;
+}
+
+/* The tree covers the canvas; the graph keeps its size, layout and zoom */
+.view-stage {
+    flex: 1;
+    display: flex;
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.view-stage.tree-active #network {
+    visibility: hidden;
+}
+
+.tree-view {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: #0d1b2a;
+    z-index: 2;
+}
+
+.tree-view[hidden] {
+    display: none;
+}
+
+.tree-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-bottom: 1px solid #0f3460;
+    flex-shrink: 0;
+}
+
+.tree-toolbar .tree-btn {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e0e0e0;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 4px;
+    flex-shrink: 0; /* a long note shrinks instead */
+    white-space: nowrap;
+}
+
+.tree-toolbar .tree-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: none;
+    box-shadow: none;
+}
+
+.tree-toolbar .tree-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.tree-search-status {
+    margin-left: 6px;
+    font-size: 11px;
+    color: #FFD54F;
+    white-space: nowrap;
+    min-width: 0; /* a long note is cut; its tooltip has it all */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-status {
+    margin-left: auto;
+    font-size: 11px;
+    color: #8a9bae;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* A device of the info panel's "Connected Devices" list that the Tree tab
+   does not have (tree.js treeOnPanelClick): the reason instead of its group. */
+.info-peer-item.tv-not-in-tree > span:first-child {
+    opacity: 0.55;
+}
+
+.info-peer-item.tv-not-in-tree > span:last-child {
+    display: none;
+}
+
+.info-peer-item.tv-not-in-tree::after {
+    content: attr(data-tree-note);
+    color: #FFD54F;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+#topologyTree {
+    flex: 1;
+    overflow: auto;
+    padding: 8px 12px 24px;
+    color: #e0e0e0;
+    font-size: 13px;
+}
+
+/* The jsTree default theme, on the dark UI */
+#topologyTree .jstree-anchor,
+#topologyTree .jstree-anchor:link,
+#topologyTree .jstree-anchor:visited {
+    color: #e0e0e0;
+}
+
+#topologyTree .jstree-hovered {
+    background: rgba(74, 144, 226, 0.18);
+    box-shadow: none;
+}
+
+#topologyTree .jstree-clicked {
+    background: rgba(74, 144, 226, 0.38);
+    box-shadow: inset 0 0 0 1px rgba(74, 144, 226, 0.7);
+}
+
+#topologyTree .jstree-search {
+    color: #FFD54F;
+    font-style: normal;
+    font-weight: 600;
+}
+
+/* The theme's arrows and dotted lines are dark grey: light on this background */
+#topologyTree .jstree-ocl {
+    filter: invert(0.85);
+}
+
+.tv-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin: 0 5px 0 2px;
+    vertical-align: middle;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.tv-name {
+    font-weight: 600;
+}
+
+/* the row's parts are apart by spaces; these add a little more */
+.tv-addr,
+.tv-port,
+.tv-count {
+    margin-left: 3px;
+}
+
+.tv-addr {
+    color: #8a9bae;
+    font-size: 12px;
+}
+
+.tv-port {
+    padding: 0 5px;
+    border-radius: 4px;
+    background: rgba(33, 150, 243, 0.14);
+    color: #64B5F6;
+    font-size: 11px;
+}
+
+.tv-count {
+    padding: 0 6px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.tv-unreachable .tv-name {
+    color: #ff6b6b;
+}
+
+.tv-folder .tv-name {
+    font-style: italic;
+    color: #b0bec5;
+}
+
+/* "Show in graph": the focused node flashes */
+.node.tree-focus {
+    stroke: #FFEB3B !important;
+    stroke-width: 6px !important;
+}

@@ -2,8 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"maps"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -52,6 +56,39 @@ func fixtureWithGateways(t *testing.T) (base, graph *DJGraph, log []string) {
 		}
 	}
 	return base, graph, log
+}
+
+// TestGraphHandlerCore: /api/graph names the analyzer's core node, the root
+// of the UI's Tree tab: the Debian router once both gateways answer SNMP,
+// and no "core" key at all for the fixture alone, which has no core (the UI
+// then picks its own root, as with a build before this field).
+func TestGraphHandlerCore(t *testing.T) {
+	base, graph, _ := fixtureWithGateways(t)
+	graphDebugFile = filepath.Join(t.TempDir(), "graphs_data.txt")
+	apiGraph := func(g *DJGraph) map[string]json.RawMessage {
+		t.Helper()
+		SetGlobalGraph(g)
+		rr := httptest.NewRecorder()
+		graphHandler(rr, httptest.NewRequest(http.MethodGet, "/api/graph", nil))
+		var top map[string]json.RawMessage
+		if err := json.Unmarshal(rr.Body.Bytes(), &top); err != nil {
+			t.Fatal(err)
+		}
+		return top
+	}
+	collectedDataMutex.RLock()
+	devices := sortedDevices(collectedData)
+	collectedDataMutex.RUnlock()
+	want := NewAnalyzer(captureData("core", devices, graph)).coreNode()
+
+	var core string
+	raw, ok := apiGraph(graph)["core"]
+	if !ok || json.Unmarshal(raw, &core) != nil || core != want || core != debianMAC {
+		t.Errorf("/api/graph with the gateways: core %s, want the analyzer's core %q (the Debian router %s)", raw, want, debianMAC)
+	}
+	if raw, ok := apiGraph(base)["core"]; ok {
+		t.Errorf("/api/graph of the fixture without gateway nodes has core %s, want no core key", raw)
+	}
 }
 
 // TestGoldenGateways pins what the two gateways of gateway_ip do to the

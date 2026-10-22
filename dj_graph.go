@@ -277,6 +277,9 @@ type GraphData struct {
 	Links       []GraphLink `json:"links"`
 	HealthScore float64     `json:"health_score"` // always included (omitempty removed)
 	TotalMACs   int         `json:"total_macs"`   // always included
+	// Core is the analyzer's core node (topologyCore), the root of the UI's
+	// Tree tab. Only graphHandler sets it, and only when there is a core.
+	Core string `json:"core,omitempty"`
 }
 
 // GetGraphData returns graph data formatted for D3.js
