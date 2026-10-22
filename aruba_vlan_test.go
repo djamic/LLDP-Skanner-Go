@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -74,14 +75,14 @@ func pollAruba(obj *SNMPObject, deliver func() *DeviceData) arubaPoll {
 
 // TestArubaVLANLast polls the fake Aruba three times. The first poll walks
 // as before: the egress walk starts while the FDB walk (163 requests) is in
-// flight, the stall fails the FDB walk, and the failed egress walk marks
-// the agent. The next polls walk the VLAN table after the other walks: the
-// FDB (1,619 rows: 1,588 on the uplink 1/1/28, 30 on 1/1/1 toward
-// 172.20.230.76, 1 on 1/1/27, the FortiGate), the 30 interfaces and the
-// sysName "6300" (the poll had no name) come in and nothing but the egress
-// walk fails; the mark stays while it fails. An agent whose egress walk
-// answers is never marked (the PiXiETECH 172.20.230.40), and a mark goes
-// with the first egress walk that answers.
+// flight, the stall fails the FDB walk, and the egress walk, failed with no
+// row, marks the agent. The next polls walk the VLAN table after the other
+// walks: the FDB (1,619 rows: 1,588 on the uplink 1/1/28, 30 on 1/1/1
+// toward 172.20.230.76, 1 on 1/1/27, the FortiGate), the 30 interfaces and
+// the sysName "6300" (the poll had no name) come in and nothing but the
+// egress walk fails; the mark stays while it fails. An agent whose egress
+// walk answers is never marked (the PiXiETECH 172.20.230.40), and a mark
+// goes with the first egress walk that answers.
 func TestArubaVLANLast(t *testing.T) {
 	resetState(t)
 	arubaAgent(t)
@@ -111,6 +112,102 @@ func TestArubaVLANLast(t *testing.T) {
 	NewSNMPObject(func(*DeviceData) {}, nil).CollectData(pixieA, "")
 	if collectVLANLast(pixieA) {
 		t.Errorf("%s stays marked after an egress walk that answered", pixieA)
+	}
+}
+
+const jamicIP = "172.20.254.226"
+
+// jamicEgressRow is a row of the egress table of 172.20.254.226 as
+// snmpbulkwalk -On printed it (2026-10-22 22:33): the 127-byte port list
+// of the Eltex agent, 16 bytes per line, so one row takes 8 lines.
+func jamicEgressRow(vlan int, first string) []string {
+	row := []string{fmt.Sprintf("%s.0.%d = Hex-STRING: %s", collectVLANEgressOID, vlan, first)}
+	for i := 0; i < 6; i++ {
+		row = append(row, strings.Repeat("00 ", 16))
+	}
+	return append(row, strings.Repeat("00 ", 15))
+}
+
+// TestVLANLastSlowAgent polls a fake 172.20.254.226 (Jamic) three times as
+// the periodic rescan does. Its agent answers, slowly: its ifDescr, FDB and
+// egress walks run into the walk limit while their rows still come
+// (fakeAgents.killAfter; 30 s live, jamicLimit here), its dot1qPvid and
+// the other walks answer. An egress walk that got rows is no stall of the
+// Aruba's kind: the agent is never marked, its VLAN walks stay with the
+// others, and every poll takes one walk limit. Marked, as any failed egress
+// walk marked an agent before, its polls after the first took two walk
+// limits (the VLAN walks ran after the killed walks): about 61 s instead of
+// 33 s live, the last poll the rescan waits for before it rebuilds the
+// graph.
+func TestVLANLastSlowAgent(t *testing.T) {
+	resetState(t)
+	const jamicLimit = 300 * time.Millisecond
+	agent := collectTestAgent()
+	agent[collectVLANEgressOID] = slices.Concat(jamicEgressRow(1, "00 00 38 00 00 00 F0 00 00 00 00 00 00 00 00 00 "),
+		jamicEgressRow(21, "00 00 00 00 00 00 10 00 00 00 00 00 00 00 00 00 "))
+	fakeSNMP.set(jamicIP, agent)
+	fakeSNMP.killAfter(jamicIP, jamicLimit, oidIfDescr, oidFDBPort, collectVLANEgressOID)
+	obj := newRescanSNMPObject()
+	for i := 1; i <= 3; i++ {
+		fakeSNMP.walkCounts()
+		start := time.Now()
+		obj.CollectData(jamicIP, "Jamic")
+		took := time.Since(start)
+		walks := fakeSNMP.walkCounts()
+		d := collectStored(jamicIP)
+		if collectVLANLast(jamicIP) {
+			t.Errorf("poll %d marked %s: its egress walk got rows before the walk limit killed it", i, jamicIP)
+		}
+		if took >= jamicLimit*3/2 {
+			t.Errorf("poll %d took %v, want about one walk limit (%v): the VLAN walks ran after the killed walks", i, took, jamicLimit)
+		}
+		if walks[jamicIP+" "+collectVLANEgressOID] != 1 || d == nil || len(d.PortVLANs) != 2 ||
+			!d.collectWalkFailed(collectWalkFDB) || !d.collectWalkFailed(collectWalkInterfaces) {
+			t.Errorf("poll %d: %d egress walks, stored %+v; want one egress walk, the 2 PVIDs and the FDB and ifDescr walks failed", i, walks[jamicIP+" "+collectVLANEgressOID], d)
+		}
+	}
+}
+
+// TestCollectNoteEgressWalk pins what marks an agent for collectVLANLast:
+// an egress walk that failed with no row (the Aruba's timeout after its two
+// 5 s attempts, or a kill before any row came), not one that failed after
+// rows (walkCutError, wrapped or not: the walk limit killed Jamic's while
+// its rows came), which clears a mark as a walk that answers to its end
+// does.
+func TestCollectNoteEgressWalk(t *testing.T) {
+	resetState(t)
+	const ip = "10.9.93.2"
+	timeout := errors.New("snmpwalk timeout/error for 172.20.230.253 OID .1.3.6.1.2.1.17.7.1.4.2.1.4: exit status 1")
+	killed := &walkCutError{err: errors.New("snmpwalk timeout/error for 172.20.254.226 OID .1.3.6.1.2.1.17.7.1.4.2.1.4: signal: killed"), rows: 1826}
+	for _, c := range []struct {
+		name         string
+		marked       bool
+		err          error
+		wantMarked   bool
+		wantAnswered bool
+	}{
+		{"no answer", false, timeout, true, false},
+		{"no answer again", true, timeout, true, false},
+		{"killed before a row", false, &walkCutError{err: errors.New("signal: killed")}, true, false},
+		{"killed while rows came", false, killed, false, true},
+		{"killed while rows came, marked", true, killed, false, true},
+		{"killed while rows came, wrapped", true, fmt.Errorf("vlan: %w", killed), false, true},
+		{"answered", true, nil, false, false},
+	} {
+		collectNoteEgressWalk(ip, nil)
+		if c.marked {
+			collectNoteEgressWalk(ip, timeout)
+		}
+		collectNoteEgressWalk(ip, c.err)
+		if got := collectVLANLast(ip); got != c.wantMarked {
+			t.Errorf("%s: marked %v, want %v", c.name, got, c.wantMarked)
+		}
+		if got := walkAnswered(c.err); got != c.wantAnswered {
+			t.Errorf("%s: walkAnswered %v, want %v", c.name, got, c.wantAnswered)
+		}
+	}
+	if killed.Error() != killed.err.Error() || !errors.Is(fmt.Errorf("vlan: %w", killed), killed.err) {
+		t.Errorf("walkCutError %q does not keep the walk's error %q", killed, killed.err)
 	}
 }
 

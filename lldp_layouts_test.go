@@ -514,17 +514,25 @@ func TestSNMPWalkOutput(t *testing.T) {
 // fakeBulkWalkScript is a stand-in for snmpbulkwalk that answers by the
 // agent IP (the next to last argument): 192.0.2.1 prints two rows and exits
 // 0, 192.0.2.2 prints rows out of order and exits 1 like net-snmp's "OID
-// not increasing", 192.0.2.3 repeats a row and then hangs. It logs its
-// arguments to args in its directory.
+// not increasing", 192.0.2.3 repeats a row and then hangs, 192.0.2.4
+// prints two rows (the first over two lines, as the port lists of the
+// egress table come) and times out, 192.0.2.5 times out with no row,
+// 192.0.2.6 prints the rows of .4 and then hangs, 192.0.2.7 hangs with no
+// row. It logs its arguments to args in its directory.
 const fakeBulkWalkScript = `
 dir=$(dirname "$0")
 echo "$*" >> "$dir/args"
 for oid; do :; done
 eval ip=\${$(($# - 1))}
+rows() { printf '%s\n' "$oid.0.1 = Hex-STRING: 00 00 38 00 00 00 F0 00 " "00 00 00 00 01 FF FE " "$oid.0.21 = Hex-STRING: 00 00 00 10 "; }
 case "$ip" in
 192.0.2.1) printf '%s\n' "$oid.1 = INTEGER: 1" "$oid.2 = STRING: \"a\"" ;;
 192.0.2.2) printf '%s\n' "$oid.2 = INTEGER: 2" "$oid.1 = INTEGER: 1"; echo "Error: OID not increasing" >&2; exit 1 ;;
 192.0.2.3) printf '%s\n' "$oid.1 = INTEGER: 1" "$oid.2 = INTEGER: 2" "$oid.1 = INTEGER: 1"; exec sleep 30 ;;
+192.0.2.4) rows; echo "Timeout: No Response from $ip" >&2; exit 1 ;;
+192.0.2.5) echo "Timeout: No Response from $ip" >&2; exit 1 ;;
+192.0.2.6) rows; exec sleep 30 ;;
+192.0.2.7) exec sleep 30 ;;
 esac
 `
 
@@ -532,7 +540,10 @@ esac
 // fakeBulkWalkScript on PATH (no SNMP request is sent): its arguments (-Cc
 // for an unordered walk only), the lines of a walk that exits 0, no lines
 // for one that exits 1, and an unordered walk whose agent repeats an OID is
-// killed at once, not after the 30 s limit.
+// killed at once, not after the 30 s limit. A walk that fails after rows,
+// at a timeout or killed at the walk limit (snmpBulkWalkWithin, with a
+// short limit), gives a walkCutError with its rows (walkAnswered) and the
+// message as before; one with no row gives a plain error.
 func TestSNMPBulkWalkExec(t *testing.T) {
 	sh, err := exec.LookPath("sh")
 	if err != nil {
@@ -554,8 +565,8 @@ func TestSNMPBulkWalkExec(t *testing.T) {
 	if lines, err := snmpBulkWalk("public", "192.0.2.1", oid, unordered); err != nil || len(lines) != 2 {
 		t.Errorf("unordered walk that exits 0: %q, %v", lines, err)
 	}
-	if lines, err := snmpBulkWalk("public", "192.0.2.2", oid, pollTiming); err == nil || lines != nil {
-		t.Errorf("walk that exits 1 (OID not increasing): %q, %v; want no lines and an error", lines, err)
+	if lines, err := snmpBulkWalk("public", "192.0.2.2", oid, pollTiming); err == nil || lines != nil || !walkAnswered(err) {
+		t.Errorf("walk that exits 1 (OID not increasing): %q, %v; want no lines and an error after rows", lines, err)
 	}
 	start := time.Now()
 	lines, err = snmpBulkWalk("public", "192.0.2.3", oid, unordered)
@@ -565,6 +576,39 @@ func TestSNMPBulkWalkExec(t *testing.T) {
 	if took := time.Since(start); took > 10*time.Second {
 		t.Errorf("the repeating walk took %v: it was not killed", took)
 	}
+
+	// The walk limit, short here: a walk is killed after it whether its
+	// rows still come (.6, the egress walk of 172.20.254.226) or none came
+	// (.7); the error counts the rows read before the kill or the timeout.
+	const limit = time.Second
+	for _, c := range []struct {
+		ip, exit string
+		rows     int
+	}{
+		{"192.0.2.4", "exit status 1", 2},
+		{"192.0.2.5", "exit status 1", 0},
+		{"192.0.2.6", "signal: killed", 2},
+		{"192.0.2.7", "signal: killed", 0},
+	} {
+		start := time.Now()
+		lines, err := snmpBulkWalkWithin("public", c.ip, oid, pollTiming, limit)
+		took := time.Since(start)
+		var cut *walkCutError
+		rows := 0
+		if errors.As(err, &cut) {
+			rows = cut.rows
+		}
+		if wantMsg := "snmpwalk timeout/error for " + c.ip + " OID " + oid + ": " + c.exit; err == nil || err.Error() != wantMsg || lines != nil {
+			t.Errorf("%s: %q, %v; want no lines and %q", c.ip, lines, err, wantMsg)
+		}
+		if rows != c.rows || walkAnswered(err) != (c.rows > 0) {
+			t.Errorf("%s: %d rows before the error (walkAnswered %v), want %d", c.ip, rows, walkAnswered(err), c.rows)
+		}
+		if took > limit+5*time.Second {
+			t.Errorf("%s took %v: it was not killed at the walk limit %v", c.ip, took, limit)
+		}
+	}
+
 	args, err := os.ReadFile(filepath.Join(dir, "args"))
 	if err != nil {
 		t.Fatal(err)
@@ -572,7 +616,11 @@ func TestSNMPBulkWalkExec(t *testing.T) {
 	want := "-v2c -c public -On -Cr25 -t 5 -r 1 192.0.2.1 " + oid + "\n" +
 		"-v2c -c public -On -Cr25 -Cc -t 5 -r 1 192.0.2.1 " + oid + "\n" +
 		"-v2c -c public -On -Cr25 -t 5 -r 1 192.0.2.2 " + oid + "\n" +
-		"-v2c -c public -On -Cr25 -Cc -t 5 -r 1 192.0.2.3 " + oid + "\n"
+		"-v2c -c public -On -Cr25 -Cc -t 5 -r 1 192.0.2.3 " + oid + "\n" +
+		"-v2c -c public -On -Cr25 -t 5 -r 1 192.0.2.4 " + oid + "\n" +
+		"-v2c -c public -On -Cr25 -t 5 -r 1 192.0.2.5 " + oid + "\n" +
+		"-v2c -c public -On -Cr25 -t 5 -r 1 192.0.2.6 " + oid + "\n" +
+		"-v2c -c public -On -Cr25 -t 5 -r 1 192.0.2.7 " + oid + "\n"
 	if string(args) != want {
 		t.Errorf("snmpbulkwalk arguments:\n%s\nwant\n%s", args, want)
 	}

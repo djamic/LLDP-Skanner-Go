@@ -759,14 +759,16 @@ func (r *switchIPsRecorder) taken() []string {
 // Every walk is counted by IP and OID. The walks of an agent marked with
 // checkOrder fail like net-snmp's when its rows come out of OID order and
 // the walk is not unordered (-Cc, walkTiming.Unordered). An agent with a
-// stall (fakeStall) takes time to answer and stalls on one table.
+// stall (fakeStall) takes time to answer and stalls on one table. The walks
+// given to killAfter run into the walk limit while their rows still come.
 type fakeAgents struct {
 	mu      sync.Mutex
-	agents  map[string]map[string][]string // ip → OID → lines
-	walks   map[string]int                 // "ip oid" → walks
-	timed   map[string]int                 // "ip oid timeout/retries" → walks
-	ordered map[string]bool                // ip → net-snmp's OID order check (checkOrder)
-	stalls  map[string]*fakeStall          // ip → its stall
+	agents  map[string]map[string][]string      // ip → OID → lines
+	walks   map[string]int                      // "ip oid" → walks
+	timed   map[string]int                      // "ip oid timeout/retries" → walks
+	ordered map[string]bool                     // ip → net-snmp's OID order check (checkOrder)
+	stalls  map[string]*fakeStall               // ip → its stall
+	killed  map[string]map[string]time.Duration // ip → OID → walk limit (killAfter)
 }
 
 // fakeStall makes an agent behave as the Aruba 6300 172.20.230.253 did on
@@ -808,6 +810,15 @@ func (f *fakeAgents) walk(_, ip, oid string, timing walkTiming) ([]string, error
 		if orderErr := netsnmpOrderCheck(lines, 25); orderErr != nil {
 			err = fmt.Errorf("fake snmp: %s for %s: %w", ip, oid, orderErr)
 		}
+	}
+	if limit, ok := f.killed[ip][oid]; ok {
+		f.mu.Unlock()
+		time.Sleep(limit)
+		err := fmt.Errorf("fake snmp: %s for %s killed at the walk limit (%v)", ip, oid, limit)
+		if rows := walkRows(lines); rows > 0 {
+			return nil, &walkCutError{err: err, rows: rows}
+		}
+		return nil, err
 	}
 	stall := f.stalls[ip]
 	if stall == nil {
@@ -864,6 +875,26 @@ func (f *fakeAgents) stall(ip, oid string, perRequest, hold time.Duration) {
 		f.stalls = map[string]*fakeStall{}
 	}
 	f.stalls[ip] = &fakeStall{oid: oid, perRequest: perRequest, hold: hold, next: make(chan struct{})}
+}
+
+// killAfter makes the walks of oids on ip run into the walk limit while
+// the agent still answers, as the ifDescr, FDB and egress walks of
+// 172.20.254.226 (Jamic, snmp_object.go, collectVLANLastIPs) run into the
+// 30 s of snmpWalkLimit: such a walk is in flight for limit and then fails
+// as snmpBulkWalk's kill does, with a walkCutError that counts the rows of
+// its canned answer (a plain error when it has none: no answer).
+func (f *fakeAgents) killAfter(ip string, limit time.Duration, oids ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.killed == nil {
+		f.killed = map[string]map[string]time.Duration{}
+	}
+	if f.killed[ip] == nil {
+		f.killed[ip] = map[string]time.Duration{}
+	}
+	for _, oid := range oids {
+		f.killed[ip][oid] = limit
+	}
 }
 
 // stallVictims returns the OIDs of the walks of ip that its stall failed
@@ -1003,6 +1034,7 @@ func (f *fakeAgents) reset() {
 	f.timed = nil
 	f.ordered = nil
 	f.stalls = nil
+	f.killed = nil
 	f.mu.Unlock()
 }
 

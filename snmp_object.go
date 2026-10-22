@@ -389,8 +389,8 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 	}()
 
 	// 6. Collect Port VLAN Configuration: with the other walks, or after
-	// them for an agent whose VLAN egress walk failed in its last poll
-	// (collectVLANLast)
+	// them for an agent whose VLAN egress walk got no answer in its last
+	// poll (collectVLANLast)
 	vlanJob := func() {
 		portVLANs, err := s.collectPortVLANs(ip)
 		if err != nil {
@@ -497,12 +497,23 @@ func snmpBulkWalkArgs(community, ip, oid string, timing walkTiming) []string {
 	return append(args, "-t", strconv.Itoa(seconds), "-r", strconv.Itoa(max(timing.Retries, 0)), ip, oid)
 }
 
+// snmpWalkLimit is how long snmpBulkWalk lets one walk run: one that is
+// still running then is killed, whether its rows still come or not.
+const snmpWalkLimit = 30 * time.Second
+
 // snmpBulkWalk runs snmpbulkwalk with timing (snmpBulkWalkArgs; killed
-// after 30s, or when an unordered walk repeats an OID) and returns its
-// lines. A walk that exits with an error returns no lines: net-snmp exits
-// with 1 when the agent's rows come out of OID order ("OID not increasing"),
-// which is why the FDB is walked unordered.
+// after snmpWalkLimit, or when an unordered walk repeats an OID) and
+// returns its lines. A walk that exits with an error returns no lines:
+// net-snmp exits with 1 when the agent's rows come out of OID order ("OID
+// not increasing"), which is why the FDB is walked unordered. When rows had
+// come before the walk exited with an error or was killed, the error is a
+// walkCutError (walkAnswered).
 func snmpBulkWalk(community, ip, oid string, timing walkTiming) ([]string, error) {
+	return snmpBulkWalkWithin(community, ip, oid, timing, snmpWalkLimit)
+}
+
+// snmpBulkWalkWithin is snmpBulkWalk with the walk killed after limit.
+func snmpBulkWalkWithin(community, ip, oid string, timing walkTiming, limit time.Duration) ([]string, error) {
 	cmd := exec.Command("snmpbulkwalk", snmpBulkWalkArgs(community, ip, oid, timing)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stderr = nil
@@ -515,9 +526,9 @@ func snmpBulkWalk(community, ip, oid string, timing walkTiming) ([]string, error
 		return nil, err
 	}
 
-	// Manual timeout: kill process group after 30s
+	// Manual timeout: kill the process group after limit
 	kill := func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	timer := time.AfterFunc(30*time.Second, kill)
+	timer := time.AfterFunc(limit, kill)
 	lines, readErr := snmpWalkOutput(stdout, timing.Unordered, kill)
 	err = cmd.Wait() // after the whole output is read: Wait closes the pipe
 	timer.Stop()
@@ -526,9 +537,47 @@ func snmpBulkWalk(community, ip, oid string, timing walkTiming) ([]string, error
 		return nil, fmt.Errorf("snmpwalk of %s OID %s stopped: %w", ip, oid, readErr)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("snmpwalk timeout/error for %s OID %s: %v", ip, oid, err)
+		err = fmt.Errorf("snmpwalk timeout/error for %s OID %s: %v", ip, oid, err)
+		if rows := walkRows(lines); rows > 0 {
+			return nil, &walkCutError{err: err, rows: rows}
+		}
+		return nil, err
 	}
 	return lines, nil
+}
+
+// walkCutError is the error of a walk that failed after its agent had
+// answered rows: the walk limit killed it while rows still came (the
+// egress table of 172.20.254.226, collectVLANLastIPs), a later request
+// timed out, or net-snmp stopped at rows out of OID order. Its message is
+// the walk's error as before. A walk that got no answer at all fails with
+// a plain error.
+type walkCutError struct {
+	err  error // the walk's error
+	rows int   // the rows read before it (walkRows)
+}
+
+func (e *walkCutError) Error() string { return e.err.Error() }
+
+func (e *walkCutError) Unwrap() error { return e.err }
+
+// walkAnswered reports whether err is the error of a walk whose agent had
+// answered rows before the walk failed (walkCutError).
+func walkAnswered(err error) bool {
+	var cut *walkCutError
+	return errors.As(err, &cut) && cut.rows > 0
+}
+
+// walkRows counts the rows of a walk's output: its "OID = value" lines, not
+// the continuation lines of multi-line values.
+func walkRows(lines []string) int {
+	rows := 0
+	for _, line := range lines {
+		if oid, _, ok := strings.Cut(line, " = "); ok && strings.HasPrefix(oid, ".") {
+			rows++
+		}
+	}
+	return rows
 }
 
 // errWalkRepeats is the error of an unordered walk whose agent repeated an
@@ -1336,13 +1385,14 @@ func (s *SNMPObject) collectSTPInfo(ip string) (STPData, error) {
 // ports of each VLAN as a bitmap, the trunk detection of collectPortVLANs.
 const collectVLANEgressOID = ".1.3.6.1.2.1.17.7.1.4.2.1.4"
 
-// The agents whose VLAN egress walk failed in their last poll: CollectData
-// walks their VLAN table (dot1qPvid, then the egress ports) after the other
-// walks of the poll, not with them. The Aruba 6300 172.20.230.253 (JL658A,
-// FL.10.13.1040) has no row in dot1qVlanCurrentTable, and its agent takes
-// 10.8 s to answer a GETNEXT into it (its answer is cached for a short
-// while: slow again 73 s later, and the polls are 5 minutes apart), so the
-// walk times out after its two 5 s attempts. While the agent works on it,
+// The agents whose VLAN egress walk failed with no answer at all (no row)
+// in their last poll: CollectData walks their VLAN table (dot1qPvid, then
+// the egress ports) after the other walks of the poll, not with them. The
+// Aruba 6300 172.20.230.253 (JL658A, FL.10.13.1040) has no row in
+// dot1qVlanCurrentTable, and its agent takes 10.8 s to answer a GETNEXT
+// into it (its answer is cached for a short while: slow again 73 s later,
+// and the polls are 5 minutes apart), so the walk times out after its two
+// 5 s attempts with no row. While the agent works on it,
 // it answers no other request of the switch: a sysUpTime GET and a
 // dot1dTpFdbPort GETBULK sent 1 s after it were answered 9.8 and 10.2 s
 // later (read-only snmpgetnext, snmpget and snmpbulkget, one at a time,
@@ -1359,13 +1409,31 @@ const collectVLANEgressOID = ".1.3.6.1.2.1.17.7.1.4.2.1.4"
 // snmpSilentDrops 0). A switch whose egress walk answers keeps its timing:
 // the HPE, SNR and PiXiETECH agents give their 4,094 rows in 2.5-5.3 s. A
 // walk that answers again clears the mark.
+//
+// An egress walk that failed after rows (walkAnswered) marks no agent: the
+// agent answers the table, and walking it last gains nothing. The Eltex
+// MES1124M 172.20.254.226 (Jamic) has 4,075 VLANs (dot1qNumVlans) and puts
+// 9 of their port lists into a response, so its egress walk still streams
+// at the 30 s walk limit (1,826 rows after 35 s) and is killed in every
+// poll, like its ifDescr (4,120 rows, 34.5 s alone) and FDB walks, while
+// its dot1qPvid answers (44 rows in 1.3 s). Marked by its killed walk, it
+// would walk its VLAN table after those killed walks, and its poll, the
+// last one that the periodic rescan waits for before it rebuilds the
+// graph, would take about 61 s instead of 33 s (read-only snmpbulkwalk,
+// snmpbulkget and snmpget, 2026-10-22 22:07-22:33). One GETNEXT into the
+// egress column per polled switch (22:34, one at a time, the Aruba left
+// out) was answered with a row by 70 agents (69 in 15-52 ms, the Huawei
+// 172.20.230.17 after its retry, 5.6 s), and at once with the row after
+// the table by the HP 172.20.254.223 and .247, which have none; the HUAWEI
+// 172.20.254.249 answers nothing, its dot1qPvid walk neither, so its
+// egress walk is never asked.
 var (
 	collectVLANLastMu  sync.Mutex
 	collectVLANLastIPs = make(map[string]bool)
 )
 
 // collectVLANLast reports whether CollectData walks the VLAN table of ip
-// after its other walks: the last egress walk of ip failed.
+// after its other walks: the last egress walk of ip got no answer.
 func collectVLANLast(ip string) bool {
 	collectVLANLastMu.Lock()
 	defer collectVLANLastMu.Unlock()
@@ -1373,11 +1441,13 @@ func collectVLANLast(ip string) bool {
 }
 
 // collectNoteEgressWalk records the outcome of an egress walk of ip
-// (collectVLANLast).
+// (collectVLANLast): a walk that failed with no row marks ip; one that
+// answered, to its end or with rows before it failed (walkAnswered),
+// clears the mark.
 func collectNoteEgressWalk(ip string, err error) {
 	collectVLANLastMu.Lock()
 	defer collectVLANLastMu.Unlock()
-	if err != nil {
+	if err != nil && !walkAnswered(err) {
 		collectVLANLastIPs[ip] = true
 	} else {
 		delete(collectVLANLastIPs, ip)
@@ -1435,7 +1505,8 @@ func (s *SNMPObject) collectPortVLANs(ip string) ([]PortVLAN, error) {
 
 	// Now check for trunk ports by looking at dot1qVlanCurrentEgressPorts
 	// A trunk port will have multiple VLANs. Its failure is no failed walk,
-	// but the next poll asks it last (collectVLANLast)
+	// but after one with no answer at all the next poll asks it last
+	// (collectVLANLast)
 	vlanLines, egressErr := s.runSNMPWalk(ip, collectVLANEgressOID)
 	collectNoteEgressWalk(ip, egressErr)
 
