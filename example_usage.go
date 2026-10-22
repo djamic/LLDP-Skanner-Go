@@ -2873,12 +2873,14 @@ func buildSwitchOwnMACs(devices map[string]*DeviceData) map[string]string {
 // management IP. A switch answers ARP from the MAC of the VLAN interface
 // that holds the IP, which is not always its chassis MAC, and a switch that
 // never sends from its chassis MAC is learned in the FDBs by that MAC only.
-// The HPE 5130 172.20.230.76 (chassis 4c:ae:a3:8d:ec:c1, LLDP off) holds its
-// IP on Vlan-interface1, MAC 4c:ae:a3:8d:ec:cb, and the SNR 172.20.230.77
-// (chassis f8:f0:82:d8:62:67) on a VLAN interface with MAC f8:f0:82:d8:62:66
-// (live SNMP, 2026-10-22). No FDB of the saved data of 2026-10-20 has either
-// chassis MAC, while .77's VLAN MAC is the only switch MAC on .76
-// GigabitEthernet1/0/48, the port .77 hangs on. The ARP data is the ARP
+// The HPE 5130 172.20.230.76 (chassis 4c:ae:a3:8d:ec:c1) holds its IP on
+// Vlan-interface1, MAC 4c:ae:a3:8d:ec:cb, and the SNR 172.20.230.77 (chassis
+// f8:f0:82:d8:62:67) on a VLAN interface with MAC f8:f0:82:d8:62:66 (live
+// SNMP, 2026-10-22). Neither chassis MAC is in an FDB, in the saved data of
+// 2026-10-20 or live on 2026-10-22. In the saved data, where LLDP is off on
+// .76 (it was enabled at about 18:49 on 2026-10-22, and LLDP has linked .76
+// to the Aruba 6300 and to .77 since), .77's VLAN MAC is the only switch MAC
+// on .76 GigabitEthernet1/0/48, the port .77 hangs on. The ARP data is the ARP
 // tables of the polled devices and globalMACtoIP (the gateways' ARP tables
 // and the MAC-IP cache). A MAC is an alias only when all of it maps the MAC
 // to one IP, that IP is a polled device's, and the MAC is no polled device's

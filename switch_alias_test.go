@@ -9,10 +9,11 @@ import (
 )
 
 // Switch own MACs: the chassis MAC and the ARP aliases (buildSwitchOwnMACs,
-// switchARPAliases). The HPE 5130 172.20.230.76 never sends from its chassis
-// MAC 4c:ae:a3:8d:ec:c1 (LLDP off, no FDB of the saved data learns it); it
-// answers ARP from its Vlan-interface1 MAC 4c:ae:a3:8d:ec:cb, the SNR
-// 172.20.230.77 (chassis f8:f0:82:d8:62:67) from f8:f0:82:d8:62:66.
+// switchARPAliases). No FDB learns the chassis MAC 4c:ae:a3:8d:ec:c1 of the
+// HPE 5130 172.20.230.76, in the saved data of 2026-10-20 (LLDP off on it)
+// or live on 2026-10-22 (LLDP on since about 18:49); it answers ARP from its
+// Vlan-interface1 MAC 4c:ae:a3:8d:ec:cb, the SNR 172.20.230.77 (chassis
+// f8:f0:82:d8:62:67, learned nowhere either) from f8:f0:82:d8:62:66.
 
 // TestSwitchARPAliases checks the one alias decision: a MAC the ARP data
 // (the polled switches' ARP tables, globalMACtoIP) maps to one IP, a polled
@@ -87,8 +88,8 @@ func TestSwitchARPAliases(t *testing.T) {
 
 // aliasAgent is a fake switch agent for the alias tests: the chassis id,
 // ports GigabitEthernet1/0/1-52, an LLDP table without neighbors (LLDP off,
-// like 172.20.230.76: the agent answers "No Such Instance"), the FDB rows by
-// port and the ARP rows by IP.
+// like 172.20.230.76 until 2026-10-22: the agent answers "No Such
+// Instance"), the FDB rows by port and the ARP rows by IP.
 func aliasAgent(chassis string, fdb map[int][]string, arp map[string]string) map[string][]string {
 	octets := func(mac string) string {
 		m, _ := parseMAC(mac)
@@ -322,7 +323,8 @@ func TestMACRefPortChoice(t *testing.T) {
 // neighbor that is a polled switch (172.20.254.202 TGE1/0/51 the Aruba
 // 6300, 172.20.230.47 Eth1/0/25 172.20.230.46, 172.20.230.83 Eth1/0/2
 // 172.20.230.2) or other switches too. Its upstream is the Aruba's port
-// 1/1/1, and the saved data has no FDB of the Aruba.
+// 1/1/1, and the saved data has no FDB of the Aruba; since LLDP is on at
+// .76, LLDP links it there (TestFixtureLLDPOnDot76).
 func TestFixtureSwitchAliases(t *testing.T) {
 	const dot76, dot77, dot76VLAN = "4c:ae:a3:8d:ec:c1", "f8:f0:82:d8:62:67", "4c:ae:a3:8d:ec:cb"
 	g := buildFixtureGraph(t)
@@ -368,6 +370,111 @@ func TestFixtureSwitchAliases(t *testing.T) {
 	if baseLinks, liveLinks := graphEdgeLines(g), graphEdgeLines(live); !slices.Equal(baseLinks, liveLinks) {
 		t.Errorf("the alias of .76 changes links: -%v +%v", sortedMinus(baseLinks, liveLinks), sortedMinus(liveLinks, baseLinks))
 	}
+}
+
+// TestFixtureLLDPOnDot76 adds to the saved data of 2026-10-20 the LLDP rows
+// that 172.20.230.76 and its neighbors have had since LLDP was enabled on .76
+// at about 18:49 on 2026-10-22 (after 51 days up, lldpStatsRemTablesInserts
+// 11 and the oldest lldpRemTimeMark of that minute). The rows as the live
+// scanner stored them at 19:55: .76 port 52 -> the Aruba 6300
+// 172.20.230.253 "1/1/1", .76 port 48 -> .77 "Ethernet1/0/24", .77 port 24
+// and the Aruba's port 1 -> .76. With the live cache entry that makes .76's
+// VLAN MAC its alias, LLDP links .76 to the Aruba and to .77, the MAC-REF
+// link .76 -> .77 of the saved data gives way to the LLDP link (port 48's
+// LLDP neighbor is .77), and nothing else changes: no node, and no other
+// switch is linked to .76 or .77. The island of .76 and .77 joins the
+// Aruba's component, as in the live graph since then: the MAC-REF link
+// .76 -> .77 is drawn only while LLDP is off.
+func TestFixtureLLDPOnDot76(t *testing.T) {
+	const dot76, dot77, aruba = "4c:ae:a3:8d:ec:c1", "f8:f0:82:d8:62:67", "88:22:5b:88:e2:40"
+	const hpe = "HPE Comware Platform Software, Software Version 7.1.070, Release 3506P02"
+	rows := map[string][]LLDPNeighbor{
+		"172.20.230.76": {
+			{LocalPortNum: 52, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: "88 22 5B 88 E2 40", RemPortIdSubtype: 5, RemPortId: `"1/1/1"`,
+				RemPortDesc: `"B Student ofis"`, RemSysName: "6300", RemSysDesc: "Aruba JL658A  FL.10.13.1040", RemMgmtIP: "172.20.230.253", RemSysCapEnabled: 40},
+			{LocalPortNum: 48, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: "F8 F0 82 D8 62 67", RemPortIdSubtype: 5, RemPortId: `"Ethernet1/0/24"`, RemPortDesc: `""`},
+		},
+		"172.20.230.77": {{LocalPortNum: 24, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: "4C AE A3 8D EC C1", RemPortIdSubtype: 5,
+			RemPortId: `"GigabitEthernet1/0/48"`, RemPortDesc: `"GigabitEthernet1/0/48 Interface"`, RemSysName: "HPE", RemSysDesc: hpe, RemMgmtIP: "172.20.230.76", RemSysCapEnabled: 40}},
+		"172.20.230.253": {{LocalPortNum: 1, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: "4C AE A3 8D EC C1", RemPortIdSubtype: 5,
+			RemPortId: `"Ten-GigabitEthernet1/0/52"`, RemPortDesc: `"Ten-GigabitEthernet1/0/52 Interface"`, RemSysName: "HPE", RemSysDesc: hpe, RemSysCapEnabled: 40}},
+	}
+	useFixture(t)
+	globalMACtoIPMutex.Lock()
+	globalMACtoIP["4c:ae:a3:8d:ec:cb"] = "172.20.230.76"
+	globalMACtoIPMutex.Unlock()
+	base := buildGraphFromSnapshot(snapshotCollectedData())
+	snapshot := snapshotCollectedData()
+	for _, ip := range slices.Sorted(maps.Keys(rows)) {
+		d := snapshot[ip]
+		if d == nil {
+			t.Fatalf("%s is not in the fixture", ip)
+		}
+		d.Neighbors = slices.Concat(d.Neighbors, rows[ip])
+	}
+	on := buildGraphFromSnapshot(snapshot)
+
+	baseLinks, onLinks := graphEdgeLines(base), graphEdgeLines(on)
+	wantRemoved := []string{dot76 + " -> " + dot77 + ` : "GE1/0/48 [MAC-REF]|"`}
+	wantAdded := []string{
+		dot76 + " -> " + aruba + ` : "TGE1/0/52 [T] 4G|BStudentofis"`,
+		dot76 + " -> " + dot77 + ` : "GE1/0/48 [T] 1G|"`,
+	}
+	if removed, added := sortedMinus(baseLinks, onLinks), sortedMinus(onLinks, baseLinks); !slices.Equal(removed, wantRemoved) || !slices.Equal(added, wantAdded) {
+		t.Errorf("LLDP on .76 changes the links\n -%q\n +%q\nwant\n -%q\n +%q", removed, added, wantRemoved, wantAdded)
+	}
+	if baseNodes, onNodes := slices.Sorted(maps.Keys(base.Nodes)), slices.Sorted(maps.Keys(on.Nodes)); !slices.Equal(baseNodes, onNodes) {
+		t.Errorf("LLDP on .76 changes the nodes: -%v +%v", sortedMinus(baseNodes, onNodes), sortedMinus(onNodes, baseNodes))
+	}
+	for id, want := range map[string][]string{dot76: {aruba, dot77}, dot77: {dot76}} {
+		if got := graphLinkedSwitches(on, id); !slices.Equal(got, want) {
+			t.Errorf("with LLDP on .76, %s is linked to the switches %v, want %v", id, got, want)
+		}
+	}
+
+	island, upstream := graphComponentOf(base, dot76), graphComponentOf(base, aruba)
+	if island[aruba] || !island[dot77] {
+		t.Fatalf("saved data: the island of .76 (%d nodes) has the Aruba: %v, .77: %v; want .77 only", len(island), island[aruba], island[dot77])
+	}
+	want := maps.Clone(upstream)
+	maps.Copy(want, island)
+	if got := graphComponentOf(on, dot76); !maps.Equal(got, want) {
+		t.Errorf("with LLDP on .76 its component has %d nodes, want the %d of its island and the %d of the Aruba's component", len(got), len(island), len(upstream))
+	}
+}
+
+// graphLinkedSwitches returns the polled switches linked to the node id in
+// g, sorted.
+func graphLinkedSwitches(g *DJGraph, id string) []string {
+	var out []string
+	for _, other := range slices.Sorted(maps.Keys(g.Nodes)) {
+		if other != id && g.graphSwitches[other] && g.GetEdge(id, other) {
+			out = append(out, other)
+		}
+	}
+	return out
+}
+
+// graphComponentOf returns the node ids connected to id in g by links in
+// either direction, id included.
+func graphComponentOf(g *DJGraph, id string) map[string]bool {
+	adj := make(map[string][]string)
+	for src, targets := range g.Edges {
+		for dst := range targets {
+			adj[src] = append(adj[src], dst)
+			adj[dst] = append(adj[dst], src)
+		}
+	}
+	comp := map[string]bool{id: true}
+	for queue := []string{id}; len(queue) > 0; queue = queue[1:] {
+		for _, next := range adj[queue[0]] {
+			if !comp[next] {
+				comp[next] = true
+				queue = append(queue, next)
+			}
+		}
+	}
+	return comp
 }
 
 // TestFDBPortsOwnAlias checks the FDB rule with own MACs: on a VLAN trunk
