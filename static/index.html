@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="/libs/xterm.css">
     <script src="/libs/xterm.js"></script>
     <script src="/libs/addon-fit.js"></script>
+    <link rel="stylesheet" href="/libs/jstree/themes/default/style.min.css">
+    <script src="/libs/jquery/jquery-3.7.1.min.js"></script>
+    <script src="/libs/jstree/jstree.min.js"></script>
     <link rel="stylesheet" href="style.css">
     <style>
         /* Floating Terminal */
@@ -174,7 +177,28 @@
                     <div class="event-empty">Waiting for events...</div>
                 </div>
             </div>
-            <svg id="network"></svg>
+            <div class="view-area">
+                <div class="view-tabs" role="tablist" aria-label="Topology view">
+                    <button type="button" class="view-tab active" id="viewTabGraph" role="tab" aria-selected="true"
+                        aria-controls="network" onclick="selectViewTab('graph')">🕸️ Graph</button>
+                    <button type="button" class="view-tab" id="viewTabTree" role="tab" aria-selected="false"
+                        aria-controls="treeView" onclick="selectViewTab('tree')">🌳 Tree</button>
+                </div>
+                <div class="view-stage" id="viewStage">
+                    <svg id="network"></svg>
+                    <div class="tree-view" id="treeView" role="tabpanel" aria-labelledby="viewTabTree" hidden>
+                        <div class="tree-toolbar">
+                            <button type="button" class="tree-btn" onclick="treeExpandAll()" title="Open every node">⊞ Expand all</button>
+                            <button type="button" class="tree-btn" onclick="treeCollapseAll()" title="Close every node">⊟ Collapse all</button>
+                            <button type="button" class="tree-btn" id="treeShowInGraph" onclick="treeShowSelectedInGraph()"
+                                title="Switch to the graph and focus the selected device (or double-click a row)" disabled>🎯 Show in graph</button>
+                            <span class="tree-search-status" id="treeSearchStatus"></span>
+                            <span class="tree-status" id="treeStatus"></span>
+                        </div>
+                        <div id="topologyTree" class="topology-tree"></div>
+                    </div>
+                </div>
+            </div>
 
             <div class="device-list-panel">
                 <h3>📋 Devices</h3>
@@ -481,6 +505,7 @@
     </div>
 
     <script src="app.js"></script>
+    <script src="tree.js"></script>
 </body>
 
 </html>

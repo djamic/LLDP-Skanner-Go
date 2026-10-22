@@ -225,8 +225,12 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	globalGraphMutex.RLock()
-	defer globalGraphMutex.RUnlock()
 	graph := globalGraph
+	var data GraphData
+	if graph != nil {
+		data = graph.GetGraphData()
+	}
+	globalGraphMutex.RUnlock()
 	if graph == nil {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "No graph data available yet",
@@ -235,7 +239,17 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	data := graph.GetGraphData()
+
+	// The core node by the analyzer's rule (topologyCore), the root of the
+	// UI's Tree tab. collectedData is locked only once the graph is
+	// released: the lock order is collectedData, then globalGraph.
+	nodes := make(map[string]GraphNode, len(data.Nodes))
+	for _, n := range data.Nodes {
+		nodes[n.ID] = n
+	}
+	collectedDataMutex.RLock()
+	data.Core = topologyCore(nodes, collectedData)
+	collectedDataMutex.RUnlock()
 
 	// E.1/E.2: Enrich graph data with health score and anomaly info
 	lastReportMutex.RLock()

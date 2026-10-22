@@ -142,6 +142,35 @@ func TestGoldenUIApp(t *testing.T) {
 	checkGolden(t, "ui_app.json", goldenJSON(t, rec, 3))
 }
 
+// TestGoldenUITree runs testdata/ui/tree_probe.js, the Node tests of the
+// Tree tab: static/tree.js's builder on a synthetic graph and on the fixture
+// graph (testdata/golden/graph.json), and the tab itself (static/app.js and
+// static/tree.js, unmodified, with a stub DOM and jsTree). A failed check
+// fails the test. It pins the checks and the fixture's tree with the default
+// filters and with only 'vm' shown. graph.json is TestGoldenGraph's golden,
+// which runs first, so one -update run rewrites both. Skipped when Node.js
+// is not installed.
+func TestGoldenUITree(t *testing.T) {
+	node := nodeBinary(t)
+	cmd := exec.Command(node, filepath.Join("testdata", "ui", "tree_probe.js"),
+		filepath.Join("static", "tree.js"), filepath.Join("testdata", "golden", "graph.json"),
+		filepath.Join("static", "index.html"), filepath.Join("static", "app.js"))
+	cmd.Env = []string{}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("tree_probe.js: %v\n%s", err, stderr.String())
+	}
+	dec := json.NewDecoder(bytes.NewReader(out))
+	dec.UseNumber()
+	var rec any
+	if err := dec.Decode(&rec); err != nil {
+		t.Fatalf("tree_probe.js output: %v\n%.500s", err, out)
+	}
+	checkGolden(t, "ui_tree.json", goldenJSON(t, rec, 4))
+}
+
 // nodeBinary returns a Node.js 16+ binary, or skips the test.
 func nodeBinary(t *testing.T) string {
 	t.Helper()

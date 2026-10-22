@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -21,18 +22,28 @@ type tokenUse struct {
 	AppJSLower   bool `json:"app_js_lowercase"`
 	IndexHTML    bool `json:"index_html"`
 	IndexHTMLLow bool `json:"index_html_lowercase"`
+	TreeJS       bool `json:"tree_js"`
 }
 
 type groupUse struct {
-	Nodes        int  `json:"graph_nodes"`
-	UICheckbox   bool `json:"index_html_data_group"`
-	AppJSLiteral bool `json:"app_js_literal"`
+	Nodes         int  `json:"graph_nodes"`
+	UICheckbox    bool `json:"index_html_data_group"`
+	AppJSLiteral  bool `json:"app_js_literal"`
+	TreeJSLiteral bool `json:"tree_js_literal"`
+}
+
+// fieldUse tells whether a UI script reads a top-level /api/graph field.
+type fieldUse struct {
+	AppJS  bool `json:"app_js"`
+	TreeJS bool `json:"tree_js"`
 }
 
 // TestGoldenLabelContract pins the label contract between the Go graph build
 // and the UI: how often each label token occurs in the fixture graph and
-// whether static/app.js and static/index.html refer to it, and for every
-// group in the graph whether the UI has a filter checkbox for it.
+// whether static/app.js, static/index.html and static/tree.js (the Tree tab)
+// refer to it, for every group in the graph whether the UI has a filter
+// checkbox for it and whether the scripts name it, and which top-level
+// /api/graph fields (GraphData) the scripts read.
 func TestGoldenLabelContract(t *testing.T) {
 	graph := buildFixtureGraph(t)
 	readStatic := func(name string) string {
@@ -42,7 +53,7 @@ func TestGoldenLabelContract(t *testing.T) {
 		}
 		return string(data)
 	}
-	appJS, indexHTML := readStatic("app.js"), readStatic("index.html")
+	appJS, indexHTML, treeJS := readStatic("app.js"), readStatic("index.html"), readStatic("tree.js")
 
 	tokens := map[string]tokenUse{}
 	for _, tok := range labelTokens {
@@ -51,6 +62,7 @@ func TestGoldenLabelContract(t *testing.T) {
 			AppJSLower:   strings.Contains(appJS, strings.ToLower(tok)),
 			IndexHTML:    strings.Contains(indexHTML, tok),
 			IndexHTMLLow: strings.Contains(indexHTML, strings.ToLower(tok)),
+			TreeJS:       strings.Contains(treeJS, tok),
 		}
 		for id := range graph.Nodes {
 			if strings.Contains(graph.SwitchInfo[id], tok) {
@@ -77,7 +89,15 @@ func TestGoldenLabelContract(t *testing.T) {
 		g := groups[name]
 		g.UICheckbox = strings.Contains(indexHTML, `data-group="`+name+`"`)
 		g.AppJSLiteral = strings.Contains(appJS, "'"+name+"'") || strings.Contains(appJS, `"`+name+`"`)
+		g.TreeJSLiteral = strings.Contains(treeJS, "'"+name+"'") || strings.Contains(treeJS, `"`+name+`"`)
 		groups[name] = g
 	}
-	checkGolden(t, "label_contract.json", goldenJSON(t, map[string]any{"tokens": tokens, "groups": groups}, 2))
+
+	fields := map[string]fieldUse{}
+	gd := reflect.TypeFor[GraphData]()
+	for i := range gd.NumField() {
+		name, _, _ := strings.Cut(gd.Field(i).Tag.Get("json"), ",")
+		fields[name] = fieldUse{AppJS: strings.Contains(appJS, "."+name), TreeJS: strings.Contains(treeJS, "."+name)}
+	}
+	checkGolden(t, "label_contract.json", goldenJSON(t, map[string]any{"tokens": tokens, "groups": groups, "api_graph_fields": fields}, 2))
 }
