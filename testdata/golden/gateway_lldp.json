@@ -1,0 +1,46 @@
+{
+  "analysis": {
+    "core": "00:0c:29:98:7b:c2",
+    "health_with_lldp": 60,
+    "health_without_lldp": 60,
+    "path_issues_with_lldp": 53,
+    "path_issues_without_lldp": 53
+  },
+  "fortigate_lldp": {
+    "neighbor_ports": {
+      "2": "mgmt",
+      "33": "x7",
+      "34": "x8"
+    },
+    "neighbors": [
+      {"TimeMarker": 0, "LocalPortNum": 2, "RemIndex": 1, "RemChassisIdSubtype": 4, "RemChassisId": "4C AE A3 8E 05 89", "RemPortIdSubtype": 5, "RemPortId": "\"GigabitEthernet1/0/47\"", "RemPortDesc": "\"GigabitEthernet1/0/47 Interface\"", "RemSysName": "HPE", "RemSysDesc": "HPE Comware Platform Software, Software Version 7.1.070, Release 3506P02", "RemMgmtIP": "172.20.230.238", "RemSysCapEnabled": 40, "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
+      {"TimeMarker": 0, "LocalPortNum": 33, "RemIndex": 2, "RemChassisIdSubtype": 4, "RemChassisId": "4C AE A3 A2 09 8C", "RemPortIdSubtype": 5, "RemPortId": "\"Ten-GigabitEthernet1/0/52\"", "RemPortDesc": "\"Ten-GigabitEthernet1/0/52 Interface\"", "RemSysName": "HPE", "RemSysDesc": "HPE Comware Platform Software, Software Version 7.1.070, Release 3506", "RemMgmtIP": "172.20.254.203", "RemSysCapEnabled": 40, "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""},
+      {"TimeMarker": 0, "LocalPortNum": 34, "RemIndex": 3, "RemChassisIdSubtype": 4, "RemChassisId": "88 22 5B 88 E2 40", "RemPortIdSubtype": 5, "RemPortId": "\"1/1/27\"", "RemPortDesc": "\"1/1/27\"", "RemSysName": "6300", "RemSysDesc": "Aruba JL658A  FL.10.13.1040", "RemMgmtIP": "172.20.230.253", "RemSysCapEnabled": 40, "RemManAddrIfSubtype": 0, "RemManAddrIfId": 0, "RemManAddrOID": ""}
+    ],
+    "ports_named": 52
+  },
+  "graph_changes": {
+    "edges_added": [
+      "68:cc:ae:96:e6:08 -> 4c:ae:a3:8e:05:89 : \"mgmt|GE1/0/47\"",
+      "68:cc:ae:96:e6:08 -> 88:22:5b:88:e2:40 : \"x8|1/1/27\""
+    ],
+    "edges_removed": null,
+    "nodes_added": null,
+    "nodes_removed": null
+  },
+  "log": [
+    "🌐 [Gateway] FortiGate-600F 172.20.0.1 drawn as router 68:cc:ae:96:e6:08, linked from 172.20.254.203 TGE1/0/52 (1 MAC on the port), by its existing link; in place of node(s) 68:cc:ae:96:e5:e8; LLDP of 172.20.0.1: linked to 4c:ae:a3:8e:05:89 (mgmt), 88:22:5b:88:e2:40 (x8); already linked: 4c:ae:a3:a2:09:8c (x7)"
+  ],
+  "router_links": {
+    "with_lldp": [
+      {"source": "4c:ae:a3:8d:ee:c9", "target": "00:0c:29:98:7b:c2", "label": "TGE1/0/52 [MAC-REF]|", "sourceLabel": "TGE1/0/52 [MAC-REF]"},
+      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|", "sourceLabel": "TGE1/0/52 [T] 10G"},
+      {"source": "68:cc:ae:96:e6:08", "target": "4c:ae:a3:8e:05:89", "label": "mgmt|GE1/0/47", "sourceLabel": "mgmt", "targetLabel": "GE1/0/47"},
+      {"source": "68:cc:ae:96:e6:08", "target": "88:22:5b:88:e2:40", "label": "x8|1/1/27", "sourceLabel": "x8", "targetLabel": "1/1/27"}
+    ],
+    "without_lldp": [
+      {"source": "4c:ae:a3:8d:ee:c9", "target": "00:0c:29:98:7b:c2", "label": "TGE1/0/52 [MAC-REF]|", "sourceLabel": "TGE1/0/52 [MAC-REF]"},
+      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|", "sourceLabel": "TGE1/0/52 [T] 10G"}
+    ]
+  }
+}

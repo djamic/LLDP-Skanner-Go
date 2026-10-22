@@ -415,6 +415,7 @@ flowchart TD
 |----------|--------|
 | `discoverGatewaySubnets()` | `ipAdEntNetMask` → `SubnetInfo{Net, Prefix, IP}` ro'yxati (har gateway uchun) |
 | `collectGatewaySVIIPs()` | Gateway SVI interfeyslarning IP'larini olish |
+| `collectGatewayLLDP()` | Gateway'ning o'z lldpRemTable qo'shnilari (FortiGate 172.20.0.1: lldpLocalSystemData yo'q, RemTable bor) va port nomlari (ifName, bo'lmasa ifDescr); router tugundan qo'shnilarga link (`gatewayLLDPLinks`), switch o'z tomonidan ko'rsatgan link takrorlanmaydi |
 | `planSubnetDiscovery()` | Xususiy subnetlardagi (/31, /32 emas) ARP-ma'lum IP'lardan MAC'i tarmoq uskunasi ishlab chiqaruvchisiniki bo'lganlari (`isNetworkMakerMAC`), har IP bir marta |
 | `probeSubnetCandidates()` | 8 ta parallel: sysDescr (2 s, qayta urinishsiz), keyin `checkSwitch`; 5 daqiqalik vaqt chegarasi |
 | `RunSubnetDiscovery()` | To'liq kashfiyot zanjiri, bitta xulosa qatori |

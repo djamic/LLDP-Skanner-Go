@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"net/netip"
@@ -23,10 +24,14 @@ import (
 // On 2026-10-22 the two gateways were 172.20.1.254, a Debian router VM
 // (sysName debian216, MAC 00:0c:29:98:7b:c2, 1388 ARP rows), and 172.20.0.1,
 // the FortiGate-600F firewall (MAC 68:cc:ae:96:e6:08 on 172.20.0.1, 2488 ARP
-// rows). Neither has BRIDGE-MIB or LLDP-MIB, so neither passes checkSwitch
-// and neither is polled as a switch: the owner configured them, so they are
-// drawn from their gateway walks instead, never as a device of
-// collectedData.
+// rows). Neither has BRIDGE-MIB or a local LLDP chassis id, so neither
+// passes checkSwitch and neither is polled as a switch: the owner
+// configured them, so they are drawn from their gateway walks instead,
+// never as a device of collectedData. The FortiGate has an lldpRemTable,
+// though (without lldpLocalSystemData): it sees the HPE 5130 4c:ae:a3:8e:05:89
+// (172.20.230.238) on its mgmt port, 172.20.254.203 on x7 and the Aruba
+// 6300 172.20.230.253 on x8, so the gateway walks read it too
+// (collectGatewayLLDP) and its router node is linked to its neighbors.
 
 // gatewayIPs is every gateway of gateway_ip in file order; gatewayIP is its
 // first entry. Both are set together (setGatewayIPs).
@@ -114,6 +119,31 @@ type gatewayPoll struct {
 	SysName  string // sysName.0 of the last walk that read one
 	Answered bool   // the agent answered SNMP at least once in this run
 	Down     bool   // the last walk got no answer
+	// LLDP is the gateway's own LLDP view from the last LLDP read that
+	// answered; nil when it showed no neighbor (or none was read yet)
+	LLDP *gatewayLLDP
+}
+
+// gatewayLLDP is a gateway's own LLDP view (collectGatewayLLDP): the
+// neighbors of its lldpRemTable, read like a switch's, and the names of
+// its ports. It is never changed once made.
+type gatewayLLDP struct {
+	Neighbors []LLDPNeighbor // in local port, then remote index order
+	// Ports names the gateway's ports by lldpRemLocalPortNum: the ifName
+	// of that ifIndex, or its ifDescr when the agent has no ifName (the
+	// FortiGate's ifDescr is empty; its LLDP port numbers are ifIndexes:
+	// 2 mgmt, 33 x7, 34 x8)
+	Ports map[int]string
+}
+
+// device is the gateway as a device for the LLDP rules of the switches
+// (graphLLDPNeighborTarget, getLocalPortName): its IP, sysName and ports.
+func (l *gatewayLLDP) device(ip, sysName string) *DeviceData {
+	d := &DeviceData{IP: ip, SysName: sysName}
+	for _, port := range slices.Sorted(maps.Keys(l.Ports)) {
+		d.Interfaces = append(d.Interfaces, InterfaceData{IfIndex: port, IfDescr: l.Ports[port]})
+	}
+	return d
 }
 
 // gatewayPolls holds the walks of this run by gateway IP (guarded by
@@ -139,12 +169,27 @@ func recordGatewayPoll(ip string, answered bool, sysName string) {
 	gatewayPolls[ip] = p
 }
 
+// recordGatewayLLDP notes the LLDP read of gateway ip (collectGatewayLLDP):
+// its view, nil when it showed no neighbor. A read that failed (err) keeps
+// the view read before.
+func recordGatewayLLDP(ip string, lldp *gatewayLLDP, err error) {
+	if err != nil {
+		return
+	}
+	gatewayPollsMu.Lock()
+	defer gatewayPollsMu.Unlock()
+	p := gatewayPolls[ip]
+	p.LLDP = lldp
+	gatewayPolls[ip] = p
+}
+
 // gatewayNode is a configured gateway that answered SNMP in this run, as
 // the graph build draws it.
 type gatewayNode struct {
 	IP      string
 	SysName string
-	Down    bool // its last walk got no answer: the router node is unreachable
+	Down    bool         // its last walk got no answer: the router node is unreachable
+	LLDP    *gatewayLLDP // its own LLDP view; nil when it showed no neighbor
 }
 
 // answeredGateways lists the configured gateways that answered SNMP in this
@@ -155,10 +200,68 @@ func answeredGateways() []gatewayNode {
 	var out []gatewayNode
 	for _, ip := range gatewayIPs {
 		if p := gatewayPolls[ip]; p.Answered {
-			out = append(out, gatewayNode{IP: ip, SysName: p.SysName, Down: p.Down})
+			out = append(out, gatewayNode{IP: ip, SysName: p.SysName, Down: p.Down, LLDP: p.LLDP})
 		}
 	}
 	return out
+}
+
+// OIDs of the gateway port names (IF-MIB ifName and ifDescr).
+const (
+	collectIfNameOID  = ".1.3.6.1.2.1.31.1.1.1.1"
+	collectIfDescrOID = ".1.3.6.1.2.1.2.2.1.2"
+)
+
+// collectGatewayLLDP reads the gateway's own LLDP view for its router node:
+// the neighbors of its lldpRemTable with their management addresses, read
+// like a switch's (collectLLDPNeighbors), and, when it has neighbors, the
+// names of its ports (collectPortNames). A gateway needs no
+// lldpLocalSystemData for it: the FortiGate answers "No Such Object" there
+// and lists its neighbors all the same. It returns nil when the gateway
+// shows no neighbor ("No Such Object", the Debian router); err is the walk
+// error of an agent that did not answer.
+func (s *SNMPObject) collectGatewayLLDP(ip string) (*gatewayLLDP, error) {
+	neighbors, err := s.collectLLDPNeighbors(ip)
+	if err != nil {
+		return nil, err
+	}
+	if len(neighbors) == 0 {
+		return nil, nil
+	}
+	slices.SortFunc(neighbors, func(a, b LLDPNeighbor) int {
+		return cmp.Or(cmp.Compare(a.LocalPortNum, b.LocalPortNum), cmp.Compare(a.RemIndex, b.RemIndex))
+	})
+	return &gatewayLLDP{Neighbors: neighbors, Ports: s.collectPortNames(ip)}, nil
+}
+
+// collectPortNames reads the names of the agent's interfaces by ifIndex:
+// ifName, or ifDescr when no ifName is set. Empty names are left out (the
+// port is then "Port N", getLocalPortName); nil when neither walk names
+// any.
+func (s *SNMPObject) collectPortNames(ip string) map[int]string {
+	for _, oid := range []string{collectIfNameOID, collectIfDescrOID} {
+		lines, err := s.runSNMPWalk(ip, oid)
+		if err != nil {
+			continue
+		}
+		var names map[int]string
+		for _, line := range lines {
+			rowOID, _, val, ok := collectSNMPValue(line)
+			idx, inTable := collectOIDIndex(rowOID, oid)
+			name := strings.TrimSpace(strings.Trim(val, "\""))
+			if !ok || !inTable || len(idx) != 1 || name == "" || graphIsSNMPException(name) {
+				continue
+			}
+			if names == nil {
+				names = make(map[int]string)
+			}
+			names[idx[0]] = name
+		}
+		if names != nil {
+			return names
+		}
+	}
+	return nil
 }
 
 // gatewayARP is the result of one gateway's ARP walk in a run.
@@ -172,16 +275,19 @@ type gatewayARP struct {
 
 // walkGatewaysARP walks the ARP table of every configured gateway at the
 // same time (gateways that do not answer cost one timeout together, not
-// one each) and reads the sysName of each one that answered. Each walk is
-// recorded: recordGatewayPoll for the router node, recordGatewayARP for
-// the gateway's expiry clock and the one warning per start of a gateway
-// that does not answer. Nothing is merged. Returns the walks in gateway_ip
-// order.
+// one each) and reads the sysName and the own LLDP view
+// (collectGatewayLLDP) of each one that answered. Each walk is recorded:
+// recordGatewayPoll and recordGatewayLLDP for the router node,
+// recordGatewayARP for the gateway's expiry clock and the one warning per
+// start of a gateway that does not answer. Nothing is merged. Returns the
+// walks in gateway_ip order.
 func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 	type walk struct {
 		entries []ARPEntry
 		err     error
 		sysName string
+		lldp    *gatewayLLDP
+		lldpErr error
 	}
 	gateways := slices.Clone(gatewayIPs)
 	walks := make([]walk, len(gateways))
@@ -193,8 +299,10 @@ func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 			w := walk{}
 			w.entries, w.err = snmpObj.collectARPTable(ip)
 			if w.err == nil {
-				// The agent answered: its name labels the router node
+				// The agent answered: its name labels the router node, its
+				// LLDP neighbors are linked to it
 				w.sysName = snmpObj.collectSysText(ip, oidSysName)
+				w.lldp, w.lldpErr = snmpObj.collectGatewayLLDP(ip)
 			}
 			walks[i] = w
 		}()
@@ -206,6 +314,9 @@ func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 		w := walks[i]
 		results[i] = gatewayARP{IP: ip, Rows: len(w.entries), Err: w.err, entries: w.entries}
 		recordGatewayPoll(ip, w.err == nil, w.sysName)
+		if w.err == nil {
+			recordGatewayLLDP(ip, w.lldp, w.lldpErr)
+		}
 		recordGatewayARP(ip, len(w.entries), w.err, macIPClock()) // warns once per gateway when it fails
 	}
 	return results
@@ -567,6 +678,10 @@ func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchChas
 			graphMergeNode(graph, id, mac)
 		}
 
+		// The gateway's own LLDP neighbors come before the FDB port: a link
+		// LLDP shows needs no MAC-REF link
+		lldpWhere := gatewayLLDPLinks(graph, mac, gws, merged)
+
 		where := "not linked: its MAC is learned on no switch port without another switch or gateway MAC"
 		if link, ok := gatewayPort(snapshot, mac, infra); ok {
 			switchID := graphDeviceNodeID(link.dev)
@@ -581,8 +696,66 @@ func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchChas
 		if len(merged) > 0 {
 			where += fmt.Sprintf("; in place of node(s) %s", strings.Join(merged, ", "))
 		}
+		if lldpWhere != "" {
+			where += "; " + lldpWhere
+		}
 		gatewayNotice("🌐 [Gateway] %s drawn as router %s, %s", strings.Join(lines, " "), mac, where)
 	}
+}
+
+// gatewayLLDPLinks links router node mac to the LLDP neighbors of its
+// gateways (gatewayNode.LLDP). Each neighbor is matched to its node as a
+// switch's neighbor is (graphLLDPNeighborTarget: a polled switch's chassis
+// MAC is the switch's node; a neighbor that is no node yet gets an LLDP
+// endpoint node, graphAddLLDPEndpoint) and is linked from the router node
+// with the label "<gateway port>|<neighbor port>" ("mgmt|GE1/0/47"), unless
+// the two are linked already: a switch that sees the gateway reports the
+// link from its side (172.20.254.203 Ten-GigabitEthernet1/0/52, whose LLDP
+// node of the FortiGate the router node replaced, gatewaySameDevice), and
+// that link stays as it is. Neighbors that are the router node itself or a
+// node it replaced (merged) are left out. It returns the text for the log
+// line ("" when no gateway of the node has LLDP neighbors).
+func gatewayLLDPLinks(graph *DJGraph, mac string, gws []gatewayNode, merged []string) string {
+	var notes []string
+	for _, gw := range gws {
+		if gw.LLDP == nil {
+			continue
+		}
+		dev := gw.LLDP.device(gw.IP, gw.SysName)
+		var linked, existing []string
+		skipped := 0
+		for _, n := range gw.LLDP.Neighbors {
+			target, displayName, ok := graphLLDPNeighborTarget(dev, n)
+			if !ok || target == mac || slices.Contains(merged, target) {
+				skipped++
+				continue
+			}
+			port := normalizePortName(getLocalPortName(dev, n.LocalPortNum))
+			graphAddSysText(graph, target, n.RemSysName, n.RemSysDesc)
+			if !graph.Nodes[target] {
+				graphAddLLDPEndpoint(graph, target, displayName, n, getGlobalIP(target))
+			}
+			link := fmt.Sprintf("%s (%s)", target, port)
+			if graph.GetEdge(mac, target) {
+				existing = append(existing, link)
+				continue
+			}
+			graph.AddEdge(mac, target, fmt.Sprintf("%s|%s", port, normalizePortName(lldpRemotePortName(n))))
+			linked = append(linked, link)
+		}
+		var parts []string
+		if len(linked) > 0 {
+			parts = append(parts, "linked to "+strings.Join(linked, ", "))
+		}
+		if len(existing) > 0 {
+			parts = append(parts, "already linked: "+strings.Join(existing, ", "))
+		}
+		if skipped > 0 {
+			parts = append(parts, fmt.Sprintf("%s left out", switchSkipCount(skipped, "neighbor")))
+		}
+		notes = append(notes, fmt.Sprintf("LLDP of %s: %s", gw.IP, strings.Join(parts, "; ")))
+	}
+	return strings.Join(notes, "; ")
 }
 
 // gatewayName is the sysName of a gateway for log lines.
