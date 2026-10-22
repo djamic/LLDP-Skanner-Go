@@ -99,6 +99,9 @@ type DeviceData struct {
 
 	// Walks that failed in the poll that produced this data (not saved).
 	failedWalks []string
+	// The switch MIBs this poll found (not saved): storeCollectedDevice
+	// stores a device it has never stored only when they make it a switch.
+	polledMIBs switchMIBs
 }
 
 // Parts of one CollectData poll, as recorded in DeviceData.failedWalks.
@@ -244,8 +247,21 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		} else {
 			mu.Lock()
 			data.ChassisID = chassisID
+			data.polledMIBs.LLDPChassis = chassisID != ""
 			mu.Unlock()
 		}
+	}()
+
+	// The BRIDGE-MIB port count, for the switch qualification of a device
+	// that was never stored (storeCollectedDevice). Optional: a failure is
+	// no failed walk and does not count among the jobs below.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ports, _ := s.collectBaseNumPorts(ip)
+		mu.Lock()
+		data.polledMIBs.BridgePorts = ports
+		mu.Unlock()
 	}()
 
 	// 2. Collect Interface Data (Full walk of IF-MIB)
@@ -429,25 +445,26 @@ func snmpBulkWalk(community, ip, oid string) ([]string, error) {
 	return lines, nil
 }
 
-// collectLocalChassisID collects the local Chassis ID
+// collectLocalChassisID collects the local Chassis ID (lldpLocChassisId).
+// When the agent answers without one the error wraps errNoLocalChassis; a
+// walk error means the agent did not answer.
 func (s *SNMPObject) collectLocalChassisID(ip string) (string, error) {
-	oid := ".1.0.8802.1.1.2.1.3.2.0" // lldpLocChassisId
-	lines, err := s.runSNMPWalk(ip, oid)
+	lines, err := s.runSNMPWalk(ip, oidLLDPLocChassisID)
 	if err != nil {
 		return "", err
 	}
 	if len(lines) == 0 {
-		return "", fmt.Errorf("no output")
+		return "", fmt.Errorf("%w: no output", errNoLocalChassis)
 	}
 	// Parse first line
 	_, val, err := parseSNMPLine(lines[0])
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %v", errNoLocalChassis, err)
 	}
 	// "No Such Object…" is no chassis id: the graph then uses the device IP
 	// instead of merging every switch that answers with the same text
 	if graphIsSNMPException(val) {
-		return "", fmt.Errorf("no lldpLocChassisId: %s", val)
+		return "", fmt.Errorf("%w: %s", errNoLocalChassis, val)
 	}
 	return graphLocalChassisID(val), nil
 }

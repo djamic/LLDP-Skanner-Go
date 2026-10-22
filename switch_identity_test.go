@@ -170,7 +170,9 @@ func TestFDBPortNames(t *testing.T) {
 // lldpLocChassisId with exception text or not at all (172.20.230.40
 // alternates) keeps its last valid chassis id, so its node id does not flip
 // to the IP and back between polls. A new valid chassis id replaces the old
-// one, and a switch that never had a valid one stays an IP node.
+// one, and a switch that never had a valid one (a BRIDGE-MIB switch without
+// LLDP-MIB) stays an IP node. The same agent without BRIDGE-MIB is no
+// switch and is not stored at all.
 func TestChassisIDKeptOnFlakyPoll(t *testing.T) {
 	resetState(t)
 	const ip = "10.9.8.40"
@@ -201,14 +203,21 @@ func TestChassisIDKeptOnFlakyPoll(t *testing.T) {
 		}
 	}
 
-	const never = "10.9.8.41"
-	fakeSNMP.set(never, agent("No Such Instance currently exists at this OID"))
+	const never, noSwitch = "10.9.8.41", "10.9.8.42"
+	bridge := agent("No Such Instance currently exists at this OID")
+	bridge[oidDot1dBaseNumPorts] = []string{oidDot1dBaseNumPorts + " = INTEGER: 24"}
+	fakeSNMP.set(never, bridge)
 	obj.CollectData(never, "never")
+	fakeSNMP.set(noSwitch, agent("No Such Instance currently exists at this OID"))
+	obj.CollectData(noSwitch, "no-switch")
 	collectedDataMutex.RLock()
-	d := collectedData[never]
+	d, other := collectedData[never], collectedData[noSwitch]
 	collectedDataMutex.RUnlock()
 	if d == nil || d.ChassisID != "" || graphDeviceNodeID(d) != never {
 		t.Errorf("switch without a valid chassis id: %+v", d)
+	}
+	if other != nil {
+		t.Errorf("device without BRIDGE-MIB and LLDP-MIB was stored: %+v", other)
 	}
 }
 

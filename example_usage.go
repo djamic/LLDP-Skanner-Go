@@ -263,6 +263,8 @@ func main() {
 
 		// Create SNMP Object for detailed data collection
 		snmpObject := newReactiveSNMPObject()
+		// SNMP devices of the ranges that are no switches (checkSwitch)
+		firstScanSkips := &switchSkips{}
 
 		// Define callback function for scan results
 		resultCallback := func(result ScanResult) {
@@ -274,11 +276,11 @@ func main() {
 				atomic.AddInt32(&snmpSuccess, 1)
 				fmt.Printf("[✓] SNMP: %s - %s\n", result.IP, result.SysName)
 
-				// Trigger detailed data collection with WaitGroup
+				// Trigger detailed data collection with WaitGroup (switches only)
 				dataCollectionWG.Add(1)
 				go func(ip, name string) {
 					defer dataCollectionWG.Done()
-					snmpObject.CollectData(ip, name)
+					collectScannedSwitch(snmpObject, ip, name, firstScanSkips)
 				}(result.IP, result.SysName)
 
 			case EventSNMPFailure:
@@ -302,7 +304,8 @@ func main() {
 				// Wait for ALL data collections to finish
 				fmt.Println("⏳ Waiting for all device data collections to complete...")
 				dataCollectionWG.Wait()
-				
+				firstScanSkips.print("Scan")
+
 				experimentCollectionEnd = time.Now()
 				collectionDuration := experimentCollectionEnd.Sub(experimentScanEnd)
 				totalDuration := experimentCollectionEnd.Sub(experimentScanStart)
@@ -521,17 +524,29 @@ func buildStartupGraph(savedHosts map[string]*DeviceData) {
 }
 
 // storeCollectedDevice stores the data of a successful SNMP poll in
-// collectedData and marks the switch reachable (the OnSuccess callbacks).
-// The tables of walks that failed in this poll are kept from the previous
-// poll (F57), so is the last valid chassis id when this poll read none
-// (keepPreviousChassisID), and the traffic counters are only updated from
-// interfaces walked just now.
-func storeCollectedDevice(data *DeviceData) {
+// collectedData and marks the switch reachable (the OnSuccess callbacks),
+// and reports whether it stored it. The tables of walks that failed in this
+// poll are kept from the previous poll (F57), so is the last valid chassis
+// id when this poll read none (keepPreviousChassisID), and the traffic
+// counters are only updated from interfaces walked just now.
+//
+// A device that is not stored yet is stored only when this poll found a
+// switch MIB (polledMIBs.isSwitch: BRIDGE-MIB ports or lldpLocChassisId).
+// Any agent whose IF-MIB answers makes a partial success, and the access
+// points, the FortiGate and the ESXi host that the rescue scan polled on
+// 2026-10-22 became isolated switch nodes that way. A stored device takes
+// every successful poll as before, whatever it shows (F53, F57, H9).
+func storeCollectedDevice(data *DeviceData) bool {
 	// Phase 8: Mark as reachable
 	data.Unreachable = false
 	data.LastSeen = time.Now()
 	collectedDataMutex.Lock()
 	prev := collectedData[data.IP]
+	if prev == nil && !data.polledMIBs.isSwitch() {
+		collectedDataMutex.Unlock()
+		fmt.Printf("🚫 [Collect] %s answered without BRIDGE-MIB ports or lldpLocChassisId: no switch, not stored\n", data.IP)
+		return false
+	}
 	collectKeepPrevious(data, prev)
 	keepPreviousChassisID(data, prev)
 	collectedData[data.IP] = data
@@ -539,6 +554,19 @@ func storeCollectedDevice(data *DeviceData) {
 	if !data.collectWalkFailed(collectWalkInterfaces) {
 		updateTrafficCounters(data.IP, data.Interfaces)
 	}
+	return true
+}
+
+// storeCollected is storeCollectedDevice as an OnSuccess callback.
+func storeCollected(data *DeviceData) { storeCollectedDevice(data) }
+
+// collectedReachable reports whether ip is in collectedData and answered
+// its last poll.
+func collectedReachable(ip string) bool {
+	collectedDataMutex.RLock()
+	defer collectedDataMutex.RUnlock()
+	d, ok := collectedData[ip]
+	return ok && !d.Unreachable
 }
 
 // keepPreviousChassisID keeps the switch identity stable across polls: when
@@ -579,7 +607,7 @@ func markUnreachable(ip string) {
 // unreachable. Normal mode used to pass nil callbacks and threw every
 // periodic, rescue and LLDP-discovery rescan away (F53).
 func newRescanSNMPObject() *SNMPObject {
-	return NewSNMPObject(storeCollectedDevice, func(ip string, err error) {
+	return NewSNMPObject(storeCollected, func(ip string, err error) {
 		markUnreachable(ip)
 		fmt.Printf("🔴 [Monitor] Switch unreachable: %s (%v)\n", ip, err)
 	})
@@ -595,7 +623,9 @@ func newReactiveSNMPObject() *SNMPObject {
 			newGraph := handleReactiveDevice(data)
 
 			// 7. Run Analyze() immediately so health_score is available in /api/graph
-			startLiveAnalysis(newGraph)
+			if newGraph != nil {
+				startLiveAnalysis(newGraph)
+			}
 		},
 		// OnFailure callback
 		func(ip string, err error) {
@@ -630,15 +660,18 @@ func analyzeLiveGraph(graph *DJGraph) {
 }
 
 // handleReactiveDevice is the OnSuccess work of the first scan: it stores the
-// switch, then rebuilds and publishes the graph and returns it. CollectData
-// runs in one goroutine per switch, so calls overlap; rebuildGraph publishes
+// switch, then rebuilds and publishes the graph and returns it (nil when
+// the device was not stored: no switch MIB in its poll). CollectData runs
+// in one goroutine per switch, so calls overlap; rebuildGraph publishes
 // their graphs in the order of their snapshots.
 func handleReactiveDevice(data *DeviceData) *DJGraph {
 	atomic.AddInt32(&dataCollected, 1)
 
 	// Store data for later processing: marks it reachable, keeps the tables
 	// of failed walks (F57) and sets the traffic baseline for the first poll
-	storeCollectedDevice(data)
+	if !storeCollectedDevice(data) {
+		return nil
+	}
 
 	fmt.Printf("[📊] %s (%s) - %d interfaces, %d neighbors, ChassisID: %s\n",
 		data.IP, data.SysName, len(data.Interfaces), len(data.Neighbors), data.ChassisID)
@@ -2506,7 +2539,8 @@ func startPeriodicRescan(snmpObject *SNMPObject) {
 
 // ─── Phase 15: Dynamic Discovery & Dead Node Recovery ──────────────────────
 // startRescueScanner runs every 7 minutes, checking swich_ips for IPs that
-// are NOT in collectedData. If alive (ping), triggers CollectData to add them.
+// are NOT in collectedData. If alive (ping) and a switch (checkSwitch),
+// triggers CollectData to add them (rescueScan).
 // This recovers switches that were down during initial scan.
 func startRescueScanner(snmpObject *SNMPObject) {
 	ticker := time.NewTicker(7 * time.Minute)
@@ -2522,39 +2556,55 @@ func startRescueScanner(snmpObject *SNMPObject) {
 	fmt.Println("🔍 [Rescue] Scanner started — checking for missing switches every 7 min")
 }
 
+// runRescueScan runs rescueScan over the lines of swich_ips, with ping as
+// the alive check.
 func runRescueScan(snmpObject *SNMPObject) {
 	// 1. Read all IPs from swich_ips (may contain CIDRs)
 	ranges, err := readSwitchIPsFile()
 	if err != nil || len(ranges) == 0 {
 		return
 	}
+	rescueScan(snmpObject, ranges, NewSNMPScanner(nil).isHostAlive)
+}
 
-	tempScanner := NewSNMPScanner(nil)
-	allIPs, err := tempScanner.ExpandNetworks(ranges)
+// rescueScan is one run of the rescue scan over ranges (swich_ips lines,
+// CIDRs expanded). Every IP that is not in collectedData and is alive is
+// asked checkSwitch first: a switch is polled, any other device (access
+// point, firewall, hypervisor, a host without SNMP) is not, and one line
+// per run names those. A switch counts as recovered only when its poll
+// stored it and it answered; the graph is rebuilt only then. Returns the
+// recovered switches in IP order and the devices skipped.
+func rescueScan(snmpObject *SNMPObject, ranges []string, alive func(ip string) bool) ([]string, *switchSkips) {
+	skips := &switchSkips{}
+	allIPs, err := NewSNMPScanner(nil).ExpandNetworks(ranges)
 	if err != nil || len(allIPs) == 0 {
-		return
+		return nil, skips
 	}
 
-	// 2. Find IPs NOT in collectedData
+	// 2. Find IPs NOT in collectedData (each once: a listed IP can also be
+	// inside a listed range)
 	collectedDataMutex.RLock()
 	var missing []string
+	listed := make(map[string]bool, len(allIPs))
 	for _, ip := range allIPs {
-		if _, exists := collectedData[ip]; !exists {
+		if _, exists := collectedData[ip]; !exists && !listed[ip] {
 			missing = append(missing, ip)
 		}
+		listed[ip] = true
 	}
 	collectedDataMutex.RUnlock()
 
 	if len(missing) == 0 {
-		return
+		return nil, skips
 	}
 
 	fmt.Printf("🔍 [Rescue] Checking %d unknown IPs from swich_ips...\n", len(missing))
 
-	// 3. Ping filter → CollectData for alive hosts
+	// 3. Ping filter → switch check → CollectData for alive switches
 	var wg sync.WaitGroup
+	var mu sync.Mutex
 	sem := make(chan struct{}, 30) // max 30 parallel pings
-	discovered := 0
+	var recovered []string
 
 	for _, ip := range missing {
 		wg.Add(1)
@@ -2563,22 +2613,45 @@ func runRescueScan(snmpObject *SNMPObject) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			if !tempScanner.isHostAlive(targetIP) {
+			if !alive(targetIP) {
+				return
+			}
+			check := snmpObject.checkSwitch(targetIP)
+			if !check.isSwitch() {
+				skips.add(check)
 				return
 			}
 
-			// Alive! Try SNMP
-			fmt.Printf("✅ [Rescue] Alive host found: %s — starting SNMP collect\n", targetIP)
+			// Alive switch: poll it
+			fmt.Printf("✅ [Rescue] Alive switch found: %s (%s) — starting SNMP collect\n", targetIP, check.switchMIBs)
 			snmpObject.CollectData(targetIP, "")
-			discovered++
+			if collectedReachable(targetIP) {
+				mu.Lock()
+				recovered = append(recovered, targetIP)
+				mu.Unlock()
+			}
 		}(ip)
 	}
 	wg.Wait()
+	skips.print("Rescue")
+	slices.SortFunc(recovered, compareIPs)
 
-	if discovered > 0 {
-		fmt.Printf("🎉 [Rescue] Recovered %d switches! Rebuilding graph...\n", discovered)
+	if len(recovered) > 0 {
+		fmt.Printf("🎉 [Rescue] Recovered %d switches! Rebuilding graph...\n", len(recovered))
 		rebuildGraph()
 	}
+	return recovered, skips
+}
+
+// collectScannedSwitch polls ip, a device the first scan or the UI rescan
+// found answering SNMP, when it qualifies as a switch (checkSwitch); any
+// other device is recorded in skips and not polled.
+func collectScannedSwitch(obj *SNMPObject, ip, sysName string, skips *switchSkips) {
+	if check := obj.checkSwitch(ip); !check.isSwitch() {
+		skips.add(check)
+		return
+	}
+	obj.CollectData(ip, sysName)
 }
 
 // appendSwitchIP adds a discovered switch to swich_ips (appendToSwitchIPs).
@@ -2588,12 +2661,15 @@ var appendSwitchIP = appendToSwitchIPs
 // discoverFromLLDP polls the management IPs that the LLDP neighbors of the
 // polled devices advertise and adds each one that answers to swich_ips.
 // Only neighbors whose enabled capabilities say router, or bridge without
-// wlanAccessPoint and telephone (lldpDiscoverable), are polled: access
+// wlanAccessPoint and telephone (lldpDiscoverable), are considered: access
 // points and IP phones advertise management IPs as well (F62 made them
 // visible) but are no switches, and a neighbor with unknown capabilities is
-// not added automatically. Called after each periodic rescan to enable
-// "chain reaction" discovery.
-func discoverFromLLDP(snmpObject *SNMPObject) {
+// not added automatically. Their agents must pass checkSwitch too before
+// they are polled (a neighbor's capabilities are its own claim); one line
+// names the ones that do not. Called after each periodic rescan to enable
+// "chain reaction" discovery. Returns the devices skipped by checkSwitch.
+func discoverFromLLDP(snmpObject *SNMPObject) *switchSkips {
+	skips := &switchSkips{}
 	collectedDataMutex.RLock()
 	seen := make(map[string]bool, len(collectedData))
 	for ip := range collectedData {
@@ -2612,31 +2688,33 @@ func discoverFromLLDP(snmpObject *SNMPObject) {
 	collectedDataMutex.RUnlock()
 
 	if len(newIPs) == 0 {
-		return
+		return skips
 	}
 
 	fmt.Printf("🔗 [LLDP-Discovery] Found %d new switch management IPs from LLDP neighbors\n", len(newIPs))
 
 	var wg sync.WaitGroup
 	for _, ip := range newIPs {
-		// Poll immediately
+		// Check and poll immediately
 		wg.Add(1)
 		go func(targetIP string) {
 			defer wg.Done()
-			fmt.Printf("🔗 [LLDP-Discovery] Polling new switch: %s\n", targetIP)
+			check := snmpObject.checkSwitch(targetIP)
+			if !check.isSwitch() {
+				skips.add(check)
+				return
+			}
+			fmt.Printf("🔗 [LLDP-Discovery] Polling new switch: %s (%s)\n", targetIP, check.switchMIBs)
 			snmpObject.CollectData(targetIP, "")
 		}(ip)
 	}
 	wg.Wait()
+	skips.print("LLDP-Discovery")
 
 	// Save the switches that answered to swich_ips for future rescans
 	added := 0
 	for _, ip := range newIPs {
-		collectedDataMutex.RLock()
-		d, ok := collectedData[ip]
-		answered := ok && !d.Unreachable
-		collectedDataMutex.RUnlock()
-		if answered {
+		if collectedReachable(ip) {
 			appendSwitchIP(ip)
 			added++
 		}
@@ -2646,6 +2724,7 @@ func discoverFromLLDP(snmpObject *SNMPObject) {
 		fmt.Printf("🎉 [LLDP-Discovery] Added %d new switches! Rebuilding graph...\n", added)
 		rebuildGraph()
 	}
+	return skips
 }
 
 // graphAddSwitchNode adds the node of a polled device, labelled
@@ -3078,20 +3157,22 @@ func handleRescanRequests(snmpObject *SNMPObject) {
 
 			// WaitGroup to track data collection goroutines
 			var rescanWG sync.WaitGroup
+			// SNMP devices of the ranges that are no switches (checkSwitch)
+			rescanSkips := &switchSkips{}
 
 			// Create a temporary scanner for discovery
 			scanner := NewSNMPScanner(func(result ScanResult) {
 				switch result.Event {
 				case EventSNMPSuccess:
 					fmt.Printf("[✓] Rescan found: %s\n", result.IP)
-				// Trigger data collection for found host
+				// Trigger data collection for found host (switches only)
 				rescanWG.Add(1)
 				go func(ip, name string) {
 					defer rescanWG.Done()
 					// Create a new SNMPObject with OnSuccess callback for each device
 					settings := GetCurrentSettings()
 					rescanSNMP := NewSNMPObject(
-						storeCollectedDevice,
+						storeCollected,
 						func(ip string, err error) {
 							markUnreachable(ip)
 							fmt.Printf("🔴 [Rescan] Switch unreachable: %s (%v)\n", ip, err)
@@ -3100,13 +3181,14 @@ func handleRescanRequests(snmpObject *SNMPObject) {
 					if settings.Community != "" {
 						rescanSNMP.Community = settings.Community
 					}
-					rescanSNMP.CollectData(ip, name)
+					collectScannedSwitch(rescanSNMP, ip, name, rescanSkips)
 				}(result.IP, result.SysName)
 
 				case EventScanComplete:
 					// Wait for all data collections to finish
 					fmt.Println("⏳ Waiting for rescan data collection to complete...")
 					rescanWG.Wait()
+					rescanSkips.print("Rescan")
 
 					// Rebuild graph with new LLDP data
 					fmt.Println("🔨 Rebuilding graph with new data...")

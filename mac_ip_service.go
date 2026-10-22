@@ -833,10 +833,12 @@ func countBits(n int) int {
 	return count
 }
 
-// probeSubnetForSwitches probes a subnet for SNMP-capable devices.
-// For small subnets (/22 or less = ≤1022 hosts), scans all IPs.
-// For large subnets, only probes IPs known from ARP cache.
-func probeSubnetForSwitches(snmpObj *SNMPObject, subnet SubnetInfo) []string {
+// probeSubnetForSwitches probes a subnet for switches: devices that answer
+// sysDescr and pass checkSwitch. SNMP devices that are no switches (access
+// points, firewalls, hypervisors) are recorded in skips. For small subnets
+// (/22 or less = ≤1022 hosts), scans all IPs. For large subnets, only
+// probes IPs known from ARP cache.
+func probeSubnetForSwitches(snmpObj *SNMPObject, subnet SubnetInfo, skips *switchSkips) []string {
 	var newSwitchIPs []string
 
 	// Get existing known IPs from collectedData
@@ -872,11 +874,18 @@ func probeSubnetForSwitches(snmpObj *SNMPObject, subnet SubnetInfo) []string {
 			continue
 		}
 		// Quick SNMP probe: request sysDescr via walk (1 OID)
-		lines, err := snmpObj.runSNMPWalk(ip, ".1.3.6.1.2.1.1.1.0")
-		if err == nil && len(lines) > 0 {
-			fmt.Printf("✅ [SubnetDisc] New SNMP device found: %s — adding to scan list\n", ip)
-			newSwitchIPs = append(newSwitchIPs, ip)
+		lines, err := snmpObj.runSNMPWalk(ip, oidSysDescr)
+		if err != nil || len(lines) == 0 {
+			continue
 		}
+		// An SNMP device: a switch only with a switch MIB
+		check := snmpObj.checkSwitch(ip)
+		if !check.isSwitch() {
+			skips.add(check)
+			continue
+		}
+		fmt.Printf("✅ [SubnetDisc] New switch found: %s (%s) — adding to scan list\n", ip, check.switchMIBs)
+		newSwitchIPs = append(newSwitchIPs, ip)
 	}
 	return newSwitchIPs
 }
@@ -936,9 +945,14 @@ func generateSubnetIPs(net string, prefix int) []string {
 	return ips
 }
 
-// RunSubnetDiscovery discovers new SNMP switches from gateway subnets
-// and adds them to swich_ips for future scanning
-func RunSubnetDiscovery() {
+// RunSubnetDiscovery discovers new switches in the gateway's subnets and
+// appends them to swich_ips for future scanning. Only devices that pass
+// checkSwitch are added (2026-10-22: 47 SNMP devices, nearly all access
+// points, were appended once the gateway answered SNMP); one line names
+// the SNMP devices skipped. swich_ips is the owner's configuration:
+// entries are only ever appended (appendSwitchIP, which skips an IP that is
+// listed already), never removed or rewritten. Returns the IPs appended.
+func RunSubnetDiscovery() []string {
 	snmpObj := &SNMPObject{
 		Community: "public",
 		Port:      161,
@@ -948,36 +962,34 @@ func RunSubnetDiscovery() {
 
 	subnets := discoverGatewaySubnets(snmpObj, gatewayIP)
 	if len(subnets) == 0 {
-		return
+		return nil
 	}
 
+	skips := &switchSkips{}
 	var allNew []string
 	for _, s := range subnets {
 		if s.Prefix < 16 {
 			continue // skip /8, /12 etc — too large, no use
 		}
-		new := probeSubnetForSwitches(snmpObj, s)
+		new := probeSubnetForSwitches(snmpObj, s, skips)
 		allNew = append(allNew, new...)
 	}
+	skips.print("SubnetDisc")
 
 	if len(allNew) == 0 {
-		fmt.Println("📡 [SubnetDisc] No new SNMP devices found in gateway subnets")
-		return
+		fmt.Println("📡 [SubnetDisc] No new switches found in gateway subnets")
+		return nil
 	}
 
 	// Append to swich_ips
-	f, err := os.OpenFile("swich_ips", os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Printf("⚠️ [SubnetDisc] Cannot open swich_ips: %v\n", err)
-		return
-	}
-	defer f.Close()
-	added := 0
+	var added []string
 	for _, ip := range allNew {
-		fmt.Fprintf(f, "%s\n", ip)
-		added++
+		if appendSwitchIP(ip) {
+			added = append(added, ip)
+		}
 	}
-	fmt.Printf("✅ [SubnetDisc] Added %d new devices to swich_ips\n", added)
+	fmt.Printf("✅ [SubnetDisc] Added %d new switches to swich_ips\n", len(added))
+	return added
 }
 
 // ─── Graph Enrichment ──────────────────────────────────────────────────────────
