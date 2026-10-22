@@ -49,6 +49,7 @@
     "ports: hostile port names are text in the badge and its tooltip",
     "ports: a bracket that is no marker stays in the port name, and an entity in a port name is shown as it is",
     "ports: a MAC-REF link names the far switch's port (from its FDB) after the \"|\", as an LLDP link does",
+    "ports: a filtered-out switch with a hostile name is text in the badge of the device below it",
     "ports: the device search matches both ports of the link to the parent, with their markers",
     "fixture: no router and no core: the root is the switch with the most links",
     "fixture: every device appears once",

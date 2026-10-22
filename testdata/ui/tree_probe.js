@@ -356,11 +356,13 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
 // link whose traffic refresh dropped its '|'; a MAC-REF link with the far
 // switch's port from its FDB, after a traffic refresh; an LLDP link from
 // the child that names no port of the parent's; an FDB port with its VLAN;
-// a hub; a pair linked from both sides; hostile port names.
+// a hub; a pair linked from both sides; hostile port names; a switch with a
+// device below it and a hostile name.
 const PA = '4c:ae:a3:8d:ee:c9', PB = '88:22:5b:88:e2:40', PC = 'aa:00:00:00:01:03', PD = 'aa:00:00:00:01:04';
 const PE = '00:1b:21:00:01:05', PF = 'aa:00:00:00:01:06', PG = `hub-${PA}-p40`;
 const PM1 = '00:1b:21:00:01:41', PM2 = '00:1b:21:00:01:42', PX = 'aa:bb:cc:00:01:66', PX3 = 'aa:bb:cc:00:01:67';
-const PK = 'aa:00:00:00:01:0a';
+const PK = 'aa:00:00:00:01:0a', PH = 'aa:00:00:00:01:08', PHE = '00:1b:21:00:01:09';
+const XSW = '<img src=x onerror=alert(4)>';
 function portGraph() {
   return {
     core: PA,
@@ -377,6 +379,8 @@ function portGraph() {
       node(PX, 'endpoint', '[LLDP-EP] evil\n10.1.0.66'),
       node(PX3, 'endpoint', '[LLDP-EP] odd\n10.1.0.67'),
       node(PK, 'switch', 'sw-k\n10.1.0.10'),
+      node(PH, 'switch', `${XSW}\n10.1.0.8`),
+      node(PHE, 'endpoint', '[ENDPOINT] Intel\n10.1.0.9'),
     ],
     links: [
       link(PB, PA, '1/1/28 ↓40M ↑399M|TGE1/0/51'),
@@ -391,6 +395,8 @@ function portGraph() {
       link(PA, PX, '<b>GE1/0/31</b> [T] 1G ↓1M ↑2M|"><img src=x onerror=alert(3)>'),
       link(PA, PX3, 'GE1/0/32 [V1"2] 1G|eth0 [x]&amp;'),
       link(PA, PK, 'GE1/0/34 [MAC-REF] ↓1M ↑2M|Eth1/0/24'),
+      link(PA, PH, 'GE1/0/33 [T] 1G|GE1/0/48'),
+      link(PH, PHE, 'GE1/0/3 [V10]|'),
     ],
   };
 }
@@ -466,6 +472,18 @@ function portGraph() {
   check('ports: a MAC-REF link names the far switch\'s port (from its FDB) after the "|", as an LLDP link does',
     at(PK).row.port === 'GE1/0/34 [MAC-REF] ⇄ Eth1/0/24' && at(PK).row.portHTML === `GE1/0/34 ${mark('[MAC-REF]')} ⇄ Eth1/0/24` &&
     at(PK).row.portTitle === 'HPE (172.20.254.202) GE1/0/34 ⇄ sw-k (10.1.0.10) Eth1/0/24\nMAC-REF link\nGE1/0/34: ↓1M ↑2M', at(PK).row);
+
+  // A switch with a device below it and a hostile name, filtered out: its
+  // name goes into the badge of the device below it, in the badge's text
+  // (treePortHTML's named switch) as well as in its tooltip, as text.
+  const swOut = T.treeProject(sp, shownBy(filterable.filter(g => g !== 'switch')), {});
+  const below = rows(swOut).find(r => r.row.id === PHE);
+  check('ports: a filtered-out switch with a hostile name is text in the badge of the device below it',
+    safeTree(swOut).length === 0 && !rows(swOut).some(r => r.json.text.includes('<img')) && below.parent === null &&
+    below.row.port === `${XSW} (10.1.0.8) GE1/0/3 [V10] ⇄ ?` &&
+    below.row.portHTML.startsWith('&lt;img src=x onerror=alert(4)&gt; (10.1.0.8) GE1/0/3 ') &&
+    below.row.portTitle === `${XSW} (10.1.0.8) GE1/0/3 ⇄ Intel (10.1.0.9) ?\n? = port unknown` &&
+    below.row.title.endsWith(`\nplugged into ${XSW} (10.1.0.8) GE1/0/3`), [safeTree(swOut), below && below.row]);
   check('ports: the device search matches both ports of the link to the parent, with their markers',
     T.treeSearchMatch('1/1/28', at(PB).json) && T.treeSearchMatch('TGE1/0/51', at(PB).json) && T.treeSearchMatch('[v1500]', at(PE).json) &&
     T.treeSearchMatch('mac-ref', at(PC).json) && !T.treeSearchMatch('↓40m', at(PB).json), [at(PB).json.data.q]);
