@@ -1403,6 +1403,21 @@ button:active {
     font-size: 11px;
 }
 
+/* In the port badge "<parent port> ⇄ <device port>" (tree.js treePortHTML):
+   a port's markers ([T], [V1500], [MAC-REF]) are small muted tags, and a
+   port the link does not name is a muted "?" */
+.tv-mark {
+    padding: 0 3px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #8a9bae;
+    font-size: 9px;
+}
+
+.tv-unknown {
+    color: #78909C;
+}
+
 .tv-count {
     padding: 0 6px;
     border-radius: 8px;
