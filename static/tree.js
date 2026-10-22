@@ -69,10 +69,12 @@ function treeLinkEnd(end) {
 // speed and the traffic: 'TGE1/0/52 [T] 10G ↓13M ↑29M' -> port 'TGE1/0/52',
 // marks ['[T]'], rate '10G ↓13M ↑29M'. A link with nothing on the target
 // side loses its '|' when its traffic is refreshed, so it is all source
-// side: 'TGE1/0/52 [MAC-REF] ↓635M ↑153M'. The target side is the port the
-// neighbour reported, as it is, or nothing (a MAC-REF or FDB link, an LLDP
-// neighbour that sent no port name); the 'Hub' of a switch->hub link
-// ('GE1/0/8|Hub') is a placeholder, not a port.
+// side: 'TGE1/0/52 [MAC-REF] ↓635M ↑153M'. The target side is the far port,
+// as it is: the port the LLDP neighbour reported (or the neighbour's own
+// view of the link named), the far switch's port toward the source from its
+// forwarding table on a MAC-REF link ('TGE1/0/52 [MAC-REF] ↓635M
+// ↑153M|GE1/0/48'), or nothing (an FDB link, a far port nothing names); the
+// 'Hub' of a switch->hub link ('GE1/0/8|Hub') is a placeholder, not a port.
 function treeLinkSide(text, own) {
     let s = text === undefined || text === null ? '' : String(text).trim();
     const side = { port: '', marks: [], rate: '', own, hub: s === 'Hub' };
@@ -116,9 +118,10 @@ function treeBetterSide(a, b) {
 // treeLinkKind tells how the scanner found a link, from the two sides of
 // its label (near the source side, far the target side), or '' when the
 // label does not tell. 'MAC-REF': its marker, a switch whose MAC the
-// forwarding table learned on the port. 'LLDP': the neighbour's port is
-// named, or the switch's port has its speed; the scanner labels no other
-// link with either. 'FDB': a hub, the MACs the forwarding table learned on
+// forwarding table learned on the port (told first: its far port can be
+// named too). 'LLDP': the neighbour's port is named, or the switch's port
+// has its speed; the scanner labels no other link without the MAC-REF
+// marker with either. 'FDB': a hub, the MACs the forwarding table learned on
 // one port. A port alone ('GE1/0/5 [V10]|') is not told: it is a MAC the
 // forwarding table learned, or an LLDP neighbour that sent no port name on
 // a port whose speed the switch does not report.

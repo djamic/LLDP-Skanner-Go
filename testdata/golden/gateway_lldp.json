@@ -34,13 +34,13 @@
   "router_links": {
     "with_lldp": [
       {"source": "4c:ae:a3:8d:ee:c9", "target": "00:0c:29:98:7b:c2", "label": "TGE1/0/52 [MAC-REF]|", "sourceLabel": "TGE1/0/52 [MAC-REF]"},
-      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|", "sourceLabel": "TGE1/0/52 [T] 10G"},
+      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|LAN", "sourceLabel": "TGE1/0/52 [T] 10G", "targetLabel": "LAN"},
       {"source": "68:cc:ae:96:e6:08", "target": "4c:ae:a3:8e:05:89", "label": "mgmt|GE1/0/47", "sourceLabel": "mgmt", "targetLabel": "GE1/0/47"},
       {"source": "68:cc:ae:96:e6:08", "target": "88:22:5b:88:e2:40", "label": "x8|1/1/27", "sourceLabel": "x8", "targetLabel": "1/1/27"}
     ],
     "without_lldp": [
       {"source": "4c:ae:a3:8d:ee:c9", "target": "00:0c:29:98:7b:c2", "label": "TGE1/0/52 [MAC-REF]|", "sourceLabel": "TGE1/0/52 [MAC-REF]"},
-      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|", "sourceLabel": "TGE1/0/52 [T] 10G"}
+      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|LAN", "sourceLabel": "TGE1/0/52 [T] 10G", "targetLabel": "LAN"}
     ]
   }
 }

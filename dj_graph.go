@@ -169,6 +169,21 @@ func (g *DJGraph) AddEdge(source, target, label string) (bool, error) {
 	return true, nil
 }
 
+// FillTargetPort names the target's port on the edge source -> target: a
+// label "<source side>|" whose target side is empty gets port there
+// ("Eth1/0/28 1G|" becomes "Eth1/0/28 1G|TGE1/0/50"). A known port is
+// never overwritten, and a label without the "|" of a link label is left
+// alone. It reports whether the label changed.
+func (g *DJGraph) FillTargetPort(source, target, port string) bool {
+	label := g.Edges[source][target]
+	near, far, isLink := strings.Cut(label, "|")
+	if label == "" || !isLink || strings.TrimSpace(far) != "" || strings.TrimSpace(port) == "" {
+		return false
+	}
+	g.Edges[source][target] = near + "|" + port
+	return true
+}
+
 // GetEdge checks if there is a connection between two nodes
 func (g *DJGraph) GetEdge(a, b string) bool {
 	return (g.Edges[a] != nil && g.Edges[a][b] != "") ||

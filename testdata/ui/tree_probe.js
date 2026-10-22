@@ -353,12 +353,14 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
 // The port badge on links as /api/graph has them (labels of the live graph
 // of 2026-10-22): 172.20.230.253 wrote its link to 172.20.254.202, so the
 // parent is the target and the traffic is on the child's port; a MAC-REF
-// link whose traffic refresh dropped its '|'; an LLDP link from the child
-// that names no port of the parent's; an FDB port with its VLAN; a hub; a
-// pair linked from both sides; hostile port names.
+// link whose traffic refresh dropped its '|'; a MAC-REF link with the far
+// switch's port from its FDB, after a traffic refresh; an LLDP link from
+// the child that names no port of the parent's; an FDB port with its VLAN;
+// a hub; a pair linked from both sides; hostile port names.
 const PA = '4c:ae:a3:8d:ee:c9', PB = '88:22:5b:88:e2:40', PC = 'aa:00:00:00:01:03', PD = 'aa:00:00:00:01:04';
 const PE = '00:1b:21:00:01:05', PF = 'aa:00:00:00:01:06', PG = `hub-${PA}-p40`;
 const PM1 = '00:1b:21:00:01:41', PM2 = '00:1b:21:00:01:42', PX = 'aa:bb:cc:00:01:66', PX3 = 'aa:bb:cc:00:01:67';
+const PK = 'aa:00:00:00:01:0a';
 function portGraph() {
   return {
     core: PA,
@@ -374,6 +376,7 @@ function portGraph() {
       node(PM2, 'endpoint', '[ENDPOINT] HP\n10.1.0.42'),
       node(PX, 'endpoint', '[LLDP-EP] evil\n10.1.0.66'),
       node(PX3, 'endpoint', '[LLDP-EP] odd\n10.1.0.67'),
+      node(PK, 'switch', 'sw-k\n10.1.0.10'),
     ],
     links: [
       link(PB, PA, '1/1/28 ↓40M ↑399M|TGE1/0/51'),
@@ -387,6 +390,7 @@ function portGraph() {
       link(PG, PM2, ''),
       link(PA, PX, '<b>GE1/0/31</b> [T] 1G ↓1M ↑2M|"><img src=x onerror=alert(3)>'),
       link(PA, PX3, 'GE1/0/32 [V1"2] 1G|eth0 [x]&amp;'),
+      link(PA, PK, 'GE1/0/34 [MAC-REF] ↓1M ↑2M|Eth1/0/24'),
     ],
   };
 }
@@ -459,6 +463,9 @@ function portGraph() {
     [safeTree(tree), at(PX).row]);
   check('ports: a bracket that is no marker stays in the port name, and an entity in a port name is shown as it is',
     at(PX3).row.port === 'GE1/0/32 [V1"2] ⇄ eth0 [x]&amp;' && at(PX3).row.portHTML === 'GE1/0/32 [V1&quot;2] ⇄ eth0 [x]&amp;amp;', at(PX3).row);
+  check('ports: a MAC-REF link names the far switch\'s port (from its FDB) after the "|", as an LLDP link does',
+    at(PK).row.port === 'GE1/0/34 [MAC-REF] ⇄ Eth1/0/24' && at(PK).row.portHTML === `GE1/0/34 ${mark('[MAC-REF]')} ⇄ Eth1/0/24` &&
+    at(PK).row.portTitle === 'HPE (172.20.254.202) GE1/0/34 ⇄ sw-k (10.1.0.10) Eth1/0/24\nMAC-REF link\nGE1/0/34: ↓1M ↑2M', at(PK).row);
   check('ports: the device search matches both ports of the link to the parent, with their markers',
     T.treeSearchMatch('1/1/28', at(PB).json) && T.treeSearchMatch('TGE1/0/51', at(PB).json) && T.treeSearchMatch('[v1500]', at(PE).json) &&
     T.treeSearchMatch('mac-ref', at(PC).json) && !T.treeSearchMatch('↓40m', at(PB).json), [at(PB).json.data.q]);

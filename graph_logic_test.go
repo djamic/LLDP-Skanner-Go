@@ -322,10 +322,10 @@ func TestGraphLLDPBuild(t *testing.T) {
 	}
 	src := "4c:ae:a3:06:01:00"
 	checks := []struct{ id, label string }{
-		{"00:1b:21:06:07:01", "GE1/0/7|"},                // F48: the rejected neighbor does not hide it
-		{"00:1b:21:06:02:01", "GE1/0/2 1G|001B21060201"}, // LLDP edge; not a hub member on port 5 (F46)
-		{"00:1b:21:06:05:02", "GE1/0/5|"},                // port 5 is left with one MAC: direct endpoint
-		{"00:50:56:aa:bb:cc", "GE1/0/6|"},                // F47: canonical node id
+		{"00:1b:21:06:07:01", "GE1/0/7|"},    // F48: the rejected neighbor does not hide it
+		{"00:1b:21:06:02:01", "GE1/0/2 1G|"}, // LLDP edge (its MAC port id names no port); not a hub member on port 5 (F46)
+		{"00:1b:21:06:05:02", "GE1/0/5|"},    // port 5 is left with one MAC: direct endpoint
+		{"00:50:56:aa:bb:cc", "GE1/0/6|"},    // F47: canonical node id
 		{"B-318/1", "GE1/0/3 1G|28"},
 		{"172.16.1.15", "GE1/0/4 1G|eth0"},
 	}

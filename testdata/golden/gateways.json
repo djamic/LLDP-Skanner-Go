@@ -21,8 +21,8 @@
       "172.20.0.1"
     ],
     "graph_changes": {
-      "edges_added": ["4c:ae:a3:8d:ee:c9 -> 00:0c:29:98:7b:c2 : \"TGE1/0/52 [MAC-REF]|\"", "4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|\""],
-      "edges_removed": ["4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e5:e8 : \"TGE1/0/52 [T] 10G|\""],
+      "edges_added": ["4c:ae:a3:8d:ee:c9 -> 00:0c:29:98:7b:c2 : \"TGE1/0/52 [MAC-REF]|\"", "4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|LAN\""],
+      "edges_removed": ["4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e5:e8 : \"TGE1/0/52 [T] 10G|LAN\""],
       "nodes_added": ["00:0c:29:98:7b:c2", "68:cc:ae:96:e6:08"],
       "nodes_after": 1030,
       "nodes_before": 1029,
@@ -95,7 +95,7 @@
     ],
     "router_links": [
       {"source": "4c:ae:a3:8d:ee:c9", "target": "00:0c:29:98:7b:c2", "label": "TGE1/0/52 [MAC-REF]|", "sourceLabel": "TGE1/0/52 [MAC-REF]"},
-      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|", "sourceLabel": "TGE1/0/52 [T] 10G"}
+      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|LAN", "sourceLabel": "TGE1/0/52 [T] 10G", "targetLabel": "LAN"}
     ],
     "router_nodes": [
       {"id": "00:0c:29:98:7b:c2", "group": "router", "type": "router", "label": "debian216\n172.20.1.254\n00:0c:29:98:7b:c2", "sysName": "debian216\n172.20.1.254"},
@@ -135,7 +135,7 @@
       "4c:ae:a3:48:00:02 -> 00:0c:29:98:7b:c2 : \"GE1/0/10 [MAC-REF]|\"",
       "4c:ae:a3:48:00:02 -> 4c:ae:a3:48:00:03 : \"TGE1/0/49 [T] 10G|TGE1/0/49\"",
       "4c:ae:a3:48:00:02 -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|LAN\"",
-      "4c:ae:a3:48:00:02 -> 6c:b3:11:48:00:10 : \"GE1/0/10 [T] 1G|6CB311480010\"",
+      "4c:ae:a3:48:00:02 -> 6c:b3:11:48:00:10 : \"GE1/0/10 [T] 1G|\"",
       "4c:ae:a3:48:00:03 -> 00:0c:29:48:07:fd : \"GE1/0/7|\"",
       "4c:ae:a3:48:00:03 -> 00:1b:21:48:05:01 : \"GE1/0/5|\"",
       "4c:ae:a3:48:00:03 -> hyp-4c:ae:a3:48:00:03-ge1_0_7 : \"ge1/0/7\"",

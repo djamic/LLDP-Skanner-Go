@@ -210,11 +210,12 @@ func TestMACRefARPAliasAgents(t *testing.T) {
 		}
 	}
 	if want := []string{
-		aliasAMAC + " -> " + aliasBMAC + ` : "GE1/0/5 [MAC-REF]|"`,
+		aliasAMAC + " -> " + aliasBMAC + ` : "GE1/0/5 [MAC-REF]|GE1/0/52"`,
 		aliasAMAC + " -> " + aliasEMAC + ` : "GE1/0/9 [MAC-REF]|"`,
-		aliasAMAC + " -> " + aliasDMAC + ` : "GE1/0/7 [MAC-REF]|"`,
+		aliasAMAC + " -> " + aliasDMAC + ` : "GE1/0/7 [MAC-REF]|GE1/0/24"`,
 	}; !slices.Equal(macRef, want) {
-		t.Errorf("MAC-REF links:\n%s\nwant\n%s\n(B from A's port 5 with 2 MACs, not from E's 30-MAC uplink; D's uplink has two switches)",
+		t.Errorf("MAC-REF links:\n%s\nwant\n%s\n(B from A's port 5 with 2 MACs, not from E's 30-MAC uplink; D's uplink has two switches; "+
+			"the far ports where B and D learn A, none on E, which does not)",
 			strings.Join(macRef, "\n"), strings.Join(want, "\n"))
 	}
 	for _, mac := range []string{aliasAVLAN, aliasBVLAN, aliasDVLAN, aliasEVLAN} {
@@ -298,10 +299,10 @@ func TestMACRefPortChoice(t *testing.T) {
 				MACTable:  macEntries(2, vlanB)},
 			swB: dev(swB, macB), swD: dev(swD, macD),
 		}, nil},
-		{"each side picks the other: the first in IP order draws the link", map[string]*DeviceData{
+		{"each side picks the other: the first in IP order draws the link, with the other's port", map[string]*DeviceData{
 			swB: dev(swB, macB, macEntries(9, vlanA)),
 			swA: dev(swA, macA, macEntries(2, vlanB)),
-		}, []string{macA + " -> " + macB + ` : "GE1/0/2 [MAC-REF]|"`}},
+		}, []string{macA + " -> " + macB + ` : "GE1/0/2 [MAC-REF]|GE1/0/9"`}},
 	} {
 		if got := build(c.devices); !slices.Equal(got, c.want) {
 			t.Errorf("%s: links %q, want %q", c.name, got, c.want)
@@ -324,7 +325,9 @@ func TestMACRefPortChoice(t *testing.T) {
 // 6300, 172.20.230.47 Eth1/0/25 172.20.230.46, 172.20.230.83 Eth1/0/2
 // 172.20.230.2) or other switches too. Its upstream is the Aruba's port
 // 1/1/1, and the saved data has no FDB of the Aruba; since LLDP is on at
-// .76, LLDP links it there (TestFixtureLLDPOnDot76).
+// .76, LLDP links it there (TestFixtureLLDPOnDot76). The alias changes one
+// label: .77 learns it on Ethernet1/0/24, so the MAC-REF link .76 -> .77
+// gets that far port (macRefFarPort; the port LLDP names since).
 func TestFixtureSwitchAliases(t *testing.T) {
 	const dot76, dot77, dot76VLAN = "4c:ae:a3:8d:ec:c1", "f8:f0:82:d8:62:67", "4c:ae:a3:8d:ec:cb"
 	g := buildFixtureGraph(t)
@@ -367,8 +370,11 @@ func TestFixtureSwitchAliases(t *testing.T) {
 	if !slices.Equal(switches, []string{dot77}) {
 		t.Errorf("with the live cache .76 is linked to the switches %v, want only .77", switches)
 	}
-	if baseLinks, liveLinks := graphEdgeLines(g), graphEdgeLines(live); !slices.Equal(baseLinks, liveLinks) {
-		t.Errorf("the alias of .76 changes links: -%v +%v", sortedMinus(baseLinks, liveLinks), sortedMinus(liveLinks, baseLinks))
+	baseLinks, liveLinks := graphEdgeLines(g), graphEdgeLines(live)
+	wantRemoved := []string{dot76 + " -> " + dot77 + ` : "GE1/0/48 [MAC-REF]|"`}
+	wantAdded := []string{dot76 + " -> " + dot77 + ` : "GE1/0/48 [MAC-REF]|Eth1/0/24"`}
+	if removed, added := sortedMinus(baseLinks, liveLinks), sortedMinus(liveLinks, baseLinks); !slices.Equal(removed, wantRemoved) || !slices.Equal(added, wantAdded) {
+		t.Errorf("the alias of .76 changes links -%v +%v, want -%v +%v", removed, added, wantRemoved, wantAdded)
 	}
 }
 
@@ -384,7 +390,10 @@ func TestFixtureSwitchAliases(t *testing.T) {
 // LLDP neighbor is .77), and nothing else changes: no node, and no other
 // switch is linked to .76 or .77. The island of .76 and .77 joins the
 // Aruba's component, as in the live graph since then: the MAC-REF link
-// .76 -> .77 is drawn only while LLDP is off.
+// .76 -> .77 is drawn only while LLDP is off. Its far port, read from .77's
+// FDB (where .77 learns .76's VLAN MAC, macRefFarPort), is Eth1/0/24, the
+// port LLDP names; the LLDP link takes it from .76's row (port id
+// "Ethernet1/0/24", description `""`).
 func TestFixtureLLDPOnDot76(t *testing.T) {
 	const dot76, dot77, aruba = "4c:ae:a3:8d:ec:c1", "f8:f0:82:d8:62:67", "88:22:5b:88:e2:40"
 	const hpe = "HPE Comware Platform Software, Software Version 7.1.070, Release 3506P02"
@@ -415,10 +424,10 @@ func TestFixtureLLDPOnDot76(t *testing.T) {
 	on := buildGraphFromSnapshot(snapshot)
 
 	baseLinks, onLinks := graphEdgeLines(base), graphEdgeLines(on)
-	wantRemoved := []string{dot76 + " -> " + dot77 + ` : "GE1/0/48 [MAC-REF]|"`}
+	wantRemoved := []string{dot76 + " -> " + dot77 + ` : "GE1/0/48 [MAC-REF]|Eth1/0/24"`}
 	wantAdded := []string{
 		dot76 + " -> " + aruba + ` : "TGE1/0/52 [T] 4G|BStudentofis"`,
-		dot76 + " -> " + dot77 + ` : "GE1/0/48 [T] 1G|"`,
+		dot76 + " -> " + dot77 + ` : "GE1/0/48 [T] 1G|Eth1/0/24"`,
 	}
 	if removed, added := sortedMinus(baseLinks, onLinks), sortedMinus(onLinks, baseLinks); !slices.Equal(removed, wantRemoved) || !slices.Equal(added, wantAdded) {
 		t.Errorf("LLDP on .76 changes the links\n -%q\n +%q\nwant\n -%q\n +%q", removed, added, wantRemoved, wantAdded)

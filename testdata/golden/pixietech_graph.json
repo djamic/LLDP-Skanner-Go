@@ -8,7 +8,7 @@
       {"source": "58:94:80:01:01:27", "target": "9c:05:d6:31:8d:59", "label": "GigaEth0/6 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/6 [V1500] 1G", "targetLabel": "eth0"},
       {"source": "58:94:80:01:01:27", "target": "f4:e2:c6:f7:1f:c1", "label": "GigaEth0/3 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/3 [V1500] 1G", "targetLabel": "eth0"},
       {"source": "58:94:80:01:01:27", "target": "f4:e2:c6:f7:23:81", "label": "GigaEth0/2 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/2 [V1500] 1G", "targetLabel": "eth0"},
-      {"source": "58:94:80:01:01:27", "target": "f8:f0:82:d1:67:5e", "label": "GigaEth0/28 [T] 1G|", "sourceLabel": "GigaEth0/28 [T] 1G"}
+      {"source": "58:94:80:01:01:27", "target": "f8:f0:82:d1:67:5e", "label": "GigaEth0/28 [T] 1G|Eth1/0/24", "sourceLabel": "GigaEth0/28 [T] 1G", "targetLabel": "Eth1/0/24"}
     ],
     "nodes": [
       {"id": "58:94:80:00:f7:a3", "group": "switch", "type": "switch", "label": "\n172.20.230.40\n58:94:80:00:f7:a3", "sysName": "\n172.20.230.40"},
@@ -44,7 +44,7 @@
       "58:94:80:01:01:27 -> 9c:05:d6:31:8d:59 : \"GigaEth0/6 [V1500] 1G|eth0\"",
       "58:94:80:01:01:27 -> f4:e2:c6:f7:1f:c1 : \"GigaEth0/3 [V1500] 1G|eth0\"",
       "58:94:80:01:01:27 -> f4:e2:c6:f7:23:81 : \"GigaEth0/2 [V1500] 1G|eth0\"",
-      "58:94:80:01:01:27 -> f8:f0:82:d1:67:5e : \"GigaEth0/28 [T] 1G|\""
+      "58:94:80:01:01:27 -> f8:f0:82:d1:67:5e : \"GigaEth0/28 [T] 1G|Eth1/0/24\""
     ],
     "edges_removed": null,
     "nodes_added": [

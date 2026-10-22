@@ -222,7 +222,7 @@ func TestGoldenPixieGraph(t *testing.T) {
 
 	for _, c := range []struct{ a, b, label string }{
 		{pixieAMAC, pixieBMAC, "GigaEth0/25 [T] 1G|GigaEth0/27"}, // .40 port 25 - .44 Gig0/27
-		{pixieBMAC, snrMAC, "GigaEth0/28 [T] 1G|"},               // .44 port 28 - SNR Ethernet1/0/24 (its port description is "")
+		{pixieBMAC, snrMAC, "GigaEth0/28 [T] 1G|Eth1/0/24"},      // .44 port 28 - SNR Ethernet1/0/24 (its port description is "": the port id names it)
 		{pixieAMAC, "ac:8b:a9:70:a9:66", "GigaEth0/1 [V1500] 1G|eth0"},
 		{pixieBMAC, "f4:e2:c6:f7:23:81", "GigaEth0/2 [V1500] 1G|eth0"},
 	} {

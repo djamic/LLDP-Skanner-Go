@@ -978,8 +978,15 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 	}
 	globalMACtoIPMutex.RUnlock()
 
-	// Add LLDP neighbors as edges
+	// Add LLDP neighbors as edges. rowsTo counts the accepted rows toward
+	// each target (two rows: two links to it, lldpReverseFarPort)
 	logDebug("  Found %d LLDP neighbors", len(data.Neighbors))
+	rowsTo := make(map[string]int)
+	for _, n := range data.Neighbors {
+		if target, _, ok := graphLLDPNeighborTarget(data, n); ok {
+			rowsTo[target]++
+		}
+	}
 	for _, neighbor := range data.Neighbors {
 		// Determine Target ID - prefer MAC address for uniqueness; skip
 		// garbage targets and NULL0 ports (before the node is made, so no
@@ -1039,10 +1046,15 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 		}
 		label := fmt.Sprintf("%s|%s", localPortLabel, normalizePortName(remotePort))
 
-		// Add Edge (Directional: Source -> Target)
+		// Add Edge (Directional: Source -> Target). When the target drew the
+		// link from its own view first and could not name this switch's
+		// port, this switch's view names it (lldpReverseFarPort)
 		added, _ := graph.AddEdge(srcID, targetID, label)
 		if added {
 			logDebug("       [NEW EDGE] Added connection: %s -> %s (Label: %s)", srcID, targetID, label)
+		} else if port := lldpReverseFarPort(graph, data, srcID, targetID, neighbor, rowsTo[targetID]); port != "" &&
+			graph.FillTargetPort(targetID, srcID, port) {
+			logDebug("       [FAR PORT] %s -> %s: this switch's own port %s", targetID, srcID, port)
 		} else {
 			logDebug("       [DUP EDGE] Edge already exists: %s -> %s", srcID, targetID)
 		}
@@ -1147,28 +1159,93 @@ func graphAddLLDPEndpoint(graph *DJGraph, targetID, displayName string, neighbor
 }
 
 // lldpRemotePortName is the far end's port in an LLDP link label (before
-// normalizePortName): the port description, else the port id; a name that
-// is the neighbor's sysName gives the port id, or "Uplink".
+// normalizePortName): the port description when it has text, else the port
+// id when it names a port (lldpPortIDName), else "": the far port is
+// unknown, and no name is made up for it (it used to be "Uplink" when the
+// description was the neighbor's sysName and the port id empty). Both come
+// as net-snmp printed them, quoted, and a description that is only quotes
+// or blanks has no text: the SNR switches (f8:f0:82) send an empty one as
+// `""`, so 172.20.230.51 sees 172.20.230.254 with lldpRemPortDesc `""` and
+// lldpRemPortId "Ethernet1/0/10", and the far port used to stay empty. A
+// description or port id that is the neighbor's sysName names no port.
 func lldpRemotePortName(neighbor LLDPNeighbor) string {
-	remotePort := neighbor.RemPortDesc
-
-	// Fallback logic for Remote Port
-	// 1. If Desc is empty, use PortID
-	if remotePort == "" {
-		remotePort = neighbor.RemPortId
+	sysName := strings.TrimSpace(neighbor.RemSysName)
+	if desc := cleanSNMPValue(neighbor.RemPortDesc); desc != "" && desc != sysName {
+		return desc
 	}
+	if id := lldpPortIDName(neighbor); id != "" && id != sysName {
+		return id
+	}
+	return ""
+}
 
-	// 2. sanity check: if Port Name equals SysName, it's likely invalid/redundant
-	if remotePort == neighbor.RemSysName {
-		// If PortId is different, try that
-		if neighbor.RemPortId != "" && neighbor.RemPortId != neighbor.RemSysName {
-			remotePort = neighbor.RemPortId
-		} else {
-			// Last resort: "Uplink" or generic
-			remotePort = "Uplink"
+// lldpPortIDName is the port id of an LLDP neighbor when it names a port,
+// else "". The port id subtype tells: an interfaceAlias (1, the FortiGate's
+// "LAN"), portComponent (2) or interfaceName (5, "Ethernet1/0/10") is a
+// name, and so is a local id (7, or no subtype) that spells no MAC (the SNR
+// S2985G-24TC switches send their port number, "28"). A macAddress (3),
+// networkAddress (4) or agentCircuitId (6) id is none, whatever its text:
+// the PCs, phones and access points send their MAC there ("48 F3 17 07 58
+// 7F", "00-e0-1a-ae-03-75", "AC8B.A970.A966", or the 6 raw bytes as a
+// STRING), and a MAC never becomes a port name.
+func lldpPortIDName(n LLDPNeighbor) string {
+	switch n.RemPortIdSubtype {
+	case 3, 4, 6:
+		return ""
+	}
+	id := cleanSNMPValue(n.RemPortId)
+	if id == "" || !isPrintableString(id) || canonicalMAC(id) != "" {
+		return ""
+	}
+	return id
+}
+
+// lldpReverseFarPort is the port of this switch (data, node srcID) that
+// names the far end of the link target drew from its own LLDP view before
+// (the edge target -> srcID with the label "<target's port ...>|", target's
+// neighbor row named no port of this switch): the interface of the local
+// port of n, this switch's row toward target. The row must fit the link:
+// when it names target's port (its far port or its port id) that is the
+// port the label starts with (lldpSamePort), and when this switch has two
+// or more rows toward target (rows: two links) it must name it. "" when no
+// such edge waits for its far port, the row does not fit, or the interface
+// table does not name the local port (no "Port 28" placeholder).
+// buildGraphEdges visits the switches in IP order and the result depends on
+// the snapshot only.
+func lldpReverseFarPort(graph *DJGraph, data *DeviceData, srcID, target string, n LLDPNeighbor, rows int) string {
+	near, far, isLink := strings.Cut(graph.Edges[target][srcID], "|")
+	nearPort := strings.Fields(near)
+	if !isLink || strings.TrimSpace(far) != "" || len(nearPort) == 0 {
+		return ""
+	}
+	named, fits := false, false
+	for _, reported := range []string{lldpRemotePortName(n), lldpPortIDName(n)} {
+		if reported = normalizePortName(reported); reported != "" {
+			named = true
+			fits = fits || lldpSamePort(nearPort[0], reported)
 		}
 	}
-	return remotePort
+	if named && !fits || !named && rows != 1 {
+		return ""
+	}
+	if !slices.ContainsFunc(data.Interfaces, func(i InterfaceData) bool { return i.IfIndex == n.LocalPortNum }) {
+		return ""
+	}
+	return normalizePortName(getLocalPortName(data, n.LocalPortNum))
+}
+
+// lldpSamePort reports whether a switch's own port name and the name a
+// neighbor reported for it (both normalizePortName'd) are one port: equal
+// but for case, or a bare port number that ends the name ("28" is
+// "Eth1/0/28", the SNR S2985G-24TC's local port ids).
+func lldpSamePort(own, reported string) bool {
+	if strings.EqualFold(own, reported) {
+		return true
+	}
+	if reported == "" || strings.Trim(reported, "0123456789") != "" {
+		return false
+	}
+	return strings.HasSuffix(own, "/"+reported)
 }
 
 // fdbPortKind is what the per-port FDB rule (fdbPorts) makes of the MACs a
@@ -2937,7 +3014,9 @@ func switchARPAliases(devices map[string]*DeviceData, chassis map[string]string)
 // or no LLDP between them) through the FDBs: a switch whose own MAC
 // (buildSwitchOwnMACs: its chassis MAC or an ARP alias) another switch learned
 // on a port where no other switch is learned is linked from that port
-// ("GE1/0/48 [MAC-REF]|"). A port where two or more other switches are
+// ("GE1/0/48 [MAC-REF]|Eth1/0/24", with the far switch's own port toward
+// it from its FDB when that tells, macRefFarPort; "GE1/0/48 [MAC-REF]|"
+// when not). A port where two or more other switches are
 // learned is a transit port (an uplink: those switches arrived through
 // further switches); a switch learned there by its chassis MAC and by an
 // alias counts once. A port whose accepted LLDP neighbor is a polled switch
@@ -3049,8 +3128,62 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 			}
 		}
 		portName := normalizePortName(getFDBPortName(srcDevice, c.port))
-		graph.AddEdge(srcID, targetID, fmt.Sprintf("%s [MAC-REF]|", portName))
+		farPort := macRefFarPort(allDevices, deviceIPs, srcID, targetID, switchMACs)
+		graph.AddEdge(srcID, targetID, fmt.Sprintf("%s [MAC-REF]|%s", portName, farPort))
 	}
+}
+
+// macRefFarPort is the far port of the MAC cross-reference link srcID ->
+// targetID: the port of the switch targetID (the first device in IP order
+// with that node id) toward srcID, read from its own FDB, where it learns
+// the own MACs of srcID (switchMACs: the chassis MAC and the ARP aliases).
+// When it learns them on two or more ports, the port toward srcID is the
+// one of those where no other polled switch is learned (a port toward its
+// other neighbors learns those). "" (unknown) when no port or more than one
+// is left, when the switch has no FDB or none that learns srcID, or when
+// its interface table does not name the port; NULL0 ports are no
+// connection.
+func macRefFarPort(allDevices map[string]*DeviceData, deviceIPs []string, srcID, targetID string, switchMACs map[string]string) string {
+	var target *DeviceData
+	for _, ip := range deviceIPs {
+		if d := allDevices[ip]; graphDeviceNodeID(d) == targetID {
+			target = d
+			break
+		}
+	}
+	if target == nil {
+		return ""
+	}
+	toSource := make(map[int]bool)    // the bridge ports that learn an own MAC of srcID
+	otherSwitch := make(map[int]bool) // the bridge ports that learn another switch's
+	for _, e := range target.MACTable {
+		id, isSwitch := switchMACs[usableMAC(e.MACAddress)]
+		switch {
+		case !isSwitch || id == targetID:
+			// no switch MAC, or the target's own
+		case id == srcID:
+			toSource[e.PortNumber] = true
+		default:
+			otherSwitch[e.PortNumber] = true
+		}
+	}
+	var ports []int
+	for _, port := range slices.Sorted(maps.Keys(toSource)) {
+		if name := getFDBPortName(target, port); !isNullInterface(name) && !isNullInterface(normalizePortName(name)) {
+			ports = append(ports, port)
+		}
+	}
+	if len(ports) > 1 {
+		ports = slices.DeleteFunc(ports, func(port int) bool { return otherSwitch[port] })
+	}
+	if len(ports) != 1 {
+		return ""
+	}
+	ifIndex := collectFDBIfIndex(target, ports[0])
+	if !slices.ContainsFunc(target.Interfaces, func(i InterfaceData) bool { return i.IfIndex == ifIndex }) {
+		return ""
+	}
+	return normalizePortName(getLocalPortName(target, ifIndex))
 }
 
 // graphBuildMutex makes snapshot, build and publish in rebuildGraph one step,
