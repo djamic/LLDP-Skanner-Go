@@ -61,17 +61,76 @@ function treeLinkEnd(end) {
     return end !== null && typeof end === 'object' ? String(end.id) : String(end);
 }
 
-// treeLinkPort is the port of nodeId on the link, "" when the label names
-// none. GetGraphData splits "<srcPort>|<dstPort>" into sourceLabel and
-// targetLabel; the 'Hub' of a switch->hub link ('GE1/0/8|Hub') is a
-// placeholder, not a port, and the [MAC-REF] marker and the speed and
-// traffic suffix are dropped as in the info panel:
-// 'TGE1/0/52 [T] 10G ↓13M ↑29M' -> 'TGE1/0/52 [T]'.
-function treeLinkPort(link, nodeId) {
-    const label = treeLinkEnd(link.source) === nodeId ? link.sourceLabel : link.targetLabel;
-    if (!label || label === 'Hub') return '';
-    return String(label).split('[MAC-REF]')[0].replace(/\s+(?:\d+[MGmg]\b|[↓↑]).*$/, '').trim();
+// treeLinkSide reads one side of a link: its port, the port's markers and
+// its speed and traffic. GetGraphData splits a link's label "<source
+// side>|<target side>" into sourceLabel and targetLabel. The source side
+// (own) is written by the switch that found the link: its port, the
+// markers ('[T]' a trunk, '[V1500]' the port's VLAN, '[MAC-REF]'), then the
+// speed and the traffic: 'TGE1/0/52 [T] 10G ↓13M ↑29M' -> port 'TGE1/0/52',
+// marks ['[T]'], rate '10G ↓13M ↑29M'. A link with nothing on the target
+// side loses its '|' when its traffic is refreshed, so it is all source
+// side: 'TGE1/0/52 [MAC-REF] ↓635M ↑153M'. The target side is the port the
+// neighbour reported, as it is, or nothing (a MAC-REF or FDB link, an LLDP
+// neighbour that sent no port name); the 'Hub' of a switch->hub link
+// ('GE1/0/8|Hub') is a placeholder, not a port.
+function treeLinkSide(text, own) {
+    let s = text === undefined || text === null ? '' : String(text).trim();
+    const side = { port: '', marks: [], rate: '', own, hub: s === 'Hub' };
+    if (!s || side.hub) return side;
+    if (own) {
+        const rate = /\s+(?:\d+[MGmg]\b|[↓↑]).*$/.exec(s);
+        if (rate) {
+            side.rate = rate[0].trim();
+            s = s.slice(0, rate.index);
+        }
+        let mark;
+        while ((mark = /\s+(\[[A-Za-z0-9-]+\])$/.exec(s))) {
+            side.marks.unshift(mark[1]);
+            s = s.slice(0, mark.index);
+        }
+    }
+    side.port = s;
+    return side;
 }
+
+// A side of a link that names no port (a device below a hub or a
+// hypervisor has none on the switch port it hangs on).
+const treeNoSide = treeLinkSide('', false);
+
+// treeSideText is a side's port with its markers ('GE1/0/22 [V1620]').
+function treeSideText(side) {
+    return [side.port, ...side.marks].filter(Boolean).join(' ');
+}
+
+// treeBetterSide picks, of two readings of one device's side of a link (a
+// pair linked from both sides), the one that names a port, the device's own
+// switch's first, else the first in text order, so the tree does not depend
+// on the order of the links.
+function treeBetterSide(a, b) {
+    if (!a) return b;
+    if (!a.port !== !b.port) return a.port ? a : b;
+    if (a.own !== b.own) return a.own ? a : b;
+    return `${treeSideText(a)}\n${a.rate}` <= `${treeSideText(b)}\n${b.rate}` ? a : b;
+}
+
+// treeLinkKind tells how the scanner found a link, from the two sides of
+// its label (near the source side, far the target side), or '' when the
+// label does not tell. 'MAC-REF': its marker, a switch whose MAC the
+// forwarding table learned on the port. 'LLDP': the neighbour's port is
+// named, or the switch's port has its speed; the scanner labels no other
+// link with either. 'FDB': a hub, the MACs the forwarding table learned on
+// one port. A port alone ('GE1/0/5 [V10]|') is not told: it is a MAC the
+// forwarding table learned, or an LLDP neighbour that sent no port name on
+// a port whose speed the switch does not report.
+function treeLinkKind(near, far) {
+    if (near.marks.includes('[MAC-REF]')) return 'MAC-REF';
+    if (far.port || /^\d+[MGmg]\b/.test(near.rate)) return 'LLDP';
+    return far.hub ? 'FDB' : '';
+}
+
+// Of the kinds of a pair linked from both sides, the tree names the first:
+// LLDP, MAC-REF, FDB.
+const treeKindRank = { '': 0, 'FDB': 1, 'MAC-REF': 2, 'LLDP': 3 };
 
 // treeNodeIPs: the node's own addresses, the id when it is an IP and then
 // every label line that is an IPv4 address (as app.js uiNodeIPs).
@@ -197,18 +256,21 @@ function treeSpanning(data) {
         });
     });
 
-    // Neighbours with the port of each end; a pair linked twice keeps the
-    // ports either link names.
+    // Neighbours, with one record per pair: each device's side of the link
+    // (treeLinkSide) and how it was found (treeLinkKind). A pair linked from
+    // both sides keeps, for each device, the side that names its port, its
+    // own switch's first (treeBetterSide).
     const adjacency = new Map();
-    const addEdge = (from, to, port, peerPort) => {
-        if (!adjacency.has(from)) adjacency.set(from, new Map());
-        const edges = adjacency.get(from);
-        const e = edges.get(to);
-        if (!e) edges.set(to, { port, peerPort });
-        else {
-            if (!e.port) e.port = port;
-            if (!e.peerPort) e.peerPort = peerPort;
+    const pair = (a, b) => {
+        if (!adjacency.has(a)) adjacency.set(a, new Map());
+        if (!adjacency.has(b)) adjacency.set(b, new Map());
+        let rec = adjacency.get(a).get(b);
+        if (!rec) {
+            rec = { sides: new Map(), kind: '' };
+            adjacency.get(a).set(b, rec);
+            adjacency.get(b).set(a, rec);
         }
+        return rec;
     };
     links.forEach(link => {
         if (!link) return;
@@ -216,9 +278,12 @@ function treeSpanning(data) {
         if (s === t || !infos.has(s) || !infos.has(t)) return;
         infos.get(s).degree++;
         infos.get(t).degree++;
-        const sp = treeLinkPort(link, s), tp = treeLinkPort(link, t);
-        addEdge(s, t, sp, tp);
-        addEdge(t, s, tp, sp);
+        const near = treeLinkSide(link.sourceLabel, true), far = treeLinkSide(link.targetLabel, false);
+        const rec = pair(s, t);
+        rec.sides.set(s, treeBetterSide(rec.sides.get(s), near));
+        rec.sides.set(t, treeBetterSide(rec.sides.get(t), far));
+        const kind = treeLinkKind(near, far);
+        if (treeKindRank[kind] > treeKindRank[rec.kind]) rec.kind = kind;
     });
 
     // Root preference: routers by id, then switches and then the other
@@ -232,8 +297,12 @@ function treeSpanning(data) {
     });
 
     const parent = new Map(), depth = new Map(), children = new Map();
-    const port = new Map(), peerPort = new Map();
-    const attachDevice = new Map(), attachPort = new Map();
+    // link: the link to the parent by its two ends, up the parent's side
+    // and down the device's own, and kind. attach: where the device is
+    // plugged in, the device and the link of the nearest link with a port
+    // on its path from the root (a hub member, a VM behind a vNIC and the
+    // hypervisor node hang on their switch port).
+    const link = new Map(), attachDevice = new Map(), attachLink = new Map();
     const search = (root) => {
         depth.set(root, 0);
         parent.set(root, null);
@@ -246,20 +315,17 @@ function treeSpanning(data) {
             for (const peer of peers) {
                 const v = peer.id;
                 if (depth.has(v)) continue;
-                const e = edges.get(v);
+                const rec = edges.get(v);
+                const l = { up: rec.sides.get(u), down: rec.sides.get(v), kind: rec.kind };
                 depth.set(v, depth.get(u) + 1);
                 parent.set(v, u);
-                port.set(v, e.port);
-                peerPort.set(v, e.peerPort);
-                // Where the device is plugged in: the nearest port on its
-                // path from the root (a hub member, a VM behind a vNIC and
-                // the hypervisor node hang on their switch port).
-                if (e.port) {
+                link.set(v, l);
+                if (l.up.port || l.down.port) {
                     attachDevice.set(v, u);
-                    attachPort.set(v, e.port);
+                    attachLink.set(v, l);
                 } else if (attachDevice.has(u)) {
                     attachDevice.set(v, attachDevice.get(u));
-                    attachPort.set(v, attachPort.get(u));
+                    attachLink.set(v, attachLink.get(u));
                 }
                 kids.push(v);
                 queue.push(v);
@@ -279,7 +345,7 @@ function treeSpanning(data) {
     }
     orphans.sort((a, b) => treeCompareInfo(infos.get(a), infos.get(b)));
 
-    const sp = { infos, root, orphans, parent, depth, children, port, peerPort, attachDevice, attachPort, coreFromServer: core !== null };
+    const sp = { infos, root, orphans, parent, depth, children, link, attachDevice, attachLink, coreFromServer: core !== null };
     infos.forEach(info => {
         info.title = treeTitle(sp, info);
         info.q = treeSearchText(sp, info);
@@ -302,13 +368,14 @@ function treeGroupFilter(enabled, filterable) {
 
 // treeTitle is the tooltip of a row (plain text, escaped when the row is
 // built): name, group and id, IPs, and the link to its parent in the
-// spanning tree with the ports of both ends.
+// spanning tree with the ports of both ends, the parent's first ('?' for a
+// port the link does not name).
 function treeTitle(sp, info) {
     const lines = [info.name, `${info.group} · ${info.id}`];
     if (info.ips.length) lines.push(info.ips.join(', '));
-    const own = sp.port.get(info.id), peer = sp.peerPort.get(info.id), up = sp.parent.get(info.id);
-    if (up !== null && up !== undefined && (own || peer)) {
-        lines.push(`link: ${sp.infos.get(up).label}${own ? ' ' + own : ''} ↔ ${peer || '?'}`);
+    const up = sp.parent.get(info.id), l = sp.link.get(info.id);
+    if (up !== null && up !== undefined && (l.up.port || l.down.port)) {
+        lines.push(`link: ${sp.infos.get(up).label} ${l.up.port || '?'} ⇄ ${l.down.port || '?'}`);
     }
     if (info.node.unreachable) lines.push('unreachable');
     return lines.join('\n');
@@ -316,24 +383,58 @@ function treeTitle(sp, info) {
 
 // treeSearchText is what the device search matches in a row, lower case:
 // id, name, addresses, the label lines (sysName holds the label's lines
-// but the id), group and the port it hangs from.
+// but the id), group and the ports of the link to its parent, with their
+// markers (the port it hangs from and its own).
 function treeSearchText(sp, info) {
-    const n = info.node;
+    const n = info.node, l = sp.link.get(info.id);
     return [info.id, info.name, info.address, info.ips.join(' '), n.hostname, n.sysName || n.label,
-        info.group, sp.port.get(info.id)].filter(Boolean).join('\n').toLowerCase();
+        info.group, l && treeSideText(l.up), l && treeSideText(l.down)].filter(Boolean).join('\n').toLowerCase();
+}
+
+// treePortHTML is the port badge of a row: both ends of the link to its
+// parent, '<parent port> ⇄ <device port>' ('TGE1/0/51 ⇄ 1/1/28'), on
+// whichever side of the link the parent is. A port's markers are small
+// tags ('TGE1/0/52 [T]'), its speed and traffic stay out, and a port the
+// link does not name is a muted '?'. A device that hangs on the link
+// through hidden devices (a VM behind its hypervisor, a hub member, when a
+// filter hides those) has no port of its own on it. named puts the name of
+// the device with the parent's port first: that device is hidden. The
+// badge's tooltip has the link in full: the two devices with their ports,
+// how the link was found (treeLinkKind), the hidden devices it goes
+// through, and the speed and traffic text of a port. Only escaped strings
+// and constants go in.
+function treePortHTML(sp, id, named) {
+    const at = sp.attachDevice.get(id), l = sp.attachLink.get(id);
+    const direct = at === sp.parent.get(id);
+    const up = l.up, down = direct ? l.down : treeNoSide;
+    const via = [];
+    for (let p = sp.parent.get(id); p !== at && p !== null && p !== undefined; p = sp.parent.get(p)) {
+        via.unshift(sp.infos.get(p).label);
+    }
+    const from = sp.infos.get(at).label;
+    const lines = [`${from} ${up.port || '?'} ⇄ ${sp.infos.get(id).label} ${down.port || '?'}`];
+    if (l.kind) lines.push(`${l.kind} link`);
+    if (via.length) lines.push(`via ${via.join(', ')} (filtered out)`);
+    [up, down].forEach(side => { if (side.rate) lines.push(`${side.port}: ${side.rate}`); });
+    if (!up.port || !down.port) lines.push('? = port unknown');
+    const port = (side) => (side.port
+        ? treeEscapeHTML(side.port) + side.marks.map(m => ` <span class="tv-mark">${treeEscapeHTML(m)}</span>`).join('')
+        : '<span class="tv-unknown">?</span>');
+    return `<span class="tv-port" title="${treeEscapeHTML(lines.join('\n'))}">` +
+        `${named ? treeEscapeHTML(from) + ' ' : ''}${port(up)} ⇄ ${port(down)}</span>`;
 }
 
 // treeRowHTML is the text of a jsTree node: the group's colour and icon,
-// the name, the IP or MAC, the port the row hangs from and the number of
+// the name, the IP or MAC, the port badge (treePortHTML) and the number of
 // devices below it, apart by spaces (the row's plain text reads the same).
 // Only escaped strings and constants go in.
-function treeRowHTML(info, color, portText, count, title) {
+function treeRowHTML(info, color, badge, count, title) {
     const unreachable = !!info.node.unreachable;
     const dot = unreachable ? treeUnreachableColor : (typeof color === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(color) ? color : treeDefaultColor);
     const icon = treeOwn(treeGroupIcons, info.group) || treeGroupIcons.unknown;
     const parts = [`<span class="tv-icon">${icon}</span>`, `<span class="tv-name">${treeEscapeHTML(info.name)}</span>`];
     if (info.address) parts.push(`<span class="tv-addr">${treeEscapeHTML(info.address)}</span>`);
-    if (portText) parts.push(`<span class="tv-port">${treeEscapeHTML(portText)}</span>`);
+    if (badge) parts.push(badge);
     if (count) parts.push(treeCountHTML(count));
     return `<span class="tv-row${unreachable ? ' tv-unreachable' : ''}" title="${treeEscapeHTML(title)}">` +
         `<span class="tv-dot" style="background:${dot}"></span>${parts.join(' ')}</span>`;
@@ -354,12 +455,13 @@ function treeCountHTML(count) {
 // (app.js uiGroupShown), a set or array of the groups shown, or null for
 // every node. A hidden node's shown descendants move up to its nearest shown
 // ancestor (to the top level when none is shown), so the tree keeps its
-// shape; children are sorted again where they merge. A row shows the port it
-// hangs from on its shown parent; a device whose port is on a hidden device
-// in between (the hypervisor of a VM, the switch of a top-level device) shows
-// that device's name with the port. Each row with shown devices below it
-// counts them. The "Not connected" folder comes last, when it has shown
-// devices. options.colors maps groups to colours (app.js groupColors).
+// shape; children are sorted again where they merge. A row shows the link to
+// its shown parent, the ports of both ends (treePortHTML); a device plugged
+// into a hidden device (the switch of a top-level device, of a VM whose
+// hypervisor is hidden, ...) shows that device's name with the link. Each
+// row with shown devices below it counts them. The "Not connected" folder
+// comes last, when it has shown devices. options.colors maps groups to
+// colours (app.js groupColors).
 function treeProject(sp, shown, options) {
     const colors = (options && options.colors) || {};
     const isShown = typeof shown === 'function' ? shown : (shown ? treeGroupFilter(shown) : () => true);
@@ -379,20 +481,22 @@ function treeProject(sp, shown, options) {
         let count = 0;
         rows.forEach(r => { count += 1 + r.count; });
 
-        // The port: on the shown parent, or on a hidden device in between,
-        // named; none when it is the port of the parent's own row.
-        let portText = '', title = info.title;
+        // The badge: the link on the shown parent, or on a hidden device in
+        // between, named; none when the device hangs on the link of the
+        // parent's own row (a hub member, a VM).
+        let badge = '', title = info.title;
         const at = sp.attachDevice.get(id);
         if (at !== undefined) {
-            if (at === visibleParent) portText = sp.attachPort.get(id);
-            else if (visibleParent === null || sp.depth.get(at) > sp.depth.get(visibleParent)) {
-                portText = `${sp.infos.get(at).label} ${sp.attachPort.get(id)}`;
-                title += `\nplugged into ${portText}`;
+            const named = at !== visibleParent && (visibleParent === null || sp.depth.get(at) > sp.depth.get(visibleParent));
+            if (at === visibleParent || named) badge = treePortHTML(sp, id, named);
+            if (named) {
+                const port = sp.attachLink.get(id).up.port;
+                title += `\nplugged into ${sp.infos.get(at).label}${port ? ' ' + port : ''}`;
             }
         }
         const json = {
             id: treeSafeId(id),
-            text: treeRowHTML(info, treeOwn(colors, info.group), portText, count, title),
+            text: treeRowHTML(info, treeOwn(colors, info.group), badge, count, title),
             children: rows.map(r => r.json),
             data: { node: id, q: info.q },
         };
