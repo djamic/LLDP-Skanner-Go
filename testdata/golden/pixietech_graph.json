@@ -1,0 +1,61 @@
+{
+  "after_polls": {
+    "links": [
+      {"source": "58:94:80:00:f7:a3", "target": "58:94:80:01:01:27", "label": "GigaEth0/25 [T] 1G|GigaEth0/27", "sourceLabel": "GigaEth0/25 [T] 1G", "targetLabel": "GigaEth0/27"},
+      {"source": "58:94:80:00:f7:a3", "target": "78:45:58:73:0f:69", "label": "GigaEth0/1 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/1 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:00:f7:a3", "target": "ac:8b:a9:70:a9:66", "label": "GigaEth0/1 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/1 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "9c:05:d6:31:6b:ad", "label": "GigaEth0/4 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/4 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "9c:05:d6:31:8d:59", "label": "GigaEth0/6 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/6 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "f4:e2:c6:f7:1f:c1", "label": "GigaEth0/3 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/3 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "f4:e2:c6:f7:23:81", "label": "GigaEth0/2 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/2 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "f8:f0:82:d1:67:5e", "label": "GigaEth0/28 [T] 1G|", "sourceLabel": "GigaEth0/28 [T] 1G"}
+    ],
+    "nodes": [
+      {"id": "58:94:80:00:f7:a3", "group": "switch", "type": "switch", "label": "\n172.20.230.40\n58:94:80:00:f7:a3", "sysName": "\n172.20.230.40"},
+      {"id": "58:94:80:01:01:27", "group": "switch", "type": "switch", "label": "\n172.20.230.44\n58:94:80:01:01:27", "sysName": "\n172.20.230.44"},
+      {"id": "78:45:58:73:0f:69", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal\nUAP-AC-Mesh-Pro, 6.8.2.15592\n172.15.121.114\n78:45:58:73:0f:69", "sysName": "[LLDP-EP] Ubiquiti\nSportzal\nUAP-AC-Mesh-Pro, 6.8.2.15592\n172.15.121.114"},
+      {"id": "9c:05:d6:31:6b:ad", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal4\nU6-Pro, 6.8.2.15592\n172.15.1.71\n9c:05:d6:31:6b:ad", "sysName": "[LLDP-EP] Ubiquiti\nSportzal4\nU6-Pro, 6.8.2.15592\n172.15.1.71"},
+      {"id": "9c:05:d6:31:8d:59", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal3\nU6-Pro, 6.8.2.15592\n172.15.1.70\n9c:05:d6:31:8d:59", "sysName": "[LLDP-EP] Ubiquiti\nSportzal3\nU6-Pro, 6.8.2.15592\n172.15.1.70"},
+      {"id": "ac:8b:a9:70:a9:66", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal\nUAP-AC-Mesh-Pro, 6.8.2.15592\n172.15.121.116\nac:8b:a9:70:a9:66", "sysName": "[LLDP-EP] Ubiquiti\nSportzal\nUAP-AC-Mesh-Pro, 6.8.2.15592\n172.15.121.116"},
+      {"id": "f4:e2:c6:f7:1f:c1", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal1\nU6-Pro, 6.8.2.15592\n172.15.1.68\nf4:e2:c6:f7:1f:c1", "sysName": "[LLDP-EP] Ubiquiti\nSportzal1\nU6-Pro, 6.8.2.15592\n172.15.1.68"},
+      {"id": "f4:e2:c6:f7:23:81", "group": "access_point", "type": "access_point", "label": "[LLDP-EP] Ubiquiti\nSportzal2\nU6-Pro, 6.2.49.14111\n172.15.1.69\nf4:e2:c6:f7:23:81", "sysName": "[LLDP-EP] Ubiquiti\nSportzal2\nU6-Pro, 6.2.49.14111\n172.15.1.69"},
+      {"id": "f8:f0:82:d1:67:5e", "group": "switch", "type": "switch", "label": "SNR-S2995G-24FX\n172.20.230.254\nf8:f0:82:d1:67:5e", "sysName": "SNR-S2995G-24FX\n172.20.230.254"}
+    ]
+  },
+  "analysis_changes": {
+    "health_after": 70,
+    "health_before": 70,
+    "suggestions_added": null,
+    "suggestions_removed": null
+  },
+  "before_polls": {
+    "links": null,
+    "nodes": [
+      {"id": "172.20.230.40", "group": "switch", "type": "switch", "label": "172.20.230.40", "ip": "172.20.230.40"},
+      {"id": "172.20.230.44", "group": "switch", "type": "switch", "label": "172.20.230.44", "ip": "172.20.230.44"}
+    ]
+  },
+  "graph_changes": {
+    "edges_added": [
+      "58:94:80:00:f7:a3 -> 58:94:80:01:01:27 : \"GigaEth0/25 [T] 1G|GigaEth0/27\"",
+      "58:94:80:00:f7:a3 -> 78:45:58:73:0f:69 : \"GigaEth0/1 [V1500] 1G|eth0\"",
+      "58:94:80:00:f7:a3 -> ac:8b:a9:70:a9:66 : \"GigaEth0/1 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> 9c:05:d6:31:6b:ad : \"GigaEth0/4 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> 9c:05:d6:31:8d:59 : \"GigaEth0/6 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> f4:e2:c6:f7:1f:c1 : \"GigaEth0/3 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> f4:e2:c6:f7:23:81 : \"GigaEth0/2 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> f8:f0:82:d1:67:5e : \"GigaEth0/28 [T] 1G|\""
+    ],
+    "edges_removed": null,
+    "nodes_added": [
+      "58:94:80:00:f7:a3",
+      "58:94:80:01:01:27"
+    ],
+    "nodes_after": 1029,
+    "nodes_before": 1029,
+    "nodes_removed": [
+      "172.20.230.40",
+      "172.20.230.44"
+    ]
+  }
+}

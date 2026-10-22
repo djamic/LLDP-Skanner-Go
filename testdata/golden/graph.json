@@ -1,8 +1,8 @@
 {
   "summary": {
     "nodes": 1029,
-    "links": 1026,
-    "edges": 1026,
+    "links": 1025,
+    "edges": 1025,
     "groups": {"access_point": 98, "bmc": 4, "camera": 56, "endpoint": 668, "hub": 33, "hypervisor": 13, "switch": 75, "vm": 65, "wifi_random": 17},
     "unreachable_nodes": 2
   },
@@ -1825,7 +1825,6 @@
     {"source": "f8:f0:82:d8:7d:07", "target": "00:e0:4c:50:dc:d8", "label": "Eth1/0/12|", "sourceLabel": "Eth1/0/12"},
     {"source": "f8:f0:82:d8:7d:07", "target": "00:e2:69:53:7d:eb", "label": "Eth1/0/24 100M|", "sourceLabel": "Eth1/0/24 100M"},
     {"source": "f8:f0:82:d8:7d:07", "target": "48:f3:17:07:56:42", "label": "Eth1/0/9 1G|", "sourceLabel": "Eth1/0/9 1G"},
-    {"source": "f8:f0:82:d8:7d:07", "target": "88:22:5b:88:e2:40", "label": "Eth1/0/25 [MAC-REF]|", "sourceLabel": "Eth1/0/25 [MAC-REF]"},
     {"source": "f8:f0:82:d8:7e:81", "target": "00:4e:35:cb:46:ae", "label": "Eth1/0/25 [V1500] 100M|eth0", "sourceLabel": "Eth1/0/25 [V1500] 100M", "targetLabel": "eth0"},
     {"source": "f8:f0:82:d8:7e:81", "target": "28:87:ba:d5:25:91", "label": "Eth1/0/11 [V1624]|", "sourceLabel": "Eth1/0/11 [V1624]"},
     {"source": "f8:f0:82:d8:7e:81", "target": "70:a7:41:aa:24:11", "label": "Eth1/0/25 [V1500] 100M|eth0", "sourceLabel": "Eth1/0/25 [V1500] 100M", "targetLabel": "eth0"},

@@ -167,10 +167,10 @@ flowchart TD
 |----------|--------|
 | `NewSNMPObject()` | OnSuccess/OnFailure callback'lar bilan SNMP ob'ekt yaratish |
 | `CollectData(ip, sysName)` | To'liq yig'ish zanjiri: `snmpbulkwalk → parse → DeviceData` |
-| `collectLocalChassisID()` | LLDP-MIB `1.0.8802.1.1.2.1.3` dan ChassisID olish |
+| `collectLocalChassisID()` | LLDP-MIB `1.0.8802.1.1.2.1.3` dan ChassisID olish; "No Such Instance" yoki bo'sh javobda ustun (`…3.2`) yana bir marta o'qiladi (PiXiETECH 172.20.230.40/.44), "No Such Object" — yakuniy |
 | `collectInterfaces()` | IF-MIB: ifDescr, ifSpeed, ifOperStatus, ifHCInOctets, ifAlias, ifInErrors |
-| `collectLLDPNeighbors()` | LLDP RemTable: RemChassisId, RemPortId, RemSysName, RemSysDesc, RemMgmtAddr |
-| `collectMACTable()` | BRIDGE-MIB: dot1dTpFdbAddress → MAC + port mapping (dot1dBasePort→ifIndex) |
+| `collectLLDPNeighbors()` | LLDP RemTable: RemChassisId, RemPortId, RemSysName, RemSysDesc, RemMgmtAddr. Indeks: standart 3 qism (TimeMark.LocalPort.RemIndex) yoki PiXiETECH 2 qism (RemIndex.LocalPort; agent bergan lldpRemLocalPortNum/lldpRemIndex ustunlari ustun), ManAddr ham shu 2 qismli shaklda (manzil 2-ustunda) |
+| `collectMACTable()` | BRIDGE-MIB: dot1dTpFdbAddress → MAC + port mapping (dot1dBasePort→ifIndex). Walk `-Cc` bilan (tartibsiz): PiXiETECH FDB'ni hash tartibida beradi, oddiy walk "OID not increasing" bilan 1 kod qaytarib, jadval bo'sh qolardi; OID takrorlansa walk to'xtatiladi |
 | `collectARPTable()` | IP-ARP: ipNetToMediaPhysAddress → MAC↔IP mapping |
 | `collectSTP()` | dot1dStpDesignatedRoot → Root Bridge ID, STP enabled holati |
 | `collectVLAN()` | Q-BRIDGE: dot1qPvid → Port VLAN ID'lar, trunk aniqlash |
@@ -234,7 +234,7 @@ flowchart TD
 | Funksiya | Joyi | Tavsif |
 |----------|------|--------|
 | `buildGraphEdges()` | example_usage:677-1043 | 1 ta qurilma uchun: LLDP→edge, MAC→endpoint/hub/VM node yaratish |
-| `addMACCrossRefEdges()` | example_usage:2518-2596 | LLDP bo'lmagan switchlarni MAC jadval orqali aniqlash (1 port=1 switch MAC → direct link) |
+| `addMACCrossRefEdges()` | example_usage:2518-2596 | LLDP bo'lmagan switchlarni MAC jadval orqali aniqlash (1 port=1 switch MAC → direct link); LLDP qo'shnisi so'ralgan switch bo'lgan portdan MAC-REF chizilmaydi |
 | `rebuildGraph()` | example_usage:2598-2652 | To'liq graf qayta qurish: snapshot → nodes → edges → MAC-ref → hypervisor → enrich → atomic swap |
 | `buildSwitchChassisMACs()` | example_usage:2501-2516 | Switch MAC → nodeID mapping (switch MAC'larni endpoint'dan ajratish uchun) |
 | `detectHypervisors()` | example_usage:2654-2806 | **Faza 1:** VM MAC'larni port bo'yicha guruhlash → `hyp-` node qo'yish. **Faza 2:** Server NIC OUI → `[HYPERVISOR]` tag |

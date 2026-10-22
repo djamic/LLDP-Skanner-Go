@@ -21,6 +21,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -34,6 +35,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -750,12 +752,15 @@ func (r *switchIPsRecorder) taken() []string {
 
 // fakeAgents answers snmpbulkwalk requests from canned "-On" output lines.
 // A walk with no canned answer fails like an agent that does not respond.
-// Every walk is counted by IP and OID.
+// Every walk is counted by IP and OID. The walks of an agent marked with
+// checkOrder fail like net-snmp's when its rows come out of OID order and
+// the walk is not unordered (-Cc, walkTiming.Unordered).
 type fakeAgents struct {
-	mu     sync.Mutex
-	agents map[string]map[string][]string // ip → OID → lines
-	walks  map[string]int                 // "ip oid" → walks
-	timed  map[string]int                 // "ip oid timeout/retries" → walks
+	mu      sync.Mutex
+	agents  map[string]map[string][]string // ip → OID → lines
+	walks   map[string]int                 // "ip oid" → walks
+	timed   map[string]int                 // "ip oid timeout/retries" → walks
+	ordered map[string]bool                // ip → net-snmp's OID order check (checkOrder)
 }
 
 var fakeSNMP = &fakeAgents{}
@@ -772,9 +777,100 @@ func (f *fakeAgents) walk(_, ip, oid string, timing walkTiming) ([]string, error
 	}
 	f.timed[fmt.Sprintf("%s %s %s/%d", ip, oid, timing.Timeout, timing.Retries)]++
 	if lines, ok := f.agents[ip][oid]; ok {
+		if f.ordered[ip] && !timing.Unordered {
+			if err := netsnmpOrderCheck(lines, 25); err != nil {
+				return nil, fmt.Errorf("fake snmp: %s for %s: %w", ip, oid, err)
+			}
+		}
 		return slices.Clone(lines), nil
 	}
 	return nil, fmt.Errorf("fake snmp: timeout from %s for %s", ip, oid)
+}
+
+// checkOrder makes the walks of ip check OID order as snmpbulkwalk does
+// without -Cc (netsnmpOrderCheck).
+func (f *fakeAgents) checkOrder(ip string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ordered == nil {
+		f.ordered = map[string]bool{}
+	}
+	f.ordered[ip] = true
+}
+
+// netsnmpOrderCheck is snmpbulkwalk's OID order check (net-snmp 5.9
+// snmpbulkwalk.c) on the rows of one walk: they come in responses of
+// repetitions rows (-Cr25), each row of a response is compared with the
+// last OID of the response before (the OID the request started from), and
+// a row that does not come after it ends the walk with "OID not
+// increasing" and exit status 1 (snmpBulkWalk then returns no lines).
+// Continuation lines of multi-line values are no rows.
+func netsnmpOrderCheck(lines []string, repetitions int) error {
+	var oids []string
+	for _, line := range lines {
+		if oid, _, ok := strings.Cut(line, " = "); ok && strings.HasPrefix(oid, ".") {
+			oids = append(oids, oid)
+		}
+	}
+	for start := repetitions; start < len(oids); start += repetitions {
+		from := oids[start-1]
+		for _, oid := range oids[start:min(start+repetitions, len(oids))] {
+			if compareOIDs(oid, from) <= 0 {
+				return fmt.Errorf("Error: OID not increasing: %s >= %s (exit status 1)", from, oid)
+			}
+		}
+	}
+	return nil
+}
+
+// compareOIDs orders numeric OIDs ("1.3.6.1...", with or without the
+// leading dot) by their components.
+func compareOIDs(a, b string) int {
+	pa := strings.Split(strings.TrimPrefix(a, "."), ".")
+	pb := strings.Split(strings.TrimPrefix(b, "."), ".")
+	for i := 0; i < len(pa) && i < len(pb); i++ {
+		na, errA := strconv.Atoi(pa[i])
+		nb, errB := strconv.Atoi(pb[i])
+		if errA != nil || errB != nil {
+			if c := strings.Compare(pa[i], pb[i]); c != 0 {
+				return c
+			}
+			continue
+		}
+		if na != nb {
+			return cmp.Compare(na, nb)
+		}
+	}
+	return cmp.Compare(len(pa), len(pb))
+}
+
+// agentWalks loads a fake agent from testdata/agents/<name>: the answers
+// that a live agent gave, as snmpbulkwalk -On printed them. A line
+// "## walk <oid> (...)" starts the answer of one walk; other "## " lines
+// are comments.
+func agentWalks(t *testing.T, name string) map[string][]string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", "agents", name))
+	if err != nil {
+		t.Fatalf("fake agent: %v", err)
+	}
+	walks := map[string][]string{}
+	oid := ""
+	for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
+		if rest, ok := strings.CutPrefix(line, "## walk "); ok {
+			oid = strings.Fields(rest)[0]
+			walks[oid] = []string{}
+			continue
+		}
+		if strings.HasPrefix(line, "## ") {
+			continue
+		}
+		if oid == "" {
+			t.Fatalf("fake agent %s: line %q before the first walk", name, line)
+		}
+		walks[oid] = append(walks[oid], line)
+	}
+	return walks
 }
 
 // walkCounts returns the walks since the last call (or reset) by "ip oid"
@@ -811,6 +907,7 @@ func (f *fakeAgents) reset() {
 	f.agents = nil
 	f.walks = nil
 	f.timed = nil
+	f.ordered = nil
 	f.mu.Unlock()
 }
 

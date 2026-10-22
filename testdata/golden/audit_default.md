@@ -233,7 +233,6 @@ graph TD
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/9 [T] 1G ↔ GE1/0/28" -->HPbr172_20_254_247
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/1 [T] 1G ↔ GE1/0/25" -->HPEbr172_20_254_202
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/25 [T] 1G ↔ " -->F_4_glavniybr172_20_240_3
-  br172_20_230_47-- "Eth1/0/25 [MAC-REF] ↔ " -->br172_20_230_253br172_20_7_227
   A_padval_SNRbr172_20_230_51-- "Eth1/0/28 1G ↔ " -->SNR_S2995G_24FXbr172_20_230_254
   A_padval_SNRbr172_20_230_51-- "Eth1/0/3 ↔ Hub" -->HUB_Unmanagedbr3_devices_4
   style Huawe fill:#4A90E2,stroke:#2A6FC2,color:#fff

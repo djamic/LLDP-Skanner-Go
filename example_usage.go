@@ -994,66 +994,10 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchChassisMACs map[str
 
 		// ENHANCED DISCOVERY: Create LLDP Endpoint if target not scanned
 		if !graph.Nodes[targetID] {
-			graph.AddNode(targetID)
-
-			// Get vendor from MAC if targetID is a MAC ("" for a name or IP)
-			vendor := getMACVendor(targetID)
-
-			// Build info from LLDP neighbor data with [LLDP-EP] marker
-			var info string
-
-			// DNS name of the neighbor (when its IP is known), for the BMC check
-			dnsName := ""
-			if ip := macToIP[targetID]; ip != "" {
-				dnsName, _ = cachedHostname(ip) // looked up before the build
-			}
-
-			// Check BMC/management interface FIRST (LLDP name, DNS name)
-			if bmcDetected, bmcType := graphIsBMC(targetID, displayName, dnsName); bmcDetected {
-				info = fmt.Sprintf("[BMC] %s", bmcType)
-
-			} else if vendor != "" {
-				info = fmt.Sprintf("[LLDP-EP] %s", vendor)
-			} else {
-				info = "[LLDP-EP]"
-			}
-
-			// Add display name (hostname/SysName) if available
-			if displayName != "" && displayName != targetID {
-				info = fmt.Sprintf("%s\n%s", info, displayName)
-			}
-
-			// Add IP or SysDesc
-			if neighbor.RemMgmtIP != "" {
-				info = fmt.Sprintf("%s\n%s", info, neighbor.RemMgmtIP)
-			} else if neighbor.RemSysDesc != "" {
-				descLines := strings.Split(neighbor.RemSysDesc, "\n")
-				info = fmt.Sprintf("%s\n%s", info, descLines[0])
-			}
-
-			graph.SwitchInfo[targetID] = info
-
-			logDebug("       [NEW NODE] Created LLDP Endpoint node: %s", targetID)
+			graphAddLLDPEndpoint(graph, targetID, displayName, neighbor, macToIP[targetID])
 		}
 
-		remotePort := neighbor.RemPortDesc
-
-		// Fallback logic for Remote Port
-		// 1. If Desc is empty, use PortID
-		if remotePort == "" {
-			remotePort = neighbor.RemPortId
-		}
-
-		// 2. sanity check: if Port Name equals SysName, it's likely invalid/redundant
-		if remotePort == neighbor.RemSysName {
-			// If PortId is different, try that
-			if neighbor.RemPortId != "" && neighbor.RemPortId != neighbor.RemSysName {
-				remotePort = neighbor.RemPortId
-			} else {
-				// Last resort: "Uplink" or generic
-				remotePort = "Uplink"
-			}
-		}
+		remotePort := lldpRemotePortName(neighbor)
 
 		// Get VLAN info for local port
 		vlanStr := getPortVLANLabel(data.PortVLANs, neighbor.LocalPortNum)
@@ -1148,6 +1092,81 @@ func graphLLDPNeighborTarget(data *DeviceData, n LLDPNeighbor) (targetID, displa
 	targetID, displayName = resolveLLDPTarget(n)
 	ok = graphUsableTargetID(targetID) && !isNullInterface(getLocalPortName(data, n.LocalPortNum))
 	return targetID, displayName, ok
+}
+
+// graphAddLLDPEndpoint adds the node of an LLDP neighbor that no polled
+// device is (an "[LLDP-EP]" node, or "[BMC]" when its LLDP or DNS name or
+// its MAC says so) with its label: the vendor, the display name, then the
+// management IP or the first line of the sysDescr. ip is the neighbor's IP
+// from the ARP data ("" when unknown), for the DNS name of the BMC check.
+// The switches' LLDP neighbors (buildGraphEdges) and the gateways' own
+// (addGatewayNodes) get their nodes here.
+func graphAddLLDPEndpoint(graph *DJGraph, targetID, displayName string, neighbor LLDPNeighbor, ip string) {
+	graph.AddNode(targetID)
+
+	// Get vendor from MAC if targetID is a MAC ("" for a name or IP)
+	vendor := getMACVendor(targetID)
+
+	// Build info from LLDP neighbor data with [LLDP-EP] marker
+	var info string
+
+	// DNS name of the neighbor (when its IP is known), for the BMC check
+	dnsName := ""
+	if ip != "" {
+		dnsName, _ = cachedHostname(ip) // looked up before the build
+	}
+
+	// Check BMC/management interface FIRST (LLDP name, DNS name)
+	if bmcDetected, bmcType := graphIsBMC(targetID, displayName, dnsName); bmcDetected {
+		info = fmt.Sprintf("[BMC] %s", bmcType)
+
+	} else if vendor != "" {
+		info = fmt.Sprintf("[LLDP-EP] %s", vendor)
+	} else {
+		info = "[LLDP-EP]"
+	}
+
+	// Add display name (hostname/SysName) if available
+	if displayName != "" && displayName != targetID {
+		info = fmt.Sprintf("%s\n%s", info, displayName)
+	}
+
+	// Add IP or SysDesc
+	if neighbor.RemMgmtIP != "" {
+		info = fmt.Sprintf("%s\n%s", info, neighbor.RemMgmtIP)
+	} else if neighbor.RemSysDesc != "" {
+		descLines := strings.Split(neighbor.RemSysDesc, "\n")
+		info = fmt.Sprintf("%s\n%s", info, descLines[0])
+	}
+
+	graph.SwitchInfo[targetID] = info
+
+	logDebug("       [NEW NODE] Created LLDP Endpoint node: %s", targetID)
+}
+
+// lldpRemotePortName is the far end's port in an LLDP link label (before
+// normalizePortName): the port description, else the port id; a name that
+// is the neighbor's sysName gives the port id, or "Uplink".
+func lldpRemotePortName(neighbor LLDPNeighbor) string {
+	remotePort := neighbor.RemPortDesc
+
+	// Fallback logic for Remote Port
+	// 1. If Desc is empty, use PortID
+	if remotePort == "" {
+		remotePort = neighbor.RemPortId
+	}
+
+	// 2. sanity check: if Port Name equals SysName, it's likely invalid/redundant
+	if remotePort == neighbor.RemSysName {
+		// If PortId is different, try that
+		if neighbor.RemPortId != "" && neighbor.RemPortId != neighbor.RemSysName {
+			remotePort = neighbor.RemPortId
+		} else {
+			// Last resort: "Uplink" or generic
+			remotePort = "Uplink"
+		}
+	}
+	return remotePort
 }
 
 // fdbPortKind is what the per-port FDB rule (fdbPorts) makes of the MACs a
@@ -2841,6 +2860,13 @@ func buildSwitchChassisMACs(devices map[string]*DeviceData) map[string]string {
 // their ChassisID MAC appears, creating an edge between them.
 // Key filter: only creates edges for ports with EXACTLY 1 switch MAC (direct connection).
 // Ports with 2+ switch MACs are transit/uplink — those MACs arrived via routing.
+// A port whose accepted LLDP neighbor is a polled switch gets no edge either:
+// LLDP names the switch on that port, so a switch MAC learned there is behind
+// it. 172.20.230.40 has 172.20.230.44 on port 25 and learns the chassis MAC of
+// the Aruba 6300 172.20.230.253 there, not .44's (.44 sends from its VLAN MAC
+// 58:94:80:01:01:42); once its FDB was read, that made a direct .40-Aruba
+// link, as 172.20.230.47 Eth1/0/25 (LLDP neighbor 4c:ae:a3:27:8b:2a) did in
+// the saved data of 2026-10-20.
 func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, switchChassisMACs map[string]string) {
 	// Devices and ports are visited in order, so which side of a switch pair
 	// creates the edge (and with which port label) is the same on every build.
@@ -2849,12 +2875,25 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 		srcDevice := allDevices[srcIP]
 		srcID := graphDeviceNodeID(srcDevice)
 
+		// The ports (ifIndex) whose LLDP neighbor is a polled switch
+		lldpSwitchPorts := make(map[int]bool)
+		for _, n := range srcDevice.Neighbors {
+			if target, _, ok := graphLLDPNeighborTarget(srcDevice, n); ok {
+				if _, polled := switchChassisMACs[target]; polled {
+					lldpSwitchPorts[n.LocalPortNum] = true
+				}
+			}
+		}
+
 		// Phase 1: Count switch MACs per port
 		portSwitchMACs := make(map[int][]string) // portNum -> list of switch node IDs
 		for _, macEntry := range srcDevice.MACTable {
 			// Skip NULL0 interface — virtual discard port, not a real connection
 			if isNullInterface(getFDBPortName(srcDevice, macEntry.PortNumber)) {
 				continue
+			}
+			if lldpSwitchPorts[collectFDBIfIndex(srcDevice, macEntry.PortNumber)] {
+				continue // LLDP names the switch on this port
 			}
 			normMAC := normalizeMAC(macEntry.MACAddress)
 			targetID, isSwitch := switchChassisMACs[normMAC]

@@ -428,7 +428,6 @@ graph TD
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzal1brU6_Pro_6_8_2_15592br172_15_1_68
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzal2brU6_Pro_6_2_49_14111br172_15_1_69
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/25 [T] 1G ↔ " -->F_4_glavniybr172_20_240_3
-  br172_20_230_47-- "Eth1/0/25 [MAC-REF] ↔ " -->br172_20_230_253br172_20_7_227
   A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_247_203
   A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_UbiquitibrpodvolxonabrU6_LR_6_7_57_15670br172_15_1_67
   A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_UbiquitibrApodvol3brU6_Pro_6_8_2_15592br172_15_1_23

@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"net/netip"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -228,10 +230,14 @@ func NewSNMPObject(onSuccess func(*DeviceData), onFailure func(string, error)) *
 }
 
 // walkTiming is how long one snmpbulkwalk waits for the agent: Timeout per
-// request (-t, in whole seconds, at least 1) and Retries (-r).
+// request (-t, in whole seconds, at least 1) and Retries (-r). Unordered
+// walks a table that an agent may return out of OID order (-Cc, see
+// collectMACTable); such a walk stops when the agent repeats an OID
+// (snmpWalkOutput).
 type walkTiming struct {
-	Timeout time.Duration
-	Retries int
+	Timeout   time.Duration
+	Retries   int
+	Unordered bool
 }
 
 // pollTiming is the timing of the polls, the ARP sweeps and checkSwitch: 5 s
@@ -441,45 +447,86 @@ func (s *SNMPObject) runSNMPWalk(ip, oid string) ([]string, error) {
 	return snmpWalk(s.Community, ip, oid, s.timing())
 }
 
+// runSNMPWalkUnordered is runSNMPWalk for a table that some agents return
+// out of OID order (walkTiming.Unordered).
+func (s *SNMPObject) runSNMPWalkUnordered(ip, oid string) ([]string, error) {
+	timing := s.timing()
+	timing.Unordered = true
+	return snmpWalk(s.Community, ip, oid, timing)
+}
+
 // snmpBulkWalkArgs are the snmpbulkwalk arguments of one walk: SNMP v2c,
-// numeric OIDs, 25 repetitions per request, and timing as -t (whole
-// seconds, at least 1) and -r.
+// numeric OIDs, 25 repetitions per request, -Cc for an unordered walk, and
+// timing as -t (whole seconds, at least 1) and -r.
 func snmpBulkWalkArgs(community, ip, oid string, timing walkTiming) []string {
 	seconds := max(int(timing.Timeout.Round(time.Second)/time.Second), 1)
-	return []string{"-v2c", "-c", community, "-On", "-Cr25",
-		"-t", strconv.Itoa(seconds), "-r", strconv.Itoa(max(timing.Retries, 0)), ip, oid}
+	args := []string{"-v2c", "-c", community, "-On", "-Cr25"}
+	if timing.Unordered {
+		args = append(args, "-Cc")
+	}
+	return append(args, "-t", strconv.Itoa(seconds), "-r", strconv.Itoa(max(timing.Retries, 0)), ip, oid)
 }
 
 // snmpBulkWalk runs snmpbulkwalk with timing (snmpBulkWalkArgs; killed
-// after 30s) and returns its lines.
+// after 30s, or when an unordered walk repeats an OID) and returns its
+// lines. A walk that exits with an error returns no lines: net-snmp exits
+// with 1 when the agent's rows come out of OID order ("OID not increasing"),
+// which is why the FDB is walked unordered.
 func snmpBulkWalk(community, ip, oid string, timing walkTiming) ([]string, error) {
 	cmd := exec.Command("snmpbulkwalk", snmpBulkWalkArgs(community, ip, oid, timing)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	var out bytes.Buffer
-	cmd.Stdout = &out
 	cmd.Stderr = nil
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
 
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 
 	// Manual timeout: kill process group after 30s
-	done := make(chan error, 1)
-	timer := time.AfterFunc(30*time.Second, func() {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	})
-	go func() { done <- cmd.Wait() }()
-	err := <-done
+	kill := func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	timer := time.AfterFunc(30*time.Second, kill)
+	lines, readErr := snmpWalkOutput(stdout, timing.Unordered, kill)
+	err = cmd.Wait() // after the whole output is read: Wait closes the pipe
 	timer.Stop()
 
+	if readErr != nil {
+		return nil, fmt.Errorf("snmpwalk of %s OID %s stopped: %w", ip, oid, readErr)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("snmpwalk timeout/error for %s OID %s: %v", ip, oid, err)
 	}
+	return lines, nil
+}
 
-	scanner := bufio.NewScanner(&out)
+// errWalkRepeats is the error of an unordered walk whose agent repeated an
+// OID (snmpWalkOutput).
+var errWalkRepeats = errors.New("the agent repeats an OID")
+
+// snmpWalkOutput reads the lines of one snmpbulkwalk from r to its end. In
+// an unordered walk (-Cc) net-snmp no longer stops an agent that leads the
+// walk back to rows it has sent (its "OID not increasing" check is what
+// -Cc turns off), so a varbind OID that comes a second time calls stop
+// (which kills the walk) and gives errWalkRepeats. The output is always
+// read to its end, so the walk never blocks on a full pipe; a line too
+// long to read ends the lines, as it did before.
+func snmpWalkOutput(r io.Reader, unordered bool, stop func()) ([]string, error) {
+	defer func() { _, _ = io.Copy(io.Discard, r) }()
+	scanner := bufio.NewScanner(r)
 	var lines []string
+	seen := make(map[string]bool)
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+		line := scanner.Text()
+		if oid, _, ok := strings.Cut(line, " = "); unordered && ok && strings.HasPrefix(oid, ".") {
+			if seen[oid] {
+				stop()
+				return nil, fmt.Errorf("%w: %s", errWalkRepeats, oid)
+			}
+			seen[oid] = true
+		}
+		lines = append(lines, line)
 	}
 	return lines, nil
 }
@@ -487,25 +534,75 @@ func snmpBulkWalk(community, ip, oid string, timing walkTiming) ([]string, error
 // collectLocalChassisID collects the local Chassis ID (lldpLocChassisId).
 // When the agent answers without one the error wraps errNoLocalChassis; a
 // walk error means the agent did not answer.
+//
+// The walk of the scalar ends in a GET of lldpLocChassisId.0. The
+// PiXiETECH switches 172.20.230.40 and .44 answer it with the chassis id
+// (STRING "5894.8000.f7a3"), but the saved data of 2026-10-20 holds
+// "No Such Instance currently exists at this OID" for both: now and then
+// the instance is missing. So an answer of "No Such Instance" (the object
+// is there, the instance is not), no output or an unreadable line is read
+// once more as the column (a GETBULK whose first row is the instance,
+// collectLocalChassisColumn). "No Such Object" (no LLDP-MIB: the
+// FortiGate, the Huawei switches) is final. When both reads fail, the
+// stored chassis id of the switch stays (keepPreviousChassisID, H9).
 func (s *SNMPObject) collectLocalChassisID(ip string) (string, error) {
 	lines, err := s.runSNMPWalk(ip, oidLLDPLocChassisID)
 	if err != nil {
 		return "", err
 	}
+	id, retry, noChassis := collectChassisAnswer(lines)
+	if noChassis == nil || !retry {
+		return id, noChassis
+	}
+	if id, ok := s.collectLocalChassisColumn(ip); ok {
+		return id, nil
+	}
+	return "", noChassis
+}
+
+// oidLLDPLocChassisIDColumn is lldpLocChassisId without the instance: its
+// walk is answered by a GETBULK from the column, not by a GET of the
+// instance.
+const oidLLDPLocChassisIDColumn = ".1.0.8802.1.1.2.1.3.2"
+
+// collectChassisAnswer reads the answer of the lldpLocChassisId walk: the
+// normalized chassis id (graphLocalChassisID), or an error that wraps
+// errNoLocalChassis, with retry set when the answer is worth a second read
+// (no output, an unreadable first line, "No Such Instance").
+func collectChassisAnswer(lines []string) (id string, retry bool, err error) {
 	if len(lines) == 0 {
-		return "", fmt.Errorf("%w: no output", errNoLocalChassis)
+		return "", true, fmt.Errorf("%w: no output", errNoLocalChassis)
 	}
 	// Parse first line
 	_, val, err := parseSNMPLine(lines[0])
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", errNoLocalChassis, err)
+		return "", true, fmt.Errorf("%w: %v", errNoLocalChassis, err)
 	}
 	// "No Such Object…" is no chassis id: the graph then uses the device IP
 	// instead of merging every switch that answers with the same text
 	if graphIsSNMPException(val) {
-		return "", fmt.Errorf("%w: %s", errNoLocalChassis, val)
+		retry = strings.HasPrefix(strings.ToLower(val), "no such instance")
+		return "", retry, fmt.Errorf("%w: %s", errNoLocalChassis, val)
 	}
-	return graphLocalChassisID(val), nil
+	return graphLocalChassisID(val), false, nil
+}
+
+// collectLocalChassisColumn is the second lldpLocChassisId read: a walk of
+// the column whose lldpLocChassisId.0 row holds a chassis id. ok is false
+// when the walk fails or shows none.
+func (s *SNMPObject) collectLocalChassisColumn(ip string) (string, bool) {
+	lines, err := s.runSNMPWalk(ip, oidLLDPLocChassisIDColumn)
+	if err != nil {
+		return "", false
+	}
+	for i, line := range lines {
+		oid, _, _, found := collectSNMPValue(line)
+		if found && strings.TrimPrefix(oid, ".") == strings.TrimPrefix(oidLLDPLocChassisID, ".") {
+			id, _, noChassis := collectChassisAnswer(lines[i : i+1])
+			return id, noChassis == nil && id != ""
+		}
+	}
+	return "", false
 }
 
 // collectInterfaces walks IF-MIB with parallel OID groups for speed
@@ -667,10 +764,13 @@ func (s *SNMPObject) collectInterfaces(ip string) ([]InterfaceData, error) {
 	return ifaces, nil
 }
 
-// collectLLDPNeighbors walks LLDP Remote Table
+// collectLLDPNeighbors walks LLDP Remote Table (lldpRemTable, then the
+// management addresses of lldpRemManAddrTable), in the index layout of the
+// LLDP-MIB or in the 2-part layout of the PiXiETECH switches
+// (collectLLDPRemIndex).
 func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 	// Walk lldpRemTable
-	lines, err := s.runSNMPWalk(ip, ".1.0.8802.1.1.2.1.4.1.1")
+	lines, err := s.runSNMPWalk(ip, collectLLDPRemOID)
 	if err != nil {
 		return nil, err
 	}
@@ -683,33 +783,14 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 			continue
 		}
 
-		// OID: .1.0.8802.1.1.2.1.4.1.1.COLUMN.TimeMark.LocalPort.RemIndex
-		// Base len is 11 parts (.1.0...1)
-		// Full OID parts
-		parts := strings.Split(oid, ".")
-		// Example: .1.0.8802.1.1.2.1.4.1.1.5.0.48.1
-		// Indices need careful parsing.
-		// Base prefix: .1.0.8802.1.1.2.1.4.1.1 (12 dots? No, starts with dot)
-		// parts[0] is empty string if starts with dot.
-
-		// Let's rely on finding "8802.1.1.2.1.4.1.1" and taking subsequent parts
-
-		// Simple heuristic: Take last 4 parts
-		if len(parts) < 15 {
+		// OID: .1.0.8802.1.1.2.1.4.1.1.COLUMN.TimeMark.LocalPort.RemIndex,
+		// or the PiXiETECH form without the time mark (collectLLDPRemIndex)
+		col, key, lp, ri, twoPart, ok := collectLLDPRemIndex(oid)
+		if !ok {
 			continue
 		}
 
-		n := len(parts)
-		colStr := parts[n-4]
-		// timeMark := parts[n-3]
-		localPortStr := parts[n-2]
-		remIdxStr := parts[n-1]
-
-		key := fmt.Sprintf("%s.%s", localPortStr, remIdxStr) // Unique key per neighbor per port
-
 		if _, exists := neighborMap[key]; !exists {
-			lp, _ := strconv.Atoi(localPortStr)
-			ri, _ := strconv.Atoi(remIdxStr)
 			neighborMap[key] = &LLDPNeighbor{
 				LocalPortNum: lp,
 				RemIndex:     ri,
@@ -717,8 +798,15 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 		}
 		neighbor := neighborMap[key]
 
-		col, _ := strconv.Atoi(colStr)
 		switch col {
+		case 2, 3: // lldpRemLocalPortNum, lldpRemIndex: index columns, read on the 2-part form only
+			if n, err := strconv.Atoi(val); twoPart && err == nil && n > 0 {
+				if col == 2 {
+					neighbor.LocalPortNum = n
+				} else {
+					neighbor.RemIndex = n
+				}
+			}
 		case 4: // ChassisIdSubtype
 			neighbor.RemChassisIdSubtype, _ = strconv.Atoi(val)
 		case 5: // ChassisId
@@ -760,6 +848,40 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 	}
 
 	return result, nil
+}
+
+// collectLLDPRemOID is lldpRemEntry (LLDP-MIB lldpRemTable): column, then
+// the index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex.
+const collectLLDPRemOID = ".1.0.8802.1.1.2.1.4.1.1"
+
+// collectLLDPRemIndex decodes one lldpRemTable OID into its column, the
+// neighbor key ("localPort.remIndex", the key collectLLDPManAddr gives),
+// the local port and the remote index. The LLDP-MIB index has three parts
+// (time mark, local port, remote index) and is read as before. The
+// PiXiETECH PXT-S2780G switches (172.20.230.40 and .44, firmware 2.2.0D)
+// leave the time mark out and put the remote index first:
+// lldpRemSysName.1.25 = "Switch" is remote index 1 on local port 25. Their
+// agent also reports the index columns, and they say so
+// (lldpRemLocalPortNum.1.25 = 25, lldpRemIndex.1.25 = 1), as do the FDB
+// (every upstream MAC on port 25), the STP root port (25) and the far end
+// (172.20.230.44 sees 172.20.230.40 on its port 27, and .40 sees .44's
+// Gig0/27 on port 25). twoPart marks that layout: collectLLDPNeighbors
+// then takes lldpRemLocalPortNum and lldpRemIndex from those columns when
+// the agent reports them. Any other index length gives ok=false.
+func collectLLDPRemIndex(oid string) (col int, key string, localPort, remIndex int, twoPart, ok bool) {
+	idx, ok := collectOIDIndex(oid, collectLLDPRemOID)
+	if !ok {
+		return 0, "", 0, 0, false, false
+	}
+	switch len(idx) {
+	case 4: // column, lldpRemTimeMark, lldpRemLocalPortNum, lldpRemIndex
+		col, localPort, remIndex = idx[0], idx[2], idx[3]
+	case 3: // column, lldpRemIndex, lldpRemLocalPortNum (PiXiETECH)
+		col, localPort, remIndex, twoPart = idx[0], idx[2], idx[1], true
+	default:
+		return 0, "", 0, 0, false, false
+	}
+	return col, fmt.Sprintf("%d.%d", localPort, remIndex), localPort, remIndex, twoPart, true
 }
 
 // LLDP system capabilities (LldpSystemCapabilitiesMap, a BITS value whose
@@ -819,13 +941,17 @@ func (s *SNMPObject) enrichWithManagementIPs(ip string, neighborMap map[string]*
 	}
 
 	for _, line := range lines {
-		oid, _, err := parseSNMPLine(line)
-		if err != nil {
+		oid, typ, val, found := collectSNMPValue(line)
+		if !found {
 			continue
 		}
-		// The address is in the index (every accessible column repeats it).
+		// The address is in the index (every accessible column repeats it),
+		// or in a column on the PiXiETECH switches (collectLLDPManAddrValue).
 		// The first IPv4 address in walk order wins.
 		key, mgmtIP, ok := collectLLDPManAddr(oid)
+		if !ok {
+			key, mgmtIP, ok = collectLLDPManAddrValue(oid, typ, val)
+		}
 		if !ok {
 			continue
 		}
@@ -868,6 +994,44 @@ func collectLLDPManAddr(oid string) (key, ip string, ok bool) {
 	}
 	return fmt.Sprintf("%d.%d", idx[2], idx[3]),
 		fmt.Sprintf("%d.%d.%d.%d", addr[0], addr[1], addr[2], addr[3]), true
+}
+
+// collectLLDPManAddrValue decodes one lldpRemManAddrTable row of the
+// PiXiETECH switches, whose index is their 2-part lldpRemTable index
+// (lldpRemIndex.lldpRemLocalPortNum, collectLLDPRemIndex) and whose address
+// is a column, not an index: column 1 is the address subtype, column 2 the
+// address as text (lldpRemManAddr.1.25 = STRING: "172.20.230.44", or
+// "FE80::AE8B:A9FF:FE70:A966" for the access points). It gives the
+// neighbor key and the IPv4 address of a column 2 row (text, IpAddress or
+// four Hex-STRING octets); any other row gives ok=false.
+func collectLLDPManAddrValue(oid, typ, val string) (key, ip string, ok bool) {
+	idx, ok := collectOIDIndex(oid, collectLLDPManAddrOID)
+	if !ok || len(idx) != 3 || idx[0] != 2 {
+		return "", "", false
+	}
+	var addr netip.Addr
+	switch typ {
+	case "STRING", "IpAddress":
+		addr, _ = netip.ParseAddr(strings.TrimSpace(strings.Trim(val, "\"")))
+	case "Hex-STRING":
+		var octets [4]byte
+		fields := strings.Fields(val)
+		if len(fields) != len(octets) {
+			return "", "", false
+		}
+		for i, f := range fields {
+			b, err := hex.DecodeString(f)
+			if err != nil || len(b) != 1 {
+				return "", "", false
+			}
+			octets[i] = b[0]
+		}
+		addr = netip.AddrFrom4(octets)
+	}
+	if !addr.Is4() || addr.IsUnspecified() {
+		return "", "", false
+	}
+	return fmt.Sprintf("%d.%d", idx[2], idx[1]), addr.String(), true
 }
 
 // OIDs of the FDB and ARP walks.
@@ -958,13 +1122,21 @@ func parseSNMPLine(line string) (oid string, value string, err error) {
 	return oid, strings.TrimSpace(value), nil
 }
 
-// collectMACTable collects MAC address table (FDB) from BRIDGE-MIB
+// collectMACTable collects MAC address table (FDB) from BRIDGE-MIB. The
+// walk is unordered (-Cc): the PiXiETECH switches 172.20.230.40 and .44
+// return their FDB in hash order (148.64.201.42.244.74, then
+// 248.240.130.124.249.203, then 148.64.201.42.244.98...), so net-snmp
+// stopped at its second request with "OID not increasing" and exit status
+// 1, the walk failed in every poll and the stored FDB of both stayed empty;
+// read without the check the agent gives each row once (94 and 106 rows on
+// 2026-10-22) and ends the table. On agents that keep OID order -Cc
+// changes nothing.
 func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 	// Walk dot1dTpFdbPort (.1.3.6.1.2.1.17.4.3.1.2) to get MAC->Port mapping
 	// OID format: .1.3.6.1.2.1.17.4.3.1.2.M1.M2.M3.M4.M5.M6 = INTEGER: PortNum
 	// where M1-M6 are the 6 bytes of MAC address
 
-	lines, err := s.runSNMPWalk(ip, collectFDBPortOID)
+	lines, err := s.runSNMPWalkUnordered(ip, collectFDBPortOID)
 	if err != nil {
 		return nil, err
 	}
