@@ -41,7 +41,8 @@ var (
 	collectedData      = make(map[string]*DeviceData)
 	collectedDataMutex sync.RWMutex // Mutex for map access
 
-	// Gateway Configuration (loaded from 'gateway_ip' file at startup)
+	// Gateway Configuration (loaded from 'gateway_ip' file at startup): the
+	// first gateway, the analyzer's core (gatewayIPs lists them all)
 	gatewayIP = ""
 
 	// Global MAC to IP lookup (from gateway ARP table)
@@ -470,9 +471,10 @@ func main() {
 // loadStartupData runs the startup steps before the web server starts: the
 // saved hosts (nil when there are none) go into collectedData with their
 // traffic baselines; then the MAC-IP service loads its cache and starts, and
-// the gateway ARP table is read. The first graph is built after that
-// (buildStartupGraph), so it already has the IP and DNS lines (F51: they
-// used to appear only after the first rescan).
+// the ARP table of every gateway is read. The first graph is built after
+// that (buildStartupGraph), so it already has the IP and DNS lines (F51:
+// they used to appear only after the first rescan) and the router nodes of
+// the gateways that answered.
 func loadStartupData(savedHosts map[string]*DeviceData) {
 	if len(savedHosts) > 0 {
 		fmt.Println("📂 Found saved network data, loading...")
@@ -491,8 +493,10 @@ func loadStartupData(savedHosts map[string]*DeviceData) {
 	// (covers gateway + all discovered switches)
 	startMacIPService()
 
-	// Collect ARP table from gateway first (legacy - also done by MacIPService)
-	fmt.Printf("🔍 Collecting ARP table from gateway %s...\n", gatewayIP)
+	// Collect the ARP tables of the gateways first (also done by MacIPService)
+	if len(gatewayIPs) > 0 {
+		fmt.Printf("🔍 Collecting ARP tables from gateways %s...\n", gatewayListText())
+	}
 	collectGatewayARP()
 }
 
@@ -2182,9 +2186,13 @@ func saveResults(data []*DeviceData) {
 	}
 }
 
-// collectGatewayARP collects ARP table from gateway and builds global MAC-IP lookup
+// collectGatewayARP collects the ARP table of every gateway into the global
+// MAC-IP lookup, with the policy of every ARP collector (F70: this one used
+// to overwrite and skip the ESXi check), and the sysName of each gateway
+// that answers, for its router node (collectGatewaysARP). A gateway that
+// does not answer gets the one warning of this run.
 func collectGatewayARP() {
-	// Create temporary SNMP object for gateway
+	// Create temporary SNMP object for the gateways
 	snmpObj := &SNMPObject{
 		Community: "public",
 		Port:      161,
@@ -2192,18 +2200,11 @@ func collectGatewayARP() {
 		Retries:   2,
 	}
 
-	arpTable, err := snmpObj.collectARPTable(gatewayIP)
-	now := macIPClock()
-	recordGatewayARP(gatewayIP, len(arpTable), err, now) // warns once when it fails
-	if err != nil {
-		return
+	for _, res := range collectGatewaysARP(snmpObj) {
+		if res.Err == nil {
+			fmt.Printf("✅ Collected %d ARP entries from gateway %s\n", res.Rows, res.IP)
+		}
 	}
-
-	// Build global lookup with the policy of every ARP collector (F70: this
-	// one used to overwrite and skip the ESXi check)
-	collectMergeMACIP(arpTable, now)
-
-	fmt.Printf("✅ Collected %d ARP entries from gateway %s\n", len(arpTable), gatewayIP)
 }
 
 // getGlobalIP looks up IP address from global MAC-IP table (any MAC text
@@ -2941,9 +2942,10 @@ func compareIPs(a, b string) int {
 }
 
 // buildGraphFromSnapshot builds the complete graph from a device snapshot:
-// switch nodes, LLDP and FDB edges, MAC cross-reference edges, hypervisor
-// nodes and IP labels. Devices are visited in IP order. The graph is not
-// published here; rebuildGraph does that once it is complete.
+// switch nodes, LLDP and FDB edges, MAC cross-reference edges, the router
+// nodes of the gateways that answered SNMP, hypervisor nodes and IP labels.
+// Devices are visited in IP order. The graph is not published here;
+// rebuildGraph does that once it is complete.
 func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	newGraph := NewDJGraph()
 	deviceIPs := sortedDeviceIPs(snapshot)
@@ -2975,6 +2977,10 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 
 	// 3. MAC cross-reference edges (for LLDP-disabled switches)
 	addMACCrossRefEdges(newGraph, snapshot, switchChassisMACs)
+
+	// 3b. One router node per gateway that answered SNMP, linked where its
+	// MAC is learned (gateways.go)
+	addGatewayNodes(newGraph, snapshot, switchChassisMACs, answeredGateways())
 
 	// 4. Detect hypervisors (per-port VM MAC concentration) — BEFORE making graph global
 	detectHypervisors(newGraph)
@@ -3029,6 +3035,9 @@ func graphHubUplinkPort(graph *DJGraph, hubID string) string {
 // Such ports indicate a connected hypervisor server (ESXi, Proxmox, Hyper-V, QEMU, Xen, VirtualBox).
 // A virtual hypervisor node is inserted between the switch port and its VM endpoints;
 // VMs behind a hub get it between the hub and the VMs, keyed by the hub's switch port.
+// A gateway's router node stays where addGatewayNodes linked it, also when
+// the gateway is a VM (the Debian router 00:0c:29:98:7b:c2), and is never
+// tagged as a server NIC.
 func detectHypervisors(graph *DJGraph) {
 	// portVMs: switchNodeID (or hub node ID) → port key → []vmMAC
 	// Edges are visited in sorted order, so each port's VM list is the same
@@ -3038,8 +3047,8 @@ func detectHypervisors(graph *DJGraph) {
 	for _, src := range slices.Sorted(maps.Keys(graph.Edges)) {
 		targets := graph.Edges[src]
 		for _, tgt := range slices.Sorted(maps.Keys(targets)) {
-			// Check if tgt MAC is a VM OUI
-			if _, isVM := hypervisorTypeOf(tgt); !isVM {
+			// Check if tgt MAC is a VM OUI (a gateway's router node is no VM)
+			if _, isVM := hypervisorTypeOf(tgt); !isVM || graph.graphRouters[tgt] {
 				continue
 			}
 			// Port from the edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26"); a
@@ -3114,8 +3123,8 @@ func detectHypervisors(graph *DJGraph) {
 		if strings.HasPrefix(nodeID, "hyp-") || strings.HasPrefix(nodeID, "hub-") {
 			continue
 		}
-		if graphIsSwitchNode(graph, nodeID) {
-			continue // skip switches
+		if graphIsSwitchNode(graph, nodeID) || graph.graphRouters[nodeID] {
+			continue // skip switches and the gateways' router nodes
 		}
 		if isServer, vendor := isServerNIC(nodeID); isServer {
 			info := graph.SwitchInfo[nodeID]

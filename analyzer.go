@@ -390,7 +390,10 @@ func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
 		})
 	}
 
-	// Send each Shadow IT and Loopback issue as a separate message with buttons (max once per hour per issue)
+	// Send each Shadow IT and Loopback issue as a separate message with buttons (max once per hour per issue).
+	// No other type gets a message of its own: path suggestions (52 on the
+	// fixture once a gateway's router node is the core) only count in the
+	// summary above, so they cannot flood the chat.
 	for _, sugg := range report.Suggestions {
 		if (sugg.Type == "shadow_it" || sugg.Type == "loopback") && sugg.IssueID != "" {
 			// Check cooldown - skip if already notified within the last hour
@@ -493,17 +496,18 @@ func (na *NetworkAnalyzer) coreNode() string {
 // topologyCore is the core node of a topology, the root of both the
 // analyzer's path check (analyzePaths) and bfs_depths.json (ExportBFSDepths),
 // so both measure hops from the same node (AC-2, R6). It is the gateway
-// (gatewayIP): the node with that id, the node of the polled device with
-// that IP, a switch or router node whose label has the gateway IP as a line
-// of its own, or an LLDP neighbor ([LLDP-EP]: a router the scanner does not
-// poll) with that line; else the first router node. Nodes are tried in id
+// (gatewayIP, the first entry of gateway_ip): the node with that id, the
+// node of the polled device with that IP, a switch or router node whose
+// label has the gateway IP as a line of its own (the router node the graph
+// draws for a gateway that answers SNMP, addGatewayNodes), or an LLDP
+// neighbor ([LLDP-EP]: a router the scanner does not poll) with that line;
+// else the first router node (another gateway's). Nodes are tried in id
 // order. Otherwise it returns "", and nothing is guessed: a guessed root
 // (the node with the most links, as bfs_depths.json once took) measured
 // hops from an access switch. A VM or FDB endpoint that carries the gateway
-// IP is never the core. On the university network the gateway
-// (172.20.1.254) is a VM that is no graph node and there are no router
-// nodes, so path analysis and bfs_depths.json stay off until gateway_ip
-// names the core switch.
+// IP is never the core. On the university network the gateway 172.20.1.254
+// is a Debian router VM: no polled device, but once its SNMP answers (since
+// 2026-10-22) its router node "debian216\n172.20.1.254" is the core.
 func topologyCore(nodes map[string]GraphNode, devices map[string]*DeviceData) string {
 	ids := slices.Sorted(maps.Keys(nodes))
 	if gatewayIP != "" {

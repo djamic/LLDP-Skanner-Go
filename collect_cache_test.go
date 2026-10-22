@@ -26,8 +26,8 @@ func collectResetCache(t *testing.T) {
 		globalMACtoIP = make(map[string]string)
 		collectMACIPSeen = make(map[string]time.Time)
 		macIPGatewayOK = time.Time{}
+		macIPGatewayWarned = make(map[string]bool)
 		globalMACtoIPMutex.Unlock()
-		macIPGatewayWarned.Store(false)
 		collectESXiMu.Lock()
 		collectESXiChecked = make(map[string]string)
 		collectESXiRetry = make(map[string]collectESXiRetryJob)
@@ -113,9 +113,9 @@ func TestCollectGatewayARPPolicy(t *testing.T) {
 		oidARP + ".5.10.7.1.2 = Hex-STRING: 01 00 5E 00 00 FB ",
 		oidARP + ".5.10.7.1.3 = Hex-STRING: DA A1 19 07 01 03 ",
 	}})
-	gatewayIP = gw
+	setGatewayIPs([]string{gw})
 	collectGatewayARP()
-	gatewayIP = fixedGatewayIP
+	setGatewayIPs([]string{fixedGatewayIP})
 	want := map[string]string{"00:50:56:07:01:01": "10.7.1.1", "da:a1:19:07:01:03": "10.7.1.3"}
 	if got := collectCacheMap(); !maps.Equal(got, want) {
 		t.Errorf("cache = %v, want %v", got, want)

@@ -7,7 +7,7 @@
     "depth_distribution": {},
     "export_time": "<time>",
     "max_depth": 0,
-    "note": "no core node: the gateway 172.20.1.254 is not in the graph (no node with that IP, no polled device, no switch, router or LLDP neighbor with it as a label line) and there is no router node; set gateway_ip to the core switch IP",
+    "note": "no core node: the gateway 172.20.1.254 is not in the graph (no node with that IP, no polled device, no switch, router or LLDP neighbor with it as a label line) and there is no router node; a gateway of gateway_ip gets a router node once it answers SNMP and its MAC is in the ARP data, or set gateway_ip to the core switch IP",
     "total_nodes": 0
   },
   "experiment_metrics": {

@@ -363,9 +363,9 @@ func TestGoldenScenarioMACIPCache(t *testing.T) {
 	rec["arp_from_switch"] = map[string]any{"added": added, "mac_to_ip": snapshotMap(), "queued": esxiJobs.taken()}
 
 	setMap(map[string]string{"00:50:56:01:02:04": "10.0.0.99"})
-	gatewayIP = "10.9.0.1"
+	setGatewayIPs([]string{"10.9.0.1"})
 	collectGatewayARP()
-	gatewayIP = fixedGatewayIP
+	setGatewayIPs([]string{fixedGatewayIP})
 	rec["gateway_arp"] = map[string]any{"mac_to_ip": snapshotMap(), "queued": esxiJobs.taken()}
 
 	dir := t.TempDir()
@@ -478,7 +478,7 @@ func TestNoSideEffectSeamsLeak(t *testing.T) {
 	if out, err := runPing("192.0.2.1"); err != nil || !strings.Contains(out, "ttl=64") {
 		t.Errorf("runPing is not the fake ping: %q %v", out, err)
 	}
-	if gatewayIP != fixedGatewayIP {
+	if gatewayIP != fixedGatewayIP || !slices.Equal(gatewayIPs, []string{fixedGatewayIP}) {
 		t.Error("harness settings were changed by a test")
 	}
 	if influxReady() {

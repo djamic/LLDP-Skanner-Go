@@ -140,7 +140,7 @@ func installSeams(dir string) {
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
 	globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
-	gatewayIP = fixedGatewayIP
+	setGatewayIPs([]string{fixedGatewayIP})
 	ignoredIssuesMutex.Lock()
 	ignoredIssuesData = map[string]bool{}
 	ignoredIssuesMutex.Unlock()
@@ -181,8 +181,14 @@ func resetState(t *testing.T) {
 	globalMACtoIP = make(map[string]string)
 	collectMACIPSeen = make(map[string]time.Time)
 	macIPGatewayOK = time.Time{}
+	macIPGatewayWarned = make(map[string]bool)
 	globalMACtoIPMutex.Unlock()
-	macIPGatewayWarned.Store(false)
+	gatewayPollsMu.Lock()
+	gatewayPolls = make(map[string]gatewayPoll)
+	gatewayPollsMu.Unlock()
+	gatewayNoticesMu.Lock()
+	gatewayNotices = make(map[string]bool)
+	gatewayNoticesMu.Unlock()
 
 	clearConfirmedESXi()
 	collectESXiMu.Lock()
@@ -203,7 +209,7 @@ func resetState(t *testing.T) {
 	ttlOSCache = make(map[string]ttlOSEntry)
 	ttlOSCacheMutex.Unlock()
 
-	gatewayIP = fixedGatewayIP
+	setGatewayIPs([]string{fixedGatewayIP})
 	ignoredIssuesMutex.Lock()
 	ignoredIssuesData = map[string]bool{}
 	ignoredIssuesMutex.Unlock()

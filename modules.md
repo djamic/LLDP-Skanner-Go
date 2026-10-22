@@ -652,7 +652,7 @@ flowchart TD
 | `readSwitchIPsFile()` | settings | `swich_ips` fayldan IP ro'yxat |
 | `writeSwitchIPsFile()` | settings | `swich_ips` faylga yozish |
 | `appendToSwitchIPs()` | settings | Yangi IP qo'shish (duplicate tekshiruv) |
-| `loadGatewayIP()` | settings | `gateway_ip` fayldan o'qish |
+| `loadGatewayIPs()` | gateways | `gateway_ip` fayldan o'qish (bir yoki bir nechta IP) |
 | `InitCaptureManager()` | capture | Capture sessiya menejeri |
 
 ---
@@ -975,7 +975,7 @@ flowchart LR
 |---|-----------|-------------------|----------|---------|
 | 1 | `network_data.json` | `SaveData()` | `LoadSavedData()` | Barcha DeviceData + ScanSettings (dastur qayta ishga tushganda restore) |
 | 2 | `swich_ips` | `writeSwitchIPsFile()`, `appendToSwitchIPs()` | `readSwitchIPsFile()` | Skanerlash kerak bo'lgan IP/CIDR ro'yxati (1 qator = 1 IP) |
-| 3 | `gateway_ip` | Qo'lda yaratiladi | `loadGatewayIP()` | Gateway router IP (1 qator) |
+| 3 | `gateway_ip` | Qo'lda yaratiladi | `loadGatewayIPs()` | Gateway router IP'lari: bitta yoki bir nechta (har qatorda bittadan yoki bo'sh joy / vergul bilan, `#` — izoh); birinchisi analyzer core, har biri SNMP javob bersa router tugun |
 | 4 | `mac_ip_cache.json` | `saveMacIPCache()` | `loadMacIPCache()` | `{mac: ip}` mapping (280K+ yozuv mumkin) |
 | 5 | `ignored_issues.json` | `SaveIgnoredIssues()` | `LoadIgnoredIssues()` | E'tiborsiz qoldirilgan muammolar ro'yxati |
 | 6 | `oui.txt` | IEEE (tashqi) | `initOUIDatabase()` | OUI vendor bazasi (280K+ yozuv, IEEE formatda) |

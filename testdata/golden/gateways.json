@@ -1,0 +1,146 @@
+{
+  "fixture": {
+    "bfs_depths": {
+      "core_found": true,
+      "core_switch_ip": "00:0c:29:98:7b:c2",
+      "deep_devices": 883,
+      "deep_switches": ["172.20.254.249", "4c:ae:a3:27:53:aa", "4c:ae:a3:27:5f:aa", "4c:ae:a3:27:6d:8a", "4c:ae:a3:27:70:2a", "4c:ae:a3:27:76:8a", "4c:ae:a3:27:79:ea", "4c:ae:a3:27:85:ea", "4c:ae:a3:27:8b:2a", "4c:ae:a3:27:8b:8a", "4c:ae:a3:8d:b3:79", "4c:ae:a3:8d:e0:91", "4c:ae:a3:8e:19:09", "4c:ae:a3:8e:42:11", "4c:ae:a3:a1:ff:6c", "4c:ae:a3:a2:01:ac", "4c:ae:a3:a2:03:2c", "4c:ae:a3:a2:06:2c", "4c:ae:a3:a2:06:ec", "4c:ae:a3:a2:09:ec", "4c:ae:a3:a2:0d:4c", "4c:ae:a3:a2:0d:ac", "4c:ae:a3:a2:10:4c", "4c:ae:a3:a2:12:ec", "4c:ae:a3:a2:13:4c", "4c:ae:a3:a2:15:ec", "4c:ae:a3:a2:18:2c", "4c:ae:a3:a2:18:ec", "4c:ae:a3:a2:19:ac", "78:48:59:72:ec:ee", "bc:ea:fa:46:47:ac", "e0:d9:e3:ee:19:c0", "f8:f0:82:7a:d9:5b", "f8:f0:82:7a:d9:5d", "f8:f0:82:7a:d9:69", "f8:f0:82:7a:d9:71", "f8:f0:82:7a:f7:9b", "f8:f0:82:7c:2a:03", "f8:f0:82:7c:2c:ff", "f8:f0:82:7c:2d:17", "f8:f0:82:7c:30:cf", "f8:f0:82:7c:f9:58", "f8:f0:82:7c:f9:84", "f8:f0:82:7c:f9:cc", "f8:f0:82:7c:fa:20", "f8:f0:82:7c:fa:26", "f8:f0:82:7c:fa:72", "f8:f0:82:7c:fa:ca", "f8:f0:82:7c:fb:0e", "f8:f0:82:d0:22:ce", "f8:f0:82:d0:23:0a", "f8:f0:82:d0:23:92"],
+      "depth_distribution": {"0": 1, "1": 1, "2": 25, "3": 72, "4": 157, "5": 203, "6": 229, "7": 257, "8": 37},
+      "max_depth": 8,
+      "total_nodes": 982
+    },
+    "bot_messages": {
+      "repeated_within_hour": 0,
+      "summary": "📊 <b>Tarmoq holati:</b> 60/100 (Fair)\n🔎 Jami topilgan muammolar: 86 ta",
+      "with_gateways": {"shadow": 33, "summary": 1},
+      "without_gateways": {"shadow": 33, "summary": 1}
+    },
+    "core": "00:0c:29:98:7b:c2",
+    "gateway_ip": [
+      "172.20.1.254",
+      "172.20.0.1"
+    ],
+    "graph_changes": {
+      "edges_added": ["4c:ae:a3:8d:ee:c9 -> 00:0c:29:98:7b:c2 : \"TGE1/0/52 [MAC-REF]|\"", "4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|\""],
+      "edges_removed": ["4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e5:e8 : \"TGE1/0/52 [T] 10G|\""],
+      "nodes_added": ["00:0c:29:98:7b:c2", "68:cc:ae:96:e6:08"],
+      "nodes_after": 1030,
+      "nodes_before": 1029,
+      "nodes_removed": ["68:cc:ae:96:e5:e8"]
+    },
+    "health": {
+      "label": "Fair",
+      "with_gateways": 60,
+      "without_gateways": 70
+    },
+    "log": [
+      "🌐 [Gateway] 172.20.1.254 (debian216): MAC 00:0c:29:98:7b:c2 from the switch ARP tables",
+      "🌐 [Gateway] 172.20.0.1 (FortiGate-600F): MAC 68:cc:ae:96:e6:08 from the switch ARP tables",
+      "🌐 [Gateway] debian216 172.20.1.254 drawn as router 00:0c:29:98:7b:c2, linked from 172.20.254.202 TGE1/0/52 (5 MACs on the port)",
+      "🌐 [Gateway] FortiGate-600F 172.20.0.1 drawn as router 68:cc:ae:96:e6:08, linked from 172.20.254.203 TGE1/0/52 (1 MAC on the port), by its existing link; in place of node(s) 68:cc:ae:96:e5:e8"
+    ],
+    "path_suggestions": [
+      {"device": "HUAWEI (172.20.254.249)", "node": "172.20.254.249", "value": "4+ hops"},
+      {"device": "A Mobil\n172.20.230.50 (4c:ae:a3:27:53:aa)", "node": "4c:ae:a3:27:53:aa", "value": "4+ hops"},
+      {"device": "D - 1\n172.20.230.3 (4c:ae:a3:27:5f:aa)", "node": "4c:ae:a3:27:5f:aa", "value": "4+ hops"},
+      {"device": "A 220\n172.20.230.49 (4c:ae:a3:27:6d:8a)", "node": "4c:ae:a3:27:6d:8a", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.36 (4c:ae:a3:27:70:2a)", "node": "4c:ae:a3:27:70:2a", "value": "4+ hops"},
+      {"device": "F-9\n172.20.240.12 (4c:ae:a3:27:76:8a)", "node": "4c:ae:a3:27:76:8a", "value": "4+ hops"},
+      {"device": "\n172.20.230.81 (4c:ae:a3:27:79:ea)", "node": "4c:ae:a3:27:79:ea", "value": "4+ hops"},
+      {"device": "B-318/2\n172.20.230.11 (4c:ae:a3:27:85:ea)", "node": "4c:ae:a3:27:85:ea", "value": "4+ hops"},
+      {"device": "A 3 Etaj\n172.20.230.46 (4c:ae:a3:27:8b:2a)", "node": "4c:ae:a3:27:8b:2a", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.82 (4c:ae:a3:27:8b:8a)", "node": "4c:ae:a3:27:8b:8a", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.43 (4c:ae:a3:8d:b3:79)", "node": "4c:ae:a3:8d:b3:79", "value": "4+ hops"},
+      {"device": "HPE\n172.20.253.10 (4c:ae:a3:8d:e0:91)", "node": "4c:ae:a3:8d:e0:91", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.7 (4c:ae:a3:8e:19:09)", "node": "4c:ae:a3:8e:19:09", "value": "4+ hops"},
+      {"device": "B-318/1\n172.20.230.13 (4c:ae:a3:8e:42:11)", "node": "4c:ae:a3:8e:42:11", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.6 (4c:ae:a3:a1:ff:6c)", "node": "4c:ae:a3:a1:ff:6c", "value": "4+ hops"},
+      {"device": "TTJ-3&4\n172.20.230.23 (4c:ae:a3:a2:01:ac)", "node": "4c:ae:a3:a2:01:ac", "value": "4+ hops"},
+      {"device": "B-423\n172.20.230.15 (4c:ae:a3:a2:03:2c)", "node": "4c:ae:a3:a2:03:2c", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.39 (4c:ae:a3:a2:06:2c)", "node": "4c:ae:a3:a2:06:2c", "value": "4+ hops"},
+      {"device": "A-332\n172.20.230.8 (4c:ae:a3:a2:06:ec)", "node": "4c:ae:a3:a2:06:ec", "value": "4+ hops"},
+      {"device": "C 424/a\n172.20.230.4 (4c:ae:a3:a2:09:ec)", "node": "4c:ae:a3:a2:09:ec", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.35 (4c:ae:a3:a2:0d:4c)", "node": "4c:ae:a3:a2:0d:4c", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.14 (4c:ae:a3:a2:0d:ac)", "node": "4c:ae:a3:a2:0d:ac", "value": "4+ hops"},
+      {"device": "F-2\n172.20.240.14 (4c:ae:a3:a2:10:4c)", "node": "4c:ae:a3:a2:10:4c", "value": "4+ hops"},
+      {"device": "A RRT Kalidor\n172.20.230.42 (4c:ae:a3:a2:12:ec)", "node": "4c:ae:a3:a2:12:ec", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.41 (4c:ae:a3:a2:13:4c)", "node": "4c:ae:a3:a2:13:4c", "value": "4+ hops"},
+      {"device": "D 1-2\n172.20.230.48 (4c:ae:a3:a2:15:ec)", "node": "4c:ae:a3:a2:15:ec", "value": "4+ hops"},
+      {"device": "B-318/3\n172.20.230.1 (4c:ae:a3:a2:18:2c)", "node": "4c:ae:a3:a2:18:2c", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.5 (4c:ae:a3:a2:18:ec)", "node": "4c:ae:a3:a2:18:ec", "value": "4+ hops"},
+      {"device": "HPE\n172.20.230.9 (4c:ae:a3:a2:19:ac)", "node": "4c:ae:a3:a2:19:ac", "value": "4+ hops"},
+      {"device": "HP\n172.20.254.204 (78:48:59:72:ec:ee)", "node": "78:48:59:72:ec:ee", "value": "4+ hops"},
+      {"device": "HP\n172.20.254.223 (bc:ea:fa:46:47:ac)", "node": "bc:ea:fa:46:47:ac", "value": "4+ hops"},
+      {"device": "Jamic\n172.20.254.226 (e0:d9:e3:ee:19:c0)", "node": "e0:d9:e3:ee:19:c0", "value": "4+ hops"},
+      {"device": "E-209.2\n172.20.230.34 (f8:f0:82:7a:d9:5b)", "node": "f8:f0:82:7a:d9:5b", "value": "4+ hops"},
+      {"device": "E205-48\n172.20.230.31 (f8:f0:82:7a:d9:5d)", "node": "f8:f0:82:7a:d9:5d", "value": "4+ hops"},
+      {"device": "E109\n172.20.230.22 (f8:f0:82:7a:d9:69)", "node": "f8:f0:82:7a:d9:69", "value": "4+ hops"},
+      {"device": "SNR-S2985G-48T\n172.20.230.26 (f8:f0:82:7a:d9:71)", "node": "f8:f0:82:7a:d9:71", "value": "4+ hops"},
+      {"device": "SNR-S2985G-48T\n172.20.230.28 (f8:f0:82:7a:f7:9b)", "node": "f8:f0:82:7a:f7:9b", "value": "4+ hops"},
+      {"device": "SNR-S2985G-24TC\n172.20.230.25 (f8:f0:82:7c:2a:03)", "node": "f8:f0:82:7c:2a:03", "value": "4+ hops"},
+      {"device": "SNR-S2985G-24TC\n172.20.230.83 (f8:f0:82:7c:2c:ff)", "node": "f8:f0:82:7c:2c:ff", "value": "4+ hops"},
+      {"device": "E109-2\n172.20.230.24 (f8:f0:82:7c:2d:17)", "node": "f8:f0:82:7c:2d:17", "value": "4+ hops"},
+      {"device": "E205-24\n172.20.230.32 (f8:f0:82:7c:30:cf)", "node": "f8:f0:82:7c:30:cf", "value": "4+ hops"},
+      {"device": "F-3(1)\n172.20.240.10 (f8:f0:82:7c:f9:58)", "node": "f8:f0:82:7c:f9:58", "value": "4+ hops"},
+      {"device": "F-4(2)_28P\n172.20.240.2 (f8:f0:82:7c:f9:84)", "node": "f8:f0:82:7c:f9:84", "value": "4+ hops"},
+      {"device": "F-3(2)\n172.20.240.11 (f8:f0:82:7c:f9:cc)", "node": "f8:f0:82:7c:f9:cc", "value": "4+ hops"},
+      {"device": "F-7(2)\n172.20.240.7 (f8:f0:82:7c:fa:20)", "node": "f8:f0:82:7c:fa:20", "value": "4+ hops"},
+      {"device": "F-7(1)\n172.20.240.6 (f8:f0:82:7c:fa:26)", "node": "f8:f0:82:7c:fa:26", "value": "4+ hops"},
+      {"device": "F-6(1)\n172.20.240.8 (f8:f0:82:7c:fa:72)", "node": "f8:f0:82:7c:fa:72", "value": "4+ hops"},
+      {"device": "F-1\n172.20.240.13 (f8:f0:82:7c:fa:ca)", "node": "f8:f0:82:7c:fa:ca", "value": "4+ hops"},
+      {"device": "F-6(2)\n172.20.240.9 (f8:f0:82:7c:fb:0e)", "node": "f8:f0:82:7c:fb:0e", "value": "4+ hops"},
+      {"device": "F-8\n172.20.240.4 (f8:f0:82:d0:22:ce)", "node": "f8:f0:82:d0:22:ce", "value": "4+ hops"},
+      {"device": "F-5\n172.20.240.5 (f8:f0:82:d0:23:0a)", "node": "f8:f0:82:d0:23:0a", "value": "4+ hops"},
+      {"device": "F-4_48P\n172.20.240.1 (f8:f0:82:d0:23:92)", "node": "f8:f0:82:d0:23:92", "value": "4+ hops"}
+    ],
+    "router_links": [
+      {"source": "4c:ae:a3:8d:ee:c9", "target": "00:0c:29:98:7b:c2", "label": "TGE1/0/52 [MAC-REF]|", "sourceLabel": "TGE1/0/52 [MAC-REF]"},
+      {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|", "sourceLabel": "TGE1/0/52 [T] 10G"}
+    ],
+    "router_nodes": [
+      {"id": "00:0c:29:98:7b:c2", "group": "router", "type": "router", "label": "debian216\n172.20.1.254\n00:0c:29:98:7b:c2", "sysName": "debian216\n172.20.1.254"},
+      {"id": "68:cc:ae:96:e6:08", "group": "router", "type": "router", "label": "FortiGate-600F\n172.20.0.1\n68:cc:ae:96:e6:08", "sysName": "FortiGate-600F\n172.20.0.1"}
+    ],
+    "summary_with_gateways": {
+      "congestion_issues": 0,
+      "loopback_issues": 0,
+      "path_issues": 52,
+      "shadow_it_issues": 33,
+      "stability_issues": 0,
+      "stp_issues": 1
+    },
+    "summary_without_gateways": {
+      "congestion_issues": 0,
+      "loopback_issues": 0,
+      "path_issues": 0,
+      "shadow_it_issues": 33,
+      "stability_issues": 0,
+      "stp_issues": 1
+    }
+  },
+  "gateway_network": {
+    "nodes": {
+      "00:0c:29:48:07:01": "vm | [VM] 💻 VMware VM VMware",
+      "00:0c:29:48:07:02": "vm | [VM] 💻 VMware VM VMware",
+      "00:0c:29:48:07:fd": "router | vyos\n10.9.48.253",
+      "00:0c:29:98:7b:c2": "router | debian216\n172.20.1.254",
+      "00:1b:21:48:05:01": "endpoint | [ENDPOINT] Intel Corporate",
+      "4c:ae:a3:48:00:02": "switch | sw-core\n10.9.48.2",
+      "4c:ae:a3:48:00:03": "switch | sw-acc\n10.9.48.3",
+      "68:cc:ae:96:e6:08": "router | FortiGate-600F\n172.20.0.1",
+      "6c:b3:11:48:00:10": "endpoint | [LLDP-EP] Lianrui",
+      "hyp-4c:ae:a3:48:00:03-ge1_0_7": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/7"
+    },
+    "edges": [
+      "4c:ae:a3:48:00:02 -> 00:0c:29:98:7b:c2 : \"GE1/0/10 [MAC-REF]|\"",
+      "4c:ae:a3:48:00:02 -> 4c:ae:a3:48:00:03 : \"TGE1/0/49 [T] 10G|TGE1/0/49\"",
+      "4c:ae:a3:48:00:02 -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|LAN\"",
+      "4c:ae:a3:48:00:02 -> 6c:b3:11:48:00:10 : \"GE1/0/10 [T] 1G|6CB311480010\"",
+      "4c:ae:a3:48:00:03 -> 00:0c:29:48:07:fd : \"GE1/0/7|\"",
+      "4c:ae:a3:48:00:03 -> 00:1b:21:48:05:01 : \"GE1/0/5|\"",
+      "4c:ae:a3:48:00:03 -> hyp-4c:ae:a3:48:00:03-ge1_0_7 : \"ge1/0/7\"",
+      "hyp-4c:ae:a3:48:00:03-ge1_0_7 -> 00:0c:29:48:07:01 : \"vNIC\"",
+      "hyp-4c:ae:a3:48:00:03-ge1_0_7 -> 00:0c:29:48:07:02 : \"vNIC\""
+    ]
+  }
+}
