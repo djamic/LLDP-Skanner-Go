@@ -407,14 +407,30 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 // agent so no SNMP request is sent.
 var snmpWalk = snmpBulkWalk
 
+// snmpProbeWalk runs the walk that asks a host whether it runs SNMP at all
+// (subnet discovery's sysDescr probe): one try with a 1 s timeout, so a host
+// without SNMP costs 1 s instead of the 10 s of a poll walk (5 s, one
+// retry). Tests replace it like snmpWalk.
+var snmpProbeWalk = func(community, ip, oid string) ([]string, error) {
+	return snmpBulkWalkTimed(community, ip, oid, 1, 0)
+}
+
 // runSNMPWalk executes snmpbulkwalk command with 30s timeout and returns lines
 func (s *SNMPObject) runSNMPWalk(ip, oid string) ([]string, error) {
 	return snmpWalk(s.Community, ip, oid)
 }
 
-// snmpBulkWalk runs snmpbulkwalk (killed after 30s) and returns its lines.
+// snmpBulkWalk runs snmpbulkwalk with the poll timeouts (5 s, one retry;
+// killed after 30s) and returns its lines.
 func snmpBulkWalk(community, ip, oid string) ([]string, error) {
-	cmd := exec.Command("snmpbulkwalk", "-v2c", "-c", community, "-On", "-Cr25", "-t", "5", "-r", "1", ip, oid)
+	return snmpBulkWalkTimed(community, ip, oid, 5, 1)
+}
+
+// snmpBulkWalkTimed runs snmpbulkwalk with timeout seconds per request and
+// retries retries (killed after 30s) and returns its lines.
+func snmpBulkWalkTimed(community, ip, oid string, timeout, retries int) ([]string, error) {
+	cmd := exec.Command("snmpbulkwalk", "-v2c", "-c", community, "-On", "-Cr25",
+		"-t", strconv.Itoa(timeout), "-r", strconv.Itoa(retries), ip, oid)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var out bytes.Buffer
 	cmd.Stdout = &out

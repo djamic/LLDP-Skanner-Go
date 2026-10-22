@@ -127,6 +127,7 @@ func installSeams(dir string) {
 		return false
 	}
 	snmpWalk = fakeSNMP.walk
+	snmpProbeWalk = snmpProbes.walk
 	ouiOpenHTTP = func(string) (oui.StaticDB, error) {
 		guard.ouiDownloads.Add(1)
 		return nil, errors.New("harness: IEEE download disabled")
@@ -228,6 +229,10 @@ func resetState(t *testing.T) {
 	SetGlobalGraph(nil)
 	esxiJobs.reset()
 	switchIPAdds.taken()
+	snmpProbes.taken()
+	arpSourcesMu.Lock()
+	arpSources = make(map[string]bool)
+	arpSourcesMu.Unlock()
 	influxRec.stop()
 	fakeSNMP.reset()
 
@@ -767,6 +772,38 @@ func (f *fakeAgents) reset() {
 	f.mu.Lock()
 	f.agents = nil
 	f.mu.Unlock()
+}
+
+// probeRecorder records the hosts that subnet discovery probes
+// (snmpProbeWalk) in probe order and answers from the fake agents.
+type probeRecorder struct {
+	mu  sync.Mutex
+	ips []string
+}
+
+var snmpProbes = &probeRecorder{}
+
+func (r *probeRecorder) walk(community, ip, oid string) ([]string, error) {
+	r.mu.Lock()
+	r.ips = append(r.ips, ip)
+	r.mu.Unlock()
+	return fakeSNMP.walk(community, ip, oid)
+}
+
+// count is the number of probes recorded.
+func (r *probeRecorder) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.ips)
+}
+
+// taken returns the probed hosts in probe order and clears the recorder.
+func (r *probeRecorder) taken() []string {
+	r.mu.Lock()
+	ips := r.ips
+	r.ips = nil
+	r.mu.Unlock()
+	return ips
 }
 
 // ─── Golden files ─────────────────────────────────────────────────────────────

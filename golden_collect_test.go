@@ -475,6 +475,9 @@ func TestNoSideEffectSeamsLeak(t *testing.T) {
 	if _, err := snmpWalk("public", "192.0.2.1", oidChassis); err == nil || !strings.Contains(err.Error(), "fake snmp") {
 		t.Errorf("snmpWalk is not the fake agent: %v", err)
 	}
+	if _, err := snmpProbeWalk("public", "192.0.2.1", oidSysDescr); err == nil || !strings.Contains(err.Error(), "fake snmp") || !slices.Equal(snmpProbes.taken(), []string{"192.0.2.1"}) {
+		t.Errorf("snmpProbeWalk is not the probe recorder over the fake agent: %v", err)
+	}
 	if out, err := runPing("192.0.2.1"); err != nil || !strings.Contains(out, "ttl=64") {
 		t.Errorf("runPing is not the fake ping: %q %v", out, err)
 	}

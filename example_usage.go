@@ -532,10 +532,11 @@ func buildStartupGraph(savedHosts map[string]*DeviceData) {
 //
 // A device that is not stored yet is stored only when this poll found a
 // switch MIB (polledMIBs.isSwitch: BRIDGE-MIB ports or lldpLocChassisId).
-// Any agent whose IF-MIB answers makes a partial success, and the access
-// points, the FortiGate and the ESXi host that the rescue scan polled on
-// 2026-10-22 became isolated switch nodes that way. A stored device takes
-// every successful poll as before, whatever it shows (F53, F57, H9).
+// Any agent whose IF-MIB answers makes a partial success, and on 2026-10-22
+// the access points that LLDP discovery polled and the FortiGate and the
+// ESXi host that the rescue scan polled became isolated switch nodes that
+// way. A stored device takes every successful poll as before, whatever it
+// shows (F53, F57, H9).
 func storeCollectedDevice(data *DeviceData) bool {
 	// Phase 8: Mark as reachable
 	data.Unreachable = false
@@ -2571,7 +2572,9 @@ func runRescueScan(snmpObject *SNMPObject) {
 // CIDRs expanded). Every IP that is not in collectedData and is alive is
 // asked checkSwitch first: a switch is polled, any other device (access
 // point, firewall, hypervisor, a host without SNMP) is not, and one line
-// per run names those. A switch counts as recovered only when its poll
+// per run names those. One that answered SNMP stays an ARP source
+// (addARPSource): the MAC-IP sweeps read the FortiGate's ARP table as they
+// did while it was polled. A switch counts as recovered only when its poll
 // stored it and it answered; the graph is rebuilt only then. Returns the
 // recovered switches in IP order and the devices skipped.
 func rescueScan(snmpObject *SNMPObject, ranges []string, alive func(ip string) bool) ([]string, *switchSkips) {
@@ -2593,6 +2596,7 @@ func rescueScan(snmpObject *SNMPObject, ranges []string, alive func(ip string) b
 		listed[ip] = true
 	}
 	collectedDataMutex.RUnlock()
+	keepARPSources(listed) // a device whose line was removed is none
 
 	if len(missing) == 0 {
 		return nil, skips
@@ -2619,6 +2623,7 @@ func rescueScan(snmpObject *SNMPObject, ranges []string, alive func(ip string) b
 			check := snmpObject.checkSwitch(targetIP)
 			if !check.isSwitch() {
 				skips.add(check)
+				addARPSource(check) // its ARP table is still read (the FortiGate's)
 				return
 			}
 
@@ -2645,10 +2650,12 @@ func rescueScan(snmpObject *SNMPObject, ranges []string, alive func(ip string) b
 
 // collectScannedSwitch polls ip, a device the first scan or the UI rescan
 // found answering SNMP, when it qualifies as a switch (checkSwitch); any
-// other device is recorded in skips and not polled.
+// other device is recorded in skips and not polled, and stays an ARP source
+// (addARPSource).
 func collectScannedSwitch(obj *SNMPObject, ip, sysName string, skips *switchSkips) {
 	if check := obj.checkSwitch(ip); !check.isSwitch() {
 		skips.add(check)
+		addARPSource(check)
 		return
 	}
 	obj.CollectData(ip, sysName)
@@ -2665,9 +2672,13 @@ var appendSwitchIP = appendToSwitchIPs
 // points and IP phones advertise management IPs as well (F62 made them
 // visible) but are no switches, and a neighbor with unknown capabilities is
 // not added automatically. Their agents must pass checkSwitch too before
-// they are polled (a neighbor's capabilities are its own claim); one line
-// names the ones that do not. Called after each periodic rescan to enable
-// "chain reaction" discovery. Returns the devices skipped by checkSwitch.
+// they are polled, because a neighbor's capabilities are its own claim: the
+// UniFi U6-Pro access points enable bridge and not wlanAccessPoint, so on
+// 2026-10-22, the first run that saw management addresses, LLDP discovery
+// polled them, stored their partial polls and appended 47 lines to
+// swich_ips. One line names the ones that fail. Called after each periodic
+// rescan to enable "chain reaction" discovery. Returns the devices skipped
+// by checkSwitch.
 func discoverFromLLDP(snmpObject *SNMPObject) *switchSkips {
 	skips := &switchSkips{}
 	collectedDataMutex.RLock()

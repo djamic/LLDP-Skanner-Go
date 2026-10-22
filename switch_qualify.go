@@ -3,19 +3,25 @@ package main
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 )
 
-// Switch qualification. On 2026-10-22 the gateway 172.20.1.254 answered SNMP
-// for the first time: subnet discovery appended every device that answered
-// sysDescr to swich_ips (47 of them, nearly all UniFi access points), and
-// the rescue scan polled every alive IP of the swich_ips ranges, so the
-// access points, the FortiGate-600F firewall 172.20.0.1 and an ESXi host
-// became isolated "switch" nodes: their IF-MIB answered, so the poll was a
-// partial success and storeCollectedDevice kept it.
+// Switch qualification. On 2026-10-22 the graph got isolated "switch" nodes
+// for devices that are no switches. LLDP discovery added most of them: F62
+// had made the LLDP management addresses readable, the capability filter
+// (lldpDiscoverable) let the UniFi U6-Pro access points through (they
+// enable bridge, not wlanAccessPoint), and their polls were a partial
+// success (IF-MIB and ARP answer, the switch tables "No Such Object"), so
+// storeCollectedDevice kept them and 47 lines were appended to swich_ips:
+// 46 access points (172.15.1.x) and 172.15.101.0. The rescue scan polled
+// every alive IP of the swich_ips ranges, so the FortiGate-600F firewall
+// 172.20.0.1 and the ESXi host 172.20.0.67 became nodes the same way. SNMP
+// on the gateway 172.20.1.254 played no part: the gateway did not answer
+// at that start, so subnet discovery found no subnet.
 //
 // A device is a switch only when its agent shows a switch MIB: BRIDGE-MIB
 // with at least one port (dot1dBaseNumPorts > 0) or LLDP-MIB's local
@@ -23,7 +29,8 @@ import (
 // asks checkSwitch before it polls or lists the device: subnet discovery,
 // LLDP discovery, the rescue scan, the first scan and the UI rescan.
 // storeCollectedDevice applies the same rule (switchMIBs.isSwitch) to what
-// the poll of a device it has never stored read.
+// the poll of a device it has never stored read. The SNMP devices of the
+// swich_ips ranges that fail it stay ARP sources (addARPSource).
 
 // OIDs of the qualification. Both are scalars: snmpbulkwalk answers them
 // with the value, or with "No Such Object" when the MIB is absent.
@@ -138,6 +145,52 @@ func (s *SNMPObject) collectSysText(ip, oid string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.Trim(val, "\""))
+}
+
+// ARP sources. The MAC-IP sweeps (collectARPFromAllSwitches) read the ARP
+// tables of the gateway and of the stored switches. Before checkSwitch the
+// rescue scan stored every SNMP device it found alive in the swich_ips
+// ranges, so the sweeps read their ARP tables too, and one of them counts:
+// on 2026-10-22 the FortiGate-600F 172.20.0.1 had 1,229 MACs in its ARP
+// table, 1,066 of which were in neither the gateway 172.20.1.254's table
+// nor the saved switch tables. Unread, those MAC-IP entries would expire
+// (collectMACIPTTL). So an SNMP device of the ranges that checkSwitch
+// rejects (in the rescue scan, the first scan or the UI rescan) is kept as
+// an ARP source while swich_ips lists it (keepARPSources): it is never
+// polled, stored or drawn, and every sweep reads its ARP table. The
+// devices that LLDP and subnet discovery reject are no ARP sources: the
+// owner did not list them, and every printer of the gateway's subnets
+// would be one.
+var (
+	arpSourcesMu sync.Mutex
+	arpSources   = make(map[string]bool)
+)
+
+// addARPSource keeps the device of c as an ARP source when it answered SNMP
+// and is no switch.
+func addARPSource(c switchCheck) {
+	if !c.Answered || c.isSwitch() {
+		return
+	}
+	arpSourcesMu.Lock()
+	arpSources[c.IP] = true
+	arpSourcesMu.Unlock()
+}
+
+// keepARPSources drops the ARP sources that are not in listed, the IPs of
+// the swich_ips lines (rescueScan): a device stays an ARP source only while
+// the owner lists it.
+func keepARPSources(listed map[string]bool) {
+	arpSourcesMu.Lock()
+	maps.DeleteFunc(arpSources, func(ip string, _ bool) bool { return !listed[ip] })
+	arpSourcesMu.Unlock()
+}
+
+// arpSourceIPs returns the ARP sources in IP order.
+func arpSourceIPs() []string {
+	arpSourcesMu.Lock()
+	defer arpSourcesMu.Unlock()
+	return slices.SortedFunc(maps.Keys(arpSources), compareIPs)
 }
 
 // switchSkipExamples is how many devices a skip summary names.
