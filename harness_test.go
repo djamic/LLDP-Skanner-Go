@@ -141,7 +141,7 @@ func installSeams(dir string) {
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
 	globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
-	gatewayIP = fixedGatewayIP
+	setGatewayIPs([]string{fixedGatewayIP})
 	ignoredIssuesMutex.Lock()
 	ignoredIssuesData = map[string]bool{}
 	ignoredIssuesMutex.Unlock()
@@ -182,8 +182,15 @@ func resetState(t *testing.T) {
 	globalMACtoIP = make(map[string]string)
 	collectMACIPSeen = make(map[string]time.Time)
 	macIPGatewayOK = time.Time{}
+	macIPGatewayWarned = make(map[string]bool)
+	macIPSVISilent = make(map[string]time.Time)
 	globalMACtoIPMutex.Unlock()
-	macIPGatewayWarned.Store(false)
+	gatewayPollsMu.Lock()
+	gatewayPolls = make(map[string]gatewayPoll)
+	gatewayPollsMu.Unlock()
+	gatewayNoticesMu.Lock()
+	gatewayNotices = make(map[string]bool)
+	gatewayNoticesMu.Unlock()
 
 	clearConfirmedESXi()
 	collectESXiMu.Lock()
@@ -204,7 +211,7 @@ func resetState(t *testing.T) {
 	ttlOSCache = make(map[string]ttlOSEntry)
 	ttlOSCacheMutex.Unlock()
 
-	gatewayIP = fixedGatewayIP
+	setGatewayIPs([]string{fixedGatewayIP})
 	ignoredIssuesMutex.Lock()
 	ignoredIssuesData = map[string]bool{}
 	ignoredIssuesMutex.Unlock()
@@ -743,9 +750,11 @@ func (r *switchIPsRecorder) taken() []string {
 
 // fakeAgents answers snmpbulkwalk requests from canned "-On" output lines.
 // A walk with no canned answer fails like an agent that does not respond.
+// Every walk is counted by IP and OID.
 type fakeAgents struct {
 	mu     sync.Mutex
 	agents map[string]map[string][]string // ip → OID → lines
+	walks  map[string]int                 // "ip oid" → walks
 }
 
 var fakeSNMP = &fakeAgents{}
@@ -753,10 +762,24 @@ var fakeSNMP = &fakeAgents{}
 func (f *fakeAgents) walk(_, ip, oid string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.walks == nil {
+		f.walks = map[string]int{}
+	}
+	f.walks[ip+" "+oid]++
 	if lines, ok := f.agents[ip][oid]; ok {
 		return slices.Clone(lines), nil
 	}
 	return nil, fmt.Errorf("fake snmp: timeout from %s for %s", ip, oid)
+}
+
+// walkCounts returns the walks since the last call (or reset) by "ip oid"
+// and clears them.
+func (f *fakeAgents) walkCounts() map[string]int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	counts := f.walks
+	f.walks = nil
+	return counts
 }
 
 func (f *fakeAgents) set(ip string, walks map[string][]string) {
@@ -771,6 +794,7 @@ func (f *fakeAgents) set(ip string, walks map[string][]string) {
 func (f *fakeAgents) reset() {
 	f.mu.Lock()
 	f.agents = nil
+	f.walks = nil
 	f.mu.Unlock()
 }
 

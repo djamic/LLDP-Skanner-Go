@@ -239,7 +239,7 @@ Har 5 daqiqada `collectARPFromAllSwitches()`:
 4. `mac_ip_cache.json` ga saqlaydi
 
 ### 9.2. Gateway Subnet Discovery (`discoverGatewaySubnets`)
-`gateway_ip` dan SNMP orqali:
+`gateway_ip` dagi har bir gateway'dan SNMP orqali (umumiy subnet bir marta):
 1. `ipAdEntAddr` (1.3.6.1.2.1.4.20.1.1) → SVI IP'lar ro'yxati
 2. `ipAdEntNetMask` (1.3.6.1.2.1.4.20.1.3) → subnet maskalari
 3. `SubnetInfo{Net, Prefix, SVIIP}` strukturasi qaytariladi

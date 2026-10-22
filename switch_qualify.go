@@ -148,7 +148,7 @@ func (s *SNMPObject) collectSysText(ip, oid string) string {
 }
 
 // ARP sources. The MAC-IP sweeps (collectARPFromAllSwitches) read the ARP
-// tables of the gateway and of the stored switches. Before checkSwitch the
+// tables of the gateways and of the stored switches. Before checkSwitch the
 // rescue scan stored every SNMP device it found alive in the swich_ips
 // ranges, so the sweeps read their ARP tables too, and one of them counts:
 // on 2026-10-22 the FortiGate-600F 172.20.0.1 had 1,229 MACs in its ARP
@@ -160,16 +160,20 @@ func (s *SNMPObject) collectSysText(ip, oid string) string {
 // polled, stored or drawn, and every sweep reads its ARP table. The
 // devices that LLDP and subnet discovery reject are no ARP sources: the
 // owner did not list them, and every printer of the gateway's subnets
-// would be one.
+// would be one. A configured gateway (gateway_ip, gateways.go) needs no
+// entry here: every sweep walks the gateways first, and the FortiGate is
+// one once gateway_ip lists it; the registry is for the other routers and
+// firewalls of the ranges.
 var (
 	arpSourcesMu sync.Mutex
 	arpSources   = make(map[string]bool)
 )
 
 // addARPSource keeps the device of c as an ARP source when it answered SNMP
-// and is no switch.
+// and is no switch. A configured gateway is an ARP source by definition
+// (every sweep walks the gateways first), so it is never added here.
 func addARPSource(c switchCheck) {
-	if !c.Answered || c.isSwitch() {
+	if !c.Answered || c.isSwitch() || isGatewayIP(c.IP) {
 		return
 	}
 	arpSourcesMu.Lock()

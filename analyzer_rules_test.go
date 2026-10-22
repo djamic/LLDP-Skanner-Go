@@ -539,17 +539,18 @@ func TestAnalyzerPathDepthsFromCore(t *testing.T) {
 // bfs_depths.json take their core from one rule (topologyCore) and run the
 // same BFS, so the switches and routers bfs_depths.json lists deeper than 3
 // hops are exactly the path suggestions. With the fixture's gateway (a VM
-// that is no graph node, as on the live network) there is no core: no path
-// suggestion, and a bfs_depths.json that says so (it used to measure from
-// the busiest access switch, 871 deep devices). With the gateway set to a
-// polled switch the core resolves, and the path penalty is capped at -10, so
-// the health score stays sensible (it fell to 10 and 0).
+// that has not answered SNMP here, so it has no router node) there is no
+// core: no path suggestion, and a bfs_depths.json that says so (it used to
+// measure from the busiest access switch, 871 deep devices). With the
+// gateway set to a polled switch the core resolves, and the path penalty is
+// capped at -10, so the health score stays sensible (it fell to 10 and 0).
+// TestGoldenGateways covers the core the gateways' router nodes give.
 func TestPathCoreOneRule(t *testing.T) {
 	graph := buildFixtureGraph(t)
 	collectedDataMutex.RLock()
 	devices := sortedDevices(collectedData)
 	collectedDataMutex.RUnlock()
-	t.Cleanup(func() { gatewayIP = fixedGatewayIP })
+	t.Cleanup(func() { setGatewayIPs([]string{fixedGatewayIP}) })
 	nodeType := map[string]string{}
 	for _, n := range graph.GetGraphData().Nodes {
 		nodeType[n.ID] = n.NodeType
@@ -562,7 +563,7 @@ func TestPathCoreOneRule(t *testing.T) {
 		{"172.20.254.202", "4c:ae:a3:8d:ee:c9", 30, 60}, // the switch that learned the gateway's MAC
 		{"172.20.230.48", "4c:ae:a3:a2:15:ec", 61, 60},  // the old guessed root, an access switch
 	} {
-		gatewayIP = c.gateway
+		setGatewayIPs([]string{c.gateway})
 		na := NewAnalyzer(captureData("core", devices, graph))
 		report := na.BuildReport()
 		var pathNodes []string

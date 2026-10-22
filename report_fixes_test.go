@@ -543,8 +543,8 @@ func TestReportBFSRoot(t *testing.T) {
 	// contains the gateway IP as a substring only: no core, and the file
 	// says so (the busiest switch used to be taken, R6).
 	reportSetDevices()
-	gatewayIP = "10.0.76.1"
-	t.Cleanup(func() { gatewayIP = fixedGatewayIP })
+	setGatewayIPs([]string{"10.0.76.1"})
+	t.Cleanup(func() { setGatewayIPs([]string{fixedGatewayIP}) })
 	h := NewDJGraph()
 	addInfoNode(h, "aa:bb:cc:76:00:11", "sw-11\n10.0.76.11")
 	addInfoNode(h, "aa:bb:cc:76:00:12", "sw-12\n10.0.76.12")

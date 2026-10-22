@@ -30,9 +30,12 @@ type DJGraph struct {
 
 	// graphSwitches holds the node ids of the polled devices (set by the
 	// graph build): such a node is a switch, whatever its label says.
+	// graphRouters holds the router nodes of the configured gateways
+	// (addGatewayNodes): such a node is a router, whatever its label says.
 	// graphSysText holds the sysName/sysDescr text known for a node (the
 	// polled sysName, LLDP RemSysName and RemSysDesc), never vendor text.
 	graphSwitches map[string]bool
+	graphRouters  map[string]bool
 	graphSysText  map[string]string
 }
 
@@ -405,6 +408,12 @@ func (g *DJGraph) GetGraphData() GraphData {
 
 // determineDeviceGroup categorizes devices based on their info
 func (g *DJGraph) determineDeviceGroup(node, info string) string {
+	// A configured gateway's router node is a router: its label is a
+	// sysName and IPs ("debian216\n172.20.1.254", "FortiGate-600F\n...").
+	if g.graphRouters[node] {
+		return "router"
+	}
+
 	// A polled device is grouped by its own name only (server, router or
 	// switch), even when its label is empty.
 	if g.graphSwitches[node] {

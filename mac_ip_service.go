@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -353,14 +352,51 @@ var macIPServiceMu sync.Mutex
 // put there by other code) counts as just seen.
 var collectMACIPSeen = make(map[string]time.Time)
 
-// macIPGatewayOK is when an ARP walk of the gateway last returned rows in
-// this run (guarded by globalMACtoIPMutex); zero while the gateway has not
-// answered. Cache entries expire only against it (collectPruneMACIP).
+// macIPGatewayOK is when an ARP walk of a gateway (any of gateway_ip) last
+// returned rows in this run (guarded by globalMACtoIPMutex); zero while no
+// gateway has answered. Cache entries expire only against it
+// (collectPruneMACIP).
 var macIPGatewayOK time.Time
 
-// macIPGatewayWarned is set once the gateway ARP warning was printed: one
-// warning per start, not one per sweep.
-var macIPGatewayWarned atomic.Bool
+// macIPGatewayWarned holds the gateways whose ARP warning was printed
+// (guarded by globalMACtoIPMutex): one warning per start and gateway, not
+// one per sweep.
+var macIPGatewayWarned = make(map[string]bool)
+
+// macIPSVISilent holds the gateway SVI IPs whose ARP walk got no answer,
+// with the time to try each one again (guarded by globalMACtoIPMutex). The
+// FortiGate answers SNMP on 172.20.0.1 only: its 15 other interface IPs
+// would cost a 10-second timeout each in every sweep.
+var macIPSVISilent = make(map[string]time.Time)
+
+// collectSVIRetry is how long a gateway SVI IP that did not answer is left
+// out of the sweeps.
+const collectSVIRetry = time.Hour
+
+// collectSVIWanted reports whether the sweep at now walks the ARP table of
+// gateway SVI svi: not while it waits for its retry after no answer.
+func collectSVIWanted(svi string, now time.Time) bool {
+	globalMACtoIPMutex.RLock()
+	defer globalMACtoIPMutex.RUnlock()
+	retry, silent := macIPSVISilent[svi]
+	return !silent || !now.Before(retry)
+}
+
+// recordSVIWalk notes the ARP walk of gateway SVI svi at now: no answer
+// leaves it out for collectSVIRetry (one line per start names it), an
+// answer brings it back.
+func recordSVIWalk(svi string, err error, now time.Time) {
+	globalMACtoIPMutex.Lock()
+	if err == nil {
+		delete(macIPSVISilent, svi)
+	} else {
+		macIPSVISilent[svi] = now.Add(collectSVIRetry)
+	}
+	globalMACtoIPMutex.Unlock()
+	if err != nil {
+		gatewayNotice("📡 [MacIPService] Gateway SVI %s does not answer SNMP: left out of the sweeps, tried again every %d minutes", svi, int(collectSVIRetry.Minutes()))
+	}
+}
 
 // macIPClock is the time source of the MAC-IP cache (last-seen times, TTL)
 // and of the ESXi check retries. Tests replace it with a clock they control.
@@ -388,25 +424,29 @@ func macIPSeenFile() string {
 }
 
 // recordGatewayARP notes an ARP walk of the gateway ip at time now: rows
-// mean it answered (cache entries may expire against this walk); no rows,
-// from an error or an empty table, print the one warning of this run.
+// mean it answered (cache entries may expire against this walk, whichever
+// gateway it was); no rows, from an error or an empty table, print the one
+// warning of this run for this gateway.
 func recordGatewayARP(ip string, rows int, err error, now time.Time) {
+	globalMACtoIPMutex.Lock()
 	if rows > 0 {
-		globalMACtoIPMutex.Lock()
 		if now.After(macIPGatewayOK) {
 			macIPGatewayOK = now
 		}
 		globalMACtoIPMutex.Unlock()
 		return
 	}
-	if !macIPGatewayWarned.CompareAndSwap(false, true) {
+	warned := macIPGatewayWarned[ip]
+	macIPGatewayWarned[ip] = true
+	globalMACtoIPMutex.Unlock()
+	if warned {
 		return
 	}
 	reason := "empty ARP table"
 	if err != nil {
 		reason = err.Error()
 	}
-	fmt.Printf("⚠️ [MacIPService] Gateway %s did not answer the SNMP ARP walk (%s). IPs only the gateway knows are not refreshed, and no MAC-IP cache entry expires until %s answers (SNMP read access to ipNetToMediaPhysAddress and ipAddrTable).\n", ip, reason, ip)
+	fmt.Printf("⚠️ [MacIPService] Gateway %s did not answer the SNMP ARP walk (%s). IPs only this gateway knows are not refreshed, and MAC-IP cache entries expire only after a gateway ARP walk that answers (SNMP read access to ipNetToMediaPhysAddress and ipAddrTable).\n", ip, reason)
 }
 
 // collectMACIPCurrent reports whether globalMACtoIP maps mac to ip.
@@ -451,12 +491,13 @@ func collectMergeMACIP(entries []ARPEntry, now time.Time) (added, changed int) {
 
 // collectPruneMACIP drops the globalMACtoIP entries whose last sighting is
 // more than the TTL before the last successful gateway ARP walk
-// (macIPGatewayOK): the gateway's table holds the ARP entry of every host,
-// so only a gateway walk that has not shown a MAC for the whole TTL says it
-// is gone, while switch ARP tables cover few hosts. Without a successful
-// gateway walk in this run nothing expires. Entries without a time count as
-// seen now, and times of MACs without an entry are forgotten. Returns the
-// number of entries dropped.
+// (macIPGatewayOK, the walk of any gateway that returned rows): the
+// gateways' tables hold the ARP entry of every host, so only gateway walks
+// that have not shown a MAC for the whole TTL say it is gone, while switch
+// ARP tables cover few hosts. Without a successful gateway walk in this run
+// nothing expires. Entries without a time count as seen now, and times of
+// MACs without an entry are forgotten. Returns the number of entries
+// dropped.
 func collectPruneMACIP(now time.Time) int {
 	globalMACtoIPMutex.Lock()
 	defer globalMACtoIPMutex.Unlock()
@@ -630,9 +671,12 @@ func collectARPMerge(snmpObj *SNMPObject, ip string) (updated, rows int, err err
 	return added + changed, len(entries), nil
 }
 
-// collectARPFromAllSwitches collects ARP from gateway (all SVI IPs) + all
-// discovered switches + the ARP sources (SNMP devices of the swich_ips
-// ranges that are no switches, arpSourceIPs)
+// collectARPFromAllSwitches collects ARP from every gateway (and all their
+// SVI IPs) + all discovered switches + the ARP sources (SNMP devices of the
+// swich_ips ranges that are no switches, arpSourceIPs). Each IP is walked
+// once per sweep: a configured gateway is an ARP source by definition, so
+// a gateway that is also stored or kept as an ARP source (the FortiGate
+// once the rescue scan rejects it) is walked as a gateway only.
 func collectARPFromAllSwitches() {
 	snmpObj := &SNMPObject{
 		Community: "public",
@@ -644,37 +688,53 @@ func collectARPFromAllSwitches() {
 	totalNew := 0
 	totalRows := 0
 
-	// 1. Gateway — collect from its own IP first. Only its answer lets
-	// cache entries expire (collectPruneMACIP).
-	n, rows, err := collectARPMerge(snmpObj, gatewayIP)
-	recordGatewayARP(gatewayIP, rows, err, macIPClock())
-	totalRows += rows
-	if n > 0 {
-		fmt.Printf("🌐 [MacIPService] Gateway %s: +%d new/changed MAC-IP entries\n", gatewayIP, n)
-		totalNew += n
-	}
-
-	// 2. Gateway SVI IPs — gateway may route multiple VLANs (172.20.x.x, 10.20.x.x...)
-	//    Query ipAddrTable to find all its interface IPs and collect ARP from each
-	sviIPs := collectGatewaySVIIPs(snmpObj, gatewayIP)
-	for _, svi := range sviIPs {
-		if svi == gatewayIP {
-			continue // already done above
+	// 1. Every gateway — collect from their own IPs first, in gateway_ip
+	// order (last write wins). Only a gateway's answer lets cache entries
+	// expire (collectPruneMACIP); its sysName labels its router node.
+	walked := make(map[string]bool)
+	var answered []string
+	for _, res := range collectGatewaysARP(snmpObj) {
+		walked[res.IP] = true
+		totalRows += res.Rows
+		if res.Err == nil {
+			answered = append(answered, res.IP)
 		}
-		n, rows, _ := collectARPMerge(snmpObj, svi)
-		totalRows += rows
-		if n > 0 {
-			fmt.Printf("🌐 [MacIPService] Gateway SVI %s: +%d new/changed MAC-IP entries\n", svi, n)
-			totalNew += n
+		if res.Updated > 0 {
+			fmt.Printf("🌐 [MacIPService] Gateway %s: +%d new/changed MAC-IP entries\n", res.IP, res.Updated)
+			totalNew += res.Updated
 		}
 	}
 
-	// 3. All discovered switches
+	// 2. Gateway SVI IPs — a gateway may route multiple VLANs (172.20.x.x, 10.20.x.x...)
+	//    Query the ipAddrTable of each gateway that answered to find all its
+	//    interface IPs and collect ARP from each (an IP once per sweep; one
+	//    that did not answer only once an hour)
+	for _, gw := range answered {
+		for _, svi := range collectGatewaySVIIPs(snmpObj, gw) {
+			if walked[svi] {
+				continue // already done above
+			}
+			walked[svi] = true
+			if !collectSVIWanted(svi, macIPClock()) {
+				continue
+			}
+			n, rows, err := collectARPMerge(snmpObj, svi)
+			recordSVIWalk(svi, err, macIPClock())
+			totalRows += rows
+			if n > 0 {
+				fmt.Printf("🌐 [MacIPService] Gateway SVI %s: +%d new/changed MAC-IP entries\n", svi, n)
+				totalNew += n
+			}
+		}
+	}
+
+	// 3. All discovered switches (a gateway was walked above)
 	collectedDataMutex.RLock()
 	switchIPs := make([]string, 0, len(collectedData))
 	for ip := range collectedData {
-		if ip != gatewayIP {
+		if !walked[ip] {
 			switchIPs = append(switchIPs, ip)
+			walked[ip] = true
 		}
 	}
 	collectedDataMutex.RUnlock()
@@ -689,16 +749,14 @@ func collectARPFromAllSwitches() {
 	}
 
 	// 4. The SNMP devices of the swich_ips ranges that are no switches
-	// (arpSourceIPs): never polled, but the FortiGate's ARP table holds MACs
-	// that no other table shows. An IP walked above is not walked again.
-	walked := map[string]bool{gatewayIP: true}
-	for _, ip := range slices.Concat(sviIPs, switchIPs) {
-		walked[ip] = true
-	}
+	// (arpSourceIPs): never polled, but such a device's ARP table can hold
+	// MACs that no other table shows. An IP walked above (a gateway, its
+	// SVIs, a switch) is not walked again.
 	for _, ip := range arpSourceIPs() {
 		if walked[ip] {
 			continue
 		}
+		walked[ip] = true
 		n, rows, _ := collectARPMerge(snmpObj, ip)
 		totalRows += rows
 		if n > 0 {
@@ -707,7 +765,7 @@ func collectARPFromAllSwitches() {
 		}
 	}
 
-	// Drop entries the gateway has not shown for the TTL (Q18). The cache is
+	// Drop entries no gateway has shown for the TTL (Q18). The cache is
 	// saved after every sweep that read ARP rows, so the last-seen times
 	// survive a restart.
 	now := macIPClock()
@@ -757,7 +815,7 @@ func collectGatewaySVIIPs(snmpObj *SNMPObject, gwIP string) []string {
 				net != "0.0.0.0" {
 				ips = append(ips, net)
 				seen[net] = true
-				fmt.Printf("📡 [MacIPService] Found gateway SVI IP: %s\n", net)
+				gatewayNotice("📡 [MacIPService] Found gateway SVI IP: %s (gateway %s)", net, gwIP) // once per start
 			}
 		}
 	}
@@ -926,10 +984,13 @@ func planSubnetDiscovery(subnets []SubnetInfo, ranges []string) []subnetProbe {
 	inListed := func(a netip.Addr) bool {
 		return slices.ContainsFunc(listed, func(p netip.Prefix) bool { return p.Contains(a) })
 	}
-	skip := map[string]bool{gatewayIP: true}
+	skip := make(map[string]bool)
+	for _, gw := range gatewayIPs {
+		skip[gw] = true // a gateway is no switch: drawn as a router
+	}
 	var plan []subnetProbe
 	for _, s := range subnets {
-		skip[s.IP] = true // the gateway's own addresses
+		skip[s.IP] = true // the gateways' own addresses
 		p, ok := s.prefix()
 		if !ok || s.Prefix < 16 {
 			continue // skip /8, /12 etc — too large, no use
@@ -1053,12 +1114,22 @@ func probeSwitches(snmpObj *SNMPObject, ips []string, workers int, skips *switch
 	wg.Wait()
 }
 
-// subnetDiscovery is one discovery run over the gateway's subnets (see the
-// subnet discovery probes above), workers hosts at a time: add is called
-// for each switch as soon as it is found; ranges are the lines of
-// swich_ips. Returns the IPs add took, in IP order.
+// subnetDiscovery is one discovery run over the subnets of every gateway
+// (the ipAddrTable of each one; a subnet two gateways share is probed
+// once; see the subnet discovery probes above), workers hosts at a time:
+// add is called for each switch as soon as it is found; ranges are the
+// lines of swich_ips. Returns the IPs add took, in IP order.
 func subnetDiscovery(snmpObj *SNMPObject, ranges []string, workers int, add func(ip string) bool) []string {
-	subnets := discoverGatewaySubnets(snmpObj, gatewayIP)
+	var subnets []SubnetInfo
+	seen := make(map[string]bool)
+	for _, gw := range gatewayIPs {
+		for _, s := range discoverGatewaySubnets(snmpObj, gw) {
+			if key := fmt.Sprintf("%s/%d", s.Net, s.Prefix); !seen[key] {
+				seen[key] = true
+				subnets = append(subnets, s)
+			}
+		}
+	}
 	if len(subnets) == 0 {
 		return nil
 	}
@@ -1097,13 +1168,13 @@ func subnetDiscovery(snmpObj *SNMPObject, ranges []string, workers int, add func
 	return added
 }
 
-// RunSubnetDiscovery discovers new switches in the gateway's subnets and
-// appends each one to swich_ips as soon as it is found, for the rescue
+// RunSubnetDiscovery discovers new switches in the subnets of every gateway
+// and appends each one to swich_ips as soon as it is found, for the rescue
 // scan to poll (subnetDiscovery). Only devices that pass checkSwitch are
-// added; one line names the SNMP devices skipped. swich_ips is the owner's
-// configuration: entries are only ever appended (appendSwitchIP, which
-// skips an IP that is listed already), never removed or rewritten.
-// Returns the IPs appended.
+// added; one line names the SNMP devices skipped, and the gateways
+// themselves are never probed. swich_ips is the owner's configuration:
+// entries are only ever appended (appendSwitchIP, which skips an IP that is
+// listed already), never removed or rewritten. Returns the IPs appended.
 func RunSubnetDiscovery() []string {
 	snmpObj := &SNMPObject{
 		Community: "public",
@@ -1133,6 +1204,9 @@ func enrichGraphWithIPs(graph *DJGraph) {
 
 	enriched := 0
 	for mac := range graph.Nodes {
+		if graph.graphRouters[mac] {
+			continue // a gateway's label is its sysName and IPs (addGatewayNodes)
+		}
 		ip := ipMap[mac] // may be empty
 		info := graph.SwitchInfo[mac]
 		changed := false

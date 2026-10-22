@@ -175,28 +175,12 @@ func init() {
 	// Initialize with defaults
 	currentSettings = DefaultSettings()
 
-	// Load gateway IP from file
-	loadGatewayIP()
+	// Load the gateway IPs from file (one or several, gateways.go)
+	loadGatewayIPs("gateway_ip")
 
 	// Try to load saved settings
 	if saved, err := LoadSavedData(); err == nil && saved != nil {
 		currentSettings = saved.Settings
 		fmt.Printf("📂 Loaded settings from %s\n", savedDataFile)
 	}
-}
-
-// loadGatewayIP reads gateway IP from 'gateway_ip' file
-func loadGatewayIP() {
-	data, err := os.ReadFile("gateway_ip")
-	if err != nil {
-		fmt.Println("⚠️  gateway_ip fayl topilmadi! Yarating: echo '172.20.1.254' > gateway_ip")
-		return
-	}
-	ip := strings.TrimSpace(string(data))
-	if ip == "" {
-		fmt.Println("⚠️  gateway_ip fayl bo'sh!")
-		return
-	}
-	gatewayIP = ip
-	fmt.Printf("🌐 Gateway IP yuklandi: %s\n", gatewayIP)
 }
