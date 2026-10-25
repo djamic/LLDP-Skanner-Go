@@ -106,6 +106,19 @@ def notify():
 import requests as sync_requests
 GO_BACKEND_URL = "http://127.0.0.1:8088/api/bot/action"
 
+
+def backend_headers():
+    """The scanner's web API needs a login: the bot sends the token of the
+    .api_token file next to this script (the scanner makes it). Read on
+    every call, so a new token counts without a restart."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".api_token")
+    try:
+        with open(path) as f:
+            return {"Authorization": "Bearer " + f.read().strip()}
+    except OSError:
+        return {}
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
     data = call.data
@@ -120,7 +133,7 @@ def handle_query(call):
     # Send action to Go backend
     try:
         payload = {"action": action, "issue_id": issue_id}
-        resp = sync_requests.post(GO_BACKEND_URL, json=payload, timeout=5)
+        resp = sync_requests.post(GO_BACKEND_URL, json=payload, headers=backend_headers(), timeout=5)
         
         if resp.status_code == 200:
             if action == "ignore":

@@ -1,5 +1,8 @@
-# Secrets
+# Secrets: web users, session and vault keys, device logins (auth.go,
+# credentials.go), and the bot's tokens
+secrets/
 bot/.bot_token
+bot/.api_token
 bot/admin_data.json
 
 # Build outputs and binaries

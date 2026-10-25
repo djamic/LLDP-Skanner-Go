@@ -83,8 +83,10 @@ func checkPortsHandler(w http.ResponseWriter, r *http.Request) {
 // WebSocket Terminal Proxy
 // ============================================================
 
+// upgrader opens the terminal's WebSocket for this server's own pages only:
+// a page of another site could otherwise use the login cookie
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin:     authFromHere,
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
 }

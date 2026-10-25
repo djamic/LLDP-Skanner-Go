@@ -171,8 +171,12 @@ func StartWebServer(port string) {
 	// Serve static files with no-cache for JS/CSS (ensures live updates)
 	staticFS := http.FileServer(http.Dir("./static"))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Prevent browser caching for JS/CSS so changes reflect immediately
-		if filepath.Ext(r.URL.Path) == ".js" || filepath.Ext(r.URL.Path) == ".css" {
+		// Prevent browser caching for JS/CSS so changes reflect immediately,
+		// and for the pages, so a page opened again passes the login check
+		// (a cached index.html after a logout loads no script: they need
+		// the login)
+		ext := filepath.Ext(r.URL.Path)
+		if ext == ".js" || ext == ".css" || ext == ".html" || strings.HasSuffix(r.URL.Path, "/") {
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			w.Header().Set("Pragma", "no-cache")
 			w.Header().Set("Expires", "0")
@@ -214,9 +218,14 @@ func StartWebServer(port string) {
 	// Terminal API (SSH/Telnet/Web)
 	registerTerminalRoutes()
 
+	// Login and the Credentials window; every route needs a login
+	// (authMiddleware) but the login page and call
+	registerAuthRoutes()
+	registerCredentialRoutes()
+
 	addr := ":" + port
 	fmt.Printf("\n🌐 Web server starting on http://localhost%s\n", addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	log.Fatal(http.ListenAndServe(addr, authMiddleware(http.DefaultServeMux)))
 }
 
 // graphHandler returns the current graph data in D3.js format

@@ -124,6 +124,12 @@ func main() {
 	legacyTest = flag.Bool("test", false, "(deprecated) Use --mode experiment")
 	flag.Parse()
 
+	// A web login command (--user-add, --user-del, --vault-password) runs
+	// alone
+	if runAuthCommand() {
+		return
+	}
+
 	// Backward compatibility: old flags override --mode
 	if *legacyExperiment || *legacyTest {
 		*modeFlag = "experiment"
