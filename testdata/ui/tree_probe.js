@@ -337,6 +337,19 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
     cl[0].plain === '📶 <img src=x onerror=alert(7)> 10.0.1.7 de:ad:00:00:00:02' && cl[1].plain === '🔌 de:ad:00:00:00:01' &&
     cl[0].q.includes('10.0.1.7') && safeTree(managedTree).length === 0 && !cl[0].text.includes('<img') &&
     T.treeRowCount(managedTree[0]) === 2, [apRow && apRow.row, cl, safeTree(managedTree)]);
+  // A client that is a node of its own (the Wi-Fi client node /api/graph
+  // adds): its own row while the filter shows it, the client row otherwise
+  const clientNode = { id: 'de:ad:00:00:00:02', label: 'phone\n10.0.1.7', sysName: 'phone\n10.0.1.7', group: 'wifi_client' };
+  const withNode = T.treeSpanning({ nodes: [{ id: 'aa:00:00:00:01:01', label: 'sw\n10.0.0.1', group: 'switch' }, managedNode, clientNode],
+    links: [{ source: 'aa:00:00:00:01:01', target: managedNode.id, label: 'GE1/0/5|eth0', sourceLabel: 'GE1/0/5', targetLabel: 'eth0' },
+      { source: managedNode.id, target: clientNode.id, label: 'Wi-Fi|wlan', sourceLabel: 'Wi-Fi', targetLabel: 'wlan' }] });
+  const shownAll = T.treeProject(withNode, null, {});
+  const noClients = T.treeProject(withNode, n => n.group !== 'wifi_client', {});
+  check('synthetic: a client shown as a device has no client row besides',
+    rows(shownAll).some(r => r.row.id === clientNode.id && r.parent === managedNode.id) &&
+    clientRows(shownAll).map(c => c.mac).join() === 'de:ad:00:00:00:01' &&
+    clientRows(noClients).map(c => c.mac).join() === 'de:ad:00:00:00:02,de:ad:00:00:00:01' &&
+    !rows(noClients).some(r => r.row.id === clientNode.id), [clientRows(shownAll), clientRows(noClients)]);
   check('synthetic: a managed device\'s tooltip has what its controller says',
     T.treeSpanning({ nodes: [managedNode], links: [] }).infos.get(managedNode.id).title
       .includes('UniFi Network controller 10.0.0.2 · U6 LR · OFFLINE · firmware 6.7.57\n2 clients connected'));

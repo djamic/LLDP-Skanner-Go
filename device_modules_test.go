@@ -315,3 +315,48 @@ func TestModuleInventory(t *testing.T) {
 		t.Errorf("the same failure is logged twice: %q", again)
 	}
 }
+
+// TestManagedClientsInGraph checks the Wi-Fi clients of a managed access
+// point in the graph data: a node (wifi_client, its name and IP) for a
+// client that is no node yet, a link from the access point to every
+// wireless client, none twice, and nothing for a wired client.
+func TestManagedClientsInGraph(t *testing.T) {
+	ap := "70:a7:41:00:00:01"
+	data := GraphData{
+		Nodes: []GraphNode{{ID: "4c:ae:a3:00:00:01", Group: "switch"}, {ID: ap, Group: "access_point", Managed: &ManagedView{Name: "A 1", Clients: []modules.ManagedClient{
+			{MAC: "DE:AD:00:00:00:01", Name: "Laptop", IP: "10.9.71.5", Kind: "wireless"},
+			{MAC: "de:ad:00:00:00:02", Name: "de:ad:00:00:00:02", Kind: "wireless"},
+			{MAC: "de:ad:00:00:00:03", Name: "phone", Kind: "wireless"},
+			{MAC: "de:ad:00:00:00:04", Name: "printer", Kind: "wired"},
+			{MAC: ap, Kind: "wireless"},
+		}}}, {ID: "de:ad:00:00:00:03", Group: "wifi_random"}},
+		Links: []GraphLink{{Source: "4c:ae:a3:00:00:01", Target: ap}, {Source: "de:ad:00:00:00:03", Target: ap, Label: "x"}},
+	}
+	addManagedClients(&data)
+	nodes := map[string]GraphNode{}
+	for _, n := range data.Nodes {
+		nodes[n.ID] = n
+	}
+	if n := nodes["de:ad:00:00:00:01"]; n.Group != "wifi_client" || n.SysName != "Laptop\n10.9.71.5" || n.IP != "10.9.71.5" || n.Label != "Laptop\n10.9.71.5\nde:ad:00:00:00:01" {
+		t.Errorf("a new client %+v", n)
+	}
+	if n := nodes["de:ad:00:00:00:02"]; n.Group != "wifi_client" || n.SysName != "" || n.Label != "de:ad:00:00:00:02" {
+		t.Errorf("a client named by its MAC %+v", n)
+	}
+	if n := nodes["de:ad:00:00:00:03"]; n.Group != "wifi_random" {
+		t.Errorf("a client that was a node already is changed: %+v", n)
+	}
+	if _, ok := nodes["de:ad:00:00:00:04"]; ok {
+		t.Error("a wired client is drawn")
+	}
+	var links []string
+	for _, l := range data.Links[2:] {
+		links = append(links, l.Source+">"+l.Target+" "+l.Label)
+	}
+	if want := []string{ap + ">de:ad:00:00:00:01 Wi-Fi|wlan", ap + ">de:ad:00:00:00:02 Wi-Fi|wlan"}; !slices.Equal(links, want) {
+		t.Errorf("new links %v, want %v (the linked client gets none)", links, want)
+	}
+	if len(data.Nodes) != 5 {
+		t.Errorf("%d nodes, want the 3 and 2 new clients", len(data.Nodes))
+	}
+}

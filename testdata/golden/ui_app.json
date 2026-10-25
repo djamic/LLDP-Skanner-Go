@@ -54,6 +54,7 @@
     "switch": "#4A90E2",
     "unknown": "#9E9E9E",
     "vm": "#9C27B0",
+    "wifi_client": "#80DEEA",
     "wifi_random": "#00BCD4"
   },
   "info_panel": [
@@ -156,6 +157,7 @@
     "switch": "#4A90E2",
     "unknown": "#9E9E9E",
     "vm": "#9C27B0",
+    "wifi_client": "#80DEEA",
     "wifi_random": "#00BCD4"
   },
   "shadow_it": {

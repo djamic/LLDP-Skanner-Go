@@ -9,6 +9,7 @@
     "synthetic: a ↔ row to a device the filter hides is left out",
     "synthetic: a ↔ row holds no markup from the server",
     "synthetic: a managed device is named by its controller, with its state and its clients below it",
+    "synthetic: a client shown as a device has no client row besides",
     "synthetic: a managed device's tooltip has what its controller says",
     "synthetic: BFS: a router behind a switch hangs below it",
     "synthetic: child order: routers/switches, hubs/hypervisors, the rest, natural by name",

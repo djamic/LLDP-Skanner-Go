@@ -110,6 +110,53 @@ func addManaged(data *GraphData) {
 	}
 }
 
+// addManagedClients adds the wireless clients of the managed devices to the
+// graph data, for the canvas: a node per client that is no node yet (group
+// wifi_client: its name and IP), and a link from its device ("Wi-Fi|wlan")
+// unless the two are linked already. A wired client (on a UniFi switch) is
+// left out: the switch FDB shows it. The UI shows the clients on demand:
+// their filter starts off, and a device's "Show Connected" shows its own.
+func addManagedClients(data *GraphData) {
+	have := make(map[string]bool, len(data.Nodes))
+	for _, n := range data.Nodes {
+		have[n.ID] = true
+	}
+	linked := make(map[string]bool, 2*len(data.Links))
+	for _, l := range data.Links {
+		linked[l.Source+"|"+l.Target], linked[l.Target+"|"+l.Source] = true, true
+	}
+	devices := len(data.Nodes)
+	for i := 0; i < devices; i++ {
+		ap := data.Nodes[i]
+		if ap.Managed == nil {
+			continue
+		}
+		for _, c := range ap.Managed.Clients {
+			mac := canonicalMAC(c.MAC)
+			if mac == "" || mac == ap.ID || c.Kind == "wired" {
+				continue
+			}
+			if !have[mac] {
+				have[mac] = true
+				var lines []string
+				if c.Name != "" && !strings.EqualFold(c.Name, mac) {
+					lines = append(lines, c.Name)
+				}
+				if c.IP != "" {
+					lines = append(lines, c.IP)
+				}
+				info := strings.Join(lines, "\n")
+				data.Nodes = append(data.Nodes, GraphNode{ID: mac, Label: strings.TrimPrefix(info+"\n"+mac, "\n"), Group: "wifi_client",
+					NodeType: "wifi_client", SysName: info, IP: c.IP})
+			}
+			if !linked[ap.ID+"|"+mac] {
+				linked[ap.ID+"|"+mac], linked[mac+"|"+ap.ID] = true, true
+				data.Links = append(data.Links, GraphLink{Source: ap.ID, Target: mac, Label: "Wi-Fi|wlan", SourceLabel: "Wi-Fi", TargetLabel: "wlan"})
+			}
+		}
+	}
+}
+
 // inventoryLoad reads inventoryFile (none is no record).
 func inventoryLoad() {
 	data, err := os.ReadFile(inventoryFile)

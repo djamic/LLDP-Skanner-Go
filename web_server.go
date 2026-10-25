@@ -263,8 +263,10 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 	data.Core = topologyCore(nodes, collectedData)
 	collectedDataMutex.RUnlock()
 
-	// The devices the controllers manage (module_inventory.go)
+	// The devices the controllers manage and their Wi-Fi clients
+	// (module_inventory.go)
 	addManaged(&data)
+	addManagedClients(&data)
 
 	// E.1/E.2: Enrich graph data with health score and anomaly info
 	lastReportMutex.RLock()

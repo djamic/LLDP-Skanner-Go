@@ -140,9 +140,15 @@ func loadGatewayIPs(path string) {
 var gatewayFile = "gateway_ip"
 
 // gatewaysChanged runs after the Settings window changed the list: the
-// gateways' ARP tables are walked at once, so a new gateway's router node
-// comes with the next graph build (a variable for tests).
-var gatewaysChanged = func() { go collectGatewayARP() }
+// gateways' ARP tables are walked at once and the graph is built again, so
+// a new gateway's router node shows without waiting for the next periodic
+// build (a variable for tests).
+var gatewaysChanged = func() {
+	go func() {
+		collectGatewayARP()
+		rebuildGraph()
+	}()
+}
 
 // gatewayFileText is the text of gatewayFile for a new list: one gateway
 // per line, each keeping the comment its line had in the file

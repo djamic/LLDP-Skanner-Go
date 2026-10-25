@@ -26,6 +26,7 @@ const groupColors = {
     'hub': '#FF9800',
     'endpoint': '#8BC34A',
     'wifi_random': '#00BCD4',
+    'wifi_client': '#80DEEA', // a UniFi access point's client (module_inventory.go)
     'vm': '#9C27B0',
     'hypervisor': '#26C6DA',  // teal-cyan
     'bmc':        '#FF6F00',  // amber — server management
@@ -254,6 +255,9 @@ function getFilteredData(data) {
 
         filteredNodes = filteredNodes.filter(n => {
             if (n.id === selected) return true;
+            // an access point's Wi-Fi clients show around it even while
+            // their filter is off (it starts off: there may be thousands)
+            if (n.group === 'wifi_client' && connectedToSelected.has(n.id)) return true;
             if (!connectedToSelected.has(n.id) || !uiGroupShown(n)) return false;
             return filterState.contextShowEndpoints || (n.group !== 'endpoint' && n.group !== 'wifi_random');
         });
@@ -1156,14 +1160,14 @@ function showInfoPanel(node) {
     // randomised-MAC group is 'Random MAC', as in the filter bar and the report)
     const typeNames = {
         'switch': '🔀 Switch', 'router': '🌐 Router', 'hub': '🔌 Hub',
-        'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC',
+        'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC', 'wifi_client': '📶 Wi-Fi client',
         'vm': '🖥️ VM', 'hypervisor': '🏗️ Hypervisor', 'bmc': '🔧 BMC',
         'server': '🖲️ Server', 'camera': '📹 Camera',
         'access_point': '📡 Wi-Fi AP', 'printer': '🖨️ Printer',
         'phone': '📱 Phone', 'iot': '🔌 IoT', 'unknown': '❓ Unknown'
     };
     const groupIcons = { 'switch':'🔀','router':'🌐','hub':'🔌','endpoint':'💻',
-        'wifi_random':'🎲','vm':'🖥️','hypervisor':'🏗️','bmc':'🔧','server':'🖲️',
+        'wifi_random':'🎲','wifi_client':'📶','vm':'🖥️','hypervisor':'🏗️','bmc':'🔧','server':'🖲️',
         'access_point':'📡','camera':'📹','printer':'🖨️','phone':'📱','iot':'🔌','unknown':'❓' };
 
     // Update panel content
@@ -2118,6 +2122,7 @@ function downloadAuditReport() {
         { id: 'phone', label: '📞 Phone', checked: false },
         { id: 'iot', label: '🌡️ IoT', checked: false },
         { id: 'wifi_random', label: '🎲 Random MAC', checked: false },
+        { id: 'wifi_client', label: '📶 Wi-Fi client', checked: false },
         { id: 'printer', label: '🖨️ Printer', checked: false },
         { id: 'server', label: '🖲️ Server', checked: false },
         { id: 'unknown', label: '❓ Unknown', checked: false },

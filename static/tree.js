@@ -20,7 +20,7 @@
 // Group icons, the same as the info panel's (app.js showInfoPanel).
 const treeGroupIcons = {
     'switch': '🔀', 'router': '🌐', 'hub': '🔌', 'endpoint': '💻',
-    'wifi_random': '🎲', 'vm': '🖥️', 'hypervisor': '🏗️', 'bmc': '🔧', 'server': '🖲️',
+    'wifi_random': '🎲', 'wifi_client': '📶', 'vm': '🖥️', 'hypervisor': '🏗️', 'bmc': '🔧', 'server': '🖲️',
     'access_point': '📡', 'camera': '📹', 'printer': '🖨️', 'phone': '📱', 'iot': '🔌', 'unknown': '❓'
 };
 
@@ -619,7 +619,12 @@ function treeProject(sp, shown, options) {
         const json = {
             id: treeSafeId(id),
             text: treeRowHTML(info, treeOwn(colors, info.group), badge, count, title),
-            children: rows.map(r => r.json).concat(xrefs, treeClientRows(id, info)),
+            // a client the filter shows as a device of its own (a Wi-Fi
+            // client node, module_inventory.go) has its own row instead
+            children: rows.map(r => r.json).concat(xrefs, treeClientRows(id, info).filter(r => {
+                const node = sp.infos.get(r.data.client);
+                return !(node && isShown(node.node));
+            })),
             data: { node: id, q: info.q },
         };
         return [{ info, json, count }];
