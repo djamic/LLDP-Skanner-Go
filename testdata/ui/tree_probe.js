@@ -157,8 +157,13 @@ function badge(text) {
     depth += m[0] === '</span>' ? -1 : 1;
     if (depth === 0) { end = m.index; break; }
   }
-  const html = text.slice(from, end);
-  return { html, text: decodeEntities(html.replace(/<[^>]*>/g, '')), title: decodeEntities(start[1]) };
+  let html = text.slice(from, end);
+  // the device the link comes from opens the badge ('254.202 '); it is read
+  // apart so the port checks below see only the two ports
+  let fromName = '';
+  const fm = /^<span class="tv-from">([^<]*)<\/span> /.exec(html);
+  if (fm) { fromName = decodeEntities(fm[1]); html = html.slice(fm[0].length); }
+  return { html, text: decodeEntities(html.replace(/<[^>]*>/g, '')), title: decodeEntities(start[1]), from: fromName };
 }
 
 // row reads a jsTree node back: the spans tree.js writes.
@@ -171,7 +176,7 @@ function row(json) {
   const b = badge(t);
   return {
     id: json.data && json.data.node, folder: !!(json.data && json.data.folder),
-    name: span('tv-name'), address: span('tv-addr'), port: b.text, portHTML: b.html, portTitle: b.title,
+    name: span('tv-name'), address: span('tv-addr'), port: b.text, portHTML: b.html, portTitle: b.title, from: b.from,
     count: span('tv-count'), icon: span('tv-icon'),
     dot: (/<span class="tv-dot" style="background:([^"]*)"/.exec(t) || [])[1] || '',
     unreachable: t.includes('tv-unreachable'),
@@ -179,12 +184,16 @@ function row(json) {
   };
 }
 
+// fullBadge is a badge as the page shows it: the device the link comes
+// from, then the two ports.
+const fullBadge = (r) => (r.from ? r.from + ' ' : '') + r.port;
+
 // outline is the tree as text, one row per line, indented by depth.
 function outline(json) {
   const lines = [];
   const walk = (n, depth) => {
     const r = row(n);
-    lines.push('  '.repeat(depth) + (r.port ? `[${r.port}] ` : '') + `${r.icon} ${r.name}` + (r.address ? ` · ${r.address}` : '') +
+    lines.push('  '.repeat(depth) + (r.port ? `[${r.from ? r.from + ' ' : ''}${r.port}] ` : '') + `${r.icon} ${r.name}` + (r.address ? ` · ${r.address}` : '') +
       (r.count ? ` (${r.count})` : '') + (r.unreachable ? ' !unreachable' : '') +
       (r.id !== undefined ? `  #${r.id}` : ''));
     (n.children || []).forEach(c => walk(c, depth + 1));
@@ -298,13 +307,13 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   const vmRows = rows(vmOnly).filter(r => !r.row.folder);
   check('synthetic: only VM: the VMs at the top, their switch port named', vmOnly.length === 3 &&
     vmRows.length === 3 && vmRows.every(r => data.nodes.find(n => n.id === r.row.id).group === 'vm') &&
-    row(vmOnly[0]).port === 'dist-10 (10.0.1.10) ge1/0/7 → ?' && row(vmOnly[1]).port === 'dist-10 (10.0.1.10) ge1/0/7 → ?' &&
+    fullBadge(row(vmOnly[0])) === 'dist-10 (10.0.1.10) ge1/0/7 → ?' && fullBadge(row(vmOnly[1])) === 'dist-10 (10.0.1.10) ge1/0/7 → ?' &&
     row(vmOnly[2]).folder && row(vmOnly[2]).count === '1', outline(vmOnly));
   const swVm = T.treeProject(sp, shownBy(['switch', 'vm']), { colors: groupColors });
   const sv = rows(swVm).filter(r => !r.row.folder);
   const svAt = (id) => sv.find(r => r.row.id === id);
   check('synthetic: switch and VM: VMs move up to their switch, with its port', svAt(VM1).parent === S3 && svAt(VM2).parent === S3 &&
-    svAt(VM1).row.port === 'ge1/0/7 → ?' && svAt(S1).parent === null && svAt(S1).row.port === 'gw-1 (10.0.0.1) Te1/0/1 → GE1/0/1' &&
+    svAt(VM1).row.port === 'ge1/0/7 → ?' && svAt(S1).parent === null && fullBadge(svAt(S1).row) === 'gw-1 (10.0.0.1) Te1/0/1 → GE1/0/1' &&
     svAt(S1).row.count === '4' && svAt(S3).row.count === '2' && svAt(S2).row.count === '', outline(swVm));
   const apFree = T.treeProject(sp, T.treeGroupFilter(['vm'], filterable.filter(g => g !== 'access_point')), {});
   check('synthetic: a group without a checkbox is always shown (as app.js uiGroupShown)',
@@ -452,12 +461,12 @@ function portGraph() {
   const noSwitch = rows(T.treeProject(sp, shownBy(filterable.filter(g => g !== 'switch')), {}));
   const e = noSwitch.find(r => r.row.id === PE), hub = noSwitch.find(r => r.row.id === PG);
   check('ports: the parent filtered out: the badge names it, and the row tooltip says where the device is plugged in',
-    e.parent === null && e.row.port === 'HPE (172.20.254.202) GE1/0/22 [V1500] → ?' && e.row.title.endsWith('\nplugged into HPE (172.20.254.202) GE1/0/22') &&
-    hub.row.port === 'HPE (172.20.254.202) GE1/0/40 → ?' && noSwitch.find(r => r.row.id === PM1).row.port === '', [e.row, hub.row.port]);
+    e.parent === null && fullBadge(e.row) === 'HPE (172.20.254.202) GE1/0/22 [V1500] → ?' && e.row.title.endsWith('\nplugged into HPE (172.20.254.202) GE1/0/22') &&
+    fullBadge(hub.row) === 'HPE (172.20.254.202) GE1/0/40 → ?' && noSwitch.find(r => r.row.id === PM1).row.port === '', [e.row, hub.row.port]);
   const onlyEndpoints = rows(T.treeProject(sp, shownBy(['endpoint']), {}));
   const lone = onlyEndpoints.find(r => r.row.id === PM1);
   check('ports: switch and hub filtered out: a hub member names the switch port it hangs on, through the hub',
-    lone.parent === null && lone.row.port === 'HPE (172.20.254.202) GE1/0/40 → ?' &&
+    lone.parent === null && fullBadge(lone.row) === 'HPE (172.20.254.202) GE1/0/40 → ?' &&
     lone.row.portTitle === 'HPE (172.20.254.202) GE1/0/40 → Dell (10.1.0.41) ?\nFDB link\nvia Unmanaged (filtered out)\n? = port unknown', lone.row);
 
   // Escaping (finding F86): hostile port names, near and far, are text.
@@ -480,8 +489,8 @@ function portGraph() {
   const below = rows(swOut).find(r => r.row.id === PHE);
   check('ports: a filtered-out switch with a hostile name is text in the badge of the device below it',
     safeTree(swOut).length === 0 && !rows(swOut).some(r => r.json.text.includes('<img')) && below.parent === null &&
-    below.row.port === `${XSW} (10.1.0.8) GE1/0/3 [V10] → ?` &&
-    below.row.portHTML.startsWith('&lt;img src=x onerror=alert(4)&gt; (10.1.0.8) GE1/0/3 ') &&
+    fullBadge(below.row) === `${XSW} (10.1.0.8) GE1/0/3 [V10] → ?` && below.row.portHTML.startsWith('GE1/0/3 ') &&
+    below.json.text.includes('<span class="tv-from">&lt;img src=x onerror=alert(4)&gt; (10.1.0.8)</span>') &&
     below.row.portTitle === `${XSW} (10.1.0.8) GE1/0/3 → Intel (10.1.0.9) ?\n? = port unknown` &&
     below.row.title.endsWith(`\nplugged into ${XSW} (10.1.0.8) GE1/0/3`), [safeTree(swOut), below && below.row]);
   check('ports: the device search matches both ports of the link to the parent, with their markers',
@@ -582,8 +591,16 @@ function hops(data, root) {
     wrong.length === 0 && parentIsSource > 0 && parentIsTarget > 0, [wrong.slice(0, 3), parentIsSource, parentIsTarget]);
   const owner = devices.find(r => r.row.id === '88:22:5b:88:e2:40');
   check('fixture: the owner\'s link: 172.20.230.253 hangs from 172.20.254.202 port TGE1/0/51, on its own port Port28',
-    owner.parent === '4c:ae:a3:8d:ee:c9' && owner.row.port === 'TGE1/0/51 → Port28' &&
+    owner.parent === '4c:ae:a3:8d:ee:c9' && owner.row.port === 'TGE1/0/51 → Port28' && owner.row.from === '254.202' &&
+    fullBadge(owner.row) === '254.202 TGE1/0/51 → Port28' &&
     owner.row.portTitle === 'HPE (172.20.254.202) TGE1/0/51 → 172.20.230.253 Port28\nLLDP link', owner.row);
+  // every badge opens with the device the link comes from: the parent's
+  // short name ('254.202') when the parent is shown, so no row reads as
+  // hanging on the row above it
+  const shortOf = (id) => { const i = sp.infos.get(id); return i && i.short; };
+  const badFrom = devices.filter(r => r.row.port && r.parent && r.row.from !== shortOf(r.parent));
+  check('fixture: every badge names the device the link comes from, the parent shown above it',
+    devices.some(r => r.row.port) && badFrom.length === 0, badFrom.slice(0, 5).map(r => [r.row.id, r.parent, r.row.from]));
 
   // Every filter of one group, and of all groups but one: the shown devices,
   // each once, below their nearest shown ancestor of the full tree, and the

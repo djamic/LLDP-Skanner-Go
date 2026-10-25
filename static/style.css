@@ -1395,6 +1395,13 @@ button:active {
     margin-right: 3px;
 }
 
+/* the device the link comes from, in front of its port */
+.tv-from {
+    color: #8a9bae;
+    font-weight: 600;
+    margin-right: 2px;
+}
+
 .tv-addr {
     color: #8a9bae;
     font-size: 12px;

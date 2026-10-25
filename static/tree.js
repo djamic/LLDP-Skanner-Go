@@ -255,6 +255,10 @@ function treeSpanning(data) {
             // how a row names this device when it holds the port of a
             // device further down: many switches are just called 'HPE'
             label: ips[0] && ips[0] !== name ? `${name} (${ips[0]})` : name,
+            // how a child's port badge names this device as the far end:
+            // the last two parts of its IPv4 address ('254.202', the way
+            // the network's switches are called), else its name
+            short: treeShortName(name, ips),
             degree: 0,
         });
     });
@@ -424,8 +428,20 @@ function treePortHTML(sp, id, named) {
     const port = (side) => (side.port
         ? treeEscapeHTML(side.port) + side.marks.map(m => ` <span class="tv-mark">${treeEscapeHTML(m)}</span>`).join('')
         : '<span class="tv-unknown">?</span>');
+    // the badge always names the device the link comes from, so a row never
+    // reads as hanging on the row above it ('254.202 TGE1/0/51 → 1/1/28')
+    const fromHTML = `<span class="tv-from">${treeEscapeHTML(named ? from : sp.infos.get(at).short)}</span>`;
     return `<span class="tv-port" title="${treeEscapeHTML(lines.join('\n'))}">` +
-        `${named ? treeEscapeHTML(from) + ' ' : ''}${port(up)} → ${port(down)}</span>`;
+        `${fromHTML} ${port(up)} → ${port(down)}</span>`;
+}
+
+// treeShortName is a device's short name for the badges of its children:
+// '254.202' for 172.20.254.202, else its name cut to 16 characters.
+function treeShortName(name, ips) {
+    const m = /^\d+\.\d+\.(\d+\.\d+)$/.exec(ips && ips[0] ? ips[0] : '');
+    if (m) return m[1];
+    const n = String(name || '');
+    return n.length > 16 ? n.slice(0, 15) + '…' : n;
 }
 
 // treeRowHTML is the text of a jsTree node: the group's colour, the port
