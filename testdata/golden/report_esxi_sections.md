@@ -907,18 +907,21 @@ graph LR
 
 **Virtual mashinalar:** 0 ta
 
-### Hypervisor #3: [HYPERVISOR] VMware ESXi — [ENDPOINT] Hewlett Packard Enterprise — 172.20.9.149
+### Hypervisor #3: [HYPERVISOR] VMware ESXi — 1 VMs on ge1/0/18 — [ENDPOINT] Hewlett Packard Enterprise — 172.20.9.149 — VMs: 172.20.7.22
 
 ```mermaid
 graph LR
-  08f1ea8d264e{{"[HYPERVISOR] VMware ESXi<br>[ENDPOINT] Hewlett Packard Enterprise<br>172.20.9.149"}}
+  08f1ea8d264e{{"[HYPERVISOR] VMware ESXi<br>1 VMs on ge1/0/18<br>[ENDPOINT] Hewlett Packard Enterprise<br>172.20.9.149<br>VMs: 172.20.7.22"}}
   4caea38deec9["HPE<br>172.20.254.202"]
   4caea38deec9-- "GE1/0/18" -->08f1ea8d264e
   style 4caea38deec9 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  000c292dde3c["[VM] 🪟 Windows VMware<br>172.20.7.22"]
+  08f1ea8d264e-->000c292dde3c
+  style 000c292dde3c fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style 08f1ea8d264e fill:#26C6DA,stroke:#0097A7,color:#fff
 ```
 
-**Virtual mashinalar:** 0 ta
+**Virtual mashinalar:** 1 ta
 
 ### Hypervisor #4: [HYPERVISOR] VMware ESXi — 2 VMs on ge1/0/32 — [ENDPOINT] Intel Corporate — 172.20.0.50 — [DNS] pc-0-50 — VMs: 172.20.13.243, 172.20.6.247
 
@@ -1013,18 +1016,21 @@ graph LR
 
 **Virtual mashinalar:** 3 ta
 
-### Hypervisor #10: [HYPERVISOR] VMware ESXi — [ENDPOINT] Hewlett Packard — 10.10.10.68
+### Hypervisor #10: [HYPERVISOR] VMware ESXi — 1 VMs on ge1/0/3 — [ENDPOINT] Hewlett Packard — 10.10.10.68 — VMs: 10.10.10.4
 
 ```mermaid
 graph LR
-  c4346bb84194{{"[HYPERVISOR] VMware ESXi<br>[ENDPOINT] Hewlett Packard<br>10.10.10.68"}}
+  c4346bb84194{{"[HYPERVISOR] VMware ESXi<br>1 VMs on ge1/0/3<br>[ENDPOINT] Hewlett Packard<br>10.10.10.68<br>VMs: 10.10.10.4"}}
   4caea3277eca["HPE<br>172.20.254.10"]
   4caea3277eca-- "GE1/0/3 [V10]" -->c4346bb84194
   style 4caea3277eca fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  000c29b745bb["[VM] 💻 VMware VM VMware<br>10.10.10.4"]
+  c4346bb84194-->000c29b745bb
+  style 000c29b745bb fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style c4346bb84194 fill:#26C6DA,stroke:#0097A7,color:#fff
 ```
 
-**Virtual mashinalar:** 0 ta
+**Virtual mashinalar:** 1 ta
 
 ### Hypervisor #11: [HYPERVISOR] VMware ESXi — 5 VMs on ge1/0/4 — [ENDPOINT] Hewlett Packard Enterprise — 10.10.10.69 — VMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66
 

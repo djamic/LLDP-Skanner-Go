@@ -3434,17 +3434,20 @@ func detectHypervisors(graph *DJGraph) {
 		}
 	}
 
-	// For each switch port with 2+ VM MACs → insert hypervisor node
+	// For each switch port with 2+ VM MACs → insert hypervisor node; a
+	// confirmed ESXi host takes one VM too (254.202 GE1/0/18: the host
+	// 172.20.9.149 and its VM 172.20.7.22)
 	for _, switchID := range slices.Sorted(maps.Keys(portVMs)) {
 		ports := portVMs[switchID]
 		for _, port := range slices.Sorted(maps.Keys(ports)) {
 			vmMACs := ports[port]
-			if len(vmMACs) < 2 {
+			hosts := portHosts[switchID][port]
+			if len(vmMACs) < 2 && len(hosts) != 1 {
 				continue // single VM MAC — could be real NIC, skip
 			}
 
 			// The one confirmed ESXi host on the port is the hypervisor
-			if hosts := portHosts[switchID][port]; len(hosts) == 1 {
+			if len(hosts) == 1 {
 				host := hosts[0]
 				graphTagHypervisorHost(graph, host, fmt.Sprintf("%d VMs on %s", len(vmMACs), port))
 				for _, vmMAC := range vmMACs {
@@ -3508,7 +3511,13 @@ func detectHypervisors(graph *DJGraph) {
 			if strings.Contains(info, "[HYPERVISOR]") || strings.Contains(info, "[BMC]") {
 				continue
 			}
-			graph.SwitchInfo[nodeID] = fmt.Sprintf("[HYPERVISOR] %s Server\n%s", vendor, info)
+			// A confirmed ESXi host is named as one, like the confirmed
+			// hosts with VMs, not by its NIC's vendor
+			tag := fmt.Sprintf("[HYPERVISOR] %s Server", vendor)
+			if graphIsConfirmedESXi(nodeID) {
+				tag = graphESXiTag
+			}
+			graph.SwitchInfo[nodeID] = tag + "\n" + info
 			fmt.Printf("🖥️  Server NIC detected: %s → %s (potential ESXi host)\n", nodeID, vendor)
 		}
 	}

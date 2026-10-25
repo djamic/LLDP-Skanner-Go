@@ -427,7 +427,9 @@ func TestGraphHypervisorTypesFromRegistry(t *testing.T) {
 // TestGraphESXiHostIsHypervisor checks a port with VMs and one confirmed
 // ESXi host NIC: the VMs hang from the host's node, whose label starts with
 // the ESXi tag and the VM count of each of its ports (once each, the tag
-// once), and no hyp- node is drawn there. Behind a hub the hyp- node stays.
+// once), and no hyp- node is drawn there, also for a single VM; a
+// confirmed server NIC is named as an ESXi host. Behind a hub the hyp- node
+// stays.
 func TestGraphESXiHostIsHypervisor(t *testing.T) {
 	resetState(t)
 	const sw, sw2, host = "4c:ae:a3:00:26:00", "4c:ae:a3:00:26:01", "d4:f5:ef:00:26:01"
@@ -466,6 +468,29 @@ func TestGraphESXiHostIsHypervisor(t *testing.T) {
 	}
 	if group := g.determineDeviceGroup(host, g.SwitchInfo[host]); group != "hypervisor" {
 		t.Errorf("host group %q, want hypervisor", group)
+	}
+
+	// A confirmed host takes a single VM too; a confirmed server NIC
+	// without VMs is named as an ESXi host, an unconfirmed one by its vendor
+	const single, vm1, esxiNIC, serverNIC = "d4:f5:ef:00:18:01", "00:0c:29:00:18:02", "5c:ed:8c:00:29:01", "5c:ed:8c:00:29:02"
+	o := graphVMPortGraph("GE1/0/18|", vm1)
+	addInfoNode(o, single, "[ENDPOINT] HPE")
+	o.AddEdge("4c:ae:a3:00:05:00", single, "GE1/0/18|")
+	for _, nic := range []string{esxiNIC, serverNIC} {
+		addInfoNode(o, nic, "[LLDP-EP] HPE")
+		o.AddEdge("4c:ae:a3:00:05:00", nic, "GE1/0/29|")
+	}
+	ConfirmedESXiMACs.Store(single, true)
+	ConfirmedESXiMACs.Store(esxiNIC, true)
+	detectHypervisors(o)
+	if o.Edges[single][vm1] != "vNIC" || o.SwitchInfo[single] != "[HYPERVISOR] VMware ESXi\n1 VMs on ge1/0/18\n[ENDPOINT] HPE" {
+		t.Errorf("host with one VM: link %q, label %q; want the VM below the host", o.Edges[single][vm1], o.SwitchInfo[single])
+	}
+	if got := o.SwitchInfo[esxiNIC]; got != "[HYPERVISOR] VMware ESXi\n[LLDP-EP] HPE" {
+		t.Errorf("confirmed server NIC label %q, want the ESXi tag", got)
+	}
+	if got := o.SwitchInfo[serverNIC]; got != "[HYPERVISOR] HPE ProLiant Server\n[LLDP-EP] HPE" {
+		t.Errorf("unconfirmed server NIC label %q, want its vendor's server tag", got)
 	}
 
 	// Behind a hub the confirmed host is a hub member like the VMs
