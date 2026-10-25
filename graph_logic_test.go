@@ -424,6 +424,67 @@ func TestGraphHypervisorTypesFromRegistry(t *testing.T) {
 	}
 }
 
+// TestGraphESXiHostIsHypervisor checks a port with VMs and one confirmed
+// ESXi host NIC: the VMs hang from the host's node, whose label starts with
+// the ESXi tag and the VM count of each of its ports (once each, the tag
+// once), and no hyp- node is drawn there. Behind a hub the hyp- node stays.
+func TestGraphESXiHostIsHypervisor(t *testing.T) {
+	resetState(t)
+	const sw, sw2, host = "4c:ae:a3:00:26:00", "4c:ae:a3:00:26:01", "d4:f5:ef:00:26:01"
+	vms := []string{"00:0c:29:00:26:02", "00:0c:29:00:26:03", "00:0c:29:00:03:04", "00:0c:29:00:03:05"}
+	g := NewDJGraph()
+	addInfoNode(g, sw, "sw\n10.0.26.1")
+	addInfoNode(g, sw2, "sw2\n10.0.26.2")
+	addInfoNode(g, host, "[ENDPOINT] HPE\n10.0.26.5")
+	g.AddEdge(sw, host, "GE1/0/26 1G|")
+	g.AddEdge(sw2, host, "GE1/0/3|")
+	for i, vm := range vms {
+		addInfoNode(g, vm, "[VM] 💻 VM")
+		if i < 2 {
+			g.AddEdge(sw, vm, "GE1/0/26 1G|")
+		} else {
+			g.AddEdge(sw2, vm, "GE1/0/3|")
+		}
+	}
+	ConfirmedESXiMACs.Store(host, "10.0.26.5")
+	detectHypervisors(g)
+	if want := "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/26\n2 VMs on ge1/0/3\n[ENDPOINT] HPE\n10.0.26.5"; g.SwitchInfo[host] != want {
+		t.Errorf("host label %q, want %q", g.SwitchInfo[host], want)
+	}
+	for _, vm := range vms {
+		if g.Edges[host][vm] != "vNIC" || g.Edges[sw][vm] != "" || g.Edges[sw2][vm] != "" {
+			t.Errorf("VM %s: host link %q, switch links %q %q; want it below the host only", vm, g.Edges[host][vm], g.Edges[sw][vm], g.Edges[sw2][vm])
+		}
+	}
+	if g.Edges[sw][host] != "GE1/0/26 1G|" || g.Edges[sw2][host] != "GE1/0/3|" {
+		t.Errorf("switch links of the host %q, %q; want them as they were", g.Edges[sw][host], g.Edges[sw2][host])
+	}
+	for id := range g.Nodes {
+		if strings.HasPrefix(id, "hyp-") {
+			t.Errorf("hyp- node %s drawn next to the confirmed host", id)
+		}
+	}
+	if group := g.determineDeviceGroup(host, g.SwitchInfo[host]); group != "hypervisor" {
+		t.Errorf("host group %q, want hypervisor", group)
+	}
+
+	// Behind a hub the confirmed host is a hub member like the VMs
+	h := NewDJGraph()
+	hub := "hub-" + sw + "-p7"
+	addInfoNode(h, sw, "sw\n10.0.26.1")
+	addInfoNode(h, hub, "[HUB] Unmanaged\n3 devices")
+	h.AddEdge(sw, hub, "GE1/0/7|Hub")
+	for _, mac := range []string{host, vms[0], vms[1]} {
+		addInfoNode(h, mac, "[ENDPOINT]")
+		h.AddEdge(hub, mac, "")
+	}
+	detectHypervisors(h)
+	_, member := h.Edges[hub][host]
+	if hyp := "hyp-" + hub + "-ge1_0_7"; !h.Nodes[hyp] || !member || len(h.Edges[host]) != 0 {
+		t.Errorf("behind a hub: %s drawn %v, host links %v; want the hyp- node and the host a hub member", hyp, h.Nodes[hyp], h.Edges[host])
+	}
+}
+
 // TestGraphHypervisorPortKey covers F23 (speed and traffic text never enter
 // the port key) and F24 (VMs behind a hub are keyed by the hub's port).
 func TestGraphHypervisorPortKey(t *testing.T) {

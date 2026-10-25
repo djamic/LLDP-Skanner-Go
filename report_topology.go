@@ -1158,11 +1158,13 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 	return md.String()
 }
 
-// reportHypervisorHosts finds the hypervisor-group nodes that belong to a
-// hyp- node: its vNIC children, and the host's own NIC, which the graph
-// keeps as a separate node on the same switch port. hosts maps a hyp- node
-// to its host NICs; covered marks all of these nodes, which get no diagram
-// of their own.
+// reportHypervisorHosts finds the hypervisor-group nodes that belong to
+// another hypervisor's diagram: the vNIC children of a hyp- node or of a
+// confirmed ESXi host (a nested ESXi), and a hyp- node's host NIC, which
+// the graph keeps as a separate node on the same switch port when it is no
+// confirmed ESXi host (detectHypervisors). hosts maps a hyp- node to its
+// host NICs; covered marks all of these nodes, which get no diagram of
+// their own.
 func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts map[string][]string, covered map[string]bool) {
 	hypOnPort := map[string][]string{} // switch node + "|" + port → hyp- nodes
 	for _, l := range data.Links {
@@ -1180,7 +1182,7 @@ func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts ma
 		if n.Group != "hypervisor" || strings.HasPrefix(n.ID, "hyp-") {
 			continue
 		}
-		if strings.HasPrefix(l.Source, "hyp-") && l.Label == "vNIC" {
+		if l.Label == "vNIC" {
 			covered[n.ID] = true
 			continue
 		}

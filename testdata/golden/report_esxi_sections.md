@@ -920,7 +920,26 @@ graph LR
 
 **Virtual mashinalar:** 0 ta
 
-### Hypervisor #4: [HYPERVISOR] VMware ESXi — [WiFi] — 172.16.16.223 — [DNS] nas01
+### Hypervisor #4: [HYPERVISOR] VMware ESXi — 2 VMs on ge1/0/32 — [ENDPOINT] Intel Corporate — 172.20.0.50 — [DNS] pc-0-50 — VMs: 172.20.13.243, 172.20.6.247
+
+```mermaid
+graph LR
+  507c6f62e24c{{"[HYPERVISOR] VMware ESXi<br>2 VMs on ge1/0/32<br>[ENDPOINT] Intel Corporate<br>172.20.0.50<br>[DNS] pc-0-50<br>VMs: 172.20.13.243, 172.20.6.247"}}
+  4caea38deec9["HPE<br>172.20.254.202"]
+  4caea38deec9-- "GE1/0/32" -->507c6f62e24c
+  style 4caea38deec9 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  000c29735e0b["[VM] 💻 VMware VM VMware<br>172.20.13.243"]
+  507c6f62e24c-->000c29735e0b
+  style 000c29735e0b fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  000c297f194e["[VM] 💻 VMware VM VMware<br>172.20.6.247"]
+  507c6f62e24c-->000c297f194e
+  style 000c297f194e fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style 507c6f62e24c fill:#26C6DA,stroke:#0097A7,color:#fff
+```
+
+**Virtual mashinalar:** 2 ta
+
+### Hypervisor #5: [HYPERVISOR] VMware ESXi — [WiFi] — 172.16.16.223 — [DNS] nas01
 
 ```mermaid
 graph LR
@@ -933,7 +952,7 @@ graph LR
 
 **Virtual mashinalar:** 0 ta
 
-### Hypervisor #5: [HYPERVISOR] VMware ESXi — [ENDPOINT] TP-Link Systems Inc — 172.16.0.121
+### Hypervisor #6: [HYPERVISOR] VMware ESXi — [ENDPOINT] TP-Link Systems Inc — 172.16.0.121
 
 ```mermaid
 graph LR
@@ -946,7 +965,7 @@ graph LR
 
 **Virtual mashinalar:** 0 ta
 
-### Hypervisor #6: [HYPERVISOR] VMware ESXi — [BMC] HPE iLO HPE — 172.20.6.139 — [DNS] ILOCZJ33411C3
+### Hypervisor #7: [HYPERVISOR] VMware ESXi — [BMC] HPE iLO HPE — 172.20.6.139 — [DNS] ILOCZJ33411C3
 
 ```mermaid
 graph LR
@@ -959,7 +978,7 @@ graph LR
 
 **Virtual mashinalar:** 0 ta
 
-### Hypervisor #7: [HYPERVISOR] VMware ESXi — [BMC] Fujitsu iRMC — 172.16.25.231
+### Hypervisor #8: [HYPERVISOR] VMware ESXi — [BMC] Fujitsu iRMC — 172.16.25.231
 
 ```mermaid
 graph LR
@@ -972,7 +991,29 @@ graph LR
 
 **Virtual mashinalar:** 0 ta
 
-### Hypervisor #8: [HYPERVISOR] VMware ESXi — [ENDPOINT] Hewlett Packard — 10.10.10.68
+### Hypervisor #9: [HYPERVISOR] VMware ESXi — 3 VMs on ge1/0/5 — [ENDPOINT] Hewlett Packard Enterprise — 10.10.10.70 — [DNS] pc-10-70 — VMs: 10.10.10.30, 10.10.10.23, 10.10.10.22
+
+```mermaid
+graph LR
+  98f2b3225c18{{"[HYPERVISOR] VMware ESXi<br>3 VMs on ge1/0/5<br>[ENDPOINT] Hewlett Packard Enterprise<br>10.10.10.70<br>[DNS] pc-10-70<br>VMs: 10.10.10.30, 10.10.10.23, 10.10.10.22"}}
+  4caea3277eca["HPE<br>172.20.254.10"]
+  4caea3277eca-- "GE1/0/5 [V10]" -->98f2b3225c18
+  style 4caea3277eca fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  000c2914e3ea["[VM] 🪟 Windows VMware<br>10.10.10.30"]
+  98f2b3225c18-->000c2914e3ea
+  style 000c2914e3ea fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  000c294ceb58["[VM] 💻 VMware VM VMware<br>10.10.10.23"]
+  98f2b3225c18-->000c294ceb58
+  style 000c294ceb58 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  000c29f6812a["[VM] 🪟 Windows VMware<br>10.10.10.22"]
+  98f2b3225c18-->000c29f6812a
+  style 000c29f6812a fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style 98f2b3225c18 fill:#26C6DA,stroke:#0097A7,color:#fff
+```
+
+**Virtual mashinalar:** 3 ta
+
+### Hypervisor #10: [HYPERVISOR] VMware ESXi — [ENDPOINT] Hewlett Packard — 10.10.10.68
 
 ```mermaid
 graph LR
@@ -985,57 +1026,35 @@ graph LR
 
 **Virtual mashinalar:** 0 ta
 
-### Hypervisor #9: [HYPERVISOR] VMware ESXi — 5 VMs on ge1/0/4 — VMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66
+### Hypervisor #11: [HYPERVISOR] VMware ESXi — 5 VMs on ge1/0/4 — [ENDPOINT] Hewlett Packard Enterprise — 10.10.10.69 — VMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66
 
 ```mermaid
 graph LR
-  hyp_4caea3277eca_ge1_0_4{{"[HYPERVISOR] VMware ESXi<br>5 VMs on ge1/0/4<br>VMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66<br>Host: d4:f5:ef:4d:b5:cf (10.10.10.69)"}}
+  d4f5ef4db5cf{{"[HYPERVISOR] VMware ESXi<br>5 VMs on ge1/0/4<br>[ENDPOINT] Hewlett Packard Enterprise<br>10.10.10.69<br>VMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66"}}
   4caea3277eca["HPE<br>172.20.254.10"]
-  4caea3277eca-- "ge1/0/4" -->hyp_4caea3277eca_ge1_0_4
+  4caea3277eca-- "GE1/0/4 [V10]" -->d4f5ef4db5cf
   style 4caea3277eca fill:#4A90E2,stroke:#2A6FC2,color:#fff
   000c2920d660["[HYPERVISOR] VMware ESXi<br>[VM] 🐧 Linux VMware"]
-  hyp_4caea3277eca_ge1_0_4-->000c2920d660
+  d4f5ef4db5cf-->000c2920d660
   style 000c2920d660 fill:#26C6DA,stroke:#0097A7,color:#fff
   000c29586fca["[VM] 💻 VMware VM VMware<br>10.10.10.24"]
-  hyp_4caea3277eca_ge1_0_4-->000c29586fca
+  d4f5ef4db5cf-->000c29586fca
   style 000c29586fca fill:#9C27B0,stroke:#7B1FA2,color:#fff
   000c29778352["[VM] 💻 VMware VM VMware<br>10.10.10.31"]
-  hyp_4caea3277eca_ge1_0_4-->000c29778352
+  d4f5ef4db5cf-->000c29778352
   style 000c29778352 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   000c29778366["[VM] 💻 VMware VM VMware<br>10.10.10.31"]
-  hyp_4caea3277eca_ge1_0_4-->000c29778366
+  d4f5ef4db5cf-->000c29778366
   style 000c29778366 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   000c29d2c063["[VM] 🪟 Windows VMware<br>10.10.10.66"]
-  hyp_4caea3277eca_ge1_0_4-->000c29d2c063
+  d4f5ef4db5cf-->000c29d2c063
   style 000c29d2c063 fill:#9C27B0,stroke:#7B1FA2,color:#fff
-  style hyp_4caea3277eca_ge1_0_4 fill:#26C6DA,stroke:#0097A7,color:#fff
+  style d4f5ef4db5cf fill:#26C6DA,stroke:#0097A7,color:#fff
 ```
 
 **Virtual mashinalar:** 5 ta
 
-### Hypervisor #10: [HYPERVISOR] VMware ESXi — 3 VMs on ge1/0/5 — VMs: 10.10.10.30, 10.10.10.23, 10.10.10.22
-
-```mermaid
-graph LR
-  hyp_4caea3277eca_ge1_0_5{{"[HYPERVISOR] VMware ESXi<br>3 VMs on ge1/0/5<br>VMs: 10.10.10.30, 10.10.10.23, 10.10.10.22<br>Host: 98:f2:b3:22:5c:18 (10.10.10.70)"}}
-  4caea3277eca["HPE<br>172.20.254.10"]
-  4caea3277eca-- "ge1/0/5" -->hyp_4caea3277eca_ge1_0_5
-  style 4caea3277eca fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  000c2914e3ea["[VM] 🪟 Windows VMware<br>10.10.10.30"]
-  hyp_4caea3277eca_ge1_0_5-->000c2914e3ea
-  style 000c2914e3ea fill:#9C27B0,stroke:#7B1FA2,color:#fff
-  000c294ceb58["[VM] 💻 VMware VM VMware<br>10.10.10.23"]
-  hyp_4caea3277eca_ge1_0_5-->000c294ceb58
-  style 000c294ceb58 fill:#9C27B0,stroke:#7B1FA2,color:#fff
-  000c29f6812a["[VM] 🪟 Windows VMware<br>10.10.10.22"]
-  hyp_4caea3277eca_ge1_0_5-->000c29f6812a
-  style 000c29f6812a fill:#9C27B0,stroke:#7B1FA2,color:#fff
-  style hyp_4caea3277eca_ge1_0_5 fill:#26C6DA,stroke:#0097A7,color:#fff
-```
-
-**Virtual mashinalar:** 3 ta
-
-### Hypervisor #11: [HYPERVISOR] VMware ESXi — 7 VMs on ge1/0/18 — VMs: 172.20.10.192, 172.20.7.132, 172.16.0.126, 172.20.16.97, 172.16.24.218
+### Hypervisor #12: [HYPERVISOR] VMware ESXi — 7 VMs on ge1/0/18 — VMs: 172.20.10.192, 172.20.7.132, 172.16.0.126, 172.20.16.97, 172.16.24.218
 
 ```mermaid
 graph LR
@@ -1069,7 +1088,7 @@ graph LR
 
 **Virtual mashinalar:** 7 ta
 
-### Hypervisor #12: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/22 — VMs: 172.20.16.109, 172.20.9.126, 172.20.225.45, 172.20.225.30
+### Hypervisor #13: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/22 — VMs: 172.20.16.109, 172.20.9.126, 172.20.225.45, 172.20.225.30
 
 ```mermaid
 graph LR
@@ -1094,7 +1113,7 @@ graph LR
 
 **Virtual mashinalar:** 4 ta
 
-### Hypervisor #13: [HYPERVISOR] VMware ESXi — 6 VMs on ge1/0/24 — VMs: 172.20.15.36, 172.20.15.179, 172.20.88.16, 172.20.224.18, 172.20.88.17, 10.10.10.26
+### Hypervisor #14: [HYPERVISOR] VMware ESXi — 6 VMs on ge1/0/24 — VMs: 172.20.15.36, 172.20.15.179, 172.20.88.16, 172.20.224.18, 172.20.88.17, 10.10.10.26
 
 ```mermaid
 graph LR
@@ -1125,7 +1144,7 @@ graph LR
 
 **Virtual mashinalar:** 6 ta
 
-### Hypervisor #14: [HYPERVISOR] VMware ESXi — 3 VMs on ge1/0/26 — VMs: 172.20.226.17, 172.20.15.118
+### Hypervisor #15: [HYPERVISOR] VMware ESXi — 3 VMs on ge1/0/26 — VMs: 172.20.226.17, 172.20.15.118
 
 ```mermaid
 graph LR
@@ -1147,7 +1166,7 @@ graph LR
 
 **Virtual mashinalar:** 3 ta
 
-### Hypervisor #15: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/28 — VMs: 172.20.228.1, 172.20.20.100, 172.20.14.186, 172.20.10.227
+### Hypervisor #16: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/28 — VMs: 172.20.228.1, 172.20.20.100, 172.20.14.186, 172.20.10.227
 
 ```mermaid
 graph LR
@@ -1172,7 +1191,7 @@ graph LR
 
 **Virtual mashinalar:** 4 ta
 
-### Hypervisor #16: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/30 — VMs: 172.16.24.136, 172.20.7.141, 172.20.10.162, 172.20.1.106
+### Hypervisor #17: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/30 — VMs: 172.16.24.136, 172.20.7.141, 172.20.10.162, 172.20.1.106
 
 ```mermaid
 graph LR
@@ -1197,7 +1216,7 @@ graph LR
 
 **Virtual mashinalar:** 4 ta
 
-### Hypervisor #17: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/31 — VMs: 172.20.0.5, 172.20.9.199, 172.20.224.49, 195.158.2.222
+### Hypervisor #18: [HYPERVISOR] VMware ESXi — 4 VMs on ge1/0/31 — VMs: 172.20.0.5, 172.20.9.199, 172.20.224.49, 195.158.2.222
 
 ```mermaid
 graph LR
@@ -1222,7 +1241,7 @@ graph LR
 
 **Virtual mashinalar:** 4 ta
 
-### Hypervisor #18: [HYPERVISOR] VMware ESXi — 2 VMs on ge1/0/32 — VMs: 172.20.9.121, 195.158.2.214
+### Hypervisor #19: [HYPERVISOR] VMware ESXi — 2 VMs on ge1/0/32 — VMs: 172.20.9.121, 195.158.2.214
 
 ```mermaid
 graph LR
@@ -1241,7 +1260,7 @@ graph LR
 
 **Virtual mashinalar:** 2 ta
 
-### Hypervisor #19: [HYPERVISOR] VMware ESXi — 13 VMs on ge1/0/26 — VMs: 172.20.7.72, 172.20.18.209, 172.20.7.58, 172.20.19.209, 172.20.17.47, 172.20.14.78, 172.20.19.122, 172.20.14.120, 172.20.16.67, 172.20.11.187, 172.20.20.218, 172.20.7.71, 172.20.14.159
+### Hypervisor #20: [HYPERVISOR] VMware ESXi — 13 VMs on ge1/0/26 — VMs: 172.20.7.72, 172.20.18.209, 172.20.7.58, 172.20.19.209, 172.20.17.47, 172.20.14.78, 172.20.19.122, 172.20.14.120, 172.20.16.67, 172.20.11.187, 172.20.20.218, 172.20.7.71, 172.20.14.159
 
 ```mermaid
 graph LR
@@ -1292,25 +1311,6 @@ graph LR
 ```
 
 **Virtual mashinalar:** 13 ta
-
-### Hypervisor #20: [HYPERVISOR] VMware ESXi — 2 VMs on ge1/0/32 — VMs: 172.20.13.243, 172.20.6.247
-
-```mermaid
-graph LR
-  hyp_4caea38deec9_ge1_0_32{{"[HYPERVISOR] VMware ESXi<br>2 VMs on ge1/0/32<br>VMs: 172.20.13.243, 172.20.6.247<br>Host: 50:7c:6f:62:e2:4c (172.20.0.50)"}}
-  4caea38deec9["HPE<br>172.20.254.202"]
-  4caea38deec9-- "ge1/0/32" -->hyp_4caea38deec9_ge1_0_32
-  style 4caea38deec9 fill:#4A90E2,stroke:#2A6FC2,color:#fff
-  000c29735e0b["[VM] 💻 VMware VM VMware<br>172.20.13.243"]
-  hyp_4caea38deec9_ge1_0_32-->000c29735e0b
-  style 000c29735e0b fill:#9C27B0,stroke:#7B1FA2,color:#fff
-  000c297f194e["[VM] 💻 VMware VM VMware<br>172.20.6.247"]
-  hyp_4caea38deec9_ge1_0_32-->000c297f194e
-  style 000c297f194e fill:#9C27B0,stroke:#7B1FA2,color:#fff
-  style hyp_4caea38deec9_ge1_0_32 fill:#26C6DA,stroke:#0097A7,color:#fff
-```
-
-**Virtual mashinalar:** 2 ta
 
 ### Hypervisor #21: [HYPERVISOR] VMware ESXi — 3 VMs on ge1/0/35 — VMs: 172.20.1.253, 172.20.1.219, 172.20.11.130
 

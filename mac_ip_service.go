@@ -1415,7 +1415,7 @@ func enrichGraphWithIPs(graph *DJGraph) {
 		// relabelled, whatever MAC binding the cache holds
 		if graphIsConfirmedESXi(mac) && !graphIsSwitchNode(graph, mac) {
 			if !strings.Contains(info, "[HYPERVISOR]") {
-				info = "[HYPERVISOR] VMware ESXi\n" + info
+				info = graphESXiTag + "\n" + info
 				changed = true
 			}
 		}
@@ -1432,11 +1432,10 @@ func enrichGraphWithIPs(graph *DJGraph) {
 		}
 	}
 
-	// Also enrich hypervisor nodes — list VM IPs in their label
+	// Also enrich hypervisor nodes — list VM IPs in their label: the hyp-
+	// nodes and the confirmed ESXi hosts with VMs, the nodes with vNIC links
+	// (detectHypervisors)
 	for nodeID := range graph.Nodes {
-		if !strings.HasPrefix(nodeID, "hyp-") {
-			continue
-		}
 		// Find VM MACs connected to this hypervisor (in MAC order, so the
 		// "VMs:" line is the same on every build) and list the IP each VM's
 		// label shows first, so the line and the VM labels agree

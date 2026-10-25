@@ -3356,24 +3356,56 @@ func graphHubUplinkPort(graph *DJGraph, hubID string) string {
 	return ""
 }
 
+// graphESXiTag is the label line of an HTTP-confirmed ESXi host.
+const graphESXiTag = "[HYPERVISOR] VMware ESXi"
+
+// graphTagHypervisorHost puts graphESXiTag and the VM count line of one of
+// its ports ("13 VMs on ge1/0/26") at the top of a confirmed ESXi host's
+// label, as a virtual hypervisor node's label starts; a host with VMs on
+// two ports gets the tag once and a count line per port.
+func graphTagHypervisorHost(graph *DJGraph, host, count string) {
+	var lines []string
+	for _, l := range strings.Split(graph.SwitchInfo[host], "\n") {
+		if l != "" && l != graphESXiTag {
+			lines = append(lines, l)
+		}
+	}
+	at := 0
+	for at < len(lines) && strings.Contains(lines[at], " VMs on ") {
+		at++
+	}
+	lines = slices.Insert(lines, at, count)
+	graph.SwitchInfo[host] = strings.Join(append([]string{graphESXiTag}, lines...), "\n")
+}
+
 // detectHypervisors scans the graph for switch ports where 2+ VM MACs are seen.
 // Such ports indicate a connected hypervisor server (ESXi, Proxmox, Hyper-V, QEMU, Xen, VirtualBox).
 // A virtual hypervisor node is inserted between the switch port and its VM endpoints;
 // VMs behind a hub get it between the hub and the VMs, keyed by the hub's switch port.
+// When the only HTTP-confirmed ESXi host learned on a switch port is a
+// physical NIC (no VM OUI: a confirmed VM NIC is a nested ESXi, one of the
+// VMs), that host is the hypervisor: the VMs hang from its node, which
+// names the host (MAC, IP, DNS name) where a virtual node could not
+// (172.20.254.202 GE1/0/26: the ESXi host 172.20.7.106 and its 13 VMs).
 // A gateway's router node stays where addGatewayNodes linked it, also when
 // the gateway is a VM (the Debian router 00:0c:29:98:7b:c2), and is never
 // tagged as a server NIC.
 func detectHypervisors(graph *DJGraph) {
-	// portVMs: switchNodeID (or hub node ID) → port key → []vmMAC
+	// portVMs: switchNodeID (or hub node ID) → port key → []vmMAC, and
+	// portHosts: switchNodeID → port key → the confirmed ESXi host NICs.
 	// Edges are visited in sorted order, so each port's VM list is the same
 	// on every build.
 	portVMs := map[string]map[string][]string{}
+	portHosts := map[string]map[string][]string{}
 
 	for _, src := range slices.Sorted(maps.Keys(graph.Edges)) {
 		targets := graph.Edges[src]
 		for _, tgt := range slices.Sorted(maps.Keys(targets)) {
-			// Check if tgt MAC is a VM OUI (a gateway's router node is no VM)
-			if _, isVM := hypervisorTypeOf(tgt); !isVM || graph.graphRouters[tgt] {
+			// Check if tgt MAC is a VM OUI (a gateway's router node is no
+			// VM), or a confirmed ESXi host NIC on a switch port
+			_, isVM := hypervisorTypeOf(tgt)
+			isHost := !isVM && !strings.HasPrefix(src, "hub-") && graphIsConfirmedESXi(tgt) && !graphIsSwitchNode(graph, tgt)
+			if (!isVM && !isHost) || graph.graphRouters[tgt] {
 				continue
 			}
 			// Port from the edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26"); a
@@ -3388,6 +3420,13 @@ func detectHypervisors(graph *DJGraph) {
 			// Normalize port name: GigabitEthernet1/0/26 → GE1/0/26
 			// GigabitF1/0/26 → GE1/0/26, Ten-GE1/0/49 → TE1/0/49
 			portKey := normalizePortForHypervisor(port)
+			if isHost {
+				if portHosts[src] == nil {
+					portHosts[src] = map[string][]string{}
+				}
+				portHosts[src][portKey] = append(portHosts[src][portKey], tgt)
+				continue
+			}
 			if portVMs[src] == nil {
 				portVMs[src] = map[string][]string{}
 			}
@@ -3402,6 +3441,19 @@ func detectHypervisors(graph *DJGraph) {
 			vmMACs := ports[port]
 			if len(vmMACs) < 2 {
 				continue // single VM MAC — could be real NIC, skip
+			}
+
+			// The one confirmed ESXi host on the port is the hypervisor
+			if hosts := portHosts[switchID][port]; len(hosts) == 1 {
+				host := hosts[0]
+				graphTagHypervisorHost(graph, host, fmt.Sprintf("%d VMs on %s", len(vmMACs), port))
+				for _, vmMAC := range vmMACs {
+					delete(graph.Edges[switchID], vmMAC)
+					graph.AddEdge(host, vmMAC, "vNIC")
+				}
+				fmt.Printf("🖥️  Hypervisor detected: VMware ESXi host %s on %s port %s (%d VMs: %s)\n",
+					host, switchID[:min(len(switchID), 20)], port, len(vmMACs), vmMACs[0])
+				continue
 			}
 
 			// Dominant hypervisor type (majority, fixed tie-break)

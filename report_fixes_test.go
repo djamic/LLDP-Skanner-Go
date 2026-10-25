@@ -288,14 +288,19 @@ func reportVMCount(part string) string {
 }
 
 // TestReportHypervisorDiagramsMergeHost (F73): one diagram per hypervisor
-// port. The ESXi host's own NIC, which the graph keeps as a separate node on
-// the same switch port, is shown inside the hyp- diagram instead of as a
-// second hypervisor with 0 VMs, and only vNIC links count as VMs.
+// port. A confirmed ESXi host's NIC on the port is the hypervisor itself
+// (detectHypervisors), and its diagram has the VMs. A host NIC nothing
+// confirmed (a server NIC the graph tags as a hypervisor), which the graph
+// keeps as a separate node on the same switch port, is shown inside the
+// hyp- diagram instead of as a second hypervisor with 0 VMs, and only vNIC
+// links count as VMs. Two confirmed host NICs on one port leave the hyp-
+// node there, with both as its hosts.
 func TestReportHypervisorDiagramsMergeHost(t *testing.T) {
 	resetState(t)
 	var macs []MACEntry
 	macs = append(macs, macEntries(4, "d4:f5:ef:73:04:01", "00:0c:29:73:04:02", "00:0c:29:73:04:03", "00:0c:29:73:04:04")...)
 	macs = append(macs, macEntries(6, "d4:f5:ef:73:06:01", "00:0c:29:73:06:02", "00:0c:29:73:06:03")...)
+	macs = append(macs, macEntries(8, "d4:f5:ef:73:08:01", "d4:f5:ef:73:08:02", "00:0c:29:73:08:03", "00:0c:29:73:08:04", "00:0c:29:73:08:05")...)
 	sw := &DeviceData{IP: "10.0.73.2", SysName: "sw-73", ChassisID: "4c:ae:a3:73:00:02",
 		Interfaces: gigabitPorts(8, nil), MACTable: macs}
 	reportSetDevices(sw)
@@ -303,27 +308,29 @@ func TestReportHypervisorDiagramsMergeHost(t *testing.T) {
 	globalMACtoIP["d4:f5:ef:73:04:01"] = "10.0.73.69"
 	globalMACtoIP["00:0c:29:73:04:02"] = "10.0.73.66"
 	globalMACtoIPMutex.Unlock()
-	ConfirmedESXiMACs.Store("d4:f5:ef:73:04:01", true) // host NIC next to hyp-…-ge1_0_4
+	ConfirmedESXiMACs.Store("d4:f5:ef:73:04:01", true) // the host NIC on GE1/0/4
 	ConfirmedESXiMACs.Store("00:0c:29:73:06:03", true) // vNIC child of hyp-…-ge1_0_6
+	ConfirmedESXiMACs.Store("d4:f5:ef:73:08:01", true) // two hosts on GE1/0/8
+	ConfirmedESXiMACs.Store("d4:f5:ef:73:08:02", true)
 	g := reportBuildGraph()
 
-	hyp4, hyp6 := "hyp-4c:ae:a3:73:00:02-ge1_0_4", "hyp-4c:ae:a3:73:00:02-ge1_0_6"
-	for _, id := range []string{hyp4, hyp6} {
-		if !g.Nodes[id] {
-			t.Fatalf("precondition: graph has no %s", id)
-		}
+	host4, hyp4, hyp6, hyp8 := "d4:f5:ef:73:04:01", "hyp-4c:ae:a3:73:00:02-ge1_0_4", "hyp-4c:ae:a3:73:00:02-ge1_0_6", "hyp-4c:ae:a3:73:00:02-ge1_0_8"
+	if g.Nodes[hyp4] || len(g.Edges[host4]) != 3 || !g.Nodes[hyp6] || !g.Nodes[hyp8] {
+		t.Fatalf("precondition: %s drawn %v, %s links %v, %s drawn %v, %s drawn %v; want the VMs of GE1/0/4 below the confirmed host, hyp- nodes on GE1/0/6 and GE1/0/8",
+			hyp4, g.Nodes[hyp4], host4, g.Edges[host4], hyp6, g.Nodes[hyp6], hyp8, g.Nodes[hyp8])
 	}
 	md := GenerateHypervisorDiagrams(g)
 	diagrams := reportHypDiagrams(md)
-	if len(diagrams) != 2 {
-		t.Errorf("%d hypervisor diagrams, want 2 (one per hypervisor port):\n%s", len(diagrams), md)
+	if len(diagrams) != 3 {
+		t.Errorf("%d hypervisor diagrams, want 3 (one per hypervisor port):\n%s", len(diagrams), md)
 	}
-	d4 := diagrams[sanitizeMermaidID(hyp4)]
-	if c := reportVMCount(d4); c != "3" {
-		t.Errorf("%s: %s VMs, want 3", hyp4, c)
+	d4 := diagrams[sanitizeMermaidID(host4)]
+	if c := reportVMCount(d4); c != "3" || !strings.Contains(d4, "10.0.73.69") {
+		t.Errorf("%s: %s VMs, want 3 below the host with its IP:\n%s", host4, c, d4)
 	}
-	if !strings.Contains(d4, "Host: d4:f5:ef:73:04:01 (10.0.73.69)") {
-		t.Errorf("%s diagram does not name its host NIC:\n%s", hyp4, d4)
+	d8 := diagrams[sanitizeMermaidID(hyp8)]
+	if c := reportVMCount(d8); c != "3" || !strings.Contains(d8, "Host: d4:f5:ef:73:08:01") || !strings.Contains(d8, "Host: d4:f5:ef:73:08:02") {
+		t.Errorf("%s: %s VMs, want 3 and both host NICs named:\n%s", hyp8, c, d8)
 	}
 	// The confirmed ESXi vNIC child (a nested ESXi) is one of the VMs, drawn
 	// in the hypervisor colour, and has no diagram of its own.
