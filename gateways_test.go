@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1083,5 +1085,65 @@ func TestMonitorFirstCycleWaitsForGraph(t *testing.T) {
 	empty := CreateSnapshot(devices, NewDJGraph(), &report)
 	if n := pathAnomalies(CompareSnapshots(empty, second)); n == 0 {
 		t.Error("against a snapshot of the empty graph no path anomaly is new: the test does not reproduce the burst")
+	}
+}
+
+// TestGatewaysHandler checks the gateways of the Settings window: GET
+// shows them; POST refuses words that are no IPv4 address and an empty
+// list, keeping the list; a good list (without repeats) is written to the
+// file, used at once (its first entry the core) and walked once, and the
+// same list again is not walked again.
+func TestGatewaysHandler(t *testing.T) {
+	resetState(t)
+	oldFile, oldChanged := gatewayFile, gatewaysChanged
+	gatewayFile = filepath.Join(t.TempDir(), "gateway_ip")
+	os.WriteFile(gatewayFile, []byte("172.20.1.254\n"), 0o644)
+	walks := 0
+	gatewaysChanged = func() { walks++ }
+	setGatewayIPs([]string{"172.20.1.254"})
+	t.Cleanup(func() { gatewayFile, gatewaysChanged = oldFile, oldChanged; setGatewayIPs([]string{fixedGatewayIP}) })
+
+	call := func(method string, body any) (int, map[string]any) {
+		data, _ := json.Marshal(body)
+		r := httptest.NewRequest(method, "/api/gateways", strings.NewReader(string(data)))
+		w := httptest.NewRecorder()
+		captureStdoutQuiet(func() { gatewaysHandler(w, r) })
+		var v map[string]any
+		json.Unmarshal(w.Body.Bytes(), &v)
+		return w.Code, v
+	}
+	if code, v := call("GET", nil); code != 200 || fmt.Sprint(v["gateways"]) != "[172.20.1.254]" || v["core"] != "172.20.1.254" {
+		t.Errorf("GET: %d %v", code, v)
+	}
+	for name, body := range map[string]map[string]any{
+		"not IPv4":   {"gateways": []string{"172.20.0.1", "fe80::1", "router.lan"}},
+		"empty":      {"gateways": []string{}},
+		"blank only": {"gateways": []string{" ", "# a comment"}},
+	} {
+		if code, v := call("POST", body); code != 400 {
+			t.Errorf("%s: %d %v, want 400", name, code, v)
+		}
+	}
+	if code, v := call("POST", map[string]any{"gateways": []string{"172.20.0.1", "fe80::1"}}); code != 400 || !strings.Contains(fmt.Sprint(v["error"]), "fe80::1") {
+		t.Errorf("the refusal names the word: %v", v)
+	}
+	if !slices.Equal(gatewayList(), []string{"172.20.1.254"}) || walks != 0 {
+		t.Fatalf("after refused lists: %v, %d walks", gatewayList(), walks)
+	}
+
+	code, v := call("POST", map[string]any{"gateways": []string{"172.20.0.1", " 172.20.1.254 ", "172.20.0.1"}})
+	if code != 200 || fmt.Sprint(v["gateways"]) != "[172.20.0.1 172.20.1.254]" {
+		t.Fatalf("POST: %d %v", code, v)
+	}
+	if !slices.Equal(gatewayList(), []string{"172.20.0.1", "172.20.1.254"}) || gatewayCore() != "172.20.0.1" || walks != 1 {
+		t.Errorf("after the change: %v core %q, %d walks", gatewayList(), gatewayCore(), walks)
+	}
+	data, _ := os.ReadFile(gatewayFile)
+	if ips, invalid := parseGatewayIPs(string(data)); !slices.Equal(ips, []string{"172.20.0.1", "172.20.1.254"}) || len(invalid) != 0 {
+		t.Errorf("file %q", data)
+	}
+	call("POST", map[string]any{"gateways": []string{"172.20.0.1", "172.20.1.254"}})
+	if walks != 1 {
+		t.Errorf("the same list was walked again")
 	}
 }

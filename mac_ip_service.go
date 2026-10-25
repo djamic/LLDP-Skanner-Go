@@ -368,7 +368,7 @@ var macIPGatewayOK = make(map[string]time.Time)
 // this run or none is configured. Called with globalMACtoIPMutex held.
 func macIPExpiryClock() time.Time {
 	var clock time.Time
-	for i, gw := range gatewayIPs {
+	for i, gw := range gatewayList() {
 		ok, answered := macIPGatewayOK[gw]
 		if !answered {
 			return time.Time{}
@@ -807,7 +807,7 @@ func collectARPFromAllSwitches() {
 	// a gateway's answer lets cache entries expire (collectPruneMACIP); its
 	// sysName labels its router node.
 	walked := make(map[string]bool)
-	for _, gw := range gatewayIPs {
+	for _, gw := range gatewayList() {
 		walked[gw] = true
 	}
 	for _, res := range walkGatewaysARP(snmpObj) {
@@ -1178,7 +1178,7 @@ func planSubnetDiscovery(subnets []SubnetInfo, ranges []string) subnetPlan {
 	}
 
 	known := make(map[string]bool) // IPs that are no candidates
-	for _, gw := range gatewayIPs {
+	for _, gw := range gatewayList() {
 		known[gw] = true // a gateway is no switch: drawn as a router
 	}
 	for _, s := range subnets {
@@ -1345,7 +1345,7 @@ func (r subnetDiscoveryRun) summary() string {
 func subnetDiscovery(snmpObj *SNMPObject, ranges []string, limits subnetDiscoveryLimits, add func(ip string) bool) []string {
 	run := subnetDiscoveryRun{Budget: limits.Budget, Skips: &switchSkips{}}
 	var subnets []SubnetInfo
-	for _, gw := range gatewayIPs {
+	for _, gw := range gatewayList() {
 		if rows := discoverGatewaySubnets(snmpObj, gw); len(rows) > 0 {
 			run.Gateways = append(run.Gateways, gw)
 			subnets = append(subnets, rows...)

@@ -236,7 +236,7 @@ func ExportBFSDepths(graph *DJGraph) {
 		TotalNodes:        len(depths),
 	}
 	if coreID == "" {
-		export.Note = fmt.Sprintf("no core node: the gateway %s is not in the graph (no node with that IP, no polled device, no switch, router or LLDP neighbor with it as a label line) and there is no router node; a gateway of gateway_ip gets a router node once it answers SNMP and its MAC is in the ARP data, or set gateway_ip to the core switch IP", gatewayIP)
+		export.Note = fmt.Sprintf("no core node: the gateway %s is not in the graph (no node with that IP, no polled device, no switch, router or LLDP neighbor with it as a label line) and there is no router node; a gateway of gateway_ip gets a router node once it answers SNMP and its MAC is in the ARP data, or set gateway_ip to the core switch IP", gatewayCore())
 	}
 
 	os.MkdirAll(exportsDir, 0755)

@@ -188,6 +188,7 @@ func StartWebServer(port string) {
 	http.HandleFunc("/api/graph", graphHandler)
 	http.HandleFunc("/api/hosts", hostsHandler)
 	http.HandleFunc("/api/settings", settingsHandler)
+	http.HandleFunc("/api/gateways", gatewaysHandler)
 	http.HandleFunc("/api/rescan", rescanHandler)
 	http.HandleFunc("/api/status", statusHandler)
 	http.HandleFunc("/api/history", historyHandler)

@@ -502,7 +502,7 @@ func loadStartupData(savedHosts map[string]*DeviceData) {
 	startMacIPService()
 
 	// Collect the ARP tables of the gateways first (also done by MacIPService)
-	if len(gatewayIPs) > 0 {
+	if len(gatewayList()) > 0 {
 		fmt.Printf("🔍 Collecting ARP tables from gateways %s...\n", gatewayListText())
 	}
 	collectGatewayARP()

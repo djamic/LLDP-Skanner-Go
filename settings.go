@@ -176,7 +176,7 @@ func init() {
 	currentSettings = DefaultSettings()
 
 	// Load the gateway IPs from file (one or several, gateways.go)
-	loadGatewayIPs("gateway_ip")
+	loadGatewayIPs(gatewayFile)
 
 	// Try to load saved settings
 	if saved, err := LoadSavedData(); err == nil && saved != nil {

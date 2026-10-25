@@ -1302,6 +1302,15 @@ uiOnNodeClick('infoNeighbors', id => highlightNodeFromPanel(id), true);
 
 // Open settings modal
 function openSettings() {
+    // The gateways (gateway_ip), apart from the scan settings
+    fetch('/api/gateways')
+        .then(res => res.json())
+        .then(v => {
+            const el = document.getElementById('settingsGateways');
+            el.value = (v.gateways || []).join('\n');
+            el.dataset.saved = el.value;
+        })
+        .catch(err => console.error('Failed to load gateways:', err));
     // Fetch current settings
     fetch('/api/settings')
         .then(res => res.json())
@@ -1343,13 +1352,28 @@ function saveSettings() {
         body: JSON.stringify(settings)
     })
         .then(res => res.json())
-        .then(data => {
-            if (data.status === 'ok') {
-                alert('✅ Settings saved successfully!');
-                closeSettings();
-            } else {
+        .then(async data => {
+            if (data.status !== 'ok') {
                 alert('❌ Failed to save settings: ' + (data.error || 'Unknown error'));
+                return;
             }
+            // The gateways, when they changed
+            const gw = document.getElementById('settingsGateways');
+            if (gw.value.trim() !== (gw.dataset.saved || '').trim()) {
+                const res = await fetch('/api/gateways', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gateways: gw.value.split('\n').map(s => s.trim()).filter(Boolean) }),
+                });
+                const v = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    alert('❌ Gateways not saved: ' + (v.error || `HTTP ${res.status}`));
+                    return;
+                }
+                gw.dataset.saved = (v.gateways || []).join('\n');
+            }
+            alert('✅ Settings saved successfully!');
+            closeSettings();
         })
         .catch(err => {
             alert('❌ Error saving settings: ' + err.message);

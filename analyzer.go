@@ -510,7 +510,7 @@ func (na *NetworkAnalyzer) coreNode() string {
 // 2026-10-22) its router node "debian216\n172.20.1.254" is the core.
 func topologyCore(nodes map[string]GraphNode, devices map[string]*DeviceData) string {
 	ids := slices.Sorted(maps.Keys(nodes))
-	if gatewayIP != "" {
+	if gatewayIP := gatewayCore(); gatewayIP != "" {
 		if _, ok := nodes[gatewayIP]; ok {
 			return gatewayIP
 		}

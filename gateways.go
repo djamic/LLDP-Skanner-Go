@@ -2,8 +2,11 @@ package main
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
+	"net/http"
 	"net/netip"
 	"os"
 	"slices"
@@ -34,12 +37,19 @@ import (
 // (collectGatewayLLDP) and its router node is linked to its neighbors.
 
 // gatewayIPs is every gateway of gateway_ip in file order; gatewayIP is its
-// first entry. Both are set together (setGatewayIPs).
-var gatewayIPs []string
+// first entry. Both are set together (setGatewayIPs), also while the
+// scanner runs (the Settings window, gatewaysHandler): read them through
+// gatewayList and gatewayCore (gatewayMu guards them).
+var (
+	gatewayIPs []string
+	gatewayMu  sync.RWMutex
+)
 
 // setGatewayIPs sets the gateway list and gatewayIP, its first entry ("" for
 // an empty list).
 func setGatewayIPs(ips []string) {
+	gatewayMu.Lock()
+	defer gatewayMu.Unlock()
 	gatewayIPs = slices.Clone(ips)
 	gatewayIP = ""
 	if len(gatewayIPs) > 0 {
@@ -47,15 +57,29 @@ func setGatewayIPs(ips []string) {
 	}
 }
 
+// gatewayList returns the gateways in gateway_ip order.
+func gatewayList() []string {
+	gatewayMu.RLock()
+	defer gatewayMu.RUnlock()
+	return slices.Clone(gatewayIPs)
+}
+
+// gatewayCore returns the first gateway, the analyzer's core ("" for none).
+func gatewayCore() string {
+	gatewayMu.RLock()
+	defer gatewayMu.RUnlock()
+	return gatewayIP
+}
+
 // isGatewayIP reports whether ip is one of the configured gateways.
 func isGatewayIP(ip string) bool {
-	return ip != "" && slices.Contains(gatewayIPs, ip)
+	return ip != "" && slices.Contains(gatewayList(), ip)
 }
 
 // gatewayListText names the gateways for log lines ("172.20.1.254,
 // 172.20.0.1").
 func gatewayListText() string {
-	return strings.Join(gatewayIPs, ", ")
+	return strings.Join(gatewayList(), ", ")
 }
 
 // parseGatewayIPs reads the text of gateway_ip: IPv4 addresses one per line
@@ -106,10 +130,65 @@ func loadGatewayIPs(path string) {
 	}
 	setGatewayIPs(ips)
 	if len(ips) == 1 {
-		fmt.Printf("🌐 Gateway IP yuklandi: %s\n", gatewayIP)
+		fmt.Printf("🌐 Gateway IP yuklandi: %s\n", ips[0])
 		return
 	}
-	fmt.Printf("🌐 Gateway IP yuklandi: %s (core: %s)\n", gatewayListText(), gatewayIP)
+	fmt.Printf("🌐 Gateway IP yuklandi: %s (core: %s)\n", gatewayListText(), ips[0])
+}
+
+// gatewayFile is the gateway list's file (a variable for tests).
+var gatewayFile = "gateway_ip"
+
+// gatewaysChanged runs after the Settings window changed the list: the
+// gateways' ARP tables are walked at once, so a new gateway's router node
+// comes with the next graph build (a variable for tests).
+var gatewaysChanged = func() { go collectGatewayARP() }
+
+// gatewaysHandler shows (GET) and sets (POST {"gateways": [...]}) the
+// gateways from the Settings window: IPv4 addresses, at least one, the
+// first the analyzer's core. A new list is written to gatewayFile and used
+// at once. The file is written in place, so it keeps its owner (it is a
+// file of the repository, and the scanner runs as root).
+func gatewaysHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		credentialsReply(w, http.StatusOK, map[string]any{"gateways": gatewayList(), "core": gatewayCore()})
+	case http.MethodPost:
+		var req struct {
+			Gateways []string `json:"gateways"`
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 16384)).Decode(&req) != nil {
+			credentialsError(w, http.StatusBadRequest, "invalid request")
+			return
+		}
+		ips, invalid := parseGatewayIPs(strings.Join(req.Gateways, "\n"))
+		if len(invalid) > 0 {
+			credentialsError(w, http.StatusBadRequest, "no IPv4 address: "+strings.Join(invalid, ", "))
+			return
+		}
+		if len(ips) == 0 {
+			credentialsError(w, http.StatusBadRequest, "give at least one gateway: the first is the analyzer's core")
+			return
+		}
+		text := "# Gateways, one per line; the first is the analyzer's core (set in the web UI's Settings)\n" + strings.Join(ips, "\n") + "\n"
+		if err := os.WriteFile(gatewayFile, []byte(text), 0o644); err != nil {
+			credentialsError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		old := gatewayList()
+		setGatewayIPs(ips)
+		user := "?"
+		if s, ok := authSessionOf(r); ok {
+			user = s.User
+		}
+		fmt.Printf("🌐 [Gateways] Set by %s: %s (core: %s)\n", user, strings.Join(ips, ", "), ips[0])
+		if !slices.Equal(old, ips) {
+			gatewaysChanged()
+		}
+		credentialsReply(w, http.StatusOK, map[string]any{"ok": true, "gateways": ips, "core": ips[0]})
+	default:
+		credentialsError(w, http.StatusMethodNotAllowed, "GET or POST")
+	}
 }
 
 // ─── Gateway walks ────────────────────────────────────────────────────────────
@@ -217,7 +296,7 @@ func answeredGateways() []gatewayNode {
 	gatewayPollsMu.Lock()
 	defer gatewayPollsMu.Unlock()
 	var out []gatewayNode
-	for _, ip := range gatewayIPs {
+	for _, ip := range gatewayList() {
 		if p := gatewayPolls[ip]; p.Answered {
 			out = append(out, gatewayNode{IP: ip, SysName: p.SysName, Down: p.Down, LLDP: p.LLDP, MACPorts: p.MACPorts})
 		}
@@ -380,7 +459,7 @@ func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 		ports    map[string]string
 		portsErr error
 	}
-	gateways := slices.Clone(gatewayIPs)
+	gateways := gatewayList()
 	walks := make([]walk, len(gateways))
 	var wg sync.WaitGroup
 	for i, ip := range gateways {
