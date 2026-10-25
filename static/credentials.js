@@ -139,10 +139,10 @@ function credTargetText(target, deviceType) {
     return deviceType ? `${target.value} · ${credLabel(credState.types, deviceType)}` : target.value;
 }
 
-function credButton(text, title, onClick, disabled) {
+function credButton(text, title, onClick, disabled, cls) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'cred-action';
+    b.className = 'cred-action' + (cls ? ' ' + cls : '');
     b.textContent = text;
     b.title = title;
     b.disabled = !!disabled;
@@ -168,13 +168,13 @@ function credRender() {
         const actions = document.createElement('td');
         actions.className = 'cred-actions';
         if (e.target.kind === 'ip' && e.deviceType && typeof modulesOpenFor === 'function') {
-            actions.append(credButton('🧩', 'Modules of this device', () => modulesOpenFor(e.target.value)));
+            actions.append(credButton('🧩 Modules', 'Modules of this device', () => modulesOpenFor(e.target.value)));
         }
         actions.append(
             credButton('↑', 'Try earlier', () => credMove(e, -1), i === 0),
             credButton('↓', 'Try later', () => credMove(e, 1), i === credState.entries.length - 1),
-            credButton('✎', 'Change', () => credEdit(e)),
-            credButton('🗑', 'Remove', () => credDelete(e)));
+            credButton('Edit', 'Change this login', () => credEdit(e)),
+            credButton('Delete', 'Delete this login', () => credDelete(e), false, 'cred-delete'));
         tr.appendChild(actions);
         return tr;
     });
@@ -284,7 +284,7 @@ async function credSubmit(event) {
 
 async function credDelete(e) {
     const what = `${credLabel(credState.protocols, e.protocol)} login of ${credTargetText(e.target, e.deviceType)}`;
-    if (!confirm(`Remove the ${what}?`)) return;
+    if (!confirm(`Delete the ${what}?`)) return;
     const r = await credApi('DELETE', '/api/credentials?id=' + encodeURIComponent(e.id));
     if (!r.ok) credFormError(r.v.error || `HTTP ${r.status}`);
     if (credEl('credId').value === e.id) credResetForm();

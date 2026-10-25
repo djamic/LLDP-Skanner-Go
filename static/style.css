@@ -1571,6 +1571,15 @@ button:active {
     background: rgba(255, 255, 255, 0.1);
 }
 
+.cred-action.cred-delete {
+    color: #ff8a80;
+    border-color: rgba(244, 67, 54, 0.5);
+}
+
+.cred-action.cred-delete:hover:not(:disabled) {
+    background: rgba(244, 67, 54, 0.25);
+}
+
 .cred-action:disabled {
     opacity: 0.3;
     cursor: default;
