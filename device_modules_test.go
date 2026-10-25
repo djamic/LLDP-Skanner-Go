@@ -464,12 +464,15 @@ func TestGatewayWLANHosts(t *testing.T) {
 	const deb, debMAC = "10.20.0.1", "00:0c:29:00:00:02"
 	setGatewayIPs([]string{fixedGatewayIP, deb, gw})
 	inventoryMu.Lock()
-	managedByMAC[ap] = ManagedView{Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", IP: "10.9.71.5"}, {MAC: "de:ad:00:00:00:09", IP: "10.50.0.9"}}}
+	managedByMAC[ap] = ManagedView{Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", IP: "10.9.71.5", Kind: "wireless"}, {MAC: "de:ad:00:00:00:09", IP: "10.50.0.9", Kind: "wireless"},
+		{MAC: "de:ad:00:00:00:0a", IP: "10.60.0.9", Kind: "vm"}}}
 	inventoryMu.Unlock()
-	shared := []ARPEntry{{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"}, {IPAddress: "10.50.0.7", MACAddress: "de:ad:00:00:00:07"}}
+	shared := []ARPEntry{{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"}, {IPAddress: "10.50.0.7", MACAddress: "de:ad:00:00:00:07"},
+		{IPAddress: "10.60.0.7", MACAddress: "de:ad:00:00:00:08"}} // the subnet of a VM only: no WLAN
 	gatewayPollsMu.Lock()
 	gatewayPolls[gw] = gatewayPoll{Answered: true, ARP: shared, Subnets: []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.50.0.0/24")}}
-	gatewayPolls[deb] = gatewayPoll{Answered: true, ARP: shared, Subnets: []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.50.0.0/24")}}
+	gatewayPolls[deb] = gatewayPoll{Answered: true, ARP: shared, Subnets: []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.50.0.0/24"),
+		netip.MustParsePrefix("10.60.0.0/24")}}
 	gatewayPollsMu.Unlock()
 	data = GraphData{Nodes: []GraphNode{{ID: gwMAC, Group: "router", SysName: "pfSense\n" + gw}, {ID: debMAC, Group: "router", SysName: "debian216\n" + deb}}}
 	addGatewayWLANHosts(&data)
@@ -578,5 +581,47 @@ func TestManagedAPNodes(t *testing.T) {
 		!strings.Contains(out, "A up "+apUp+" (10.9.50.11) drawn from UniFi 10.9.60.5, linked by its uplink "+sw+" GigabitEthernet1/0/12\n") ||
 		!strings.Contains(out, "A fdb "+apFDB+" (10.9.50.13) drawn from  , linked by the FDB of 10.9.50.1 GE1/0/5 (3 MACs on the port)") {
 		t.Errorf("log %q", out)
+	}
+}
+
+// TestManagedVMNames checks the virtual machines a vCenter lists: the node
+// of each gets what vCenter tells of it (its name, guest OS, power, its
+// host's name), whether or not its host is a node, and no VM gets a node
+// or a link of its own (the graph places VMs by the FDBs).
+func TestManagedVMNames(t *testing.T) {
+	resetState(t)
+	const esxA, esxB = "48:df:37:00:0a:01", "48:df:37:00:0b:01"
+	inventoryMu.Lock()
+	managedByMAC = map[string]ManagedView{
+		esxA: {Name: "esx-a.lab.local", Kind: "hypervisor", Clients: []modules.ManagedClient{
+			{MAC: "00:50:56:AA:00:01", Name: "Web & App", IP: "10.9.1.10", Kind: "vm", OS: "Ubuntu Linux (64-bit)", Power: "On"},
+			{MAC: "00:50:56:aa:00:05", Name: "not a node", Kind: "vm"},
+		}},
+		esxB: {Name: "esx-b.lab.local", Kind: "hypervisor", Clients: []modules.ManagedClient{{MAC: "00:0c:29:aa:00:03", Name: "db", Kind: "vm", Power: "Off"}}},
+	}
+	inventoryMu.Unlock()
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		managedByMAC = map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+	data := GraphData{
+		Nodes: []GraphNode{{ID: esxA, Group: "hypervisor"}, {ID: "00:50:56:aa:00:01", Group: "vm"}, {ID: "00:0c:29:aa:00:03", Group: "vm"}},
+		Links: []GraphLink{{Source: esxA, Target: "00:50:56:aa:00:01", Label: "vNIC"}},
+	}
+	addManaged(&data)
+	addManagedClients(&data)
+	addManagedVMNames(&data)
+	if len(data.Nodes) != 3 || len(data.Links) != 1 {
+		t.Errorf("nodes %+v links %+v: want none added", data.Nodes, data.Links)
+	}
+	if c := data.Nodes[1].Client; c == nil || c.Name != "Web & App" || c.Device != "esx-a.lab.local" || c.OS != "Ubuntu Linux (64-bit)" {
+		t.Errorf("the VM of esx-a %+v", c)
+	}
+	if c := data.Nodes[2].Client; c == nil || c.Name != "db" || c.Device != "esx-b.lab.local" || c.Power != "Off" {
+		t.Errorf("the VM of esx-b, no node: %+v", c)
+	}
+	if m := data.Nodes[0].Managed; m == nil || m.Name != "esx-a.lab.local" || len(m.Clients) != 2 {
+		t.Errorf("the host %+v", m)
 	}
 }

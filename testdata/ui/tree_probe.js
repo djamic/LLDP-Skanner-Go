@@ -367,6 +367,24 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
     JSON.stringify(details) === JSON.stringify(['TUIT · 5 GHz · channel 36 · Wi-Fi 6 (ax)', 'signal -61 dBm · experience 97%',
       'rate rx 866 / tx 1200 Mbit/s · traffic rx 1.2 KB / tx 5.7 GB', 'connected 1h 1m · host name phone<x>', 'Intel · VLAN 20']) &&
     T.treeClientDetails({ mac: 'x', channel: 0, signal: 0 }).length === 0, [dc, details]);
+  // A vCenter's host and its VMs (module_inventory.go): the host named by
+  // vCenter with its VM NICs as a 🖥️ count, a VM node by its vCenter name,
+  // a VM with no node as a 🖥️ row below its host
+  const esx = { id: '48:df:37:00:0a:01', label: '[HYPERVISOR] VMware ESXi\n10.0.0.41', sysName: '[HYPERVISOR] VMware ESXi\n10.0.0.41', group: 'hypervisor',
+    managed: { source: 'VMware vCenter', controller: '10.0.0.7', name: 'esx-a.lab.local', kind: 'hypervisor', state: 'ONLINE', clients: [
+      { mac: '00:50:56:aa:00:01', name: 'Web <App>', ip: '10.0.1.10', kind: 'vm', os: 'Ubuntu Linux (64-bit)', power: 'On', hostname: 'web01' },
+      { mac: '00:50:56:aa:00:05', name: 'archive', kind: 'vm', os: 'Windows', power: 'Off' }] } };
+  const vmNode = { id: '00:50:56:aa:00:01', label: '[VM] 🐧 Linux VMware\nweb01\n10.0.1.10', sysName: '[VM] 🐧 Linux VMware\nweb01\n10.0.1.10', hostname: 'web01', group: 'vm',
+    client: Object.assign({ device: 'esx-a.lab.local' }, esx.managed.clients[0]) };
+  const vmTree = T.treeProject(T.treeSpanning({ nodes: [esx, vmNode], links: [{ source: esx.id, target: vmNode.id, label: 'vNIC' }] }), null, {});
+  const vmRow = rows(vmTree).find(r => r.row.id === vmNode.id), esxRow = rows(vmTree).find(r => r.row.id === esx.id);
+  const vmClients = clientRows(vmTree);
+  check('synthetic: a vCenter host by its name with its VM count, a VM node by its vCenter name, a VM with no node a row below',
+    esxRow && esxRow.row.name === 'esx-a.lab.local' && esxRow.json.text.includes('🖥️ 2') && vmRow && vmRow.row.name === 'Web <App>' &&
+    vmClients.length === 1 && vmClients[0].mac === '00:50:56:aa:00:05' && vmClients[0].plain.startsWith('🖥️ archive') &&
+    vmClients[0].text.includes('virtual machine of esx-a.lab.local') && vmClients[0].text.includes('power Off · Windows') &&
+    JSON.stringify(T.treeClientDetails(esx.managed.clients[0])) === JSON.stringify(['power On · Ubuntu Linux (64-bit)', 'guest name web01']) &&
+    safeTree(vmTree).length === 0, [esxRow && esxRow.row, vmRow && vmRow.row, vmClients]);
   check('synthetic: BFS: a router behind a switch hangs below it', at(R2).parent === S2 && at(R2).depth === 3);
   check('synthetic: child order: routers/switches, hubs/hypervisors, the rest, natural by name',
     JSON.stringify(kids(at(S1).json).map(c => row(c).name)) === JSON.stringify(['dist-2', 'dist-10']) &&

@@ -268,6 +268,7 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 	addManaged(&data)
 	addGatewayWLANHosts(&data)
 	addManagedClients(&data)
+	addManagedVMNames(&data)
 
 	// E.1/E.2: Enrich graph data with health score and anomaly info
 	lastReportMutex.RLock()

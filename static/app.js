@@ -96,6 +96,8 @@ function uiNodeText(d) {
         const state = m.state && String(m.state).toUpperCase() !== 'ONLINE' ? ` · ${m.state}` : '';
         return [m.name + state, uiNodeIPs(d)[0] || m.ip].filter(Boolean).join('\n');
     }
+    // a virtual machine by its vCenter name (d.client)
+    if (d.client && d.client.kind === 'vm' && d.client.name) return [d.client.name, uiNodeIPs(d)[0] || d.client.ip].filter(Boolean).join('\n');
     return d.hostname || d.sysName || d.label || d.id;
 }
 
@@ -1116,6 +1118,7 @@ function uiComparePorts(a, b) {
 // uiNodeName: DNS name, else the first name line, else the node's IP, else its id.
 function uiNodeName(node) {
     if (node.managed && node.managed.name) return node.managed.name;
+    if (node.client && node.client.kind === 'vm' && node.client.name) return node.client.name;
     const info = uiParseNodeInfo(node);
     return info.hostname || info.name || uiNodeIPs(node)[0] || node.id;
 }
@@ -1127,7 +1130,7 @@ function showInfoPanel(node) {
     // Parse node info (vendor, detail, DNS name, name line)
     const type = node.group || 'unknown';
     const info = uiParseNodeInfo(node);
-    const sysName = (node.managed && node.managed.name) || info.hostname || info.name;
+    const sysName = (node.managed && node.managed.name) || (node.client && node.client.kind === 'vm' && node.client.name) || info.hostname || info.name;
     // Same address as Connect and History; further IP lines are listed after it
     const ips = uiNodeIPs(node);
 
@@ -1192,18 +1195,22 @@ function showInfoPanel(node) {
         managedSection.hidden = !m;
         if (m) {
             const clients = (m.clients || []).length;
+            const count = m.kind === 'hypervisor' ? `${clients} VM NIC${clients === 1 ? '' : 's'}` : `${clients} client${clients === 1 ? '' : 's'}`;
             document.getElementById('infoManaged').textContent = [`${m.source || 'Controller'} ${m.controller || ''}`.trim(),
-                m.model, m.state, m.firmware && 'firmware ' + m.firmware, `${clients} client${clients === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+                m.model, m.state, m.firmware && (m.kind === 'hypervisor' ? m.firmware : 'firmware ' + m.firmware), count].filter(Boolean).join(' · ');
         }
     }
 
     // What the controller tells of it as a client (node.client: a Wi-Fi
-    // client's SSID, signal, ...; tree.js treeClientDetails words it)
+    // client's SSID, signal, ...; a VM's vCenter name, guest OS, power;
+    // tree.js treeClientDetails words it)
     const clientSection = document.getElementById('infoClientSection');
     if (clientSection) {
         const c = node.client;
         const lines = c && typeof treeClientDetails === 'function' ? treeClientDetails(c) : [];
         clientSection.hidden = !c;
+        const label = document.getElementById('infoClientLabel');
+        if (label) label.textContent = c && c.kind === 'vm' ? 'Virtual machine' : 'WLAN client';
         if (c) document.getElementById('infoClient').textContent = [`on ${c.device || '?'}`, ...lines].join('\n');
     }
 

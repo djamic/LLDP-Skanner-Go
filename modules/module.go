@@ -122,7 +122,8 @@ type ManagedDevice struct {
 	IP       string `json:"ip,omitempty"`
 	State    string `json:"state,omitempty"` // "ONLINE", "OFFLINE", ...
 	Firmware string `json:"firmware,omitempty"`
-	// Kind is "access_point", "switch" or "gateway", "" when unknown
+	// Kind is "access_point", "switch", "gateway" or "hypervisor", "" when
+	// unknown
 	Kind string `json:"kind,omitempty"`
 	// Uplink is the device it is connected through, nil when unknown
 	Uplink  *ManagedUplink  `json:"uplink,omitempty"`
@@ -140,14 +141,15 @@ type ManagedUplink struct {
 	Wireless  bool   `json:"wireless,omitempty"`  // a mesh link
 }
 
-// ManagedClient is a client connected to a managed device. The fields
-// after Kind are what the controller tells of a Wi-Fi client, when it can
-// (a UniFi controller's older API): zero when unknown.
+// ManagedClient is a client connected to a managed device: a Wi-Fi client
+// of an access point, a virtual machine's NIC on its host. The fields after
+// Kind are what the controller tells of it, when it can (a UniFi
+// controller's older API, a vCenter): zero when unknown.
 type ManagedClient struct {
 	MAC  string `json:"mac"`
 	Name string `json:"name,omitempty"`
 	IP   string `json:"ip,omitempty"`
-	Kind string `json:"kind,omitempty"` // "wireless", "wired", ...
+	Kind string `json:"kind,omitempty"` // "wireless", "wired", "vm", ...
 
 	Hostname     string `json:"hostname,omitempty"` // the name it gave DHCP
 	Vendor       string `json:"vendor,omitempty"`
@@ -164,6 +166,8 @@ type ManagedClient struct {
 	TxBytes      int64  `json:"txBytes,omitempty"`
 	Uptime       int64  `json:"uptime,omitempty"`       // seconds connected
 	Satisfaction int    `json:"satisfaction,omitempty"` // the controller's 0-100 score
+	OS           string `json:"os,omitempty"`           // a VM's guest OS, "Ubuntu Linux (64-bit)"
+	Power        string `json:"power,omitempty"`        // a VM's "On", "Off", "Suspended"
 }
 
 // Inventorier is a module whose devices report the devices they manage;

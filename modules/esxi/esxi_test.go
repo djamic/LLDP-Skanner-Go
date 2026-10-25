@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/vsphere"
 )
 
 // Tests of the ESXi module against a fake host API: the answers are those
@@ -44,9 +45,9 @@ func newFakeHost(t *testing.T) (*fakeHost, func()) {
 		service: `<service><key>snmpd</key><label>SNMP Server</label><required>false</required><running>false</running><ruleset>snmp</ruleset><policy>off</policy></service>`,
 	}
 	srv := httptest.NewTLSServer(h)
-	old := sdkURL
-	sdkURL = func(string) string { return srv.URL + "/sdk" }
-	return h, func() { sdkURL = old; srv.Close() }
+	old := vsphere.SDKURL
+	vsphere.SDKURL = func(string) string { return srv.URL + "/sdk" }
+	return h, func() { vsphere.SDKURL = old; srv.Close() }
 }
 
 var fakeMethod = regexp.MustCompile(`<soapenv:Body><(\w+)`)
@@ -313,13 +314,13 @@ func TestNotESXi(t *testing.T) {
 		fmt.Fprintf(w, fakeEnvelope, `<RetrieveServiceContentResponse xmlns="urn:vim25"><returnval><about><fullName>VMware vCenter Server 8.0.3</fullName><apiType>VirtualCenter</apiType></about></returnval></RetrieveServiceContentResponse>`)
 	}))
 	defer srv.Close()
-	old := sdkURL
-	sdkURL = func(string) string { return srv.URL + "/sdk" }
-	defer func() { sdkURL = old }()
+	old := vsphere.SDKURL
+	vsphere.SDKURL = func(string) string { return srv.URL + "/sdk" }
+	defer func() { vsphere.SDKURL = old }()
 	if _, err := run(t, "detect", modules.Login{Username: "root", Password: "x"}); err == nil || !strings.Contains(err.Error(), "not an ESXi host") {
 		t.Errorf("a vCenter: %v", err)
 	}
-	sdkURL = func(string) string { return "https://127.0.0.1:1/sdk" }
+	vsphere.SDKURL = func(string) string { return "https://127.0.0.1:1/sdk" }
 	if _, err := run(t, "detect", modules.Login{}); err == nil || errors.Is(err, modules.ErrLoginRejected) {
 		t.Errorf("no API: %v, want an error that is no refused login", err)
 	}

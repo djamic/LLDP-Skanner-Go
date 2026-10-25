@@ -193,7 +193,7 @@ function credRender() {
 // credTypeProtocol is the protocol a device type's logins usually are for:
 // picking the type picks it (the first protocol, vSphere, is no switch's).
 const credTypeProtocol = {
-    'esxi': 'vsphere', 'bmc': 'redfish', 'ilo': 'redfish', 'idrac': 'redfish',
+    'esxi': 'vsphere', 'vcenter': 'vsphere', 'bmc': 'redfish', 'ilo': 'redfish', 'idrac': 'redfish',
     'fortigate': 'https', 'unifi-controller': 'https',
 };
 

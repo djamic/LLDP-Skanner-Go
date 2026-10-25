@@ -83,6 +83,7 @@ var credentialProtocols = []credentialOption{
 // credentialTypes are the device types a login can be given for.
 var credentialTypes = []credentialOption{
 	{"esxi", "ESXi hosts"},
+	{"vcenter", "vCenter Servers"},
 	{"switch", "All switches"},
 	{"switch-hpe", "HPE / H3C switches"},
 	{"switch-aruba", "Aruba switches"},

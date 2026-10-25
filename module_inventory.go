@@ -324,8 +324,8 @@ func addManagedClients(data *GraphData) {
 		devName := cmp.Or(dev.Managed.Name, strings.Split(dev.SysName, "\n")[0], dev.ID)
 		for _, c := range dev.Managed.Clients {
 			mac := canonicalMAC(c.MAC)
-			if mac == "" || mac == dev.ID || c.Kind == "wired" {
-				continue
+			if mac == "" || mac == dev.ID || c.Kind == "wired" || c.Kind == "vm" {
+				continue // a VM: addManagedVMNames
 			}
 			if at, ok := have[mac]; ok {
 				if data.Nodes[at].Client == nil {
@@ -359,6 +359,30 @@ func addManagedClients(data *GraphData) {
 	}
 }
 
+// addManagedVMNames gives the nodes of the virtual machines the vCenters
+// list (clients of kind "vm" of their hosts) what vCenter tells of them
+// (GraphNode.Client: the VM's name, guest OS, power, ...), whether or not
+// their host is a node: the UI names a VM's node by its vCenter name. No
+// node or link is added: the graph places the VMs by the switches' FDBs.
+func addManagedVMNames(data *GraphData) {
+	at := make(map[string]int, len(data.Nodes))
+	for i, n := range data.Nodes {
+		at[n.ID] = i
+	}
+	inventoryMu.Lock()
+	defer inventoryMu.Unlock()
+	for _, dev := range managedByMAC {
+		for _, c := range dev.Clients {
+			if c.Kind != "vm" {
+				continue
+			}
+			if i, ok := at[canonicalMAC(c.MAC)]; ok && data.Nodes[i].Client == nil {
+				data.Nodes[i].Client = &ClientView{ManagedClient: c, Device: dev.Name}
+			}
+		}
+	}
+}
+
 // wlanDNSName is the short DNS name of a client's IP from the scanner's
 // cache ("Elliot" for Elliot.dhcp.tuit.uz), "" when there is none or it is
 // only the IP spelt out (a provider's 172-15-182-169.lightspeed...):
@@ -382,7 +406,7 @@ const gatewayARPSource = "Gateway ARP"
 // WLAN subnets that the graph shows nowhere else, as the clients of a
 // managed device (GraphNode.Managed, source "Gateway ARP"), so
 // addManagedClients draws them below it and the tree lists them. A WLAN
-// subnet is a subnet of the gateway that holds a client of a managed device
+// subnet is a subnet of the gateway that holds a Wi-Fi client of a managed device
 // (172.15.0.0/16 of the pfSense 172.15.1.254: the UniFi clients' subnet),
 // unless the IP of another gateway is in it and its own is not: debian216
 // 172.20.1.254 has 172.15.1.253 in it too, and the hosts it talked to in
@@ -417,7 +441,7 @@ func addGatewayWLANHosts(data *GraphData) {
 		managedMAC[mac] = true
 		for _, c := range dev.Clients {
 			known[canonicalMAC(c.MAC)] = c
-			if a, err := netip.ParseAddr(c.IP); err == nil {
+			if a, err := netip.ParseAddr(c.IP); err == nil && c.Kind == "wireless" {
 				clientIPs = append(clientIPs, a)
 			}
 		}
@@ -489,7 +513,7 @@ func inventoryResolveNames() {
 	inventoryMu.Lock()
 	for _, dev := range managedByMAC {
 		for _, c := range dev.Clients {
-			if c.IP != "" {
+			if c.IP != "" && c.Kind != "vm" { // the graph build looks up the VMs it has
 				ips = append(ips, c.IP)
 			}
 		}

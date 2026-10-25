@@ -16,6 +16,7 @@ import (
 	"lldp_scanner/modules"
 	_ "lldp_scanner/modules/esxi"
 	_ "lldp_scanner/modules/unificontroller"
+	_ "lldp_scanner/modules/vcenter"
 )
 
 // ─── Device modules ───────────────────────────────────────────────────────────
