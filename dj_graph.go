@@ -270,6 +270,9 @@ type GraphNode struct {
 	Anomalies   []string `json:"anomalies,omitempty"`   // E.2: anomaly types for glow effect
 	Unreachable bool     `json:"unreachable"` // Phase 8: device is down
 	LastSeen    string   `json:"lastSeen,omitempty"`    // Phase 8: last successful poll time
+	// Managed is the device a controller manages under this MAC (a UniFi
+	// access point with its clients); only graphHandler sets it
+	Managed *ManagedView `json:"managed,omitempty"`
 	X           float64  `json:"x,omitempty"`
 	Y           float64  `json:"y,omitempty"`
 }

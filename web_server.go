@@ -223,6 +223,7 @@ func StartWebServer(port string) {
 	registerAuthRoutes()
 	registerCredentialRoutes()
 	registerModuleRoutes()
+	startModuleInventory()
 
 	addr := ":" + port
 	fmt.Printf("\n🌐 Web server starting on http://localhost%s\n", addr)
@@ -260,6 +261,9 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 	collectedDataMutex.RLock()
 	data.Core = topologyCore(nodes, collectedData)
 	collectedDataMutex.RUnlock()
+
+	// The devices the controllers manage (module_inventory.go)
+	addManaged(&data)
 
 	// E.1/E.2: Enrich graph data with health score and anomaly info
 	lastReportMutex.RLock()

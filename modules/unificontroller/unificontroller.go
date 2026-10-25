@@ -122,11 +122,13 @@ func (d device) uplinkID() string {
 	return d.UplinkDeviceID
 }
 
-// clientInfo is one connected client: only its kind and the device it is
-// on are read.
+// clientInfo is one connected client.
 type clientInfo struct {
 	Type           string `json:"type"`           // "WIRED", "WIRELESS", "VPN", "TELEPORT"
 	UplinkDeviceID string `json:"uplinkDeviceId"` // the access point or switch it is on
+	Name           string `json:"name"`
+	MacAddress     string `json:"macAddress"`
+	IPAddress      string `json:"ipAddress"`
 }
 
 func firstOf(values ...string) string {
@@ -136,6 +138,57 @@ func firstOf(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+
+// Inventory reads the devices the application manages, with the clients
+// on each (modules.Inventorier): the scanner names its access points by
+// them and lists their clients in the tree. A site that cannot be read
+// fails the whole read, so the scanner keeps the inventory it had.
+func (Module) Inventory(ctx context.Context, req modules.Request) (modules.Inventory, error) {
+	var inv modules.Inventory
+	key := strings.TrimSpace(req.Login.Password)
+	if key == "" {
+		return inv, fmt.Errorf("%w: no API key (the key is the login's password)", modules.ErrLoginRejected)
+	}
+	c, _, err := connect(ctx, req.IP, key)
+	if err != nil {
+		return inv, err
+	}
+	defer c.http.CloseIdleConnections()
+	sites, _, err := getAll[site](ctx, c, "/sites")
+	if err != nil {
+		return inv, fmt.Errorf("sites: %w", err)
+	}
+	for _, s := range sites {
+		devs, _, err := getAll[device](ctx, c, "/sites/"+url.PathEscape(s.ID)+"/devices")
+		if err != nil {
+			return inv, fmt.Errorf("devices of site %s: %w", s.label(), err)
+		}
+		clients, _, err := getAll[clientInfo](ctx, c, "/sites/"+url.PathEscape(s.ID)+"/clients")
+		if err != nil {
+			return inv, fmt.Errorf("clients of site %s: %w", s.label(), err)
+		}
+		onDevice := map[string][]modules.ManagedClient{}
+		for _, cl := range clients {
+			if cl.UplinkDeviceID == "" {
+				continue // VPN and Teleport clients are on no device
+			}
+			onDevice[cl.UplinkDeviceID] = append(onDevice[cl.UplinkDeviceID], modules.ManagedClient{
+				MAC: strings.ToLower(strings.TrimSpace(cl.MacAddress)), Name: strings.TrimSpace(cl.Name),
+				IP: strings.TrimSpace(cl.IPAddress), Kind: strings.ToLower(cl.Type)})
+		}
+		for _, d := range devs {
+			cls := onDevice[d.ID]
+			slices.SortFunc(cls, func(a, b modules.ManagedClient) int {
+				return cmp.Or(cmp.Compare(strings.ToLower(firstOf(a.Name, a.MAC)), strings.ToLower(firstOf(b.Name, b.MAC))), cmp.Compare(a.MAC, b.MAC))
+			})
+			inv.Devices = append(inv.Devices, modules.ManagedDevice{MAC: strings.ToLower(strings.TrimSpace(d.MacAddress)),
+				Name: d.label(), Model: d.Model, IP: d.IPAddress, State: d.State, Firmware: d.FirmwareVersion, Clients: cls})
+		}
+	}
+	return inv, nil
 }
 
 // ─── Detect ───────────────────────────────────────────────────────────────────

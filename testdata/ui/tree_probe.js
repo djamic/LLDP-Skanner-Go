@@ -214,12 +214,27 @@ function outline(json) {
 function rows(json) {
   const out = [];
   const walk = (n, parent, depth, folder) => {
-    if (n.data && n.data.xref !== undefined) return; // a '↔' row: see xrefRows
+    if (n.data && (n.data.xref !== undefined || n.data.client !== undefined)) return; // '↔' and client rows: see xrefRows, clientRows
     const r = row(n);
     out.push({ json: n, row: r, parent, depth, folder });
     (n.children || []).forEach(c => walk(c, r.folder ? null : r.id, depth + 1, folder || r.folder));
   };
   json.forEach(n => walk(n, null, 0, false));
+  return out;
+}
+
+// clientRows lists the client rows of the devices a controller manages:
+// each with the device row it hangs under, its MAC, id, text and plain text.
+function clientRows(json) {
+  const out = [];
+  const walk = (n, owner) => {
+    if (n.data && n.data.client !== undefined) {
+      out.push({ owner, mac: n.data.client, id: n.id, q: n.data.q, text: n.text, plain: decodeEntities(n.text.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim() });
+      return;
+    }
+    (n.children || []).forEach(c => walk(c, n.data && n.data.node));
+  };
+  json.forEach(n => walk(n, null));
   return out;
 }
 
@@ -256,10 +271,10 @@ function safeTree(json) {
     const stray = strayMarkup(n.text);
     if (stray !== null) problems.push(`markup in ${n.id}: ${stray}`);
     if (!/^tv[df]-[A-Za-z0-9_-]+$/.test(n.id)) problems.push(`id ${n.id}`);
-    (n.children || []).filter(c => c.data && c.data.xref !== undefined).forEach(c => {
+    (n.children || []).filter(c => c.data && (c.data.xref !== undefined || c.data.client !== undefined)).forEach(c => {
       const strayX = strayMarkup(c.text);
       if (strayX !== null) problems.push(`markup in ${c.id}: ${strayX}`);
-      if (!/^tvx-[A-Za-z0-9_-]+$/.test(c.id)) problems.push(`id ${c.id}`);
+      if (!(c.data.xref !== undefined ? /^tvx-[A-Za-z0-9_-]+$/ : /^tvw-[A-Za-z0-9_-]+$/).test(c.id)) problems.push(`id ${c.id}`);
       for (const key of ['li_attr', 'a_attr', 'icon', 'type']) if (key in c) problems.push(`${key} on ${c.id}`);
     });
     for (const key of ['li_attr', 'a_attr', 'icon', 'type']) if (key in n) problems.push(`${key} on ${n.id}`);
@@ -304,6 +319,27 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
     { source: 'b', target: 'c', label: '<i>q2</i>|"r2&', sourceLabel: '<i>q2</i>', targetLabel: '"r2&' }] }), null, {});
   check('synthetic: a ↔ row holds no markup from the server', xrefRows(hostileX).length === 2 && safeTree(hostileX).length === 0 &&
     !xrefRows(hostileX).some(x => x.text.includes('<img') || x.text.includes('<i>')), [safeTree(hostileX), xrefRows(hostileX).map(x => x.text)]);
+  // A device its controller manages (node.managed, a UniFi access point):
+  // named by the controller, its state when not online, its clients as rows
+  // below it that are no devices (no count) but are found by the search,
+  // and no markup from the server anywhere
+  const managedNode = { id: '70:a7:41:00:00:01', label: '[LLDP-EP] Ubiquiti\nA1qavat118\n10.0.0.12', sysName: '[LLDP-EP] Ubiquiti\nA1qavat118\n10.0.0.12', group: 'access_point',
+    managed: { source: 'UniFi Network controller', controller: '10.0.0.2', name: 'A 1 qavat <118>', model: 'U6 LR', state: 'OFFLINE', firmware: '6.7.57',
+      clients: [{ mac: 'de:ad:00:00:00:02', name: '<img src=x onerror=alert(7)>', ip: '10.0.1.7', kind: 'wireless' }, { mac: 'de:ad:00:00:00:01', kind: 'wired' }] } };
+  const managedTree = T.treeProject(T.treeSpanning({ nodes: [{ id: 'aa:00:00:00:01:01', label: 'sw\n10.0.0.1', group: 'switch' }, managedNode],
+    links: [{ source: 'aa:00:00:00:01:01', target: managedNode.id, label: 'GE1/0/5|eth0', sourceLabel: 'GE1/0/5', targetLabel: 'eth0' }] }), null, {});
+  const apRow = rows(managedTree).find(r => r.row.id === managedNode.id);
+  const cl = clientRows(managedTree);
+  check('synthetic: a managed device is named by its controller, with its state and its clients below it',
+    !!apRow && apRow.row.name === 'A 1 qavat <118>' && apRow.json.text.includes('<span class="tv-state">OFFLINE</span>') &&
+    apRow.json.text.includes('📶 2') && !apRow.json.text.includes('tv-count') &&
+    cl.length === 2 && cl.every(c => c.owner === managedNode.id && /^tvw-/.test(c.id)) &&
+    cl[0].plain === '📶 <img src=x onerror=alert(7)> 10.0.1.7 de:ad:00:00:00:02' && cl[1].plain === '🔌 de:ad:00:00:00:01' &&
+    cl[0].q.includes('10.0.1.7') && safeTree(managedTree).length === 0 && !cl[0].text.includes('<img') &&
+    T.treeRowCount(managedTree[0]) === 2, [apRow && apRow.row, cl, safeTree(managedTree)]);
+  check('synthetic: a managed device\'s tooltip has what its controller says',
+    T.treeSpanning({ nodes: [managedNode], links: [] }).infos.get(managedNode.id).title
+      .includes('UniFi Network controller 10.0.0.2 · U6 LR · OFFLINE · firmware 6.7.57\n2 clients connected'));
   check('synthetic: BFS: a router behind a switch hangs below it', at(R2).parent === S2 && at(R2).depth === 3);
   check('synthetic: child order: routers/switches, hubs/hypervisors, the rest, natural by name',
     JSON.stringify(kids(at(S1).json).map(c => row(c).name)) === JSON.stringify(['dist-2', 'dist-10']) &&

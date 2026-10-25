@@ -149,14 +149,17 @@ function treeNodeIPs(node) {
 // A tag line of a label starts with its tag: '[ENDPOINT] Intel'.
 const treeTagPattern = /^\[[A-Za-z-]+\]\s*/;
 
-// treeNodeName is the name a row shows: the DNS name, else the first line
-// of sysName (or label) that names the device (an SNMP sysName or an LLDP
-// system name), else the text of its first tag line (the vendor of
-// '[ENDPOINT] Intel', '[LLDP-EP] SNR' or '[WiFi] Apple', the OS of
-// '[VM] 🐧 Linux VMware', the type of '[BMC] HPE iLO'), else its IP, else
-// its id. A hub or hypervisor is named by its tag line: its other lines
-// count devices and VMs ("4 devices", "6 VMs on ge1/0/24", "VMs: ...").
+// treeNodeName is the name a row shows: the name its controller gives it
+// (node.managed, a UniFi access point's "A 1 qavat 118"), the DNS name,
+// else the first line of sysName (or label) that names the device (an SNMP
+// sysName or an LLDP system name), else the text of its first tag line (the
+// vendor of '[ENDPOINT] Intel', '[LLDP-EP] SNR' or '[WiFi] Apple', the OS
+// of '[VM] 🐧 Linux VMware', the type of '[BMC] HPE iLO'), else its IP,
+// else its id. A hub or hypervisor is named by its tag line: its other
+// lines count devices and VMs ("4 devices", "6 VMs on ge1/0/24", "VMs:
+// ...").
 function treeNodeName(node) {
+    if (node.managed && node.managed.name) return String(node.managed.name);
     if (node.hostname) return String(node.hostname);
     const id = String(node.id);
     const lines = String(node.sysName || node.label || '').split('\n').map(s => s.trim()).filter(Boolean);
@@ -398,6 +401,12 @@ function treeTitle(sp, info) {
         lines.push(`link: ${sp.infos.get(up).label} ${l.up.port || '?'} → ${l.down.port || '?'}`);
     }
     if (info.node.unreachable) lines.push('unreachable');
+    const m = info.node.managed;
+    if (m) {
+        lines.push([`${m.source || 'controller'} ${m.controller || ''}`.trim(), m.model, m.state, m.firmware && 'firmware ' + m.firmware]
+            .filter(Boolean).join(' · '));
+        if (m.clients && m.clients.length) lines.push(`${m.clients.length} client${m.clients.length === 1 ? '' : 's'} connected`);
+    }
     return lines.join('\n');
 }
 
@@ -408,7 +417,7 @@ function treeTitle(sp, info) {
 function treeSearchText(sp, info) {
     const n = info.node, l = sp.link.get(info.id);
     return [info.id, info.name, info.address, info.ips.join(' '), n.hostname, n.sysName || n.label,
-        info.group, l && treeSideText(l.up), l && treeSideText(l.down)].filter(Boolean).join('\n').toLowerCase();
+        n.managed && n.managed.model, info.group, l && treeSideText(l.up), l && treeSideText(l.down)].filter(Boolean).join('\n').toLowerCase();
 }
 
 // treePortHTML is the port badge of a row: both ends of the link to its
@@ -470,7 +479,14 @@ function treeRowHTML(info, color, badge, count, title) {
     if (badge) parts.push(badge);
     parts.push(`<span class="tv-icon">${icon}</span>`, `<span class="tv-name">${treeEscapeHTML(info.name)}</span>`);
     if (info.address) parts.push(`<span class="tv-addr">${treeEscapeHTML(info.address)}</span>`);
+    // what its controller says (node.managed): a state other than online,
+    // and the clients, listed below the row (treeClientRows)
+    const m = info.node.managed;
+    if (m && m.state && String(m.state).toUpperCase() !== 'ONLINE') parts.push(`<span class="tv-state">${treeEscapeHTML(m.state)}</span>`);
     if (count) parts.push(treeCountHTML(count));
+    if (m && m.clients && m.clients.length) {
+        parts.push(`<span class="tv-clients" title="${m.clients.length} client${m.clients.length === 1 ? '' : 's'} connected">📶 ${m.clients.length}</span>`);
+    }
     return `<span class="tv-row${unreachable ? ' tv-unreachable' : ''}" title="${treeEscapeHTML(title)}">` +
         `<span class="tv-dot" style="background:${dot}"></span>${parts.join(' ')}</span>`;
 }
@@ -498,6 +514,36 @@ function treeXrefHTML(info, other, x) {
         `<span class="tv-port"><span class="tv-from">${treeEscapeHTML(info.short)}</span> ${port(x.up)} → ${port(x.down)}</span> ` +
         `<span class="tv-icon">${icon}</span> <span class="tv-name">${treeEscapeHTML(other.name)}</span>` +
         (other.address ? ` <span class="tv-addr">${treeEscapeHTML(other.address)}</span>` : '') + `</span>`;
+}
+
+// treeClientId is the jsTree id of the row of a client connected to
+// device id.
+function treeClientId(id, mac) {
+    return 'tvw-' + treeSafeId(`${id}>${mac}`).slice(4);
+}
+
+// treeClientRows are the rows of the clients its controller lists on a
+// device (node.managed.clients: a UniFi access point's Wi-Fi clients):
+// leaves with the client's name, IP and MAC, found by the device search.
+// They are no devices of the graph: no count, no info panel. Only escaped
+// strings and constants go in.
+function treeClientRows(id, info) {
+    const m = info.node.managed;
+    if (!m || !Array.isArray(m.clients)) return [];
+    return m.clients.filter(c => c && c.mac).map(c => {
+        const name = c.name || c.mac;
+        const icon = c.kind === 'wired' ? '🔌' : '📶';
+        const title = [name, c.ip, c.mac, `${c.kind || 'client'} client of ${info.name}`].filter(Boolean).join('\n');
+        return {
+            id: treeClientId(id, String(c.mac)),
+            text: `<span class="tv-row tv-client" title="${treeEscapeHTML(title)}"><span class="tv-icon">${icon}</span> ` +
+                `<span class="tv-name">${treeEscapeHTML(name)}</span>` +
+                (c.ip ? ` <span class="tv-addr">${treeEscapeHTML(c.ip)}</span>` : '') +
+                (c.name ? ` <span class="tv-addr">${treeEscapeHTML(c.mac)}</span>` : '') + `</span>`,
+            children: [],
+            data: { client: String(c.mac), q: [name, c.ip, c.mac].filter(Boolean).join('\n').toLowerCase() },
+        };
+    });
 }
 
 // treeOwn is table[key] when the table has that key itself (a group named
@@ -571,7 +617,7 @@ function treeProject(sp, shown, options) {
         const json = {
             id: treeSafeId(id),
             text: treeRowHTML(info, treeOwn(colors, info.group), badge, count, title),
-            children: rows.map(r => r.json).concat(xrefs),
+            children: rows.map(r => r.json).concat(xrefs, treeClientRows(id, info)),
             data: { node: id, q: info.q },
         };
         return [{ info, json, count }];
@@ -819,7 +865,7 @@ function treeShowSearchResult(text) {
 // treeRowCount is the number of devices in a JSON row (the folder and the
 // '↔' rows of extra links are none).
 function treeRowCount(row) {
-    let count = row.id === treeFolderId || (row.data && row.data.xref !== undefined) ? 0 : 1;
+    let count = row.id === treeFolderId || (row.data && (row.data.xref !== undefined || row.data.client !== undefined)) ? 0 : 1;
     (row.children || []).forEach(child => { count += treeRowCount(child); });
     return count;
 }

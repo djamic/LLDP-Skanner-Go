@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -241,5 +243,75 @@ func TestModuleDeclaredType(t *testing.T) {
 	}
 	if _, v := moduleTestRun(t, moduleRunRequest{Module: "fake", Action: "detect", IP: "10.9.70.9"}); v["ok"] != true {
 		t.Errorf("run on a declared device: %v", v)
+	}
+}
+
+// Inventory makes the fake module a controller: with the password "good"
+// it manages one access point with two clients; "down" fails the read.
+func (f *fakeModule) Inventory(_ context.Context, req modules.Request) (modules.Inventory, error) {
+	switch req.Login.Password {
+	case "good":
+		return modules.Inventory{Devices: []modules.ManagedDevice{{MAC: "AA:00:00:00:00:01", Name: "AP 1 qavat", Model: "U6 LR", State: "ONLINE",
+			Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", Name: "Laptop", IP: "10.9.71.5", Kind: "wireless"}, {MAC: "de:ad:00:00:00:02", Kind: "wireless"}}}}}, nil
+	case "down":
+		return modules.Inventory{}, errors.New("the controller is down")
+	}
+	return modules.Inventory{}, fmt.Errorf("%w: wrong key", modules.ErrLoginRejected)
+}
+
+// TestModuleInventory checks the inventory of a controller the Credentials
+// window declares: read with its login, kept in the file (0600) and read
+// back, given to the graph node of its MAC, and kept when a later read
+// fails.
+func TestModuleInventory(t *testing.T) {
+	moduleTestSetup(t)
+	inventoryFile = filepath.Join(t.TempDir(), "modules_inventory.json")
+	defer func() { inventoryFile = "modules_inventory.json" }()
+	inventoryMu.Lock()
+	inventories, managedByMAC, inventoryNotices = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]string{}
+	inventoryMu.Unlock()
+	save := func(passwords ...string) {
+		var entries []credentialEntry
+		for i, p := range passwords {
+			id := fmt.Sprintf("inv%d", i)
+			secret, _ := credentialsSeal(id, p)
+			entries = append(entries, credentialEntry{ID: id, Target: credentialTarget{"ip", "10.9.70.9"}, Protocol: "ssh", Secret: secret, DeviceType: "fake-dev"})
+		}
+		credentialsSave(entries)
+	}
+	save("bad", "good")
+	if got := inventoryTargets(testFakeModule); !slices.Equal(got, []string{"10.9.70.9"}) {
+		t.Fatalf("targets %v", got)
+	}
+	captureStdoutQuiet(inventoryRound)
+	v := managedViewOf("aa:00:00:00:00:01")
+	if v == nil || v.Name != "AP 1 qavat" || v.Controller != "10.9.70.9" || v.Source != "Fake device" || len(v.Clients) != 2 || v.Clients[0].Name != "Laptop" {
+		t.Fatalf("managed view %+v", v)
+	}
+	data := GraphData{Nodes: []GraphNode{{ID: "aa:00:00:00:00:01"}, {ID: "aa:00:00:00:00:02"}, {ID: "10.9.70.9"}}}
+	addManaged(&data)
+	if data.Nodes[0].Managed == nil || data.Nodes[1].Managed != nil || data.Nodes[2].Managed != nil {
+		t.Errorf("managed of the nodes %+v", data.Nodes)
+	}
+	if info, err := os.Stat(inventoryFile); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("inventory file %v (%v), want mode 0600", info, err)
+	}
+
+	// The kept inventory comes back after a restart, and a failed read
+	// keeps it
+	inventoryMu.Lock()
+	inventories, managedByMAC = map[string]inventoryRecord{}, map[string]ManagedView{}
+	inventoryMu.Unlock()
+	inventoryLoad()
+	if v := managedViewOf("aa:00:00:00:00:01"); v == nil || v.Model != "U6 LR" {
+		t.Fatalf("after a restart %+v", v)
+	}
+	save("down")
+	out := captureStdout(t, inventoryRound)
+	if v := managedViewOf("aa:00:00:00:00:01"); v == nil || !strings.Contains(out, "the controller is down") {
+		t.Errorf("after a failed read: %+v, log %q", v, out)
+	}
+	if again := captureStdout(t, inventoryRound); strings.Contains(again, "down") {
+		t.Errorf("the same failure is logged twice: %q", again)
 	}
 }

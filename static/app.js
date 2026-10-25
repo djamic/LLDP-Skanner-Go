@@ -86,8 +86,15 @@ async function loadNetworkData() {
 const uiSimFields = new Set(['x', 'y', 'vx', 'vy', 'fx', 'fy', 'index']);
 
 // uiNodeText is the text drawn under a node.
-// E.4: hostname priority — hostname > sysName > label > id
+// E.4: hostname priority — hostname > sysName > label > id; a device its
+// controller manages (d.managed, a UniFi access point) is drawn by the
+// controller's name, a state other than online and its IP
 function uiNodeText(d) {
+    const m = d.managed;
+    if (m && m.name) {
+        const state = m.state && String(m.state).toUpperCase() !== 'ONLINE' ? ` · ${m.state}` : '';
+        return [m.name + state, uiNodeIPs(d)[0] || m.ip].filter(Boolean).join('\n');
+    }
     return d.hostname || d.sysName || d.label || d.id;
 }
 
@@ -1099,6 +1106,7 @@ function uiComparePorts(a, b) {
 
 // uiNodeName: DNS name, else the first name line, else the node's IP, else its id.
 function uiNodeName(node) {
+    if (node.managed && node.managed.name) return node.managed.name;
     const info = uiParseNodeInfo(node);
     return info.hostname || info.name || uiNodeIPs(node)[0] || node.id;
 }
@@ -1110,7 +1118,7 @@ function showInfoPanel(node) {
     // Parse node info (vendor, detail, DNS name, name line)
     const type = node.group || 'unknown';
     const info = uiParseNodeInfo(node);
-    const sysName = info.hostname || info.name;
+    const sysName = (node.managed && node.managed.name) || info.hostname || info.name;
     // Same address as Connect and History; further IP lines are listed after it
     const ips = uiNodeIPs(node);
 
@@ -1167,6 +1175,18 @@ function showInfoPanel(node) {
         : ips[0] + (ips.length > 1 ? ` (also ${ips.slice(1).join(', ')})` : '');
     document.getElementById('infoSysName').textContent = sysName || node.id;
     document.getElementById('infoConnections').textContent = totalConnections;
+
+    // What its controller tells of it (node.managed: a UniFi access point)
+    const managedSection = document.getElementById('infoManagedSection');
+    if (managedSection) {
+        const m = node.managed;
+        managedSection.hidden = !m;
+        if (m) {
+            const clients = (m.clients || []).length;
+            document.getElementById('infoManaged').textContent = [`${m.source || 'Controller'} ${m.controller || ''}`.trim(),
+                m.model, m.state, m.firmware && 'firmware ' + m.firmware, `${clients} client${clients === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+        }
+    }
 
     // Phase 8: Show unreachable status
     const statusEl = document.getElementById('infoStatus');

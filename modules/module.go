@@ -100,6 +100,39 @@ type Prober interface {
 	Probe(ctx context.Context, ip string) bool
 }
 
+// Inventory is what a device that manages others (a UniFi controller
+// manages its access points and switches) tells of them, for the
+// scanner's graph and tree: the devices, by MAC, with their clients.
+type Inventory struct {
+	Devices []ManagedDevice `json:"devices"`
+}
+
+// ManagedDevice is one device of an Inventory.
+type ManagedDevice struct {
+	MAC      string          `json:"mac"` // "70:a7:41:a8:a2:ff"
+	Name     string          `json:"name"`
+	Model    string          `json:"model,omitempty"`
+	IP       string          `json:"ip,omitempty"`
+	State    string          `json:"state,omitempty"` // "ONLINE", "OFFLINE", ...
+	Firmware string          `json:"firmware,omitempty"`
+	Clients  []ManagedClient `json:"clients,omitempty"`
+}
+
+// ManagedClient is a client connected to a managed device.
+type ManagedClient struct {
+	MAC  string `json:"mac"`
+	Name string `json:"name,omitempty"`
+	IP   string `json:"ip,omitempty"`
+	Kind string `json:"kind,omitempty"` // "wireless", "wired", ...
+}
+
+// Inventorier is a module whose devices report the devices they manage;
+// the scanner reads the inventory every few minutes with the device's
+// login, as it runs an action.
+type Inventorier interface {
+	Inventory(ctx context.Context, req Request) (Inventory, error)
+}
+
 var (
 	registryMu sync.Mutex
 	registry   []Module

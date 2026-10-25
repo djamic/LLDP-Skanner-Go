@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -666,5 +667,49 @@ func TestModule(t *testing.T) {
 	}
 	if _, err := m.Run(context.Background(), modules.Request{IP: "10.9.60.5", Action: "reboot", Login: modules.Login{Password: testKey}}); err == nil {
 		t.Error("an unknown action ran")
+	}
+}
+
+// TestInventory checks the devices and their clients the scanner reads
+// for its graph and tree: every device of every site by MAC (lower case),
+// each with the clients on it in name order, and no client of no device.
+func TestInventory(t *testing.T) {
+	f := newFake()
+	f.clients = map[string][]map[string]any{
+		"s-main": {
+			{"type": "WIRELESS", "uplinkDeviceId": "d-ap1", "name": "phone-zed", "macAddress": "DE:AD:00:00:00:02", "ipAddress": "10.9.62.7"},
+			{"type": "WIRELESS", "uplinkDeviceId": "d-ap1", "name": "Laptop-A", "macAddress": "de:ad:00:00:00:01", "ipAddress": "10.9.62.5"},
+			{"type": "WIRED", "uplinkDeviceId": "d-sw", "macAddress": "de:ad:00:00:00:03"},
+			{"type": "VPN", "name": "remote", "macAddress": "de:ad:00:00:00:04"},
+		},
+		"s-lab": {},
+	}
+	srv := serve(t, f.handler())
+	useBases(t, srv.URL+prefix)
+	inv, err := Module{}.Inventory(context.Background(), modules.Request{IP: "10.9.60.5", Login: modules.Login{Password: testKey}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byMAC := map[string]modules.ManagedDevice{}
+	for _, d := range inv.Devices {
+		byMAC[d.MAC] = d
+	}
+	if len(inv.Devices) != 4 || byMAC["aa:bb:cc:00:00:02"].Name != "ap-a" || byMAC["aa:bb:cc:00:00:03"].State != "OFFLINE" ||
+		byMAC["aa:bb:cc:00:00:09"].Model != "U6 LR" || byMAC["aa:bb:cc:00:00:02"].Firmware != "6.6.77" {
+		t.Fatalf("devices %+v", inv.Devices)
+	}
+	ap := byMAC["aa:bb:cc:00:00:02"].Clients
+	want := []modules.ManagedClient{
+		{MAC: "de:ad:00:00:00:01", Name: "Laptop-A", IP: "10.9.62.5", Kind: "wireless"},
+		{MAC: "de:ad:00:00:00:02", Name: "phone-zed", IP: "10.9.62.7", Kind: "wireless"},
+	}
+	if !slices.Equal(ap, want) {
+		t.Errorf("clients of ap-a %+v, want %+v", ap, want)
+	}
+	if sw := byMAC["aa:bb:cc:00:00:01"].Clients; len(sw) != 1 || sw[0].Kind != "wired" {
+		t.Errorf("clients of the switch %+v", sw)
+	}
+	if _, err := (Module{}).Inventory(context.Background(), modules.Request{IP: "10.9.60.5", Login: modules.Login{Password: "wrong"}}); !errors.Is(err, modules.ErrLoginRejected) {
+		t.Errorf("a wrong key: %v", err)
 	}
 }
