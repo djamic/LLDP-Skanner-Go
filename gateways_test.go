@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -72,11 +73,29 @@ func fortiGateGateway(arp ...string) map[string][]string {
 
 // debianGateway answers like 172.20.1.254: its ARP table lists the
 // FortiGate, then the extra rows; 172.20.1.254/16, 10.20.5.1/16 and the
-// loopback.
+// loopback. Its interfaces are those of 2026-10-25 (snmpbulkwalk of the
+// live agent): its MAC is on eth0 and on the VLAN interfaces made on it,
+// eth1 has a MAC of its own, the loopback and the WireGuard tunnel none.
 func debianGateway(arp ...string) map[string][]string {
 	rows := append([]string{arpRow(2, fortiGW, fortiMAC)}, arp...)
-	return gatewayAgent("debian216", "Linux debian216 6.12.101+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.101-1 (2026-08-05) x86_64", rows,
+	walks := gatewayAgent("debian216", "Linux debian216 6.12.101+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.101-1 (2026-08-05) x86_64", rows,
 		gwAddr{debianGW, "255.255.0.0", 2}, gwAddr{"10.20.5.1", "255.255.0.0", 65}, gwAddr{"127.0.0.1", "255.0.0.0", 1})
+	phys := func(idx int, mac string) string {
+		if mac == "" {
+			return fmt.Sprintf("%s.%d = \"\"", collectIfPhysAddressOID, idx)
+		}
+		return fmt.Sprintf("%s.%d = Hex-STRING: %s ", collectIfPhysAddressOID, idx, strings.ToUpper(strings.ReplaceAll(mac, ":", " ")))
+	}
+	walks[collectIfPhysAddressOID] = []string{phys(1, ""), phys(2, debianMAC), phys(3, "00:0c:29:98:7b:cc"), phys(23, ""), phys(59, debianMAC), phys(65, debianMAC)}
+	var names []string
+	for _, n := range []struct {
+		idx  int
+		name string
+	}{{1, "lo"}, {2, "eth0"}, {3, "eth1"}, {23, "wg0"}, {59, "eth0.10"}, {65, "eth0.3333"}} {
+		names = append(names, fmt.Sprintf("%s.%d = STRING: %q", collectIfNameOID, n.idx, n.name))
+	}
+	walks[collectIfNameOID] = names
+	return walks
 }
 
 // TestParseGatewayIPs checks the gateway_ip format: one IP as before, or
@@ -184,8 +203,10 @@ func TestGatewayARPEveryGateway(t *testing.T) {
 	if got := collectCacheMap(); !maps.Equal(got, want) {
 		t.Errorf("after the startup gateway ARP: cache %v, want %v", got, want)
 	}
-	if got, want := answeredGateways(), []gatewayNode{{IP: debianGW, SysName: "debian216"}, {IP: fortiGW, SysName: "FortiGate-600F"}}; !slices.Equal(got, want) {
-		t.Errorf("answered gateways %+v, want %+v", got, want)
+	wantGWs := []gatewayNode{{IP: debianGW, SysName: "debian216", MACPorts: map[string]string{debianMAC: "eth0", "00:0c:29:98:7b:cc": "eth1"}},
+		{IP: fortiGW, SysName: "FortiGate-600F"}} // the FortiGate's agent has no ifPhysAddress
+	if got := answeredGateways(); !reflect.DeepEqual(got, wantGWs) {
+		t.Errorf("answered gateways %+v, want %+v", got, wantGWs)
 	}
 	for _, ip := range []string{debianGW, fortiGW} {
 		if !strings.Contains(out, "Collected 3 ARP entries from gateway "+ip) {
@@ -661,8 +682,9 @@ func TestGatewayRouterNodes(t *testing.T) {
 
 	// The links: the FortiGate keeps the LLDP link of the node it replaced,
 	// the Debian gets a MAC-REF link from the ESXi port (its VMs get no FDB
-	// nodes there, the port has an LLDP neighbor), the router VM keeps the
-	// FDB link of its VM port and is no VM of the hypervisor node there.
+	// nodes there, the port has an LLDP neighbor) into eth0, the port of its
+	// MAC, the router VM keeps the FDB link of its VM port and is no VM of
+	// the hypervisor node there (its agent names no port of its MAC).
 	links := map[string]string{}
 	for _, l := range data.Links {
 		if g.graphRouters[l.Source] || g.graphRouters[l.Target] {
@@ -671,11 +693,14 @@ func TestGatewayRouterNodes(t *testing.T) {
 	}
 	wantLinks := map[string]string{
 		"4c:ae:a3:48:00:02 -> " + fortiMAC:   "TGE1/0/52 [T] 10G|LAN",
-		"4c:ae:a3:48:00:02 -> " + debianMAC:  "GE1/0/10 [MAC-REF]|",
+		"4c:ae:a3:48:00:02 -> " + debianMAC:  "GE1/0/10 [MAC-REF]|eth0",
 		"4c:ae:a3:48:00:03 -> " + gwNetVMMAC: "GE1/0/7|",
 	}
 	if !maps.Equal(links, wantLinks) {
 		t.Errorf("router links %v, want %v", links, wantLinks)
+	}
+	if !strings.Contains(out, "drawn as router "+debianMAC+", linked from 10.9.48.2 GE1/0/10 (4 MACs on the port); its MAC is on its port eth0") {
+		t.Errorf("want the Debian's placement line to name its port:\n%s", out)
 	}
 	if g.Nodes[fortiLLDP] {
 		t.Errorf("the FortiGate's LLDP node %s is still drawn next to its router node", fortiLLDP)
@@ -715,7 +740,9 @@ func TestGatewayRouterNodes(t *testing.T) {
 // router node), one that stops answering (unreachable), two gateway IPs of
 // one router (one node, both IPs), one that is a polled switch (drawn as
 // that switch, which is the core), and the FortiGate advertising its IP as
-// the LLDP management address on a port where its MAC is not learned.
+// the LLDP management address on a port where its MAC is not learned; and
+// the gateway's port of its MAC: kept when a later read fails, and given
+// to an existing link without it.
 func TestGatewayRouterNodeCases(t *testing.T) {
 	t.Run("stored before checkSwitch", func(t *testing.T) {
 		gatewayNetworkUp(t)
@@ -745,6 +772,34 @@ func TestGatewayRouterNodeCases(t *testing.T) {
 		}
 		if g.NodeStatus[debianMAC] != "" {
 			t.Errorf("the Debian router is %q, want reachable", g.NodeStatus[debianMAC])
+		}
+	})
+
+	t.Run("its port read fails", func(t *testing.T) {
+		gatewayNetworkUp(t)
+		// The next walk answers ARP, but not ifPhysAddress: the port read
+		// before stays
+		debian := debianGateway()
+		delete(debian, collectIfPhysAddressOID)
+		fakeSNMP.set(debianGW, debian)
+		captureStdout(t, collectGatewayARP)
+		g := buildGraphFromSnapshot(snapshotCollectedData())
+		if got := g.Edges["4c:ae:a3:48:00:02"][debianMAC]; got != "GE1/0/10 [MAC-REF]|eth0" {
+			t.Errorf("Debian link after a failed port read %q, want the port read before", got)
+		}
+	})
+
+	t.Run("an existing link gets its port", func(t *testing.T) {
+		gatewayNetworkUp(t)
+		// The router VM's agent has its MAC on ifIndex 2, named by ifDescr
+		// only: the FDB link of its VM port gets its side
+		vyos := gatewayAgent("vyos", "VyOS 1.4", nil)
+		vyos[collectIfPhysAddressOID] = []string{collectIfPhysAddressOID + ".2 = Hex-STRING: " + strings.ToUpper(strings.ReplaceAll(gwNetVMMAC, ":", " ")) + " "}
+		fakeSNMP.set(gwNetVM, vyos)
+		captureStdout(t, collectGatewayARP)
+		g := buildGraphFromSnapshot(snapshotCollectedData())
+		if got := g.Edges["4c:ae:a3:48:00:03"][gwNetVMMAC]; got != "GE1/0/7|eth0" {
+			t.Errorf("router VM link %q, want its existing FDB link with its port eth0", got)
 		}
 	})
 
@@ -865,6 +920,47 @@ func TestGatewayPortRule(t *testing.T) {
 		if ok != c.ok || got != c.ip || link.port != c.port {
 			t.Errorf("%s: gatewayPort = %s port %d (found %v), want %s port %d (found %v)", c.name, got, link.port, ok, c.ip, c.port, c.ok)
 		}
+	}
+}
+
+// TestGatewayMACPorts checks the gateway's port of each interface MAC: of
+// the named interfaces with the MAC, a VLAN interface of another one is
+// left out and the lowest ifIndex wins; an interface without a name gives
+// no port.
+func TestGatewayMACPorts(t *testing.T) {
+	const mac, other = "00:0c:29:98:7b:c2", "00:0c:29:98:7b:cc"
+	cases := []struct {
+		name        string
+		macs, names map[int]string
+		want        map[string]string
+	}{
+		{"the Debian router", map[int]string{2: mac, 3: other, 59: mac, 65: mac},
+			map[int]string{1: "lo", 2: "eth0", 3: "eth1", 59: "eth0.10", 65: "eth0.3333"}, map[string]string{mac: "eth0", other: "eth1"}},
+		{"a VLAN interface with a lower ifIndex", map[int]string{5: mac, 7: mac},
+			map[int]string{5: "eth0.10", 7: "eth0"}, map[string]string{mac: "eth0"}},
+		{"the lowest ifIndex", map[int]string{4: mac, 9: mac},
+			map[int]string{4: "x7", 9: "br0"}, map[string]string{mac: "x7"}},
+		{"an interface without a name", map[int]string{2: mac, 6: mac},
+			map[int]string{6: "br0"}, map[string]string{mac: "br0"}},
+		{"no names", map[int]string{2: mac}, nil, nil},
+	}
+	for _, c := range cases {
+		if got := gatewayMACPorts(c.macs, c.names); !maps.Equal(got, c.want) {
+			t.Errorf("%s: gatewayMACPorts = %v, want %v", c.name, got, c.want)
+		}
+	}
+
+	// The read of the live Debian agent: its MAC on eth0, eth1's own MAC
+	resetState(t)
+	fakeSNMP.set(debianGW, debianGateway())
+	obj := &SNMPObject{Community: "public", Port: 161}
+	ports, err := obj.collectGatewayMACPorts(debianGW, nil)
+	if want := map[string]string{debianMAC: "eth0", other: "eth1"}; err != nil || !maps.Equal(ports, want) {
+		t.Errorf("collectGatewayMACPorts(%s) = %v, %v; want %v", debianGW, ports, err, want)
+	}
+	// An agent without ifPhysAddress
+	if ports, err := obj.collectGatewayMACPorts(fortiGW, nil); err == nil || ports != nil {
+		t.Errorf("collectGatewayMACPorts of an agent that does not answer = %v, %v; want an error", ports, err)
 	}
 }
 

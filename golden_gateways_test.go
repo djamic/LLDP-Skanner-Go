@@ -38,9 +38,10 @@ func sortedMinus(a, b []string) []string {
 }
 
 // fixtureWithGateways loads the fixture and notes the two gateways of
-// 2026-10-22 as answering SNMP with their sysNames, as the startup gateway
-// ARP does when their agents answer (the fixture's ARP data stays as it
-// is). It returns the graph built without and with the gateways, and the
+// 2026-10-22 as answering SNMP with their sysNames, and the Debian's port
+// of its MAC (eth0, its agent's ifPhysAddress of 2026-10-25), as the
+// startup gateway ARP does when their agents answer (the fixture's ARP data
+// stays as it is). It returns the graph built without and with the gateways, and the
 // gateway lines the build with them logged.
 func fixtureWithGateways(t *testing.T) (base, graph *DJGraph, log []string) {
 	t.Helper()
@@ -49,6 +50,7 @@ func fixtureWithGateways(t *testing.T) (base, graph *DJGraph, log []string) {
 	t.Cleanup(func() { setGatewayIPs([]string{fixedGatewayIP}) })
 	recordGatewayPoll(debianGW, true, "debian216")
 	recordGatewayPoll(fortiGW, true, "FortiGate-600F")
+	recordGatewayMACPorts(debianGW, map[string]string{debianMAC: "eth0", "00:0c:29:98:7b:cc": "eth1"}, nil)
 	out := captureStdout(t, func() { graph = buildGraphFromSnapshot(snapshotCollectedData()) })
 	for _, line := range strings.Split(out, "\n") {
 		if strings.Contains(line, "[Gateway]") {

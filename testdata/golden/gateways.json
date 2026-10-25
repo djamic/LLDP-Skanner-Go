@@ -21,7 +21,7 @@
       "172.20.0.1"
     ],
     "graph_changes": {
-      "edges_added": ["4c:ae:a3:8d:ee:c9 -> 00:0c:29:98:7b:c2 : \"TGE1/0/52 [MAC-REF]|\"", "4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|LAN\""],
+      "edges_added": ["4c:ae:a3:8d:ee:c9 -> 00:0c:29:98:7b:c2 : \"TGE1/0/52 [MAC-REF]|eth0\"", "4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|LAN\""],
       "edges_removed": ["4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e5:e8 : \"TGE1/0/52 [T] 10G|LAN\""],
       "nodes_added": ["00:0c:29:98:7b:c2", "68:cc:ae:96:e6:08"],
       "nodes_after": 1030,
@@ -36,7 +36,7 @@
     "log": [
       "🌐 [Gateway] 172.20.1.254 (debian216): MAC 00:0c:29:98:7b:c2 from the switch ARP tables",
       "🌐 [Gateway] 172.20.0.1 (FortiGate-600F): MAC 68:cc:ae:96:e6:08 from the switch ARP tables",
-      "🌐 [Gateway] debian216 172.20.1.254 drawn as router 00:0c:29:98:7b:c2, linked from 172.20.254.202 TGE1/0/52 (5 MACs on the port)",
+      "🌐 [Gateway] debian216 172.20.1.254 drawn as router 00:0c:29:98:7b:c2, linked from 172.20.254.202 TGE1/0/52 (5 MACs on the port); its MAC is on its port eth0",
       "🌐 [Gateway] FortiGate-600F 172.20.0.1 drawn as router 68:cc:ae:96:e6:08, linked from 172.20.254.203 TGE1/0/52 (1 MAC on the port), by its existing link; in place of node(s) 68:cc:ae:96:e5:e8"
     ],
     "path_suggestions": [
@@ -94,7 +94,7 @@
       {"device": "\n172.20.230.47 (f8:f0:82:d8:7d:07)", "node": "f8:f0:82:d8:7d:07", "value": "4+ hops"}
     ],
     "router_links": [
-      {"source": "4c:ae:a3:8d:ee:c9", "target": "00:0c:29:98:7b:c2", "label": "TGE1/0/52 [MAC-REF]|", "sourceLabel": "TGE1/0/52 [MAC-REF]"},
+      {"source": "4c:ae:a3:8d:ee:c9", "target": "00:0c:29:98:7b:c2", "label": "TGE1/0/52 [MAC-REF]|eth0", "sourceLabel": "TGE1/0/52 [MAC-REF]", "targetLabel": "eth0"},
       {"source": "4c:ae:a3:a2:09:8c", "target": "68:cc:ae:96:e6:08", "label": "TGE1/0/52 [T] 10G|LAN", "sourceLabel": "TGE1/0/52 [T] 10G", "targetLabel": "LAN"}
     ],
     "router_nodes": [
@@ -132,7 +132,7 @@
       "hyp-4c:ae:a3:48:00:03-ge1_0_7": "hypervisor | [HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/7"
     },
     "edges": [
-      "4c:ae:a3:48:00:02 -> 00:0c:29:98:7b:c2 : \"GE1/0/10 [MAC-REF]|\"",
+      "4c:ae:a3:48:00:02 -> 00:0c:29:98:7b:c2 : \"GE1/0/10 [MAC-REF]|eth0\"",
       "4c:ae:a3:48:00:02 -> 4c:ae:a3:48:00:03 : \"TGE1/0/49 [T] 10G|TGE1/0/49\"",
       "4c:ae:a3:48:00:02 -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|LAN\"",
       "4c:ae:a3:48:00:02 -> 6c:b3:11:48:00:10 : \"GE1/0/10 [T] 1G|\"",

@@ -122,6 +122,10 @@ type gatewayPoll struct {
 	// LLDP is the gateway's own LLDP view from the last LLDP read that
 	// answered; nil when it showed no neighbor (or none was read yet)
 	LLDP *gatewayLLDP
+	// MACPorts names the gateway's port of each of its interface MACs
+	// (collectGatewayMACPorts) from the last read that answered; nil when
+	// it named none (or none was read yet)
+	MACPorts map[string]string
 }
 
 // gatewayLLDP is a gateway's own LLDP view (collectGatewayLLDP): the
@@ -183,13 +187,28 @@ func recordGatewayLLDP(ip string, lldp *gatewayLLDP, err error) {
 	gatewayPolls[ip] = p
 }
 
+// recordGatewayMACPorts notes the port read of gateway ip
+// (collectGatewayMACPorts): its port of each interface MAC, nil when it
+// named none. A read that failed (err) keeps the ports read before.
+func recordGatewayMACPorts(ip string, ports map[string]string, err error) {
+	if err != nil {
+		return
+	}
+	gatewayPollsMu.Lock()
+	defer gatewayPollsMu.Unlock()
+	p := gatewayPolls[ip]
+	p.MACPorts = ports
+	gatewayPolls[ip] = p
+}
+
 // gatewayNode is a configured gateway that answered SNMP in this run, as
 // the graph build draws it.
 type gatewayNode struct {
-	IP      string
-	SysName string
-	Down    bool         // its last walk got no answer: the router node is unreachable
-	LLDP    *gatewayLLDP // its own LLDP view; nil when it showed no neighbor
+	IP       string
+	SysName  string
+	Down     bool              // its last walk got no answer: the router node is unreachable
+	LLDP     *gatewayLLDP      // its own LLDP view; nil when it showed no neighbor
+	MACPorts map[string]string // its port of each interface MAC (collectGatewayMACPorts)
 }
 
 // answeredGateways lists the configured gateways that answered SNMP in this
@@ -200,16 +219,18 @@ func answeredGateways() []gatewayNode {
 	var out []gatewayNode
 	for _, ip := range gatewayIPs {
 		if p := gatewayPolls[ip]; p.Answered {
-			out = append(out, gatewayNode{IP: ip, SysName: p.SysName, Down: p.Down, LLDP: p.LLDP})
+			out = append(out, gatewayNode{IP: ip, SysName: p.SysName, Down: p.Down, LLDP: p.LLDP, MACPorts: p.MACPorts})
 		}
 	}
 	return out
 }
 
-// OIDs of the gateway port names (IF-MIB ifName and ifDescr).
+// OIDs of the gateway port names (IF-MIB ifName and ifDescr) and of the
+// MACs of its interfaces (ifPhysAddress).
 const (
-	collectIfNameOID  = ".1.3.6.1.2.1.31.1.1.1.1"
-	collectIfDescrOID = ".1.3.6.1.2.1.2.2.1.2"
+	collectIfNameOID        = ".1.3.6.1.2.1.31.1.1.1.1"
+	collectIfDescrOID       = ".1.3.6.1.2.1.2.2.1.2"
+	collectIfPhysAddressOID = ".1.3.6.1.2.1.2.2.1.6"
 )
 
 // collectGatewayLLDP reads the gateway's own LLDP view for its router node:
@@ -264,6 +285,73 @@ func (s *SNMPObject) collectPortNames(ip string) map[int]string {
 	return nil
 }
 
+// collectGatewayMACPorts reads the MACs of the gateway's interfaces
+// (ifPhysAddress) and names the port of each MAC (gatewayMACPorts), with
+// the port names LLDP read (names) or, when nil, a read of its own
+// (collectPortNames). A switch learns the gateway's MAC from that port, so
+// it is the gateway's side of its MAC-REF link (addGatewayNodes), which no
+// LLDP shows when the gateway runs none: the Debian router 172.20.1.254
+// has 00:0c:29:98:7b:c2 on eth0 and on its VLAN interfaces eth0.10 ...
+// eth0.3333. It returns nil when no interface has a usable MAC; err is the
+// walk error of an agent that did not answer.
+func (s *SNMPObject) collectGatewayMACPorts(ip string, names map[int]string) (map[string]string, error) {
+	lines, err := s.runSNMPWalk(ip, collectIfPhysAddressOID)
+	if err != nil {
+		return nil, err
+	}
+	macs := make(map[int]string)
+	for _, line := range lines {
+		rowOID, typ, val, ok := collectSNMPValue(line)
+		idx, inTable := collectOIDIndex(rowOID, collectIfPhysAddressOID)
+		if !ok || !inTable || len(idx) != 1 {
+			continue
+		}
+		if mac, ok := collectPhysAddress(typ, val); ok && usableMAC(mac) != "" {
+			macs[idx[0]] = usableMAC(mac)
+		}
+	}
+	if len(macs) == 0 {
+		return nil, nil
+	}
+	if names == nil {
+		names = s.collectPortNames(ip)
+	}
+	return gatewayMACPorts(macs, names), nil
+}
+
+// gatewayMACPorts names the port of each interface MAC of a gateway (macs
+// and names by ifIndex): of the named interfaces with the MAC, a VLAN
+// interface of another one ("eth0.10" of "eth0") is left out and the
+// lowest ifIndex wins, so the port comes before the VLAN, bridge and tunnel
+// interfaces made on it later. A MAC no named interface has gets no port;
+// nil when no MAC gets one.
+func gatewayMACPorts(macs, names map[int]string) map[string]string {
+	byMAC := make(map[string][]int) // ifIndexes in ascending order
+	for _, idx := range slices.Sorted(maps.Keys(macs)) {
+		if names[idx] != "" {
+			byMAC[macs[idx]] = append(byMAC[macs[idx]], idx)
+		}
+	}
+	var ports map[string]string
+	for mac, idxs := range byMAC {
+		named := make(map[string]bool, len(idxs))
+		for _, idx := range idxs {
+			named[names[idx]] = true
+		}
+		for _, idx := range idxs {
+			if parent, _, vlan := strings.Cut(names[idx], "."); vlan && named[parent] {
+				continue
+			}
+			if ports == nil {
+				ports = make(map[string]string)
+			}
+			ports[mac] = names[idx]
+			break
+		}
+	}
+	return ports
+}
+
 // gatewayARP is the result of one gateway's ARP walk in a run.
 type gatewayARP struct {
 	IP      string
@@ -275,19 +363,22 @@ type gatewayARP struct {
 
 // walkGatewaysARP walks the ARP table of every configured gateway at the
 // same time (gateways that do not answer cost one timeout together, not
-// one each) and reads the sysName and the own LLDP view
-// (collectGatewayLLDP) of each one that answered. Each walk is recorded:
-// recordGatewayPoll and recordGatewayLLDP for the router node,
+// one each) and reads the sysName, the own LLDP view (collectGatewayLLDP)
+// and the port of each interface MAC (collectGatewayMACPorts) of each one
+// that answered. Each walk is recorded: recordGatewayPoll,
+// recordGatewayLLDP and recordGatewayMACPorts for the router node,
 // recordGatewayARP for the gateway's expiry clock and the one warning per
 // start of a gateway that does not answer. Nothing is merged. Returns the
 // walks in gateway_ip order.
 func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 	type walk struct {
-		entries []ARPEntry
-		err     error
-		sysName string
-		lldp    *gatewayLLDP
-		lldpErr error
+		entries  []ARPEntry
+		err      error
+		sysName  string
+		lldp     *gatewayLLDP
+		lldpErr  error
+		ports    map[string]string
+		portsErr error
 	}
 	gateways := slices.Clone(gatewayIPs)
 	walks := make([]walk, len(gateways))
@@ -300,9 +391,15 @@ func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 			w.entries, w.err = snmpObj.collectARPTable(ip)
 			if w.err == nil {
 				// The agent answered: its name labels the router node, its
-				// LLDP neighbors are linked to it
+				// LLDP neighbors are linked to it, and the port of its MAC
+				// is its side of the switch port it is linked from
 				w.sysName = snmpObj.collectSysText(ip, oidSysName)
 				w.lldp, w.lldpErr = snmpObj.collectGatewayLLDP(ip)
+				var names map[int]string
+				if w.lldp != nil {
+					names = w.lldp.Ports
+				}
+				w.ports, w.portsErr = snmpObj.collectGatewayMACPorts(ip, names)
 			}
 			walks[i] = w
 		}()
@@ -316,6 +413,7 @@ func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 		recordGatewayPoll(ip, w.err == nil, w.sysName)
 		if w.err == nil {
 			recordGatewayLLDP(ip, w.lldp, w.lldpErr)
+			recordGatewayMACPorts(ip, w.ports, w.portsErr)
 		}
 		recordGatewayARP(ip, len(w.entries), w.err, macIPClock()) // warns once per gateway when it fails
 	}
@@ -602,7 +700,10 @@ func graphMergeNode(graph *DJGraph, from, into string) {
 // place of the nodes that are the same device (an endpoint node of its MAC,
 // gatewaySameDevice), keeps their links, and is linked from the port that
 // gatewayPort picks unless that switch is linked to it already, with the
-// label of a MAC cross-reference link ("TGE1/0/52 [MAC-REF]|"). A gateway
+// label of a MAC cross-reference link ("TGE1/0/52 [MAC-REF]|eth0"). Its
+// side of the link is the gateway's port of its MAC (gatewayNode.MACPorts),
+// which also names its side of an existing link from that switch that has
+// none; it stays empty when the gateway's agent names no port. A gateway
 // is configured by the owner, so it needs no switch MIB (checkSwitch) and
 // is never a device of collectedData; a gateway that is a polled switch is
 // drawn by the switch rules instead. A gateway whose MAC is not known is not
@@ -684,6 +785,14 @@ func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMACs
 		// LLDP shows needs no MAC-REF link
 		lldpWhere := gatewayLLDPLinks(graph, mac, gws, merged)
 
+		// The gateway's port of its MAC, its side of the switch port
+		gwPort := ""
+		for _, gw := range gws {
+			if port := gw.MACPorts[mac]; gwPort == "" && port != "" {
+				gwPort = normalizePortName(port)
+			}
+		}
+
 		where := "not linked: its MAC is learned on no switch port without another switch or gateway MAC"
 		if link, ok := gatewayPort(snapshot, mac, infra); ok {
 			switchID := graphDeviceNodeID(link.dev)
@@ -691,8 +800,12 @@ func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMACs
 			where = fmt.Sprintf("linked from %s %s (%s on the port)", link.dev.IP, portName, switchSkipCount(link.macs, "MAC"))
 			if graph.GetEdge(switchID, mac) {
 				where += ", by its existing link"
+				graph.FillTargetPort(switchID, mac, gwPort)
 			} else {
-				graph.AddEdge(switchID, mac, fmt.Sprintf("%s [MAC-REF]|", portName))
+				graph.AddEdge(switchID, mac, fmt.Sprintf("%s [MAC-REF]|%s", portName, gwPort))
+			}
+			if gwPort != "" {
+				where += fmt.Sprintf("; its MAC is on its port %s", gwPort)
 			}
 		}
 		if len(merged) > 0 {
