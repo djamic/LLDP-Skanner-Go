@@ -358,6 +358,9 @@ func TestAuthCommands(t *testing.T) {
 	if users, _ := authLoadUsers(); len(users) != 1 {
 		t.Errorf("users after failed commands: %+v", users)
 	}
+	if out := captureStdout(t, func() { authCommandUserList() }); out != "user: admin\n" {
+		t.Errorf("--user-list printed %q", out)
+	}
 	if err := run(func() error { return authCommandUserDel("admin") }); err != nil {
 		t.Error(err)
 	}

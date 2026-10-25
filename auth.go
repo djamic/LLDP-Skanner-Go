@@ -557,6 +557,7 @@ func registerAuthRoutes() {
 var (
 	userAddFlag   = flag.String("user-add", "", "Web login: add a user, or set a new password for one (asks for it)")
 	userDelFlag   = flag.String("user-del", "", "Web login: remove a user")
+	userListFlag  = flag.Bool("user-list", false, "Web login: list the users (\"user: NAME\" lines; deploy.sh reads them)")
 	vaultPassFlag = flag.Bool("vault-password", false, "Set the password of the Credentials section (asks for it)")
 )
 
@@ -569,6 +570,8 @@ func runAuthCommand() bool {
 		err = authCommandUserAdd(*userAddFlag, os.Stdin)
 	case *userDelFlag != "":
 		err = authCommandUserDel(*userDelFlag)
+	case *userListFlag:
+		err = authCommandUserList()
 	case *vaultPassFlag:
 		err = credentialsCommandVaultPassword(os.Stdin)
 	default:
@@ -634,6 +637,18 @@ func authCommandUserDel(name string) error {
 		return err
 	}
 	fmt.Printf("✅ Web user %s removed\n", name)
+	return nil
+}
+
+// authCommandUserList prints the users' names, one "user: NAME" line each.
+func authCommandUserList() error {
+	users, err := authLoadUsers()
+	if err != nil {
+		return err
+	}
+	for _, u := range users {
+		fmt.Printf("user: %s\n", u.Name)
+	}
 	return nil
 }
 
