@@ -325,7 +325,7 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   // and no markup from the server anywhere
   const managedNode = { id: '70:a7:41:00:00:01', label: '[LLDP-EP] Ubiquiti\nA1qavat118\n10.0.0.12', sysName: '[LLDP-EP] Ubiquiti\nA1qavat118\n10.0.0.12', group: 'access_point',
     managed: { source: 'UniFi Network controller', controller: '10.0.0.2', name: 'A 1 qavat <118>', model: 'U6 LR', state: 'OFFLINE', firmware: '6.7.57',
-      clients: [{ mac: 'de:ad:00:00:00:02', name: '<img src=x onerror=alert(7)>', ip: '10.0.1.7', kind: 'wireless' }, { mac: 'de:ad:00:00:00:01', kind: 'wired' }] } };
+      clients: [{ mac: 'de:ad:00:00:00:02', name: '<img src=x onerror=alert(7)>', ip: '10.0.1.7', kind: 'wireless' }, { mac: 'de:ad:00:00:00:01', name: 'DE:AD:00:00:00:01', kind: 'wired' }] } };
   const managedTree = T.treeProject(T.treeSpanning({ nodes: [{ id: 'aa:00:00:00:01:01', label: 'sw\n10.0.0.1', group: 'switch' }, managedNode],
     links: [{ source: 'aa:00:00:00:01:01', target: managedNode.id, label: 'GE1/0/5|eth0', sourceLabel: 'GE1/0/5', targetLabel: 'eth0' }] }), null, {});
   const apRow = rows(managedTree).find(r => r.row.id === managedNode.id);

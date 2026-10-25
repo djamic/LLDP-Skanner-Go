@@ -531,7 +531,9 @@ function treeClientRows(id, info) {
     const m = info.node.managed;
     if (!m || !Array.isArray(m.clients)) return [];
     return m.clients.filter(c => c && c.mac).map(c => {
-        const name = c.name || c.mac;
+        // a client with no name has its MAC as the name in UniFi
+        const named = !!c.name && String(c.name).toLowerCase() !== String(c.mac).toLowerCase();
+        const name = named ? c.name : c.mac;
         const icon = c.kind === 'wired' ? '🔌' : '📶';
         const title = [name, c.ip, c.mac, `${c.kind || 'client'} client of ${info.name}`].filter(Boolean).join('\n');
         return {
@@ -539,7 +541,7 @@ function treeClientRows(id, info) {
             text: `<span class="tv-row tv-client" title="${treeEscapeHTML(title)}"><span class="tv-icon">${icon}</span> ` +
                 `<span class="tv-name">${treeEscapeHTML(name)}</span>` +
                 (c.ip ? ` <span class="tv-addr">${treeEscapeHTML(c.ip)}</span>` : '') +
-                (c.name ? ` <span class="tv-addr">${treeEscapeHTML(c.mac)}</span>` : '') + `</span>`,
+                (named ? ` <span class="tv-addr">${treeEscapeHTML(c.mac)}</span>` : '') + `</span>`,
             children: [],
             data: { client: String(c.mac), q: [name, c.ip, c.mac].filter(Boolean).join('\n').toLowerCase() },
         };
