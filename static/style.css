@@ -1533,7 +1533,6 @@ button:active {
     overflow-wrap: break-word;
 }
 
-.cred-target,
 .cred-user {
     white-space: nowrap;
 }

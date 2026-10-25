@@ -37,6 +37,21 @@ async function modulesShowFor(ip) {
     section.hidden = false;
 }
 
+// modulesOpenFor shows the modules of the device at ip in the module
+// window: for a device the Credentials window declares (its IP with a
+// device type), which may be in no graph.
+async function modulesOpenFor(ip) {
+    modOpen('🧩 Modules · ' + ip, [modNode('p', 'mod-running', '⏳ …')]);
+    let v = {};
+    try {
+        v = await (await fetch('/api/modules?ip=' + encodeURIComponent(ip))).json();
+    } catch (err) {
+        v = { error: err.message };
+    }
+    const cards = (v.modules || []).map(m => modCard(ip, m));
+    modOpen('🧩 Modules · ' + ip, cards.length ? cards : [modNode('p', 'mod-status mod-failed', v.error || 'No module serves this device.')]);
+}
+
 function modCard(ip, m) {
     const card = modNode('div', 'mod-card');
     const head = modNode('div', 'mod-head');

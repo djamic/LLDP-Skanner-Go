@@ -65,12 +65,14 @@ func esxiConfirmedIP(ip string) bool {
 }
 
 // deviceTypesOf returns the device types (Credentials types) of the device
-// at ip, most specific first: "esxi" for a confirmed ESXi host, then the
-// type of each module that recognizes the device itself (modules.Prober;
-// answers are kept moduleProbeLifetime).
+// at ip, most specific first: those the Credentials window declares for it
+// (a login for its IP or range with a device type), "esxi" for a confirmed
+// ESXi host, then the type of each module that recognizes the device
+// itself (modules.Prober; answers are kept moduleProbeLifetime). A type
+// declared or known is not probed for.
 func deviceTypesOf(ctx context.Context, ip string) []string {
-	var types []string
-	if esxiConfirmedIP(ip) {
+	types := credentialsDeclaredTypes(ip)
+	if esxiConfirmedIP(ip) && !slices.Contains(types, "esxi") {
 		types = append(types, "esxi")
 	}
 	for _, m := range modules.All() {

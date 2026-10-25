@@ -222,3 +222,24 @@ func TestModuleRunVerifiesSNMP(t *testing.T) {
 		t.Errorf("a device that does not answer: %v", v["snmp"])
 	}
 }
+
+// TestModuleDeclaredType: a device the Credentials window declares of a
+// module's type has the module with no probe.
+func TestModuleDeclaredType(t *testing.T) {
+	moduleTestSetup(t)
+	secret, _ := credentialsSeal("decl", "good")
+	if err := credentialsSave([]credentialEntry{{ID: "decl", Target: credentialTarget{"ip", "10.9.70.9"}, Protocol: "ssh",
+		Username: "u", Secret: secret, DeviceType: "fake-dev"}}); err != nil {
+		t.Fatal(err)
+	}
+	v := moduleTestList(t, "10.9.70.9")
+	if list := v["modules"].([]any); len(list) != 1 || list[0].(map[string]any)["logins"] != 1.0 {
+		t.Fatalf("modules of a declared device: %v", v)
+	}
+	if testFakeModule.probes != 0 {
+		t.Errorf("a declared device was probed %d times", testFakeModule.probes)
+	}
+	if _, v := moduleTestRun(t, moduleRunRequest{Module: "fake", Action: "detect", IP: "10.9.70.9"}); v["ok"] != true {
+		t.Errorf("run on a declared device: %v", v)
+	}
+}

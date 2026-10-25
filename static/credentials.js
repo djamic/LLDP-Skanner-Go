@@ -115,6 +115,8 @@ async function credLoad() {
     credState.entries = r.v.entries || [];
     credFillSelect(credEl('credProtocol'), credState.protocols);
     credFillSelect(credEl('credTypeValue'), credState.types);
+    credFillSelect(credEl('credDeviceType'), [{ id: '', label: '— the scanner finds out —' },
+        ...credState.types.filter(t => t.id !== 'any')]);
     if (!credEl('credId').value) credTypeChanged();
     credRender();
 }
@@ -132,9 +134,9 @@ function credFillSelect(select, options) {
 
 const credLabel = (options, id) => (options.find(o => o.id === id) || { label: id }).label;
 
-function credTargetText(target) {
+function credTargetText(target, deviceType) {
     if (target.kind === 'type') return credLabel(credState.types, target.value);
-    return target.value;
+    return deviceType ? `${target.value} · ${credLabel(credState.types, deviceType)}` : target.value;
 }
 
 function credButton(text, title, onClick, disabled) {
@@ -158,13 +160,16 @@ function credRender() {
             tr.appendChild(td);
         };
         cell(String(i + 1), 'cred-num');
-        cell(credTargetText(e.target), 'cred-target cred-kind-' + e.target.kind);
+        cell(credTargetText(e.target, e.deviceType), 'cred-target cred-kind-' + e.target.kind);
         cell(credLabel(credState.protocols, e.protocol));
         cell(e.username || '—', 'cred-user');
         cell(e.hasPassword ? '••••••' : '—');
         cell(e.note || '', 'cred-note-cell');
         const actions = document.createElement('td');
         actions.className = 'cred-actions';
+        if (e.target.kind === 'ip' && e.deviceType && typeof modulesOpenFor === 'function') {
+            actions.append(credButton('🧩', 'Modules of this device', () => modulesOpenFor(e.target.value)));
+        }
         actions.append(
             credButton('↑', 'Try earlier', () => credMove(e, -1), i === 0),
             credButton('↓', 'Try later', () => credMove(e, 1), i === credState.entries.length - 1),
@@ -193,7 +198,9 @@ const credTypeProtocol = {
 };
 
 function credTypeChanged() {
-    const type = credEl('credTypeValue').value;
+    const kind = credEl('credKind').value;
+    const type = kind === 'type' ? credEl('credTypeValue').value : credEl('credDeviceType').value;
+    if (kind !== 'type' && !type) return;
     const protocol = credTypeProtocol[type] || 'ssh';
     if ([...credEl('credProtocol').options].some(o => o.value === protocol)) credEl('credProtocol').value = protocol;
 }
@@ -203,6 +210,7 @@ function credKindChanged() {
     const kind = credEl('credKind').value;
     credEl('credTypeValue').hidden = kind !== 'type';
     credEl('credIPValue').hidden = kind === 'type';
+    credEl('credDeviceTypeGroup').hidden = kind === 'type';
     credEl('credIPValue').placeholder = kind === 'cidr' ? '172.20.0.0/24' : '172.20.0.3';
 }
 
@@ -219,6 +227,7 @@ function credResetForm() {
     credEl('credPassword').value = '';
     credEl('credPassword').placeholder = '';
     credEl('credNote').value = '';
+    credEl('credDeviceType').value = '';
     credEl('credFormTitle').textContent = 'Add a login';
     credEl('credSave').textContent = '➕ Add';
     credEl('credCancel').hidden = true;
@@ -238,6 +247,7 @@ function credEdit(e) {
     credEl('credPassword').value = '';
     credEl('credPassword').placeholder = 'unchanged';
     credEl('credNote').value = e.note || '';
+    credEl('credDeviceType').value = e.deviceType || '';
     credEl('credFormTitle').textContent = 'Change login #' + (credState.entries.indexOf(e) + 1);
     credEl('credSave').textContent = '💾 Save';
     credEl('credCancel').hidden = false;
@@ -256,6 +266,7 @@ async function credSubmit(event) {
         username: credEl('credUser').value.trim(),
         password: credEl('credPassword').value,
         note: credEl('credNote').value.trim(),
+        deviceType: kind === 'type' ? '' : credEl('credDeviceType').value,
     };
     const r = await credApi(id ? 'PUT' : 'POST', '/api/credentials', body);
     credEl('credPassword').value = '';
@@ -272,7 +283,7 @@ async function credSubmit(event) {
 }
 
 async function credDelete(e) {
-    const what = `${credLabel(credState.protocols, e.protocol)} login of ${credTargetText(e.target)}`;
+    const what = `${credLabel(credState.protocols, e.protocol)} login of ${credTargetText(e.target, e.deviceType)}`;
     if (!confirm(`Remove the ${what}?`)) return;
     const r = await credApi('DELETE', '/api/credentials?id=' + encodeURIComponent(e.id));
     if (!r.ok) credFormError(r.v.error || `HTTP ${r.status}`);
@@ -292,6 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     credEl('credForm').addEventListener('submit', credSubmit);
     credEl('credKind').addEventListener('change', credKindChanged);
     credEl('credTypeValue').addEventListener('change', credTypeChanged);
+    credEl('credDeviceType').addEventListener('change', credTypeChanged);
     credEl('credCancel').addEventListener('click', credResetForm);
     credKindChanged();
 });

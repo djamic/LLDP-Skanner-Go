@@ -50,10 +50,14 @@ type credentialEntry struct {
 	Username string           `json:"username"`
 	// Secret is base64(nonce | AES-GCM ciphertext) of the password, the
 	// entry id as additional data (credentialsSeal)
-	Secret  string    `json:"secret"`
-	Note    string    `json:"note,omitempty"`
-	Created time.Time `json:"created"`
-	Updated time.Time `json:"updated"`
+	Secret string `json:"secret"`
+	Note   string `json:"note,omitempty"`
+	// DeviceType, on a login for an IP or a range, says what the device
+	// is (a credentialTypes id): the scanner then knows it with no probe
+	// (deviceTypesOf), as the owner knows the UniFi controller's address
+	DeviceType string    `json:"deviceType,omitempty"`
+	Created    time.Time `json:"created"`
+	Updated    time.Time `json:"updated"`
 }
 
 type credentialsFile struct {
@@ -259,6 +263,49 @@ func credentialsFor(ip, protocol string, types []string) ([]credentialLogin, err
 	return out, nil
 }
 
+// credentialsDeclaredTypes returns the device types the Credentials window
+// declares for the device at ip (credentialEntry.DeviceType): those of the
+// logins for its IP, then of the IP ranges that hold it (the narrowest
+// first), each once.
+func credentialsDeclaredTypes(ip string) []string {
+	addr := net.ParseIP(ip)
+	credentialsMu.Lock()
+	entries, err := credentialsLoad()
+	credentialsMu.Unlock()
+	if err != nil || addr == nil {
+		return nil
+	}
+	type declared struct {
+		typ  string
+		rank int // 0 for the IP itself, else the range's host bits + 1
+	}
+	var found []declared
+	for _, e := range entries {
+		if e.DeviceType == "" {
+			continue
+		}
+		switch e.Target.Kind {
+		case "ip":
+			if e.Target.Value == addr.String() {
+				found = append(found, declared{e.DeviceType, 0})
+			}
+		case "cidr":
+			if _, n, err := net.ParseCIDR(e.Target.Value); err == nil && n.Contains(addr) {
+				ones, bits := n.Mask.Size()
+				found = append(found, declared{e.DeviceType, bits - ones + 1})
+			}
+		}
+	}
+	slices.SortStableFunc(found, func(a, b declared) int { return cmp.Compare(a.rank, b.rank) })
+	var types []string
+	for _, d := range found {
+		if !slices.Contains(types, d.typ) {
+			types = append(types, d.typ)
+		}
+	}
+	return types
+}
+
 // ─── The vault password ───────────────────────────────────────────────────────
 
 // credentialsVaultHash is the bcrypt hash of the Credentials password, ""
@@ -341,18 +388,20 @@ type credentialView struct {
 	Username    string           `json:"username"`
 	HasPassword bool             `json:"hasPassword"`
 	Note        string           `json:"note"`
+	DeviceType  string           `json:"deviceType,omitempty"`
 	Updated     time.Time        `json:"updated"`
 }
 
 // credentialRequest is the body of a create or an update: the password is
 // kept on an update that leaves it empty.
 type credentialRequest struct {
-	ID       string           `json:"id"`
-	Target   credentialTarget `json:"target"`
-	Protocol string           `json:"protocol"`
-	Username string           `json:"username"`
-	Password string           `json:"password"`
-	Note     string           `json:"note"`
+	ID         string           `json:"id"`
+	Target     credentialTarget `json:"target"`
+	Protocol   string           `json:"protocol"`
+	Username   string           `json:"username"`
+	Password   string           `json:"password"`
+	Note       string           `json:"note"`
+	DeviceType string           `json:"deviceType"`
 }
 
 // credentialsValidate checks a request and puts its target in canonical
@@ -380,6 +429,12 @@ func credentialsValidate(req *credentialRequest, create bool) error {
 		}
 	default:
 		return fmt.Errorf("unknown target kind %q", req.Target.Kind)
+	}
+	switch {
+	case req.Target.Kind == "type":
+		req.DeviceType = "" // the target already is the type
+	case req.DeviceType != "" && (req.DeviceType == "any" || !credentialOptionKnown(credentialTypes, req.DeviceType)):
+		return fmt.Errorf("unknown device type %q", req.DeviceType)
 	}
 	if !credentialOptionKnown(credentialProtocols, req.Protocol) {
 		return fmt.Errorf("unknown protocol %q", req.Protocol)
@@ -485,7 +540,7 @@ func credentialsHandler(w http.ResponseWriter, r *http.Request) {
 		views := make([]credentialView, 0, len(entries))
 		for _, e := range entries {
 			views = append(views, credentialView{ID: e.ID, Target: e.Target, Protocol: e.Protocol, Username: e.Username,
-				HasPassword: e.Secret != "", Note: e.Note, Updated: e.Updated})
+				HasPassword: e.Secret != "", Note: e.Note, DeviceType: e.DeviceType, Updated: e.Updated})
 		}
 		credentialsReply(w, http.StatusOK, map[string]any{"entries": views, "protocols": credentialProtocols, "types": credentialTypes})
 
@@ -510,7 +565,7 @@ func credentialsHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			e = entries[i]
 		}
-		e.Target, e.Protocol, e.Username, e.Note, e.Updated = req.Target, req.Protocol, req.Username, req.Note, now
+		e.Target, e.Protocol, e.Username, e.Note, e.DeviceType, e.Updated = req.Target, req.Protocol, req.Username, req.Note, req.DeviceType, now
 		if req.Password != "" {
 			if e.Secret, err = credentialsSeal(e.ID, req.Password); err != nil {
 				credentialsError(w, http.StatusInternalServerError, err.Error())

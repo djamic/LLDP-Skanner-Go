@@ -278,3 +278,50 @@ func TestCredentialsVaultCommand(t *testing.T) {
 		t.Errorf("the vault key was not made: %v", err)
 	}
 }
+
+// TestCredentialsDeclaredType checks a login for an IP or a range that
+// says what the device is: kept and listed, refused for an unknown type,
+// dropped on a login for a type, and found for the IPs it covers, the IP
+// before the ranges (the narrowest first).
+func TestCredentialsDeclaredType(t *testing.T) {
+	authTestSetup(t)
+	s := authSession{User: "admin", ID: randomHex(16), Exp: time.Now().Add(time.Hour).Unix()}
+	credentialsUnlock(s, time.Now())
+	add := func(req credentialRequest) (int, string) {
+		code, v, body := credentialsTestCall(t, s, "POST", "/api/credentials", req)
+		id, _ := v["id"].(string)
+		if code != 200 {
+			return code, body
+		}
+		return code, id
+	}
+	if code, _ := add(credentialRequest{Target: credentialTarget{"ip", "10.9.60.5"}, Protocol: "https", Password: "key", DeviceType: "unifi-controller"}); code != 200 {
+		t.Fatalf("an IP declared a UniFi controller: %d", code)
+	}
+	add(credentialRequest{Target: credentialTarget{"cidr", "10.9.60.0/24"}, Protocol: "ssh", Username: "root", Password: "p", DeviceType: "linux"})
+	add(credentialRequest{Target: credentialTarget{"cidr", "10.9.0.0/16"}, Protocol: "ssh", Username: "root", Password: "p", DeviceType: "router"})
+	add(credentialRequest{Target: credentialTarget{"type", "esxi"}, Protocol: "vsphere", Username: "root", Password: "p", DeviceType: "linux"})
+	for _, bad := range []string{"toaster", "any"} {
+		if code, _ := add(credentialRequest{Target: credentialTarget{"ip", "10.9.60.6"}, Protocol: "ssh", Username: "u", Password: "p", DeviceType: bad}); code != 400 {
+			t.Errorf("device type %q: %d, want 400", bad, code)
+		}
+	}
+	entries, _ := credentialsLoad()
+	if len(entries) != 4 || entries[0].DeviceType != "unifi-controller" || entries[3].DeviceType != "" {
+		t.Fatalf("stored %+v", entries)
+	}
+	_, v, _ := credentialsTestCall(t, s, "GET", "/api/credentials", nil)
+	if e := v["entries"].([]any)[0].(map[string]any); e["deviceType"] != "unifi-controller" {
+		t.Errorf("listed %v", e)
+	}
+	for ip, want := range map[string][]string{
+		"10.9.60.5": {"unifi-controller", "linux", "router"},
+		"10.9.60.7": {"linux", "router"},
+		"10.9.1.1":  {"router"},
+		"10.8.0.1":  nil,
+	} {
+		if got := credentialsDeclaredTypes(ip); !slices.Equal(got, want) {
+			t.Errorf("declared types of %s: %v, want %v", ip, got, want)
+		}
+	}
+}
