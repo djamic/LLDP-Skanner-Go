@@ -1097,7 +1097,7 @@ func TestGatewaysHandler(t *testing.T) {
 	resetState(t)
 	oldFile, oldChanged := gatewayFile, gatewaysChanged
 	gatewayFile = filepath.Join(t.TempDir(), "gateway_ip")
-	os.WriteFile(gatewayFile, []byte("172.20.1.254\n"), 0o644)
+	os.WriteFile(gatewayFile, []byte("172.20.1.254   # debian216 (core)\n"), 0o644)
 	walks := 0
 	gatewaysChanged = func() { walks++ }
 	setGatewayIPs([]string{"172.20.1.254"})
@@ -1139,8 +1139,9 @@ func TestGatewaysHandler(t *testing.T) {
 		t.Errorf("after the change: %v core %q, %d walks", gatewayList(), gatewayCore(), walks)
 	}
 	data, _ := os.ReadFile(gatewayFile)
-	if ips, invalid := parseGatewayIPs(string(data)); !slices.Equal(ips, []string{"172.20.0.1", "172.20.1.254"}) || len(invalid) != 0 {
-		t.Errorf("file %q", data)
+	if ips, invalid := parseGatewayIPs(string(data)); !slices.Equal(ips, []string{"172.20.0.1", "172.20.1.254"}) || len(invalid) != 0 ||
+		!strings.Contains(string(data), "172.20.1.254   # debian216 (core)\n") {
+		t.Errorf("file %q: want both gateways, the kept one with its comment", data)
 	}
 	call("POST", map[string]any{"gateways": []string{"172.20.0.1", "172.20.1.254"}})
 	if walks != 1 {

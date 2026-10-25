@@ -144,6 +144,31 @@ var gatewayFile = "gateway_ip"
 // comes with the next graph build (a variable for tests).
 var gatewaysChanged = func() { go collectGatewayARP() }
 
+// gatewayFileText is the text of gatewayFile for a new list: one gateway
+// per line, each keeping the comment its line had in the file
+// ("172.20.0.1     # FortiGate-600F").
+func gatewayFileText(ips []string) string {
+	comments := map[string]string{}
+	if data, err := os.ReadFile(gatewayFile); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			addr, comment, _ := strings.Cut(line, "#")
+			if words := strings.Fields(addr); len(words) == 1 && strings.TrimSpace(comment) != "" {
+				comments[words[0]] = strings.TrimSpace(comment)
+			}
+		}
+	}
+	var b strings.Builder
+	b.WriteString("# Gateways, one per line; the first is the analyzer's core (also set in the web UI's Settings)\n")
+	for _, ip := range ips {
+		if c := comments[ip]; c != "" {
+			fmt.Fprintf(&b, "%-14s # %s\n", ip, c)
+		} else {
+			b.WriteString(ip + "\n")
+		}
+	}
+	return b.String()
+}
+
 // gatewaysHandler shows (GET) and sets (POST {"gateways": [...]}) the
 // gateways from the Settings window: IPv4 addresses, at least one, the
 // first the analyzer's core. A new list is written to gatewayFile and used
@@ -170,8 +195,7 @@ func gatewaysHandler(w http.ResponseWriter, r *http.Request) {
 			credentialsError(w, http.StatusBadRequest, "give at least one gateway: the first is the analyzer's core")
 			return
 		}
-		text := "# Gateways, one per line; the first is the analyzer's core (set in the web UI's Settings)\n" + strings.Join(ips, "\n") + "\n"
-		if err := os.WriteFile(gatewayFile, []byte(text), 0o644); err != nil {
+		if err := os.WriteFile(gatewayFile, []byte(gatewayFileText(ips)), 0o644); err != nil {
 			credentialsError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
