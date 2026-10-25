@@ -3313,6 +3313,10 @@ func buildGraphFromSnapshot(snapshot map[string]*DeviceData) *DJGraph {
 	// MAC is learned (gateways.go)
 	addGatewayNodes(newGraph, snapshot, switchMACs, answeredGateways())
 
+	// 3c. The access points the controllers manage that no switch showed
+	// (module_inventory.go)
+	addManagedAPNodes(newGraph, snapshot, switchMACs)
+
 	// 4. Detect hypervisors (per-port VM MAC concentration) — BEFORE making graph global
 	detectHypervisors(newGraph)
 	// 5. Enrich with IPs from MAC-IP cache — BEFORE making graph global

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -40,8 +41,9 @@ type inventoryRecord struct {
 }
 
 // inventories holds the records by "module|ip", managedByMAC the devices
-// they manage by canonical MAC, inventoryNotices the failures already
-// logged; inventoryMu guards them.
+// they manage by canonical MAC, inventoryNotices what was logged (the
+// failures and notes by "module|ip", the lines of inventoryNotice);
+// inventoryMu guards them.
 var (
 	inventoryMu      sync.Mutex
 	inventories      = make(map[string]inventoryRecord)
@@ -59,8 +61,39 @@ type ManagedView struct {
 	IP         string                  `json:"ip,omitempty"`
 	State      string                  `json:"state,omitempty"`
 	Firmware   string                  `json:"firmware,omitempty"`
+	Kind       string                  `json:"kind,omitempty"` // "access_point", "switch", "gateway"
+	Uplink     *modules.ManagedUplink  `json:"uplink,omitempty"`
 	Updated    time.Time               `json:"updated"`
 	Clients    []modules.ManagedClient `json:"clients,omitempty"`
+}
+
+// ClientView is a client of a managed device, as /api/graph shows its
+// node: what the controller tells of it, and the device's name.
+type ClientView struct {
+	modules.ManagedClient
+	Device string `json:"device"` // "A 1 qavat 118", the gateway's name
+}
+
+// inventoryAPsChanged runs when a read changed the access points the
+// graph build draws (addManagedAPNodes): it builds the graph again, so they
+// show at once (a variable for tests).
+var inventoryAPsChanged = func() { go rebuildGraph() }
+
+// inventoryAPs is what of managedByMAC the graph build draws: each access
+// point with its IP, state and uplink (inventoryMu held).
+func inventoryAPs() string {
+	var lines []string
+	for mac, v := range managedByMAC {
+		if v.Kind == "access_point" {
+			line := strings.Join([]string{mac, v.Name, v.IP, v.State}, "|")
+			if v.Uplink != nil {
+				line += fmt.Sprintf("|%+v", *v.Uplink)
+			}
+			lines = append(lines, line)
+		}
+	}
+	slices.Sort(lines)
+	return strings.Join(lines, "\n")
 }
 
 // inventoryIndex rebuilds managedByMAC from the records, the newest record
@@ -84,7 +117,7 @@ func inventoryIndex() {
 				continue
 			}
 			index[mac] = ManagedView{Source: label, Controller: rec.IP, Name: d.Name, Model: d.Model, IP: d.IP,
-				State: d.State, Firmware: d.Firmware, Updated: rec.Time, Clients: d.Clients}
+				State: d.State, Firmware: d.Firmware, Kind: d.Kind, Uplink: d.Uplink, Updated: rec.Time, Clients: d.Clients}
 		}
 	}
 	managedByMAC = index
@@ -111,18 +144,128 @@ func addManaged(data *GraphData) {
 	}
 }
 
+// addManagedAPNodes adds to the graph the access points the controllers
+// manage that it has no node for, by MAC or IP (the build's step 3c): a
+// node by the access point's MAC (group access_point, graphManaged) with
+// its name and IP, unreachable when its controller has it offline, linked
+// where it is connected. Its controller tells where (ManagedView.Uplink):
+// the switch port its LLDP sees, the UniFi switch, or the access point of
+// a mesh link, when that device is a node; else the link is the switch port
+// its MAC is learned on, by the rule of a gateway's router node
+// (gatewayPort: no other switch or gateway learned there, the fewest MACs;
+// a [MAC-REF] link); else it has none, and the tree shows it under "Not
+// connected".
+func addManagedAPNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMACs map[string]string) {
+	known := map[string]bool{} // the IPs of the nodes
+	for id := range graph.Nodes {
+		known[id] = true
+		for _, line := range strings.Split(graph.SwitchInfo[id], "\n") {
+			if parseIPv4(line) != "" {
+				known[line] = true
+			}
+		}
+	}
+	inventoryMu.Lock()
+	var macs []string
+	views := map[string]ManagedView{}
+	for mac, v := range managedByMAC {
+		if v.Kind == "access_point" && !graph.Nodes[mac] && (v.IP == "" || !known[v.IP]) {
+			macs = append(macs, mac)
+			views[mac] = v
+		}
+	}
+	inventoryMu.Unlock()
+	if len(macs) == 0 {
+		return
+	}
+	slices.Sort(macs)
+	if graph.graphManaged == nil {
+		graph.graphManaged = make(map[string]bool)
+	}
+	for _, mac := range macs {
+		v := views[mac]
+		graph.AddNode(mac)
+		graph.graphManaged[mac] = true
+		graph.SwitchInfo[mac] = strings.Trim(v.Name+"\n"+v.IP, "\n")
+		if strings.EqualFold(v.State, "OFFLINE") {
+			graph.NodeStatus[mac] = "unreachable"
+		}
+	}
+
+	// The switches and gateways, for the FDB port (gatewayPort)
+	infra := make(map[string]string, len(switchMACs)+len(graph.graphRouters)+1)
+	for m, id := range switchMACs {
+		infra[m] = id
+	}
+	for m := range graph.graphRouters {
+		infra[m] = m
+	}
+	byUplink, byFDB, none := 0, 0, 0
+	for _, mac := range macs {
+		v := views[mac]
+		where := ""
+		if up := v.Uplink; up != nil {
+			parent := canonicalMAC(up.MAC)
+			if id, ok := switchMACs[parent]; ok {
+				parent = id
+			}
+			switch {
+			case parent == "" || parent == mac || !graph.Nodes[parent]:
+			case up.Wireless:
+				graph.AddEdge(parent, mac, "mesh|mesh")
+				where = "linked by a mesh link from " + parent
+			default:
+				graph.AddEdge(parent, mac, strings.TrimSpace(up.Port)+"|"+strings.TrimSpace(up.LocalPort))
+				where = strings.TrimSpace(fmt.Sprintf("linked by its uplink %s %s", parent, up.Port))
+			}
+		}
+		if where != "" {
+			byUplink++
+		} else {
+			infra[mac] = mac
+			link, ok := gatewayPort(snapshot, mac, infra)
+			delete(infra, mac)
+			if ok {
+				switchID := graphDeviceNodeID(link.dev)
+				portName := normalizePortName(getFDBPortName(link.dev, link.port))
+				graph.AddEdge(switchID, mac, portName+" [MAC-REF]|")
+				where = fmt.Sprintf("linked by the FDB of %s %s (%s on the port)", link.dev.IP, portName, switchSkipCount(link.macs, "MAC"))
+				byFDB++
+			} else {
+				where = "not linked: its uplink is no node, and no switch port learns its MAC without another switch"
+				none++
+			}
+		}
+		inventoryNotice(fmt.Sprintf("📡 [Inventory] %s %s (%s) drawn from %s %s, %s", v.Name, mac, cmp.Or(v.IP, "no IP"), v.Source, v.Controller, where))
+	}
+	inventoryNotice(fmt.Sprintf("📡 [Inventory] %d access points no switch shows drawn from their controllers: %d linked by their uplink, %d by the FDB, %d not linked", len(macs), byUplink, byFDB, none))
+}
+
+// inventoryNotice prints a line once in a run.
+func inventoryNotice(line string) {
+	inventoryMu.Lock()
+	printed := inventoryNotices["line|"+line] != ""
+	inventoryNotices["line|"+line] = "printed"
+	inventoryMu.Unlock()
+	if !printed {
+		fmt.Println(line)
+	}
+}
+
 // addManagedClients adds the clients of the managed devices to the graph
 // data, for the canvas: a node per client that is no node yet (group
-// wifi_client: its name, from its controller or else its DNS name, and its
-// IP), and a link from its device unless the two are linked already: "WLAN"
-// from an access point, "ARP" from a gateway (addGatewayWLANHosts). A wired
-// client (on a UniFi switch) is left out: the switch FDB shows it. The UI
-// shows the clients on demand: their WLAN filter starts off, and a
-// device's "Show Connected" shows its own.
+// wifi_client: its name, from its controller, else its DHCP host name,
+// else its DNS name, and its IP), and a link from its device unless the
+// two are linked already: "WLAN" from an access point, "ARP" from a
+// gateway (addGatewayWLANHosts). A client's node, new or not, gets what the
+// controller tells of it (GraphNode.Client). A wired client (on a UniFi
+// switch) is left out: the switch FDB shows it. The UI shows the clients on
+// demand: their WLAN filter starts off, and a device's "Show Connected"
+// shows its own.
 func addManagedClients(data *GraphData) {
-	have := make(map[string]bool, len(data.Nodes))
-	for _, n := range data.Nodes {
-		have[n.ID] = true
+	have := make(map[string]int, len(data.Nodes)) // node id → its index
+	for i, n := range data.Nodes {
+		have[n.ID] = i
 	}
 	linked := make(map[string]bool, 2*len(data.Links))
 	for _, l := range data.Links {
@@ -138,15 +281,23 @@ func addManagedClients(data *GraphData) {
 		if dev.Managed.Source == gatewayARPSource {
 			label, near = "ARP|wlan", "ARP"
 		}
+		devName := cmp.Or(dev.Managed.Name, strings.Split(dev.SysName, "\n")[0], dev.ID)
 		for _, c := range dev.Managed.Clients {
 			mac := canonicalMAC(c.MAC)
 			if mac == "" || mac == dev.ID || c.Kind == "wired" {
 				continue
 			}
-			if !have[mac] {
-				have[mac] = true
+			if at, ok := have[mac]; ok {
+				if data.Nodes[at].Client == nil {
+					data.Nodes[at].Client = &ClientView{ManagedClient: c, Device: devName}
+				}
+			} else {
+				have[mac] = len(data.Nodes)
 				name, hostname := c.Name, ""
 				if name == "" || strings.EqualFold(name, mac) {
+					name = c.Hostname
+				}
+				if name == "" {
 					name, hostname = wlanDNSName(c.IP), wlanDNSName(c.IP)
 				}
 				var lines []string
@@ -158,7 +309,7 @@ func addManagedClients(data *GraphData) {
 				}
 				info := strings.Join(lines, "\n")
 				data.Nodes = append(data.Nodes, GraphNode{ID: mac, Label: strings.TrimPrefix(info+"\n"+mac, "\n"), Group: "wifi_client",
-					NodeType: "wifi_client", SysName: info, IP: c.IP, Hostname: hostname})
+					NodeType: "wifi_client", SysName: info, IP: c.IP, Hostname: hostname, Client: &ClientView{ManagedClient: c, Device: devName}})
 			}
 			if !linked[dev.ID+"|"+mac] {
 				linked[dev.ID+"|"+mac], linked[mac+"|"+dev.ID] = true, true
@@ -196,7 +347,7 @@ const gatewayARPSource = "Gateway ARP"
 // Left out are the hosts the graph has as nodes or as clients of a device
 // in it, the managed devices themselves (the access points) and the
 // gateway. A client its controller lists on a device the graph does not
-// have keeps the controller's name. The gateway decides who is on the
+// have keeps what the controller tells of it. The gateway decides who is on the
 // WLAN (its ARP table), the controller where and by which name.
 func addGatewayWLANHosts(data *GraphData) {
 	have := make(map[string]bool, len(data.Nodes))
@@ -255,7 +406,8 @@ func addGatewayWLANHosts(data *GraphData) {
 			seen[mac] = true
 			h := modules.ManagedClient{MAC: mac, IP: e.IPAddress, Kind: "arp"}
 			if c, ok := known[mac]; ok {
-				h.Name, h.Kind = c.Name, c.Kind
+				h = c // with what its controller tells of it
+				h.MAC, h.IP = mac, e.IPAddress
 			}
 			hosts = append(hosts, h)
 		}
@@ -400,8 +552,9 @@ func inventoryRead(ctx context.Context, m modules.Module, inv modules.Inventorie
 		notice("no " + m.Protocol() + " login for it in Credentials")
 		return
 	}
-	for _, l := range logins {
-		got, err := inv.Inventory(ctx, modules.Request{IP: ip, Login: modules.Login{Username: l.Username, Password: l.Password}})
+	for i, l := range logins {
+		login, others := moduleLogins(logins, i)
+		got, err := inv.Inventory(ctx, modules.Request{IP: ip, Login: login, Others: others})
 		if errors.Is(err, modules.ErrLoginRejected) {
 			continue
 		}
@@ -416,13 +569,27 @@ func inventoryRead(ctx context.Context, m modules.Module, inv modules.Inventorie
 		}
 		inventoryMu.Lock()
 		first := inventories[m.ID()+"|"+ip].Time.IsZero()
+		aps := inventoryAPs()
 		inventories[m.ID()+"|"+ip] = inventoryRecord{Module: m.ID(), IP: ip, Time: time.Now(), Inventory: got}
 		inventoryIndex()
 		inventorySave()
+		apsChanged := inventoryAPs() != aps
 		inventoryMu.Unlock()
+		if apsChanged {
+			inventoryAPsChanged()
+		}
 		notice("")
 		if first {
 			fmt.Printf("🧩 [Inventory %s] %s: %d devices, %d clients\n", m.ID(), ip, len(got.Devices), clients)
+		}
+		// What it could not read, once until it changes
+		notes := strings.Join(got.Notes, "; ")
+		inventoryMu.Lock()
+		changed := inventoryNotices[m.ID()+"|"+ip+"|notes"] != notes
+		inventoryNotices[m.ID()+"|"+ip+"|notes"] = notes
+		inventoryMu.Unlock()
+		if changed && notes != "" {
+			fmt.Printf("ℹ️  [Inventory %s] %s: %s\n", m.ID(), ip, notes)
 		}
 		return
 	}

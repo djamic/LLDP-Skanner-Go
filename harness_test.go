@@ -194,6 +194,7 @@ func resetState(t *testing.T) {
 	gatewayNoticesMu.Lock()
 	gatewayNotices = make(map[string]bool)
 	gatewayNoticesMu.Unlock()
+	inventoryAPsChanged = func() {} // no graph build behind a test's back
 
 	clearConfirmedESXi()
 	collectESXiMu.Lock()

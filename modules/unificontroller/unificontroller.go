@@ -5,6 +5,9 @@
 // the key as its password and no user name), it detects the application:
 // its version, its sites, every device it manages (name, model, MAC, IP,
 // state, firmware, uplink device) and how many clients are on each device.
+// The application's older API (classic.go), with the key or a local
+// user's login (a login with a user name), adds the clients' Wi-Fi
+// details and the devices' uplinks.
 // It recognizes the application with no key (Probe) by its status page, by
 // the way its API refuses a request with no key, or by its UniFi OS
 // console.
@@ -13,11 +16,13 @@ package unificontroller
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"lldp_scanner/modules"
 )
@@ -51,7 +56,12 @@ func (Module) Run(ctx context.Context, req modules.Request) (modules.Result, err
 		return modules.Result{}, err
 	}
 	defer c.http.CloseIdleConnections()
-	return detect(ctx, c, info)
+	return detect(ctx, c, info, loginsOf(req))
+}
+
+// loginsOf is the request's login, then its others.
+func loginsOf(req modules.Request) []modules.Login {
+	return append([]modules.Login{req.Login}, req.Others...)
 }
 
 // Probe tells, with no key, whether a UniFi Network application answers at
@@ -94,6 +104,9 @@ type site struct {
 
 func (s site) label() string { return firstOf(s.Name, s.InternalReference, s.ID) }
 
+// ref is the site's name in the older API.
+func (s site) ref() string { return firstOf(s.InternalReference, "default") }
+
 // device is one device the application manages (an access point, a
 // switch, a gateway). Firmware and uplink are not in every version's list.
 type device struct {
@@ -111,9 +124,34 @@ type device struct {
 	} `json:"uplink"`
 	// UplinkDeviceID is the same, as the clients carry it
 	UplinkDeviceID string `json:"uplinkDeviceId"`
+	// Features are what it does: ["accessPoint","switching"] in the list,
+	// {"accessPoint":{...},"switching":{...}} in its details
+	Features json.RawMessage `json:"features"`
 }
 
 func (d device) label() string { return firstOf(d.Name, d.MacAddress, d.ID) }
+
+func (d device) mac() string { return strings.ToLower(strings.TrimSpace(d.MacAddress)) }
+
+// kind is "access_point" for a device with the access point feature,
+// "switch" for one that only switches, else "".
+func (d device) kind() string {
+	var names []string
+	if json.Unmarshal(d.Features, &names) != nil {
+		var features map[string]json.RawMessage
+		json.Unmarshal(d.Features, &features)
+		for name := range features {
+			names = append(names, name)
+		}
+	}
+	switch {
+	case slices.Contains(names, "accessPoint"):
+		return "access_point"
+	case slices.Contains(names, "switching"):
+		return "switch"
+	}
+	return ""
+}
 
 func (d device) uplinkID() string {
 	if d.Uplink != nil && d.Uplink.DeviceID != "" {
@@ -144,8 +182,12 @@ func firstOf(values ...string) string {
 
 // Inventory reads the devices the application manages, with the clients
 // on each (modules.Inventorier): the scanner names its access points by
-// them and lists their clients in the tree. A site that cannot be read
-// fails the whole read, so the scanner keeps the inventory it had.
+// them, draws those it has no node for, and lists their clients in the
+// tree. The older API adds the clients' Wi-Fi details and the devices'
+// kinds and uplinks; without it the Integration API's device details give
+// the kinds and the uplinks to UniFi devices. A site that cannot be read
+// fails the whole read, so the scanner keeps the inventory it had; details
+// that cannot be read are a note.
 func (Module) Inventory(ctx context.Context, req modules.Request) (modules.Inventory, error) {
 	var inv modules.Inventory
 	key := strings.TrimSpace(req.Login.Password)
@@ -161,6 +203,14 @@ func (Module) Inventory(ctx context.Context, req modules.Request) (modules.Inven
 	if err != nil {
 		return inv, fmt.Errorf("sites: %w", err)
 	}
+	var cc *classicClient
+	if len(sites) > 0 {
+		if cc, err = classicOpen(ctx, c, sites[0].ref(), loginsOf(req)); err != nil {
+			inv.Notes = append(inv.Notes, "client details: "+err.Error())
+		} else {
+			defer cc.close()
+		}
+	}
 	for _, s := range sites {
 		devs, _, err := getAll[device](ctx, c, "/sites/"+url.PathEscape(s.ID)+"/devices")
 		if err != nil {
@@ -170,25 +220,146 @@ func (Module) Inventory(ctx context.Context, req modules.Request) (modules.Inven
 		if err != nil {
 			return inv, fmt.Errorf("clients of site %s: %w", s.label(), err)
 		}
-		onDevice := map[string][]modules.ManagedClient{}
-		for _, cl := range clients {
-			if cl.UplinkDeviceID == "" {
-				continue // VPN and Teleport clients are on no device
-			}
-			onDevice[cl.UplinkDeviceID] = append(onDevice[cl.UplinkDeviceID], modules.ManagedClient{
-				MAC: strings.ToLower(strings.TrimSpace(cl.MacAddress)), Name: strings.TrimSpace(cl.Name),
-				IP: strings.TrimSpace(cl.IPAddress), Kind: strings.ToLower(cl.Type)})
+		var stations map[string]station
+		var details map[string]classicDevice
+		if cc != nil {
+			stations, details = classicSite(ctx, cc, s, &inv.Notes)
+		} else {
+			deviceDetails(ctx, c, s, devs, &inv.Notes)
 		}
-		for _, d := range devs {
-			cls := onDevice[d.ID]
-			slices.SortFunc(cls, func(a, b modules.ManagedClient) int {
-				return cmp.Or(cmp.Compare(strings.ToLower(firstOf(a.Name, a.MAC)), strings.ToLower(firstOf(b.Name, b.MAC))), cmp.Compare(a.MAC, b.MAC))
-			})
-			inv.Devices = append(inv.Devices, modules.ManagedDevice{MAC: strings.ToLower(strings.TrimSpace(d.MacAddress)),
-				Name: d.label(), Model: d.Model, IP: d.IPAddress, State: d.State, Firmware: d.FirmwareVersion, Clients: cls})
-		}
+		inv.Devices = append(inv.Devices, siteDevices(devs, clients, stations, details)...)
 	}
 	return inv, nil
+}
+
+// classicSite reads the stations and the devices of a site from the older
+// API, by MAC; what cannot be read is a note.
+func classicSite(ctx context.Context, cc *classicClient, s site, notes *[]string) (map[string]station, map[string]classicDevice) {
+	stations := map[string]station{}
+	list, err := cc.stations(ctx, s.ref())
+	if err != nil {
+		*notes = append(*notes, fmt.Sprintf("client details of site %s: %v", s.label(), err))
+	}
+	for _, st := range list {
+		stations[strings.ToLower(strings.TrimSpace(st.MAC))] = st
+	}
+	details := map[string]classicDevice{}
+	devs, err := cc.devices(ctx, s.ref())
+	if err != nil {
+		*notes = append(*notes, fmt.Sprintf("device uplinks of site %s: %v", s.label(), err))
+	}
+	for _, d := range devs {
+		details[strings.ToLower(strings.TrimSpace(d.MAC))] = d
+	}
+	return stations, details
+}
+
+// detailWorkers is how many device details are read at once.
+const detailWorkers = 4
+
+// deviceDetails reads the Integration API's details of the devices whose
+// list entry tells no uplink or kind, and takes those from them.
+func deviceDetails(ctx context.Context, c *apiClient, s site, devs []device, notes *[]string) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	failed, firstErr := 0, error(nil)
+	slots := make(chan struct{}, detailWorkers)
+	for i := range devs {
+		if devs[i].uplinkID() != "" && devs[i].kind() != "" {
+			continue
+		}
+		wg.Add(1)
+		go func(d *device) {
+			defer wg.Done()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			var detail device
+			err := c.get(ctx, "/sites/"+url.PathEscape(s.ID)+"/devices/"+url.PathEscape(d.ID), nil, &detail)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				failed++
+				firstErr = cmp.Or(firstErr, err)
+				return
+			}
+			if detail.uplinkID() != "" {
+				d.Uplink, d.UplinkDeviceID = detail.Uplink, detail.UplinkDeviceID
+			}
+			if detail.kind() != "" {
+				d.Features = detail.Features
+			}
+		}(&devs[i])
+	}
+	wg.Wait()
+	if failed > 0 {
+		*notes = append(*notes, fmt.Sprintf("device details of site %s: %d not read: %v", s.label(), failed, firstErr))
+	}
+}
+
+// siteDevices makes the managed devices of a site: each with its kind, its
+// uplink and its clients, sorted by name. A client gets the details of its
+// station (the older API), and its name there when the Integration API
+// names it by its MAC only; a Wi-Fi station the Integration API did not
+// list (it connected between the two reads) is added to its access point.
+func siteDevices(devs []device, clients []clientInfo, stations map[string]station, details map[string]classicDevice) []modules.ManagedDevice {
+	macOf := map[string]string{} // device ID → MAC
+	kindOf := map[string]string{}
+	for _, d := range devs {
+		mac := d.mac()
+		macOf[d.ID] = mac
+		kindOf[mac] = d.kind()
+		if cd, ok := details[mac]; ok {
+			kindOf[mac] = cmp.Or(classicKinds[strings.ToLower(cd.Type)], kindOf[mac])
+		}
+	}
+	onDevice := map[string][]modules.ManagedClient{}
+	listed := map[string]bool{}
+	for _, cl := range clients {
+		dev := macOf[cl.UplinkDeviceID]
+		if cl.UplinkDeviceID == "" || dev == "" {
+			continue // VPN and Teleport clients are on no device
+		}
+		mc := modules.ManagedClient{MAC: strings.ToLower(strings.TrimSpace(cl.MacAddress)), Name: strings.TrimSpace(cl.Name),
+			IP: strings.TrimSpace(cl.IPAddress), Kind: strings.ToLower(cl.Type)}
+		if st, ok := stations[mc.MAC]; ok {
+			st.apply(&mc)
+			if mc.Name == "" || strings.EqualFold(mc.Name, mc.MAC) {
+				mc.Name = firstOf(st.Name, st.Hostname, mc.Name)
+			}
+		}
+		listed[mc.MAC] = true
+		onDevice[dev] = append(onDevice[dev], mc)
+	}
+	for mac, st := range stations {
+		ap := strings.ToLower(strings.TrimSpace(st.APMAC))
+		if _, known := kindOf[ap]; listed[mac] || st.IsWired || ap == "" || !known {
+			continue
+		}
+		mc := modules.ManagedClient{MAC: mac, Name: firstOf(st.Name, st.Hostname), Kind: "wireless"}
+		st.apply(&mc)
+		onDevice[ap] = append(onDevice[ap], mc)
+	}
+	var out []modules.ManagedDevice
+	for _, d := range devs {
+		mac := d.mac()
+		cls := onDevice[mac]
+		slices.SortFunc(cls, func(a, b modules.ManagedClient) int {
+			return cmp.Or(cmp.Compare(strings.ToLower(firstOf(a.Name, a.MAC)), strings.ToLower(firstOf(b.Name, b.MAC))), cmp.Compare(a.MAC, b.MAC))
+		})
+		md := modules.ManagedDevice{MAC: mac, Name: d.label(), Model: d.Model, IP: d.IPAddress, State: d.State,
+			Firmware: d.FirmwareVersion, Kind: kindOf[mac], Clients: cls}
+		if cd, ok := details[mac]; ok {
+			md.Uplink = cd.uplink()
+		}
+		if up := macOf[d.uplinkID()]; md.Uplink == nil && up != "" {
+			md.Uplink = &modules.ManagedUplink{MAC: up, Wireless: md.Kind == "access_point" && kindOf[up] == "access_point"}
+		}
+		if md.Kind == "" && slices.ContainsFunc(cls, func(c modules.ManagedClient) bool { return c.Kind == "wireless" }) {
+			md.Kind = "access_point"
+		}
+		out = append(out, md)
+	}
+	return out
 }
 
 // ─── Detect ───────────────────────────────────────────────────────────────────
@@ -199,13 +370,67 @@ type clientCount struct {
 	wired, wireless, others int
 }
 
-func detect(ctx context.Context, c *apiClient, info appInfo) (modules.Result, error) {
+// ssidCount is how many Wi-Fi clients one SSID has, by band.
+type ssidCount struct {
+	site, ssid             string
+	all, ghz24, ghz5, ghz6 int
+}
+
+func detect(ctx context.Context, c *apiClient, info appInfo, logins []modules.Login) (modules.Result, error) {
 	var r modules.Result
 	sites, _, err := getAll[site](ctx, c, "/sites")
 	if err != nil {
 		return r, fmt.Errorf("sites: %w", err)
 	}
 	slices.SortFunc(sites, func(a, b site) int { return cmp.Compare(strings.ToLower(a.label()), strings.ToLower(b.label())) })
+
+	// The older API: the clients' Wi-Fi details
+	details := ""
+	networks := modules.Table{Title: "Wi-Fi networks", Columns: []string{"Site", "SSID", "Clients", "2.4 GHz", "5 GHz", "6 GHz"}}
+	if len(sites) > 0 {
+		cc, err := classicOpen(ctx, c, sites[0].ref(), logins)
+		if err != nil {
+			details = "not read: " + err.Error()
+		} else {
+			details = "read with " + cc.who
+			ssids := map[[2]string]*ssidCount{}
+			for _, s := range sites {
+				stations, err := cc.stations(ctx, s.ref())
+				if err != nil {
+					details += fmt.Sprintf("; site %s not read: %v", s.label(), err)
+					continue
+				}
+				for _, st := range stations {
+					if st.IsWired {
+						continue
+					}
+					var mc modules.ManagedClient
+					st.apply(&mc)
+					n := ssids[[2]string{s.ID, mc.SSID}]
+					if n == nil {
+						n = &ssidCount{site: s.label(), ssid: firstOf(mc.SSID, "(none)")}
+						ssids[[2]string{s.ID, mc.SSID}] = n
+					}
+					n.all++
+					switch mc.Band {
+					case bands["ng"]:
+						n.ghz24++
+					case bands["na"]:
+						n.ghz5++
+					case bands["6e"]:
+						n.ghz6++
+					}
+				}
+			}
+			cc.close()
+			for _, n := range ssids {
+				networks.Rows = append(networks.Rows, []string{n.site, n.ssid, strconv.Itoa(n.all), strconv.Itoa(n.ghz24), strconv.Itoa(n.ghz5), strconv.Itoa(n.ghz6)})
+			}
+			slices.SortFunc(networks.Rows, func(a, b []string) int {
+				return cmp.Or(cmp.Compare(strings.ToLower(a[0]), strings.ToLower(b[0])), cmp.Compare(strings.ToLower(a[1]), strings.ToLower(b[1])))
+			})
+		}
+	}
 
 	devices := modules.Table{Title: "Devices", Columns: []string{"Site", "Name", "Model", "MAC", "IP", "State", "Firmware", "Uplink"}}
 	counts := map[[2]string]*clientCount{} // site ID, device ID → its clients
@@ -296,8 +521,12 @@ func detect(ctx context.Context, c *apiClient, info appInfo) (modules.Result, er
 	if clientTotal > 0 {
 		r.AddFact("Clients", fmt.Sprintf("%d (%d wired, %d wireless)", clientTotal, wired, wireless))
 	}
+	r.AddFact("Client details", details)
 	r.AddFact("Not read", strings.Join(notRead, "; "))
 	r.Tables = append(r.Tables, devices, byDevice)
+	if len(networks.Rows) > 0 {
+		r.Tables = append(r.Tables, networks)
+	}
 
 	r.Summary = fmt.Sprintf("%s: %s, %s (%d online), %s", strings.TrimSpace("UniFi Network "+info.ApplicationVersion),
 		plural(len(sites), "site"), plural(deviceCount, "device"), online, plural(clientTotal, "client"))

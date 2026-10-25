@@ -37,11 +37,24 @@ type fakeController struct {
 	clients  map[string][]map[string]any // by site ID
 	pageSize int
 	noTotal  bool // pages with no totalCount
+	// details are the answers of the device details, by device ID
+	details map[string]map[string]any
 
-	mu     sync.Mutex
-	keys   []string       // the X-API-KEY of every request
-	limits []string       // the limit of every list request
-	pages  map[string]int // list requests by path
+	// The older API (classic.go), as a UniFi OS console serves it: it
+	// takes the key when classicKey, else a session of one of users
+	// (name → password); stations and cdevices are its stat/sta and
+	// stat/device, by site name
+	classicKey bool
+	users      map[string]string
+	stations   map[string][]map[string]any
+	cdevices   map[string][]map[string]any
+
+	mu      sync.Mutex
+	keys    []string       // the X-API-KEY of every request
+	limits  []string       // the limit of every list request
+	pages   map[string]int // list requests by path
+	logins  []string       // the user and password of every login
+	logouts int            // the logouts with the session's CSRF token
 }
 
 func newFake() *fakeController {
@@ -82,8 +95,76 @@ func newFake() *fakeController {
 	}
 }
 
-func (f *fakeController) handler() http.Handler {
+// classic serves the older API.
+func (f *fakeController) classic() http.Handler {
 	mux := http.NewServeMux()
+	answer := func(w http.ResponseWriter, code int, data any) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		rc, msg := "ok", ""
+		if code != http.StatusOK {
+			rc, msg = "error", "api.err.LoginRequired"
+		}
+		json.NewEncoder(w).Encode(map[string]any{"meta": map[string]any{"rc": rc, "msg": msg}, "data": data})
+	}
+	mux.HandleFunc("POST /api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Username, Password string }
+		json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		f.logins = append(f.logins, body.Username+":"+body.Password)
+		f.mu.Unlock()
+		if want, ok := f.users[body.Username]; !ok || want != body.Password {
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, `{"error":{"code":401,"message":"Invalid username or password"}}`)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{Name: "TOKEN", Value: "session-" + body.Username, Path: "/", Secure: true, HttpOnly: true})
+		w.Header().Set("X-Csrf-Token", "csrf-"+body.Username)
+		fmt.Fprintf(w, `{"username":%q}`, body.Username)
+	})
+	mux.HandleFunc("POST /api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie("TOKEN"); err == nil && r.Header.Get("X-Csrf-Token") == "csrf-"+strings.TrimPrefix(c.Value, "session-") {
+			f.mu.Lock()
+			f.logouts++
+			f.mu.Unlock()
+		}
+	})
+	mux.HandleFunc("GET /proxy/network/api/s/{site}/stat/{what}", func(w http.ResponseWriter, r *http.Request) {
+		ok := f.classicKey && r.Header.Get("X-API-KEY") == f.key
+		if c, err := r.Cookie("TOKEN"); err == nil {
+			_, ok = f.users[strings.TrimPrefix(c.Value, "session-")]
+		}
+		if !ok {
+			answer(w, http.StatusUnauthorized, []any{})
+			return
+		}
+		site := r.PathValue("site")
+		switch r.PathValue("what") {
+		case "sta":
+			answer(w, http.StatusOK, append([]map[string]any{}, f.stations[site]...))
+		case "device":
+			answer(w, http.StatusOK, append([]map[string]any{}, f.cdevices[site]...))
+		case "device-basic":
+			answer(w, http.StatusOK, []any{})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	return mux
+}
+
+func (f *fakeController) handler() http.Handler {
+	classic := f.classic()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET "+prefix+"/sites/{site}/devices/{id}", func(w http.ResponseWriter, r *http.Request) {
+		d, ok := f.details[r.PathValue("id")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(d)
+	})
 	mux.HandleFunc("GET "+prefix+"/info", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, f.info)
@@ -100,6 +181,10 @@ func (f *fakeController) handler() http.Handler {
 		f.mu.Lock()
 		f.keys = append(f.keys, key)
 		f.mu.Unlock()
+		if !strings.HasPrefix(r.URL.Path, prefix) {
+			classic.ServeHTTP(w, r)
+			return
+		}
 		if key != f.key {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
@@ -711,5 +796,198 @@ func TestInventory(t *testing.T) {
 	}
 	if _, err := (Module{}).Inventory(context.Background(), modules.Request{IP: "10.9.60.5", Login: modules.Login{Password: "wrong"}}); !errors.Is(err, modules.ErrLoginRejected) {
 		t.Errorf("a wrong key: %v", err)
+	}
+}
+
+// detailsFake is newFake with the older API's view of site Main: the
+// stations of ap-a and the devices with their kinds and uplinks.
+func detailsFake() *fakeController {
+	f := newFake()
+	f.clients = map[string][]map[string]any{
+		"s-main": {
+			{"type": "WIRELESS", "uplinkDeviceId": "d-ap1", "name": "Laptop-A", "macAddress": "de:ad:00:00:00:01", "ipAddress": "10.9.62.5"},
+			{"type": "WIRELESS", "uplinkDeviceId": "d-ap1", "name": "de:ad:00:00:00:02", "macAddress": "de:ad:00:00:00:02"},
+			{"type": "WIRED", "uplinkDeviceId": "d-sw", "macAddress": "de:ad:00:00:00:03"},
+		},
+		"s-lab": {},
+	}
+	f.stations = map[string][]map[string]any{"default": {
+		{"mac": "DE:AD:00:00:00:01", "hostname": "laptop-a", "ip": "10.9.62.5", "is_wired": false, "ap_mac": "aa:bb:cc:00:00:02",
+			"essid": "TUIT", "radio": "na", "radio_proto": "ax", "channel": 36, "signal": -61, "rx_rate": 866700, "tx_rate": "1200000",
+			"rx_bytes": 1234, "tx_bytes": 5678e6, "uptime": 3700, "oui": "Intel Corporate", "network": "WLAN", "vlan": 20, "satisfaction": 97},
+		{"mac": "de:ad:00:00:00:02", "hostname": "phone-x", "ip": "10.9.62.8", "ap_mac": "aa:bb:cc:00:00:02", "essid": "TUIT-Guest",
+			"radio": "ng", "radio_proto": "n", "channel": 6, "signal": -77, "satisfaction": -1},
+		{"mac": "de:ad:00:00:00:05", "name": "Tablet", "ip": "10.9.62.9", "ap_mac": "aa:bb:cc:00:00:02", "essid": "TUIT", "radio": "6e", "radio_proto": "ax"},
+		{"mac": "de:ad:00:00:00:06", "ip": "10.9.62.10", "ap_mac": "aa:bb:cc:00:00:77", "essid": "TUIT"},
+		{"mac": "de:ad:00:00:00:03", "hostname": "printer", "is_wired": true, "network": "LAN", "sw_mac": "aa:bb:cc:00:00:01"},
+	}}
+	f.cdevices = map[string][]map[string]any{"default": {
+		{"mac": "AA:BB:CC:00:00:01", "type": "usw", "uplink": map[string]any{"type": "wire", "uplink_mac": "4c:ae:a3:00:00:10", "uplink_remote_port": 12},
+			"lldp_table": []map[string]any{{"chassis_id": "4C:AE:A3:00:00:10", "port_id": "GigabitEthernet1/0/12", "local_port_name": "Port 25"}}},
+		{"mac": "aa:bb:cc:00:00:02", "type": "uap", "uplink": map[string]any{"type": "wire", "uplink_mac": "aa:bb:cc:00:00:01", "uplink_remote_port": "5", "name": "eth0"}},
+		{"mac": "aa:bb:cc:00:00:03", "type": "uap", "uplink": map[string]any{"type": "wireless", "uplink_mac": "aa:bb:cc:00:00:02"}},
+	}}
+	return f
+}
+
+// checkDetails checks the inventory of detailsFake with the older API
+// read: the stations' details on the clients (a client the Integration
+// API names by its MAC by its host name, a station it did not list added
+// to its access point, a station of an unknown device left out), the
+// devices' kinds and uplinks (the LLDP neighbor's port, the uplink's
+// device and port number, the parent of a mesh link).
+func checkDetails(t *testing.T, inv modules.Inventory) {
+	t.Helper()
+	if len(inv.Notes) != 0 {
+		t.Errorf("notes %q", inv.Notes)
+	}
+	byMAC := map[string]modules.ManagedDevice{}
+	for _, d := range inv.Devices {
+		byMAC[d.MAC] = d
+	}
+	want := []modules.ManagedClient{
+		{MAC: "de:ad:00:00:00:01", Name: "Laptop-A", IP: "10.9.62.5", Kind: "wireless", Hostname: "laptop-a", Vendor: "Intel Corporate",
+			SSID: "TUIT", Network: "WLAN", VLAN: 20, Band: "5 GHz", Channel: 36, Standard: "Wi-Fi 6 (ax)", Signal: -61, RxRate: 866, TxRate: 1200,
+			RxBytes: 1234, TxBytes: 5678e6, Uptime: 3700, Satisfaction: 97},
+		{MAC: "de:ad:00:00:00:02", Name: "phone-x", IP: "10.9.62.8", Kind: "wireless", Hostname: "phone-x", SSID: "TUIT-Guest",
+			Band: "2.4 GHz", Channel: 6, Standard: "Wi-Fi 4 (n)", Signal: -77},
+		{MAC: "de:ad:00:00:00:05", Name: "Tablet", IP: "10.9.62.9", Kind: "wireless", SSID: "TUIT", Band: "6 GHz", Standard: "Wi-Fi 6E (ax)"},
+	}
+	if got := byMAC["aa:bb:cc:00:00:02"].Clients; !slices.Equal(got, want) {
+		t.Errorf("clients of ap-a\n got %+v\nwant %+v", got, want)
+	}
+	if sw := byMAC["aa:bb:cc:00:00:01"].Clients; len(sw) != 1 || sw[0].Hostname != "printer" || sw[0].Network != "LAN" || sw[0].SSID != "" {
+		t.Errorf("the wired client %+v", sw)
+	}
+	uplinks := map[string]string{}
+	for mac, d := range byMAC {
+		uplinks[mac] = d.Kind
+		if d.Uplink != nil {
+			uplinks[mac] += fmt.Sprintf(" %+v", *d.Uplink)
+		}
+	}
+	if want := map[string]string{
+		"aa:bb:cc:00:00:01": "switch {MAC:4c:ae:a3:00:00:10 Port:GigabitEthernet1/0/12 LocalPort:Port 25 Wireless:false}",
+		"aa:bb:cc:00:00:02": "access_point {MAC:aa:bb:cc:00:00:01 Port:5 LocalPort:eth0 Wireless:false}",
+		"aa:bb:cc:00:00:03": "access_point {MAC:aa:bb:cc:00:00:02 Port: LocalPort: Wireless:true}",
+		"aa:bb:cc:00:00:09": "access_point", // site Lab: its uplink is no device of the site; it has Wi-Fi clients
+	}; !reflect.DeepEqual(uplinks, want) {
+		t.Errorf("kinds and uplinks\n got %q\nwant %q", uplinks, want)
+	}
+}
+
+func resetRefused(t *testing.T) {
+	refusedMu.Lock()
+	refusedLogins = map[string]time.Time{}
+	refusedMu.Unlock()
+	t.Cleanup(func() {
+		refusedMu.Lock()
+		refusedLogins = map[string]time.Time{}
+		refusedMu.Unlock()
+	})
+}
+
+// TestInventoryDetailsWithKey checks the older API read with the API key,
+// with no login of a user.
+func TestInventoryDetailsWithKey(t *testing.T) {
+	resetRefused(t)
+	f := detailsFake()
+	f.clients["s-lab"] = []map[string]any{{"type": "WIRELESS", "uplinkDeviceId": "d-ap9", "macAddress": "de:ad:00:00:00:09"}}
+	f.classicKey = true
+	srv := serve(t, f.handler())
+	useBases(t, srv.URL+prefix)
+	inv, err := Module{}.Inventory(context.Background(), modules.Request{IP: "10.9.60.5", Login: modules.Login{Password: testKey},
+		Others: []modules.Login{{Username: "viewer", Password: "pw"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkDetails(t, inv)
+	if len(f.logins) != 0 {
+		t.Errorf("logins %q with a key the older API takes", f.logins)
+	}
+}
+
+// TestInventoryDetailsWithUser checks the older API read in the session of
+// a local user, when it refuses the key: a refused login is passed and not
+// tried again for an hour, the session is logged out, and with no login of
+// a user a note says why there are no details.
+func TestInventoryDetailsWithUser(t *testing.T) {
+	resetRefused(t)
+	f := detailsFake()
+	f.clients["s-lab"] = []map[string]any{{"type": "WIRELESS", "uplinkDeviceId": "d-ap9", "macAddress": "de:ad:00:00:00:09"}}
+	f.users = map[string]string{"viewer": "pw"}
+	srv := serve(t, f.handler())
+	useBases(t, srv.URL+prefix)
+	req := modules.Request{IP: "10.9.60.5", Login: modules.Login{Password: testKey},
+		Others: []modules.Login{{Username: "viewer", Password: "wrong"}, {Username: "viewer", Password: "pw"}}}
+	for range 2 {
+		inv, err := Module{}.Inventory(context.Background(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkDetails(t, inv)
+	}
+	if want := []string{"viewer:wrong", "viewer:pw", "viewer:pw"}; !slices.Equal(f.logins, want) {
+		t.Errorf("logins %q, want %q (the refused one once)", f.logins, want)
+	}
+	if f.logouts != 2 {
+		t.Errorf("%d logouts, want 2", f.logouts)
+	}
+
+	// No user that logs in: the Integration API's device details give the
+	// kinds and uplinks, and a note says why there are no client details
+	f.details = map[string]map[string]any{
+		"d-ap1": {"id": "d-ap1", "features": map[string]any{"accessPoint": map[string]any{}}, "uplink": map[string]any{"deviceId": "d-sw"}},
+		"d-ap2": {"id": "d-ap2", "features": map[string]any{"accessPoint": map[string]any{}}},
+	}
+	req.Others = []modules.Login{{Password: "no user"}}
+	inv, err := Module{}.Inventory(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note := strings.Join(inv.Notes, "; "); !strings.Contains(note, "client details: it refuses the API key; Credentials has no login with a user name") ||
+		!strings.Contains(note, "device details of site Lab: 1 not read") {
+		t.Errorf("notes %q", inv.Notes)
+	}
+	kinds := map[string]string{}
+	for _, d := range inv.Devices {
+		kinds[d.MAC] = d.Kind
+		if d.Uplink != nil {
+			kinds[d.MAC] += " " + d.Uplink.MAC
+		}
+		for _, c := range d.Clients {
+			if c.SSID != "" || c.Hostname != "" {
+				t.Errorf("details without the older API: %+v", c)
+			}
+		}
+	}
+	if want := map[string]string{"aa:bb:cc:00:00:01": "switch", "aa:bb:cc:00:00:02": "access_point aa:bb:cc:00:00:01",
+		"aa:bb:cc:00:00:03": "access_point aa:bb:cc:00:00:01", "aa:bb:cc:00:00:09": "access_point"}; !reflect.DeepEqual(kinds, want) {
+		t.Errorf("kinds and uplinks %q, want %q", kinds, want)
+	}
+}
+
+// TestDetectDetails checks what Detect tells of the older API: how it was
+// read, and the Wi-Fi networks with their clients by band.
+func TestDetectDetails(t *testing.T) {
+	resetRefused(t)
+	f := detailsFake()
+	f.users = map[string]string{"viewer": "pw"}
+	srv := serve(t, f.handler())
+	useBases(t, srv.URL+prefix)
+	r, err := Module{}.Run(context.Background(), modules.Request{IP: "10.9.60.5", Action: "detect", Login: modules.Login{Password: testKey},
+		Others: []modules.Login{{Username: "viewer", Password: "pw"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fact(r, "Client details"); !strings.HasPrefix(got, "read with user viewer") {
+		t.Errorf("client details %q", got)
+	}
+	sameRows(t, table(t, r, "Wi-Fi networks"), [][]string{
+		{"Main", "TUIT", "3", "0", "1", "1"},
+		{"Main", "TUIT-Guest", "1", "1", "0", "0"},
+	})
+	if f.logouts != 1 {
+		t.Errorf("%d logouts, want 1", f.logouts)
 	}
 }

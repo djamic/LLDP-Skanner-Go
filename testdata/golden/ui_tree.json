@@ -11,6 +11,7 @@
     "synthetic: a managed device is named by its controller, with its state and its clients below it",
     "synthetic: a client shown as a device has no client row besides",
     "synthetic: a managed device's tooltip has what its controller says",
+    "synthetic: a client's SSID and signal on its row, its details in its tooltip",
     "synthetic: BFS: a router behind a switch hangs below it",
     "synthetic: child order: routers/switches, hubs/hypervisors, the rest, natural by name",
     "synthetic: ports: both ends of the link to the parent, the parent's first on either side of the link, speed and traffic dropped, markers kept",

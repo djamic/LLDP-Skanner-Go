@@ -1753,3 +1753,13 @@ button:active {
 .tv-client {
     opacity: 0.85;
 }
+
+.tv-radio {
+    color: #80DEEA;
+    font-size: 11px;
+}
+
+/* The details of a WLAN client in the info panel (app.js) */
+.info-lines {
+    white-space: pre-line;
+}

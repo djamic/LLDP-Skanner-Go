@@ -1197,6 +1197,16 @@ function showInfoPanel(node) {
         }
     }
 
+    // What the controller tells of it as a client (node.client: a Wi-Fi
+    // client's SSID, signal, ...; tree.js treeClientDetails words it)
+    const clientSection = document.getElementById('infoClientSection');
+    if (clientSection) {
+        const c = node.client;
+        const lines = c && typeof treeClientDetails === 'function' ? treeClientDetails(c) : [];
+        clientSection.hidden = !c;
+        if (c) document.getElementById('infoClient').textContent = [`on ${c.device || '?'}`, ...lines].join('\n');
+    }
+
     // Phase 8: Show unreachable status
     const statusEl = document.getElementById('infoStatus');
     if (statusEl) {

@@ -34,9 +34,13 @@ type DJGraph struct {
 	// (addGatewayNodes): such a node is a router, whatever its label says.
 	// graphSysText holds the sysName/sysDescr text known for a node (the
 	// polled sysName, LLDP RemSysName and RemSysDesc), never vendor text.
+	// graphManaged holds the nodes of the access points a controller
+	// manages that no switch showed (addManagedAPNodes): such a node is an
+	// access point.
 	graphSwitches map[string]bool
 	graphRouters  map[string]bool
 	graphSysText  map[string]string
+	graphManaged  map[string]bool
 }
 
 // NewDJGraph creates a new graph instance
@@ -273,6 +277,10 @@ type GraphNode struct {
 	// Managed is the device a controller manages under this MAC (a UniFi
 	// access point with its clients); only graphHandler sets it
 	Managed *ManagedView `json:"managed,omitempty"`
+	// Client is what a controller tells of the node as the client of a
+	// device it manages (a Wi-Fi client's SSID, signal, ...); only
+	// graphHandler sets it
+	Client *ClientView `json:"client,omitempty"`
 	X           float64  `json:"x,omitempty"`
 	Y           float64  `json:"y,omitempty"`
 }
@@ -437,6 +445,9 @@ func (g *DJGraph) determineDeviceGroup(node, info string) string {
 	// sysName and IPs ("debian216\n172.20.1.254", "FortiGate-600F\n...").
 	if g.graphRouters[node] {
 		return "router"
+	}
+	if g.graphManaged[node] {
+		return "access_point"
 	}
 
 	// A polled device is grouped by its own name only (server, router or

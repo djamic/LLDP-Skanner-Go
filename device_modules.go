@@ -242,8 +242,8 @@ func moduleRunHandler(w http.ResponseWriter, r *http.Request) {
 	tried := 0
 	for i := range logins {
 		tried++
-		res, err = m.Run(ctx, modules.Request{IP: addr, Action: action.ID,
-			Login: modules.Login{Username: logins[i].Username, Password: logins[i].Password}, Community: community})
+		login, others := moduleLogins(logins, i)
+		res, err = m.Run(ctx, modules.Request{IP: addr, Action: action.ID, Login: login, Others: others, Community: community})
 		if errors.Is(err, modules.ErrLoginRejected) {
 			continue
 		}
@@ -298,6 +298,18 @@ func moduleCheckSNMP(ip, community string) string {
 		}
 	}
 	return "the device does not answer SNMP with community " + community + " yet"
+}
+
+// moduleLogins gives a module login i of logins, and the others in their
+// order.
+func moduleLogins(logins []credentialLogin, i int) (modules.Login, []modules.Login) {
+	var others []modules.Login
+	for j, l := range logins {
+		if j != i {
+			others = append(others, modules.Login{Username: l.Username, Password: l.Password})
+		}
+	}
+	return modules.Login{Username: logins[i].Username, Password: logins[i].Password}, others
 }
 
 // registerModuleRoutes adds the modules' API.

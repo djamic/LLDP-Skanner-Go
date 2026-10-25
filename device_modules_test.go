@@ -332,13 +332,14 @@ func TestManagedClientsInGraph(t *testing.T) {
 	ap := "70:a7:41:00:00:01"
 	data := GraphData{
 		Nodes: []GraphNode{{ID: "4c:ae:a3:00:00:01", Group: "switch"}, {ID: ap, Group: "access_point", Managed: &ManagedView{Name: "A 1", Clients: []modules.ManagedClient{
-			{MAC: "DE:AD:00:00:00:01", Name: "Laptop", IP: "10.9.71.5", Kind: "wireless"},
+			{MAC: "DE:AD:00:00:00:01", Name: "Laptop", IP: "10.9.71.5", Kind: "wireless", SSID: "TUIT", Signal: -61},
 			{MAC: "de:ad:00:00:00:02", Name: "de:ad:00:00:00:02", Kind: "wireless"},
-			{MAC: "de:ad:00:00:00:03", Name: "phone", Kind: "wireless"},
+			{MAC: "de:ad:00:00:00:03", Name: "phone", Kind: "wireless", SSID: "TUIT-Guest"},
 			{MAC: "de:ad:00:00:00:04", Name: "printer", Kind: "wired"},
 			{MAC: ap, Kind: "wireless"},
 			{MAC: "de:ad:00:00:00:05", Name: "de:ad:00:00:00:05", IP: "10.9.71.10", Kind: "wireless"},
 			{MAC: "de:ad:00:00:00:06", IP: "10.9.71.11", Kind: "wireless"},
+			{MAC: "de:ad:00:00:00:07", IP: "10.9.71.10", Kind: "wireless", Hostname: "phone-y"},
 		}}}, {ID: "de:ad:00:00:00:03", Group: "wifi_random"}},
 		Links: []GraphLink{{Source: "4c:ae:a3:00:00:01", Target: ap}, {Source: "de:ad:00:00:00:03", Target: ap, Label: "x"}},
 	}
@@ -347,8 +348,15 @@ func TestManagedClientsInGraph(t *testing.T) {
 	for _, n := range data.Nodes {
 		nodes[n.ID] = n
 	}
-	if n := nodes["de:ad:00:00:00:01"]; n.Group != "wifi_client" || n.SysName != "Laptop\n10.9.71.5" || n.IP != "10.9.71.5" || n.Label != "Laptop\n10.9.71.5\nde:ad:00:00:00:01" {
+	if n := nodes["de:ad:00:00:00:01"]; n.Group != "wifi_client" || n.SysName != "Laptop\n10.9.71.5" || n.IP != "10.9.71.5" || n.Label != "Laptop\n10.9.71.5\nde:ad:00:00:00:01" ||
+		n.Client == nil || n.Client.Device != "A 1" || n.Client.SSID != "TUIT" || n.Client.Signal != -61 {
 		t.Errorf("a new client %+v", n)
+	}
+	if n := nodes["de:ad:00:00:00:03"]; n.Client == nil || n.Client.SSID != "TUIT-Guest" {
+		t.Errorf("a client that was a node already gets no details: %+v", n)
+	}
+	if n := nodes["de:ad:00:00:00:07"]; n.SysName != "phone-y\n10.9.71.10" || n.Hostname != "" {
+		t.Errorf("a client named by its DHCP host name %+v", n)
 	}
 	if n := nodes["de:ad:00:00:00:02"]; n.Group != "wifi_client" || n.SysName != "" || n.Label != "de:ad:00:00:00:02" {
 		t.Errorf("a client named by its MAC %+v", n)
@@ -370,12 +378,12 @@ func TestManagedClientsInGraph(t *testing.T) {
 		links = append(links, l.Source+">"+l.Target+" "+l.Label+" "+l.SourceLabel+" "+l.Kind)
 	}
 	want := []string{ap + ">de:ad:00:00:00:01 WLAN|wlan WLAN wlan", ap + ">de:ad:00:00:00:02 WLAN|wlan WLAN wlan",
-		ap + ">de:ad:00:00:00:05 WLAN|wlan WLAN wlan", ap + ">de:ad:00:00:00:06 WLAN|wlan WLAN wlan"}
+		ap + ">de:ad:00:00:00:05 WLAN|wlan WLAN wlan", ap + ">de:ad:00:00:00:06 WLAN|wlan WLAN wlan", ap + ">de:ad:00:00:00:07 WLAN|wlan WLAN wlan"}
 	if !slices.Equal(links, want) {
 		t.Errorf("new links %v, want %v (the linked client gets none)", links, want)
 	}
-	if len(data.Nodes) != 7 {
-		t.Errorf("%d nodes, want the 3 and 4 new clients", len(data.Nodes))
+	if len(data.Nodes) != 8 {
+		t.Errorf("%d nodes, want the 3 and 5 new clients", len(data.Nodes))
 	}
 }
 
@@ -455,5 +463,81 @@ func TestGatewayWLANHosts(t *testing.T) {
 	addGatewayWLANHosts(&data)
 	if data.Nodes[0].Managed != nil {
 		t.Errorf("hosts without a WLAN subnet: %+v", data.Nodes[0].Managed)
+	}
+}
+
+// TestManagedAPNodes checks the access points the controllers manage that
+// the graph has no node for: a node each (group access_point, its name and
+// IP, unreachable when offline), linked by its uplink when that device is a
+// node (a switch by its chassis MAC, the parent of a mesh link), else by
+// the switch port its MAC is learned on ([MAC-REF]), else not at all; an
+// access point the graph has by MAC or IP, and a device of another kind,
+// get no node.
+func TestManagedAPNodes(t *testing.T) {
+	resetState(t)
+	const sw = "4c:ae:a3:50:00:01"
+	const apUp, apMesh, apFDB, apNone, apInGraph, apByIP, usw = "70:a7:41:50:00:01", "70:a7:41:50:00:02", "70:a7:41:50:00:03",
+		"70:a7:41:50:00:04", "70:a7:41:50:00:05", "70:a7:41:50:00:06", "70:a7:41:50:00:09"
+	snapshot := map[string]*DeviceData{"10.9.50.1": {IP: "10.9.50.1", ChassisID: sw, Interfaces: gigabitPorts(10, nil),
+		MACTable: slices.Concat(macEntries(5, apFDB, "de:ad:00:50:00:01", "de:ad:00:50:00:02"), macEntries(6, apUp))}}
+	switchMACs := buildSwitchOwnMACs(snapshot)
+	graph := NewDJGraph()
+	for _, id := range []string{sw, apInGraph, "10.9.50.77"} {
+		graph.AddNode(id)
+	}
+	graph.graphSwitches = map[string]bool{sw: true}
+	inventoryMu.Lock()
+	inventoryNotices = map[string]string{}
+	managedByMAC = map[string]ManagedView{
+		apUp:      {Name: "A up", IP: "10.9.50.11", Kind: "access_point", Source: "UniFi", Controller: "10.9.60.5", Uplink: &modules.ManagedUplink{MAC: "4C:AE:A3:50:00:01", Port: "GigabitEthernet1/0/12", LocalPort: "eth0"}},
+		apMesh:    {Name: "A mesh", Kind: "access_point", Uplink: &modules.ManagedUplink{MAC: apUp, Wireless: true}},
+		apFDB:     {Name: "A fdb", IP: "10.9.50.13", Kind: "access_point"},
+		apNone:    {Name: "A none", Kind: "access_point", State: "OFFLINE", Uplink: &modules.ManagedUplink{MAC: "00:11:22:33:44:55", Port: "3"}},
+		apInGraph: {Name: "A in graph", Kind: "access_point"},
+		apByIP:    {Name: "A by IP", IP: "10.9.50.77", Kind: "access_point"},
+		usw:       {Name: "USW", Kind: "switch"},
+	}
+	inventoryMu.Unlock()
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		managedByMAC, inventoryNotices = map[string]ManagedView{}, map[string]string{}
+		inventoryMu.Unlock()
+	})
+	out := captureStdout(t, func() { addManagedAPNodes(graph, snapshot, switchMACs) })
+	data := graph.GetGraphData()
+	groups := map[string]string{}
+	for _, n := range data.Nodes {
+		groups[n.ID] = n.Group + " " + strings.ReplaceAll(n.SysName, "\n", "/")
+		if n.Unreachable {
+			groups[n.ID] += " unreachable"
+		}
+	}
+	for mac, want := range map[string]string{apUp: "access_point A up/10.9.50.11", apMesh: "access_point A mesh", apFDB: "access_point A fdb/10.9.50.13",
+		apNone: "access_point A none unreachable"} {
+		if groups[mac] != want {
+			t.Errorf("node %s: %q, want %q", mac, groups[mac], want)
+		}
+	}
+	for _, mac := range []string{apByIP, usw} {
+		if _, ok := groups[mac]; ok {
+			t.Errorf("a node for %s", mac)
+		}
+	}
+	if graph.graphManaged[apInGraph] {
+		t.Error("the access point the graph has is changed")
+	}
+	var links []string
+	for _, l := range data.Links {
+		links = append(links, l.Source+">"+l.Target+" "+l.Label)
+	}
+	slices.Sort(links)
+	want := []string{sw + ">" + apUp + " GigabitEthernet1/0/12|eth0", sw + ">" + apFDB + " GE1/0/5 [MAC-REF]|", apUp + ">" + apMesh + " mesh|mesh"}
+	if !slices.Equal(links, want) {
+		t.Errorf("links\n got %q\nwant %q", links, want)
+	}
+	if !strings.Contains(out, "4 access points no switch shows drawn from their controllers: 2 linked by their uplink, 1 by the FDB, 1 not linked") ||
+		!strings.Contains(out, "A up "+apUp+" (10.9.50.11) drawn from UniFi 10.9.60.5, linked by its uplink "+sw+" GigabitEthernet1/0/12\n") ||
+		!strings.Contains(out, "A fdb "+apFDB+" (10.9.50.13) drawn from  , linked by the FDB of 10.9.50.1 GE1/0/5 (3 MACs on the port)") {
+		t.Errorf("log %q", out)
 	}
 }

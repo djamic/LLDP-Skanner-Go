@@ -42,6 +42,10 @@ type Request struct {
 	IP     string
 	Action string
 	Login  Login
+	// Others are the device's other logins of the protocol, in the order
+	// they are tried, for a module that needs a second kind of login (a
+	// UniFi controller's local user, besides its API key)
+	Others []Login
 	// Community is the SNMP community the scanner polls with, for an
 	// action that sets the device's SNMP
 	Community string
@@ -105,25 +109,61 @@ type Prober interface {
 // scanner's graph and tree: the devices, by MAC, with their clients.
 type Inventory struct {
 	Devices []ManagedDevice `json:"devices"`
+	// Notes say what could not be read, the rest being there ("client
+	// details: ..."); the scanner logs them
+	Notes []string `json:"notes,omitempty"`
 }
 
 // ManagedDevice is one device of an Inventory.
 type ManagedDevice struct {
-	MAC      string          `json:"mac"` // "70:a7:41:a8:a2:ff"
-	Name     string          `json:"name"`
-	Model    string          `json:"model,omitempty"`
-	IP       string          `json:"ip,omitempty"`
-	State    string          `json:"state,omitempty"` // "ONLINE", "OFFLINE", ...
-	Firmware string          `json:"firmware,omitempty"`
-	Clients  []ManagedClient `json:"clients,omitempty"`
+	MAC      string `json:"mac"` // "70:a7:41:a8:a2:ff"
+	Name     string `json:"name"`
+	Model    string `json:"model,omitempty"`
+	IP       string `json:"ip,omitempty"`
+	State    string `json:"state,omitempty"` // "ONLINE", "OFFLINE", ...
+	Firmware string `json:"firmware,omitempty"`
+	// Kind is "access_point", "switch" or "gateway", "" when unknown
+	Kind string `json:"kind,omitempty"`
+	// Uplink is the device it is connected through, nil when unknown
+	Uplink  *ManagedUplink  `json:"uplink,omitempty"`
+	Clients []ManagedClient `json:"clients,omitempty"`
 }
 
-// ManagedClient is a client connected to a managed device.
+// ManagedUplink is the link of a managed device to the device it is
+// connected through.
+type ManagedUplink struct {
+	// MAC is that device's: a switch's chassis MAC (its LLDP), the UniFi
+	// switch's, or the access point's of a mesh link
+	MAC       string `json:"mac"`
+	Port      string `json:"port,omitempty"`      // its port, "GigabitEthernet1/0/10" or "5"
+	LocalPort string `json:"localPort,omitempty"` // the device's own, "eth0"
+	Wireless  bool   `json:"wireless,omitempty"`  // a mesh link
+}
+
+// ManagedClient is a client connected to a managed device. The fields
+// after Kind are what the controller tells of a Wi-Fi client, when it can
+// (a UniFi controller's older API): zero when unknown.
 type ManagedClient struct {
 	MAC  string `json:"mac"`
 	Name string `json:"name,omitempty"`
 	IP   string `json:"ip,omitempty"`
 	Kind string `json:"kind,omitempty"` // "wireless", "wired", ...
+
+	Hostname     string `json:"hostname,omitempty"` // the name it gave DHCP
+	Vendor       string `json:"vendor,omitempty"`
+	SSID         string `json:"ssid,omitempty"`
+	Network      string `json:"network,omitempty"` // the controller's network (VLAN) name
+	VLAN         int    `json:"vlan,omitempty"`
+	Band         string `json:"band,omitempty"` // "2.4 GHz", "5 GHz", "6 GHz"
+	Channel      int    `json:"channel,omitempty"`
+	Standard     string `json:"standard,omitempty"` // "Wi-Fi 6 (ax)"
+	Signal       int    `json:"signal,omitempty"`   // dBm, "-61"
+	RxRate       int    `json:"rxRate,omitempty"`   // Mbit/s, of the last frames
+	TxRate       int    `json:"txRate,omitempty"`
+	RxBytes      int64  `json:"rxBytes,omitempty"` // since it connected
+	TxBytes      int64  `json:"txBytes,omitempty"`
+	Uptime       int64  `json:"uptime,omitempty"`       // seconds connected
+	Satisfaction int    `json:"satisfaction,omitempty"` // the controller's 0-100 score
 }
 
 // Inventorier is a module whose devices report the devices they manage;

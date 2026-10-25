@@ -522,29 +522,71 @@ function treeClientId(id, mac) {
     return 'tvw-' + treeSafeId(`${id}>${mac}`).slice(4);
 }
 
+// treeBytes is a byte count for people: "812 B", "4.2 MB", "1.3 GB".
+function treeBytes(n) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    let v = Number(n) || 0;
+    while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
+    return `${i && v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
+
+// treeDuration is a number of seconds for people: "45s", "12m", "3h 5m", "2d 4h".
+function treeDuration(s) {
+    s = Math.max(0, Math.floor(Number(s) || 0));
+    const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+    if (d) return `${d}d ${h}h`;
+    if (h) return `${h}h ${m}m`;
+    return m ? `${m}m` : `${s}s`;
+}
+
+// treeClientDetails are the lines of what its controller tells of a client
+// (node.managed.clients[i], node.client): its network and radio, signal,
+// rates, traffic, time connected, DHCP host name, vendor and VLAN; [] when
+// it tells none of it. The tooltip of a client row and the info panel
+// (app.js) show them.
+function treeClientDetails(c) {
+    if (!c) return [];
+    const join = parts => parts.filter(Boolean).join(' · ');
+    const lines = [
+        join([c.ssid, c.band, c.channel && `channel ${c.channel}`, c.standard]),
+        join([c.signal && `signal ${c.signal} dBm`, c.satisfaction && `experience ${c.satisfaction}%`]),
+        join([(c.rxRate || c.txRate) && `rate rx ${c.rxRate || 0} / tx ${c.txRate || 0} Mbit/s`,
+            (c.rxBytes || c.txBytes) && `traffic rx ${treeBytes(c.rxBytes)} / tx ${treeBytes(c.txBytes)}`]),
+        join([c.uptime && `connected ${treeDuration(c.uptime)}`,
+            c.hostname && String(c.hostname) !== String(c.name) && `host name ${c.hostname}`]),
+        join([c.vendor, c.network && `network ${c.network}`, c.vlan && `VLAN ${c.vlan}`]),
+    ];
+    return lines.filter(Boolean);
+}
+
 // treeClientRows are the rows of the clients its controller lists on a
 // device (node.managed.clients: a UniFi access point's Wi-Fi clients):
-// leaves with the client's name, IP and MAC, found by the device search.
-// They are no devices of the graph: no count, no info panel. Only escaped
-// strings and constants go in.
+// leaves with the client's name, IP and MAC, its SSID and signal when the
+// controller tells them, found by the device search. They are no devices
+// of the graph: no count, no info panel; the tooltip tells the details
+// (treeClientDetails). Only escaped strings and constants go in.
 function treeClientRows(id, info) {
     const m = info.node.managed;
     if (!m || !Array.isArray(m.clients)) return [];
     return m.clients.filter(c => c && c.mac).map(c => {
-        // a client with no name has its MAC as the name in UniFi
+        // a client with no name has its MAC as the name in UniFi; its DHCP
+        // host name is the next best
         const named = !!c.name && String(c.name).toLowerCase() !== String(c.mac).toLowerCase();
-        const name = named ? c.name : c.mac;
+        const name = named ? c.name : (c.hostname || c.mac);
         const icon = c.kind === 'wired' ? '🔌' : '📶';
         const kind = { wired: 'wired client', wireless: 'Wi-Fi client', arp: 'WLAN host in the ARP table' }[c.kind] || 'client';
-        const title = [name, c.ip, c.mac, `${kind} of ${info.name}`].filter(Boolean).join('\n');
+        const title = [name, c.ip, c.mac, `${kind} of ${info.name}`, ...treeClientDetails(c)].filter(Boolean).join('\n');
+        const radio = [c.ssid, c.signal && `${c.signal} dBm`].filter(Boolean).join(' · ');
         return {
             id: treeClientId(id, String(c.mac)),
             text: `<span class="tv-row tv-client" title="${treeEscapeHTML(title)}"><span class="tv-icon">${icon}</span> ` +
                 `<span class="tv-name">${treeEscapeHTML(name)}</span>` +
                 (c.ip ? ` <span class="tv-addr">${treeEscapeHTML(c.ip)}</span>` : '') +
-                (named ? ` <span class="tv-addr">${treeEscapeHTML(c.mac)}</span>` : '') + `</span>`,
+                (name !== c.mac ? ` <span class="tv-addr">${treeEscapeHTML(c.mac)}</span>` : '') +
+                (radio ? ` <span class="tv-radio">${treeEscapeHTML(radio)}</span>` : '') + `</span>`,
             children: [],
-            data: { client: String(c.mac), q: [name, c.ip, c.mac].filter(Boolean).join('\n').toLowerCase() },
+            data: { client: String(c.mac), q: [name, c.ip, c.mac, c.ssid, c.hostname].filter(Boolean).join('\n').toLowerCase() },
         };
     });
 }

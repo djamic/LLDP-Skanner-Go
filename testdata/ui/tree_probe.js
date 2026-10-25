@@ -353,6 +353,20 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   check('synthetic: a managed device\'s tooltip has what its controller says',
     T.treeSpanning({ nodes: [managedNode], links: [] }).infos.get(managedNode.id).title
       .includes('UniFi Network controller 10.0.0.2 · U6 LR · OFFLINE · firmware 6.7.57\n2 clients connected'));
+  // A client its controller tells the details of (its older API): its SSID
+  // and signal on its row, named by its DHCP host name, the rest in its
+  // tooltip; nothing unescaped
+  const detailNode = { id: '70:a7:41:00:00:03', label: 'ap3', group: 'access_point', managed: { name: 'AP 3', clients: [
+    { mac: 'de:ad:00:00:00:05', name: 'de:ad:00:00:00:05', hostname: 'phone<x>', ip: '10.0.1.9', kind: 'wireless', ssid: 'TUIT', band: '5 GHz', channel: 36,
+      standard: 'Wi-Fi 6 (ax)', signal: -61, satisfaction: 97, rxRate: 866, txRate: 1200, rxBytes: 1234, txBytes: 5678000000, uptime: 3700, vendor: 'Intel', vlan: 20 }] } };
+  const dc = clientRows(T.treeProject(T.treeSpanning({ nodes: [detailNode], links: [] }), null, {}));
+  const details = T.treeClientDetails(detailNode.managed.clients[0]);
+  check('synthetic: a client\'s SSID and signal on its row, its details in its tooltip',
+    dc.length === 1 && dc[0].plain === '📶 phone<x> 10.0.1.9 de:ad:00:00:00:05 TUIT · -61 dBm' && !dc[0].text.includes('<x>') &&
+    dc[0].text.includes('connected 1h 1m') && dc[0].q.includes('tuit') &&
+    JSON.stringify(details) === JSON.stringify(['TUIT · 5 GHz · channel 36 · Wi-Fi 6 (ax)', 'signal -61 dBm · experience 97%',
+      'rate rx 866 / tx 1200 Mbit/s · traffic rx 1.2 KB / tx 5.7 GB', 'connected 1h 1m · host name phone<x>', 'Intel · VLAN 20']) &&
+    T.treeClientDetails({ mac: 'x', channel: 0, signal: 0 }).length === 0, [dc, details]);
   check('synthetic: BFS: a router behind a switch hangs below it', at(R2).parent === S2 && at(R2).depth === 3);
   check('synthetic: child order: routers/switches, hubs/hypervisors, the rest, natural by name',
     JSON.stringify(kids(at(S1).json).map(c => row(c).name)) === JSON.stringify(['dist-2', 'dist-10']) &&
