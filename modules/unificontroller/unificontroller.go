@@ -5,8 +5,9 @@
 // the key as its password and no user name), it detects the application:
 // its version, its sites, every device it manages (name, model, MAC, IP,
 // state, firmware, uplink device) and how many clients are on each device.
-// It recognizes the application with no key (Probe) by its status page or
-// by the way its API refuses a request with no key.
+// It recognizes the application with no key (Probe) by its status page, by
+// the way its API refuses a request with no key, or by its UniFi OS
+// console.
 package unificontroller
 
 import (
@@ -54,8 +55,9 @@ func (Module) Run(ctx context.Context, req modules.Request) (modules.Result, err
 }
 
 // Probe tells, with no key, whether a UniFi Network application answers at
-// ip: its status page, or its API refusing a request with no key in its
-// own error JSON. The checks run at once, for probeTimeout at most.
+// ip: its status page, its API refusing a request with no key in its own
+// error JSON, or a UniFi OS console's page and gateway refusal
+// (unifiOSConsole). The checks run at once, for probeTimeout at most.
 func (Module) Probe(ctx context.Context, ip string) bool {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
@@ -66,7 +68,8 @@ func (Module) Probe(ctx context.Context, ip string) bool {
 		checks = append(checks, func() bool { return isStatusPage(ctx, hc, u) })
 	}
 	for _, base := range apiBases(ip) {
-		checks = append(checks, func() bool { return refusesWithoutKey(ctx, hc, base) })
+		checks = append(checks, func() bool { return refusesWithoutKey(ctx, hc, base) },
+			func() bool { return unifiOSConsole(ctx, hc, base) })
 	}
 	found := make(chan bool, len(checks))
 	for _, check := range checks {

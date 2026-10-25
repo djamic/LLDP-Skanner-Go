@@ -562,6 +562,31 @@ func TestProbe(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, `{"meta":{"rc":"error","msg":"api.err.LoginRequired"},"data":[]}`)
 	})
+	// A UniFi OS console (172.15.1.2): its page titled "UniFi OS", its
+	// gateway refusing the API with no key, no status page with no login
+	consoleRefusal := `{"error":{"code":401,"message":"Unauthorized"}}`
+	console := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/":
+			fmt.Fprint(w, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>UniFi OS</title></head><body></body></html>`)
+		case strings.HasPrefix(r.URL.Path, "/proxy/network/"):
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, consoleRefusal)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	// The same refusal from a web server that is no UniFi OS console
+	sameRefusal := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			fmt.Fprint(w, `<html><head><title>Router admin</title></head></html>`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, consoleRefusal)
+	})
 	controller := newFake()
 
 	for _, tc := range []struct {
@@ -572,6 +597,8 @@ func TestProbe(t *testing.T) {
 		{"integration API refusing no key", controller.handler(), true},
 		{"status page", statusPage, true},
 		{"older API refusing no key", classicRefusal, true},
+		{"UniFi OS console", console, true},
+		{"the console's refusal from another web server", sameRefusal, false},
 		{"plain web server", plain, false},
 		{"401 web page everywhere", htmlEverywhere, false},
 		{"404 everywhere", http.NotFoundHandler(), false},

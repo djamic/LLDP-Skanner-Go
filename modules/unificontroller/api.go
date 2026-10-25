@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -23,8 +24,8 @@ import (
 // its /proxy/network, a self-hosted Network Application 9.x on port 8443.
 var apiBases = func(ip string) []string {
 	return []string{
-		"https://" + net.JoinHostPort(ip, "443") + "/proxy/network/integration/v1",
-		"https://" + net.JoinHostPort(ip, "8443") + "/proxy/network/integration/v1",
+		"https://" + net.JoinHostPort(ip, "443") + integrationPath,
+		"https://" + net.JoinHostPort(ip, "8443") + integrationPath,
 	}
 }
 
@@ -219,6 +220,56 @@ func refusesWithoutKey(ctx context.Context, hc *http.Client, base string) bool {
 	return (refusal.StatusCode == code && refusal.StatusName != "") ||
 		strings.HasPrefix(refusal.Code, "api.") ||
 		strings.HasPrefix(refusal.Meta.Msg, "api.err.")
+}
+
+// integrationPath is where a UniFi OS console serves the application's
+// Integration API.
+const integrationPath = "/proxy/network/integration/v1"
+
+// unifiOSConsole tells whether base is the application behind a UniFi OS
+// console (UDM, Cloud Key, UniFi OS Server): the console's own page, titled
+// "UniFi OS", and its gateway refusing the API with no key as
+// {"error":{"code":401,"message":"Unauthorized"}} (172.15.1.2 does, and
+// has no status page that answers with no login). Both must hold: another
+// web server may refuse in the same words.
+func unifiOSConsole(ctx context.Context, hc *http.Client, base string) bool {
+	root, ok := strings.CutSuffix(base, integrationPath)
+	if !ok {
+		return false
+	}
+	var refusal struct {
+		Error struct {
+			Code int `json:"code"`
+		} `json:"error"`
+	}
+	code, ok := probeGet(ctx, hc, base+"/info", &refusal)
+	if !ok || (code != http.StatusUnauthorized && code != http.StatusForbidden) || refusal.Error.Code != code {
+		return false
+	}
+	return probeTitle(ctx, hc, root+"/") == "UniFi OS"
+}
+
+var htmlTitle = regexp.MustCompile(`(?is)<title>\s*([^<]*?)\s*</title>`)
+
+// probeTitle is the title of the HTML page at u, "" when there is none.
+func probeTitle(ctx context.Context, hc *http.Client, u string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	if m := htmlTitle.FindSubmatch(data); m != nil {
+		return string(m[1])
+	}
+	return ""
 }
 
 // probeGet asks u with no key and reads its answer, a JSON object, into
