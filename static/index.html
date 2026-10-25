@@ -250,6 +250,10 @@
                     <div class="info-label">Status</div>
                     <div class="info-value" id="infoStatus" style="display:none">-</div>
                 </div>
+                <div class="info-section full-width" id="infoModules" hidden>
+                    <div class="info-label">Modules</div>
+                    <div id="infoModulesList"></div>
+                </div>
                 <div class="info-section full-width">
                     <div class="info-label">Connected Devices</div>
                     <div class="info-list" id="infoNeighbors"></div>
@@ -408,6 +412,20 @@
             <div class="modal-footer">
                 <button onclick="lockCredentials()" class="btn-secondary" id="credLockBtn" hidden>🔒 Lock</button>
                 <button onclick="closeCredentials()" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Module Result Modal (modules.js) -->
+    <div id="moduleModal" class="modal" style="display: none;">
+        <div class="modal-content credentials-content">
+            <div class="modal-header">
+                <h2 id="moduleModalTitle">🧩 Module</h2>
+                <button onclick="closeModuleResult()" class="close-btn">✕</button>
+            </div>
+            <div class="modal-body" id="moduleModalBody"></div>
+            <div class="modal-footer">
+                <button onclick="closeModuleResult()" class="btn-secondary">Close</button>
             </div>
         </div>
     </div>
@@ -597,6 +615,7 @@
     </div>
 
     <script src="credentials.js"></script>
+    <script src="modules.js"></script>
     <script src="app.js"></script>
     <script src="tree.js"></script>
 </body>

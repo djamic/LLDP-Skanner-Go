@@ -222,6 +222,7 @@ func StartWebServer(port string) {
 	// (authMiddleware) but the login page and call
 	registerAuthRoutes()
 	registerCredentialRoutes()
+	registerModuleRoutes()
 
 	addr := ":" + port
 	fmt.Printf("\n🌐 Web server starting on http://localhost%s\n", addr)

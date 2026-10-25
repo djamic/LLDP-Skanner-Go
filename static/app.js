@@ -1215,6 +1215,9 @@ function showInfoPanel(node) {
         }).join('');
     }
 
+    // The device modules of this device (modules.js), from its first IP
+    if (typeof modulesShowFor === 'function') modulesShowFor(ips[0] || '');
+
     // Show panel
     panel.style.display = 'block';
 

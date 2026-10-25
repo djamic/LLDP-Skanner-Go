@@ -115,6 +115,7 @@ async function credLoad() {
     credState.entries = r.v.entries || [];
     credFillSelect(credEl('credProtocol'), credState.protocols);
     credFillSelect(credEl('credTypeValue'), credState.types);
+    if (!credEl('credId').value) credTypeChanged();
     credRender();
 }
 
@@ -184,6 +185,19 @@ function credRender() {
     credEl('credRows').replaceChildren(...rows);
 }
 
+// credTypeProtocol is the protocol a device type's logins usually are for:
+// picking the type picks it (the first protocol, vSphere, is no switch's).
+const credTypeProtocol = {
+    'esxi': 'vsphere', 'bmc': 'redfish', 'ilo': 'redfish', 'idrac': 'redfish',
+    'fortigate': 'https', 'unifi-controller': 'https',
+};
+
+function credTypeChanged() {
+    const type = credEl('credTypeValue').value;
+    const protocol = credTypeProtocol[type] || 'ssh';
+    if ([...credEl('credProtocol').options].some(o => o.value === protocol)) credEl('credProtocol').value = protocol;
+}
+
 // credKindChanged shows the device type list or the IP field.
 function credKindChanged() {
     const kind = credEl('credKind').value;
@@ -210,6 +224,7 @@ function credResetForm() {
     credEl('credCancel').hidden = true;
     credFormError('');
     credKindChanged();
+    credTypeChanged();
 }
 
 function credEdit(e) {
@@ -276,6 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     credEl('credUnlockForm').addEventListener('submit', credUnlock);
     credEl('credForm').addEventListener('submit', credSubmit);
     credEl('credKind').addEventListener('change', credKindChanged);
+    credEl('credTypeValue').addEventListener('change', credTypeChanged);
     credEl('credCancel').addEventListener('click', credResetForm);
     credKindChanged();
 });

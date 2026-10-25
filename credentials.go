@@ -91,6 +91,7 @@ var credentialTypes = []credentialOption{
 	{"idrac", "Dell iDRAC"},
 	{"router", "Gateways and routers"},
 	{"fortigate", "FortiGate"},
+	{"unifi-controller", "UniFi Network controllers"},
 	{"linux", "Linux servers"},
 	{"any", "Any device"},
 }
