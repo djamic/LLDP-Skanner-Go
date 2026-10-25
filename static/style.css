@@ -1395,6 +1395,18 @@ button:active {
     margin-right: 3px;
 }
 
+/* a link the tree leaves out ('↔'): muted, a click goes to the device */
+.tv-xref {
+    font-style: italic;
+    opacity: 0.8;
+}
+
+.tv-xmark {
+    color: #FFB74D;
+    font-style: normal;
+    font-weight: 700;
+}
+
 /* the device the link comes from, in front of its port */
 .tv-from {
     color: #8a9bae;

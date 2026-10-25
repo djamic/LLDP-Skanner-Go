@@ -188,10 +188,18 @@ function row(json) {
 // from, then the two ports.
 const fullBadge = (r) => (r.from ? r.from + ' ' : '') + r.port;
 
+// kids is a row's device rows: its children without the '↔' rows of the
+// links the tree leaves out.
+const kids = (n) => (n.children || []).filter(c => !(c.data && c.data.xref !== undefined));
+
 // outline is the tree as text, one row per line, indented by depth.
 function outline(json) {
   const lines = [];
   const walk = (n, depth) => {
+    if (n.data && n.data.xref !== undefined) {
+      lines.push('  '.repeat(depth) + decodeEntities(n.text.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim() + `  #>${n.data.xref}`);
+      return;
+    }
     const r = row(n);
     lines.push('  '.repeat(depth) + (r.port ? `[${r.from ? r.from + ' ' : ''}${r.port}] ` : '') + `${r.icon} ${r.name}` + (r.address ? ` · ${r.address}` : '') +
       (r.count ? ` (${r.count})` : '') + (r.unreachable ? ' !unreachable' : '') +
@@ -206,11 +214,27 @@ function outline(json) {
 function rows(json) {
   const out = [];
   const walk = (n, parent, depth, folder) => {
+    if (n.data && n.data.xref !== undefined) return; // a '↔' row: see xrefRows
     const r = row(n);
     out.push({ json: n, row: r, parent, depth, folder });
     (n.children || []).forEach(c => walk(c, r.folder ? null : r.id, depth + 1, folder || r.folder));
   };
   json.forEach(n => walk(n, null, 0, false));
+  return out;
+}
+
+// xrefRows lists the '↔' rows: each with the device row it hangs under,
+// the device it points to, and its text read back.
+function xrefRows(json) {
+  const out = [];
+  const walk = (n, owner) => {
+    if (n.data && n.data.xref !== undefined) {
+      out.push({ owner, target: n.data.xref, id: n.id, text: n.text, plain: decodeEntities(n.text.replace(/<[^>]*>/g, '')) });
+      return;
+    }
+    (n.children || []).forEach(c => walk(c, n.data && n.data.node));
+  };
+  json.forEach(n => walk(n, null));
   return out;
 }
 
@@ -232,6 +256,12 @@ function safeTree(json) {
     const stray = strayMarkup(n.text);
     if (stray !== null) problems.push(`markup in ${n.id}: ${stray}`);
     if (!/^tv[df]-[A-Za-z0-9_-]+$/.test(n.id)) problems.push(`id ${n.id}`);
+    (n.children || []).filter(c => c.data && c.data.xref !== undefined).forEach(c => {
+      const strayX = strayMarkup(c.text);
+      if (strayX !== null) problems.push(`markup in ${c.id}: ${strayX}`);
+      if (!/^tvx-[A-Za-z0-9_-]+$/.test(c.id)) problems.push(`id ${c.id}`);
+      for (const key of ['li_attr', 'a_attr', 'icon', 'type']) if (key in c) problems.push(`${key} on ${c.id}`);
+    });
     for (const key of ['li_attr', 'a_attr', 'icon', 'type']) if (key in n) problems.push(`${key} on ${n.id}`);
   });
   return problems;
@@ -255,12 +285,31 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   check('synthetic: every device appears once', ids.length === data.nodes.length && new Set(ids).size === ids.length, ids);
   const at = (id) => rs.find(r => r.row.id === id);
   check('synthetic: BFS: a loop link does not move a device deeper (dist-10 hangs from core-sw)', at(S3).parent === S1 && at(S2).parent === S1);
+  // The loop link the tree leaves out is a '↔' row under both of its ends,
+  // out of that device's port, with the device at the other end.
+  const loopX = xrefRows(all);
+  const s2x = loopX.find(x => x.owner === S2 && x.target === S3), s3x = loopX.find(x => x.owner === S3 && x.target === S2);
+  check('synthetic: a link the tree leaves out is a ↔ row under both ends, its own port first',
+    loopX.length === 2 && !!s2x && !!s3x &&
+    s2x.plain.replace(/\s+/g, ' ').trim() === '↔ 1.2 GE1/0/47 → GE1/0/47 🔀 dist-10 10.0.1.10' &&
+    s3x.plain.replace(/\s+/g, ' ').trim() === '↔ 1.10 GE1/0/47 → GE1/0/47 🔀 dist-2 10.0.1.2' &&
+    s2x.id === T.treeXrefId(S2, S3) && /^tvx-/.test(s2x.id), loopX);
+  const noDist10 = T.treeProject(sp, (node) => String(node.id) !== S3, {});
+  check('synthetic: a ↔ row to a device the filter hides is left out', xrefRows(noDist10).length === 0, xrefRows(noDist10));
+  const hostileX = T.treeProject(T.treeSpanning({ nodes: [
+    { id: 'a', label: '<b>a</b>\n10.0.0.1', group: 'switch' }, { id: 'b', label: '"><img src=x onerror=alert(5)>\n10.0.0.2', group: 'switch' },
+    { id: 'c', label: 'c\n10.0.0.3', group: 'switch' }], links: [
+    { source: 'a', target: 'b', label: 'p1|q1', sourceLabel: 'p1', targetLabel: 'q1' },
+    { source: 'a', target: 'c', label: 'p2|r1', sourceLabel: 'p2', targetLabel: 'r1' },
+    { source: 'b', target: 'c', label: '<i>q2</i>|"r2&', sourceLabel: '<i>q2</i>', targetLabel: '"r2&' }] }), null, {});
+  check('synthetic: a ↔ row holds no markup from the server', xrefRows(hostileX).length === 2 && safeTree(hostileX).length === 0 &&
+    !xrefRows(hostileX).some(x => x.text.includes('<img') || x.text.includes('<i>')), [safeTree(hostileX), xrefRows(hostileX).map(x => x.text)]);
   check('synthetic: BFS: a router behind a switch hangs below it', at(R2).parent === S2 && at(R2).depth === 3);
   check('synthetic: child order: routers/switches, hubs/hypervisors, the rest, natural by name',
-    JSON.stringify(at(S1).json.children.map(c => row(c).name)) === JSON.stringify(['dist-2', 'dist-10']) &&
-    JSON.stringify(at(S2).json.children.map(c => row(c).id)) === JSON.stringify([R2, H]) &&
-    JSON.stringify(at(S3).json.children.map(c => row(c).id)) === JSON.stringify([Y, X2, X1, AP]),
-    [at(S2).json.children.map(c => row(c).id), at(S3).json.children.map(c => row(c).id)]);
+    JSON.stringify(kids(at(S1).json).map(c => row(c).name)) === JSON.stringify(['dist-2', 'dist-10']) &&
+    JSON.stringify(kids(at(S2).json).map(c => row(c).id)) === JSON.stringify([R2, H]) &&
+    JSON.stringify(kids(at(S3).json).map(c => row(c).id)) === JSON.stringify([Y, X2, X1, AP]),
+    [kids(at(S2).json).map(c => row(c).id), kids(at(S3).json).map(c => row(c).id)]);
   check('synthetic: ports: both ends of the link to the parent, the parent\'s first on either side of the link, speed and traffic dropped, markers kept',
     at(S1).row.port === 'Te1/0/1 → GE1/0/1' && at(S3).row.port === 'GE1/0/2 → GE1/0/48' && at(R2).row.port === 'GE1/0/46 → port1' &&
     at(H).row.port === 'GE1/0/5 → ?' && at(Y).row.port === 'ge1/0/7 → ?' && at(AP).row.port === 'GE1/0/12 [MAC-REF] → eth0' &&
@@ -279,7 +328,7 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
     at(H).row.count === '2' && at(E1).row.count === '' && row(all[1]).count === '3',
     rs.map(r => [r.row.id, r.row.count]));
   check('synthetic: the folder holds what the core does not reach, each part as its own tree',
-    JSON.stringify(all[1].children.map(c => row(c).id)) === JSON.stringify([S9, VM9]) && at(E9).parent === S9,
+    JSON.stringify(kids(all[1]).map(c => row(c).id)) === JSON.stringify([S9, VM9]) && at(E9).parent === S9,
     outline([all[1]]));
   check('synthetic: icon and colour per group as in the graph, red when unreachable',
     rs.every(r => r.row.icon === groupIcons[data.nodes.find(n => n.id === r.row.id).group]) &&
@@ -550,7 +599,7 @@ function hops(data, root) {
     devices.filter(r => r.folder).length === data.nodes.length - depth.size && devices.filter(r => r.folder).every(r => !depth.has(r.row.id)));
   const countOk = rs.every(r => {
     let below = 0;
-    const walk = (n) => (n.children || []).forEach(c => { below++; walk(c); });
+    const walk = (n) => kids(n).forEach(c => { below++; walk(c); });
     walk(r.json);
     return r.row.count === (below ? String(below) : '');
   });
@@ -562,9 +611,17 @@ function hops(data, root) {
       const infos = list.filter(n => n.id !== treeConst('treeFolderId')).map(n => sp.infos.get(row(n).id));
       return infos.every((k, i) => i === 0 || T.treeCompareInfo(infos[i - 1], k) < 0);
     };
-    return sorted(tree) && rows(tree).every(r => sorted(r.json.children || []));
+    return sorted(tree) && rows(tree).every(r => sorted(kids(r.json)));
   };
   check('fixture: siblings are in child order', inOrder(json));
+  // every '↔' row is a link the tree leaves out, shown under both ends
+  const fx = xrefRows(json);
+  const fxKey = new Set(fx.map(x => `${x.owner}>${x.target}`));
+  const fxBad = fx.filter(x => sp.parent.get(x.owner) === x.target || sp.parent.get(x.target) === x.owner || !fxKey.has(`${x.target}>${x.owner}`));
+  let extraTotal = 0;
+  sp.extra.forEach(list => { extraTotal += list.length; });
+  check('fixture: each link the tree leaves out is a ↔ row under both of its ends', fx.length === extraTotal && fx.length > 0 && fxBad.length === 0,
+    [fx.length, extraTotal, fxBad.slice(0, 3)]);
   const problems = safeTree(json);
   check('fixture: no row holds markup from the server', problems.length === 0, problems.slice(0, 3));
 
@@ -1041,6 +1098,21 @@ async function viewChecks() {
   fire(tree, 'changed.jstree', null, { action: 'select_node', selected: [], node: {} }); // jsTree's own, no event
   check('view: opened rows and the selection a user makes are remembered',
     sameSet(run('[...treeState.open]'), [r1Id, s1Id, s3Id, yId]) && run('treeState.selected') === vm1Id, run('[...treeState.open]'));
+  // A click on the '↔' row of the loop link under dist-2 goes to dist-10.
+  const s2Id = T.treeSafeId(S2);
+  tree.user.toggle(s2Id);
+  tree.user.click(T.treeXrefId(S2, S3));
+  runTimers();
+  check('view: a click on a ↔ row selects the device at the other end of the link and opens its info, and opens or closes no row',
+    run('treeState.selected') === s3Id && JSON.stringify(tree.model.selected()) === JSON.stringify([s3Id]) &&
+    sameSet(run('[...treeState.open]'), [r1Id, s1Id, s2Id, s3Id, yId]) &&
+    byId('infoPanel').style.display === 'block' && byId('infoPanelTitle').textContent === 'dist-10',
+    [run('treeState.selected'), run('[...treeState.open]'), byId('infoPanelTitle').textContent]);
+  run('closeInfoPanel()');
+  tree.user.toggle(s2Id);
+  tree.user.click(vm1Id);
+  runTimers();
+  run('closeInfoPanel()');
 
   const vmBox = P.boxes.find(c => c.dataset.group === 'vm');
   const hypBox = P.boxes.find(c => c.dataset.group === 'hypervisor');

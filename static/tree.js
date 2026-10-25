@@ -352,7 +352,20 @@ function treeSpanning(data) {
     }
     orphans.sort((a, b) => treeCompareInfo(infos.get(a), infos.get(b)));
 
-    const sp = { infos, root, orphans, parent, depth, children, link, attachDevice, attachLink, coreFromServer: core !== null };
+    // extra: the links the spanning tree leaves out (the FortiGate's second
+    // and third port, a device two switches see). Each end lists them with
+    // its own port first, so every row can show where else it is cabled.
+    const extra = new Map();
+    adjacency.forEach((edges, a) => {
+        edges.forEach((rec, b) => {
+            if (parent.get(a) === b || parent.get(b) === a) return;
+            if (!extra.has(a)) extra.set(a, []);
+            extra.get(a).push({ other: b, up: rec.sides.get(a) || treeNoSide, down: rec.sides.get(b) || treeNoSide, kind: rec.kind });
+        });
+    });
+    extra.forEach(list => list.sort((x, y) => treeCompareInfo(infos.get(x.other), infos.get(y.other))));
+
+    const sp = { infos, root, orphans, parent, depth, children, link, attachDevice, attachLink, extra, coreFromServer: core !== null };
     infos.forEach(info => {
         info.title = treeTitle(sp, info);
         info.q = treeSearchText(sp, info);
@@ -462,6 +475,31 @@ function treeRowHTML(info, color, badge, count, title) {
         `<span class="tv-dot" style="background:${dot}"></span>${parts.join(' ')}</span>`;
 }
 
+// treeXrefId is the jsTree id of the row of a link from device id to
+// device other that the tree leaves out.
+function treeXrefId(id, other) {
+    return 'tvx-' + treeSafeId(`${id}>${other}`).slice(4);
+}
+
+// treeXrefHTML is the text of such a row: '↔', the link out of this device
+// ('0.1 LAN → TGE1/0/52'), then the device at the other end. Its tooltip
+// says why the device is not below: it hangs under its other parent. Only
+// escaped strings and constants go in.
+function treeXrefHTML(info, other, x) {
+    const port = (side) => (side.port
+        ? treeEscapeHTML(side.port) + side.marks.map(m => ` <span class="tv-mark">${treeEscapeHTML(m)}</span>`).join('')
+        : '<span class="tv-unknown">?</span>');
+    const lines = [`also cabled: ${info.label} ${x.up.port || '?'} → ${other.label} ${x.down.port || '?'}`];
+    if (x.kind) lines.push(`${x.kind} link`);
+    lines.push('the device is shown under its other link; click to go to it');
+    const icon = treeOwn(treeGroupIcons, other.group) || treeGroupIcons.unknown;
+    return `<span class="tv-row tv-xref" title="${treeEscapeHTML(lines.join('\n'))}">` +
+        `<span class="tv-xmark">↔</span> ` +
+        `<span class="tv-port"><span class="tv-from">${treeEscapeHTML(info.short)}</span> ${port(x.up)} → ${port(x.down)}</span> ` +
+        `<span class="tv-icon">${icon}</span> <span class="tv-name">${treeEscapeHTML(other.name)}</span>` +
+        (other.address ? ` <span class="tv-addr">${treeEscapeHTML(other.address)}</span>` : '') + `</span>`;
+}
+
 // treeOwn is table[key] when the table has that key itself (a group named
 // 'constructor' or '__proto__' finds nothing).
 function treeOwn(table, key) {
@@ -516,10 +554,24 @@ function treeProject(sp, shown, options) {
                 title += `\nplugged into ${sp.infos.get(at).label}${port ? ' ' + port : ''}`;
             }
         }
+        // The device's other links, after its children: one '↔' row per
+        // link the tree leaves out, to a device the filter shows. A click
+        // jumps to that device's own row. They are no devices: no count.
+        const xrefs = [];
+        for (const x of (sp.extra && sp.extra.get(id)) || []) {
+            const other = sp.infos.get(x.other);
+            if (!other || !isShown(other.node)) continue;
+            xrefs.push({
+                id: treeXrefId(id, x.other),
+                text: treeXrefHTML(info, other, x),
+                children: [],
+                data: { xref: x.other, q: '' },
+            });
+        }
         const json = {
             id: treeSafeId(id),
             text: treeRowHTML(info, treeOwn(colors, info.group), badge, count, title),
-            children: rows.map(r => r.json),
+            children: rows.map(r => r.json).concat(xrefs),
             data: { node: id, q: info.q },
         };
         return [{ info, json, count }];
@@ -764,9 +816,10 @@ function treeShowSearchResult(text) {
     el.title = text;
 }
 
-// treeRowCount is the number of devices in a JSON row (the folder is none).
+// treeRowCount is the number of devices in a JSON row (the folder and the
+// '↔' rows of extra links are none).
 function treeRowCount(row) {
-    let count = row.id === treeFolderId ? 0 : 1;
+    let count = row.id === treeFolderId || (row.data && row.data.xref !== undefined) ? 0 : 1;
     (row.children || []).forEach(child => { count += treeRowCount(child); });
     return count;
 }
@@ -875,6 +928,17 @@ function treeGraphNode(node) {
 function treeOnActivate(node) {
     const tree = treeState.instance;
     if (!tree || !node) return;
+    // a '↔' row: go to the device at the other end of the link
+    if (node.data && node.data.xref !== undefined) {
+        const target = node.data.xref;
+        clearTimeout(treeState.panelTimer);
+        if (treeReveal(target)) {
+            const graphNode = treeGraphNode(tree.get_node(treeSafeId(target)));
+            if (graphNode) treeState.panelTimer = setTimeout(() => showInfoPanel(graphNode), 250);
+        }
+        treeUpdateToolbar();
+        return;
+    }
     tree.toggle_node(node);
     const graphNode = treeGraphNode(node);
     clearTimeout(treeState.panelTimer);
