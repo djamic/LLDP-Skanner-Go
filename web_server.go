@@ -266,6 +266,7 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 	// The devices the controllers manage and their Wi-Fi clients
 	// (module_inventory.go)
 	addManaged(&data)
+	addGatewayWLANHosts(&data)
 	addManagedClients(&data)
 
 	// E.1/E.2: Enrich graph data with health score and anomaly info

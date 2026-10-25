@@ -284,6 +284,10 @@ type GraphLink struct {
 	Label       string `json:"label,omitempty"`
 	SourceLabel string `json:"sourceLabel,omitempty"`
 	TargetLabel string `json:"targetLabel,omitempty"`
+	// Kind is "wlan" for the link of a Wi-Fi client (module_inventory.go):
+	// the canvas leaves its label at the access point out, where the
+	// labels of many clients meet
+	Kind string `json:"kind,omitempty"`
 	TrafficUp   uint64 `json:"trafficUp,omitempty"`   // Upload speed in bps
 	TrafficDown uint64 `json:"trafficDown,omitempty"` // Download speed in bps
 	Unreachable bool   `json:"unreachable"` // Phase 8: link endpoint is down

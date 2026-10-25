@@ -535,7 +535,8 @@ function treeClientRows(id, info) {
         const named = !!c.name && String(c.name).toLowerCase() !== String(c.mac).toLowerCase();
         const name = named ? c.name : c.mac;
         const icon = c.kind === 'wired' ? '🔌' : '📶';
-        const title = [name, c.ip, c.mac, `${c.kind || 'client'} client of ${info.name}`].filter(Boolean).join('\n');
+        const kind = { wired: 'wired client', wireless: 'Wi-Fi client', arp: 'WLAN host in the ARP table' }[c.kind] || 'client';
+        const title = [name, c.ip, c.mac, `${kind} of ${info.name}`].filter(Boolean).join('\n');
         return {
             id: treeClientId(id, String(c.mac)),
             text: `<span class="tv-row tv-client" title="${treeEscapeHTML(title)}"><span class="tv-icon">${icon}</span> ` +

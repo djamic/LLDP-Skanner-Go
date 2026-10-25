@@ -26,7 +26,7 @@ const groupColors = {
     'hub': '#FF9800',
     'endpoint': '#8BC34A',
     'wifi_random': '#00BCD4',
-    'wifi_client': '#80DEEA', // a UniFi access point's client (module_inventory.go)
+    'wifi_client': '#80DEEA', // a WLAN client: of a UniFi access point, or in a gateway's ARP table (module_inventory.go)
     'vm': '#9C27B0',
     'hypervisor': '#26C6DA',  // teal-cyan
     'bmc':        '#FF6F00',  // amber — server management
@@ -341,6 +341,10 @@ function renderGraph() {
         const label = (d.label || d.sourceLabel || '');
         return label.includes('MAC-REF');
     };
+    // A WLAN client's link (kind 'wlan', module_inventory.go): thin, in the
+    // clients' colour, with no label at the access point or gateway, where
+    // the links of all its clients meet
+    const isWLAN = d => d.kind === 'wlan';
 
     const linkUpdate = linkEnter.merge(link)
         .attr('class', d => {
@@ -350,6 +354,7 @@ function renderGraph() {
         })
         .attr('stroke', d => {
             if (d.unreachable) return '#ff4444';
+            if (isWLAN(d)) return '#80DEEA';
             if (isMacRef(d)) return '#FF9800';  // orange for MAC-REF
             return '#3a5a7c';
         })
@@ -363,7 +368,7 @@ function renderGraph() {
             if (isMacRef(d)) return 0.6;
             return 0.7;
         })
-        .attr('stroke-width', d => isMacRef(d) ? 1.5 : 2);
+        .attr('stroke-width', d => isWLAN(d) ? 1 : isMacRef(d) ? 1.5 : 2);
 
     // UPDATE SOURCE LABELS
     const sourceLinkLabel = g.selectAll('text.source-label')
@@ -380,7 +385,7 @@ function renderGraph() {
 
     // Text on enter and update: the backend rewrites traffic labels every 30 s
     const sourceLabelUpdate = sourceLabelEnter.merge(sourceLinkLabel)
-        .text(d => d.sourceLabel || '');
+        .text(d => (isWLAN(d) ? '' : d.sourceLabel || ''));
 
     // UPDATE TARGET LABELS
     const targetLinkLabel = g.selectAll('text.target-label')
@@ -1160,7 +1165,7 @@ function showInfoPanel(node) {
     // randomised-MAC group is 'Random MAC', as in the filter bar and the report)
     const typeNames = {
         'switch': '🔀 Switch', 'router': '🌐 Router', 'hub': '🔌 Hub',
-        'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC', 'wifi_client': '📶 Wi-Fi client',
+        'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC', 'wifi_client': '📶 WLAN client',
         'vm': '🖥️ VM', 'hypervisor': '🏗️ Hypervisor', 'bmc': '🔧 BMC',
         'server': '🖲️ Server', 'camera': '📹 Camera',
         'access_point': '📡 Wi-Fi AP', 'printer': '🖨️ Printer',
@@ -2122,7 +2127,7 @@ function downloadAuditReport() {
         { id: 'phone', label: '📞 Phone', checked: false },
         { id: 'iot', label: '🌡️ IoT', checked: false },
         { id: 'wifi_random', label: '🎲 Random MAC', checked: false },
-        { id: 'wifi_client', label: '📶 Wi-Fi client', checked: false },
+        { id: 'wifi_client', label: '📶 WLAN client', checked: false },
         { id: 'printer', label: '🖨️ Printer', checked: false },
         { id: 'server', label: '🖲️ Server', checked: false },
         { id: 'unknown', label: '❓ Unknown', checked: false },

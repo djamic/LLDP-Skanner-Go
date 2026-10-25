@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -318,9 +319,16 @@ func TestModuleInventory(t *testing.T) {
 
 // TestManagedClientsInGraph checks the Wi-Fi clients of a managed access
 // point in the graph data: a node (wifi_client, its name and IP) for a
-// client that is no node yet, a link from the access point to every
-// wireless client, none twice, and nothing for a wired client.
+// client that is no node yet, named by its DNS name when the controller
+// has no name for it (but not by a name that only spells its IP), a "WLAN"
+// link of kind wlan from the access point to every wireless client, none
+// twice, and nothing for a wired client.
 func TestManagedClientsInGraph(t *testing.T) {
+	resetState(t)
+	dnsCacheMutex.Lock()
+	dnsCache["10.9.71.10"] = dnsEntry{name: "Elliot"}
+	dnsCache["10.9.71.11"] = dnsEntry{name: "10-9-71-11"}
+	dnsCacheMutex.Unlock()
 	ap := "70:a7:41:00:00:01"
 	data := GraphData{
 		Nodes: []GraphNode{{ID: "4c:ae:a3:00:00:01", Group: "switch"}, {ID: ap, Group: "access_point", Managed: &ManagedView{Name: "A 1", Clients: []modules.ManagedClient{
@@ -329,6 +337,8 @@ func TestManagedClientsInGraph(t *testing.T) {
 			{MAC: "de:ad:00:00:00:03", Name: "phone", Kind: "wireless"},
 			{MAC: "de:ad:00:00:00:04", Name: "printer", Kind: "wired"},
 			{MAC: ap, Kind: "wireless"},
+			{MAC: "de:ad:00:00:00:05", Name: "de:ad:00:00:00:05", IP: "10.9.71.10", Kind: "wireless"},
+			{MAC: "de:ad:00:00:00:06", IP: "10.9.71.11", Kind: "wireless"},
 		}}}, {ID: "de:ad:00:00:00:03", Group: "wifi_random"}},
 		Links: []GraphLink{{Source: "4c:ae:a3:00:00:01", Target: ap}, {Source: "de:ad:00:00:00:03", Target: ap, Label: "x"}},
 	}
@@ -343,6 +353,12 @@ func TestManagedClientsInGraph(t *testing.T) {
 	if n := nodes["de:ad:00:00:00:02"]; n.Group != "wifi_client" || n.SysName != "" || n.Label != "de:ad:00:00:00:02" {
 		t.Errorf("a client named by its MAC %+v", n)
 	}
+	if n := nodes["de:ad:00:00:00:05"]; n.SysName != "Elliot\n10.9.71.10" || n.Hostname != "Elliot" || n.Label != "Elliot\n10.9.71.10\nde:ad:00:00:00:05" {
+		t.Errorf("a client named by its DNS name %+v", n)
+	}
+	if n := nodes["de:ad:00:00:00:06"]; n.SysName != "10.9.71.11" || n.Hostname != "" {
+		t.Errorf("a client whose DNS name spells its IP %+v", n)
+	}
 	if n := nodes["de:ad:00:00:00:03"]; n.Group != "wifi_random" {
 		t.Errorf("a client that was a node already is changed: %+v", n)
 	}
@@ -351,12 +367,93 @@ func TestManagedClientsInGraph(t *testing.T) {
 	}
 	var links []string
 	for _, l := range data.Links[2:] {
-		links = append(links, l.Source+">"+l.Target+" "+l.Label)
+		links = append(links, l.Source+">"+l.Target+" "+l.Label+" "+l.SourceLabel+" "+l.Kind)
 	}
-	if want := []string{ap + ">de:ad:00:00:00:01 Wi-Fi|wlan", ap + ">de:ad:00:00:00:02 Wi-Fi|wlan"}; !slices.Equal(links, want) {
+	want := []string{ap + ">de:ad:00:00:00:01 WLAN|wlan WLAN wlan", ap + ">de:ad:00:00:00:02 WLAN|wlan WLAN wlan",
+		ap + ">de:ad:00:00:00:05 WLAN|wlan WLAN wlan", ap + ">de:ad:00:00:00:06 WLAN|wlan WLAN wlan"}
+	if !slices.Equal(links, want) {
 		t.Errorf("new links %v, want %v (the linked client gets none)", links, want)
 	}
-	if len(data.Nodes) != 5 {
-		t.Errorf("%d nodes, want the 3 and 2 new clients", len(data.Nodes))
+	if len(data.Nodes) != 7 {
+		t.Errorf("%d nodes, want the 3 and 4 new clients", len(data.Nodes))
+	}
+}
+
+// TestGatewayWLANHosts checks the WLAN hosts of a gateway: the hosts of
+// its ARP table in its subnets that hold a client of a managed device go to
+// its router node as clients (source "Gateway ARP", in IP order), named by
+// the controller when it lists them on a device the graph has not, and
+// addManagedClients draws them with "ARP" links. Left out are the hosts in
+// its other subnets, the clients shown under a device of the graph, the
+// graph's nodes, the managed devices, the gateway and a repeated or
+// unusable MAC.
+func TestGatewayWLANHosts(t *testing.T) {
+	resetState(t)
+	const gw, gwMAC = "10.9.0.1", "00:0c:29:00:00:01"
+	setGatewayIPs([]string{fixedGatewayIP, gw})
+	ap, apAway := "70:a7:41:00:00:01", "70:a7:41:00:00:02"
+	inventoryMu.Lock()
+	inventories, managedByMAC = map[string]inventoryRecord{}, map[string]ManagedView{
+		ap:     {Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", Name: "Laptop", IP: "10.9.71.5", Kind: "wireless"}}},
+		apAway: {Name: "B 2", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:02", Name: "Phone-X", IP: "10.9.71.9", Kind: "wireless"}}},
+	}
+	inventoryMu.Unlock()
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		inventories, managedByMAC = map[string]inventoryRecord{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+	arp := []ARPEntry{
+		{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"},
+		{IPAddress: "10.9.71.5", MACAddress: "de:ad:00:00:00:01"}, // shown under the access point
+		{IPAddress: "10.9.71.9", MACAddress: "DE:AD:00:00:00:02"}, // its access point is no node
+		{IPAddress: "10.9.70.2", MACAddress: "de:ad:00:00:00:04"}, // a node of the graph
+		{IPAddress: "10.9.1.2", MACAddress: ap},
+		{IPAddress: "10.9.1.3", MACAddress: apAway},
+		{IPAddress: "10.9.0.1", MACAddress: gwMAC},
+		{IPAddress: "10.20.0.5", MACAddress: "de:ad:00:00:00:05"}, // not in the WLAN
+		{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"},
+		{IPAddress: "10.9.80.4", MACAddress: "00:00:00:00:00:00"},
+		{IPAddress: "10.9.12.1", MACAddress: "de:ad:00:00:00:06"},
+	}
+	gatewayPollsMu.Lock()
+	gatewayPolls[gw] = gatewayPoll{Answered: true, ARP: arp, Subnets: []netip.Prefix{
+		netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.20.0.0/24"), netip.MustParsePrefix("10.9.71.9/32")}}
+	gatewayPollsMu.Unlock()
+	data := GraphData{Nodes: []GraphNode{
+		{ID: gwMAC, Group: "router", SysName: "pfSense\n" + gw},
+		{ID: ap, Group: "access_point"},
+		{ID: "de:ad:00:00:00:04", Group: "endpoint"},
+	}}
+	addManaged(&data)
+	addGatewayWLANHosts(&data)
+	m := data.Nodes[0].Managed
+	if m == nil || m.Source != "Gateway ARP" || m.Controller != gw {
+		t.Fatalf("the router's view %+v", m)
+	}
+	var hosts []string
+	for _, c := range m.Clients {
+		hosts = append(hosts, strings.Join([]string{c.MAC, c.IP, c.Name, c.Kind}, " "))
+	}
+	if want := []string{"de:ad:00:00:00:06 10.9.12.1  arp", "de:ad:00:00:00:02 10.9.71.9 Phone-X wireless", "de:ad:00:00:00:03 10.9.80.3  arp"}; !slices.Equal(hosts, want) {
+		t.Errorf("WLAN hosts %q, want %q", hosts, want)
+	}
+	addManagedClients(&data)
+	var links []string
+	for _, l := range data.Links {
+		links = append(links, l.Source+">"+l.Target+" "+l.Label)
+	}
+	if want := []string{gwMAC + ">de:ad:00:00:00:06 ARP|wlan", gwMAC + ">de:ad:00:00:00:02 ARP|wlan", gwMAC + ">de:ad:00:00:00:03 ARP|wlan", ap + ">de:ad:00:00:00:01 WLAN|wlan"}; !slices.Equal(links, want) {
+		t.Errorf("links %q, want %q", links, want)
+	}
+
+	// No managed client in a subnet of the gateway: no WLAN, no hosts
+	inventoryMu.Lock()
+	managedByMAC = map[string]ManagedView{ap: {Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", IP: "192.168.5.5"}}}}
+	inventoryMu.Unlock()
+	data = GraphData{Nodes: []GraphNode{{ID: gwMAC, Group: "router", SysName: "pfSense\n" + gw}}}
+	addGatewayWLANHosts(&data)
+	if data.Nodes[0].Managed != nil {
+		t.Errorf("hosts without a WLAN subnet: %+v", data.Nodes[0].Managed)
 	}
 }

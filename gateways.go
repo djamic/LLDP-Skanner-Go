@@ -235,6 +235,11 @@ type gatewayPoll struct {
 	// (collectGatewayMACPorts) from the last read that answered; nil when
 	// it named none (or none was read yet)
 	MACPorts map[string]string
+	// ARP and Subnets are the gateway's ARP rows and its subnets
+	// (ipAddrTable) from the last walk that answered: the WLAN hosts of a
+	// Wi-Fi gateway come from them (addGatewayWLANHosts)
+	ARP     []ARPEntry
+	Subnets []netip.Prefix
 }
 
 // gatewayLLDP is a gateway's own LLDP view (collectGatewayLLDP): the
@@ -294,6 +299,45 @@ func recordGatewayLLDP(ip string, lldp *gatewayLLDP, err error) {
 	p := gatewayPolls[ip]
 	p.LLDP = lldp
 	gatewayPolls[ip] = p
+}
+
+// recordGatewayHosts notes the ARP rows and the subnets of an answering
+// walk of gateway ip; subnets that were not read keep those read before.
+func recordGatewayHosts(ip string, arp []ARPEntry, subnets []SubnetInfo) {
+	gatewayPollsMu.Lock()
+	defer gatewayPollsMu.Unlock()
+	p := gatewayPolls[ip]
+	p.ARP = arp
+	if len(subnets) > 0 {
+		p.Subnets = nil
+		for _, s := range subnets {
+			if pfx, err := netip.ParsePrefix(fmt.Sprintf("%s/%d", s.Net, s.Prefix)); err == nil {
+				p.Subnets = append(p.Subnets, pfx)
+			}
+		}
+	}
+	gatewayPolls[ip] = p
+}
+
+// gatewayHostTable is a gateway's ARP rows and subnets (recordGatewayHosts).
+type gatewayHostTable struct {
+	IP      string
+	ARP     []ARPEntry
+	Subnets []netip.Prefix
+}
+
+// gatewayHostTables returns the ARP rows and subnets of the gateways that
+// answered, in gateway_ip order.
+func gatewayHostTables() []gatewayHostTable {
+	gatewayPollsMu.Lock()
+	defer gatewayPollsMu.Unlock()
+	var out []gatewayHostTable
+	for _, ip := range gatewayList() {
+		if p := gatewayPolls[ip]; p.Answered && len(p.ARP) > 0 {
+			out = append(out, gatewayHostTable{IP: ip, ARP: p.ARP, Subnets: p.Subnets})
+		}
+	}
+	return out
 }
 
 // recordGatewayMACPorts notes the port read of gateway ip
@@ -488,6 +532,7 @@ func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 		lldpErr  error
 		ports    map[string]string
 		portsErr error
+		subnets  []SubnetInfo
 	}
 	gateways := gatewayList()
 	walks := make([]walk, len(gateways))
@@ -509,6 +554,7 @@ func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 					names = w.lldp.Ports
 				}
 				w.ports, w.portsErr = snmpObj.collectGatewayMACPorts(ip, names)
+				w.subnets = discoverGatewaySubnets(snmpObj, ip)
 			}
 			walks[i] = w
 		}()
@@ -523,6 +569,7 @@ func walkGatewaysARP(snmpObj *SNMPObject) []gatewayARP {
 		if w.err == nil {
 			recordGatewayLLDP(ip, w.lldp, w.lldpErr)
 			recordGatewayMACPorts(ip, w.ports, w.portsErr)
+			recordGatewayHosts(ip, w.entries, w.subnets)
 		}
 		recordGatewayARP(ip, len(w.entries), w.err, macIPClock()) // warns once per gateway when it fails
 	}

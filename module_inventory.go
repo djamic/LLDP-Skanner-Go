@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"slices"
 	"strings"
@@ -110,12 +111,14 @@ func addManaged(data *GraphData) {
 	}
 }
 
-// addManagedClients adds the wireless clients of the managed devices to the
-// graph data, for the canvas: a node per client that is no node yet (group
-// wifi_client: its name and IP), and a link from its device ("Wi-Fi|wlan")
-// unless the two are linked already. A wired client (on a UniFi switch) is
-// left out: the switch FDB shows it. The UI shows the clients on demand:
-// their filter starts off, and a device's "Show Connected" shows its own.
+// addManagedClients adds the clients of the managed devices to the graph
+// data, for the canvas: a node per client that is no node yet (group
+// wifi_client: its name, from its controller or else its DNS name, and its
+// IP), and a link from its device unless the two are linked already: "WLAN"
+// from an access point, "ARP" from a gateway (addGatewayWLANHosts). A wired
+// client (on a UniFi switch) is left out: the switch FDB shows it. The UI
+// shows the clients on demand: their WLAN filter starts off, and a
+// device's "Show Connected" shows its own.
 func addManagedClients(data *GraphData) {
 	have := make(map[string]bool, len(data.Nodes))
 	for _, n := range data.Nodes {
@@ -127,34 +130,168 @@ func addManagedClients(data *GraphData) {
 	}
 	devices := len(data.Nodes)
 	for i := 0; i < devices; i++ {
-		ap := data.Nodes[i]
-		if ap.Managed == nil {
+		dev := data.Nodes[i]
+		if dev.Managed == nil {
 			continue
 		}
-		for _, c := range ap.Managed.Clients {
+		label, near := "WLAN|wlan", "WLAN"
+		if dev.Managed.Source == gatewayARPSource {
+			label, near = "ARP|wlan", "ARP"
+		}
+		for _, c := range dev.Managed.Clients {
 			mac := canonicalMAC(c.MAC)
-			if mac == "" || mac == ap.ID || c.Kind == "wired" {
+			if mac == "" || mac == dev.ID || c.Kind == "wired" {
 				continue
 			}
 			if !have[mac] {
 				have[mac] = true
+				name, hostname := c.Name, ""
+				if name == "" || strings.EqualFold(name, mac) {
+					name, hostname = wlanDNSName(c.IP), wlanDNSName(c.IP)
+				}
 				var lines []string
-				if c.Name != "" && !strings.EqualFold(c.Name, mac) {
-					lines = append(lines, c.Name)
+				if name != "" {
+					lines = append(lines, name)
 				}
 				if c.IP != "" {
 					lines = append(lines, c.IP)
 				}
 				info := strings.Join(lines, "\n")
 				data.Nodes = append(data.Nodes, GraphNode{ID: mac, Label: strings.TrimPrefix(info+"\n"+mac, "\n"), Group: "wifi_client",
-					NodeType: "wifi_client", SysName: info, IP: c.IP})
+					NodeType: "wifi_client", SysName: info, IP: c.IP, Hostname: hostname})
 			}
-			if !linked[ap.ID+"|"+mac] {
-				linked[ap.ID+"|"+mac], linked[mac+"|"+ap.ID] = true, true
-				data.Links = append(data.Links, GraphLink{Source: ap.ID, Target: mac, Label: "Wi-Fi|wlan", SourceLabel: "Wi-Fi", TargetLabel: "wlan"})
+			if !linked[dev.ID+"|"+mac] {
+				linked[dev.ID+"|"+mac], linked[mac+"|"+dev.ID] = true, true
+				data.Links = append(data.Links, GraphLink{Source: dev.ID, Target: mac, Label: label, SourceLabel: near, TargetLabel: "wlan", Kind: "wlan"})
 			}
 		}
 	}
+}
+
+// wlanDNSName is the short DNS name of a client's IP from the scanner's
+// cache ("Elliot" for Elliot.dhcp.tuit.uz), "" when there is none or it is
+// only the IP spelt out (a provider's 172-15-182-169.lightspeed...):
+// inventoryResolveNames starts the lookups.
+func wlanDNSName(ip string) string {
+	if ip == "" {
+		return ""
+	}
+	name, _ := cachedHostname(ip)
+	if strings.Contains(name, strings.ReplaceAll(ip, ".", "-")) {
+		return ""
+	}
+	return name
+}
+
+// gatewayARPSource is the source of the clients addGatewayWLANHosts gives
+// a gateway's router node.
+const gatewayARPSource = "Gateway ARP"
+
+// addGatewayWLANHosts gives each gateway's router node the hosts of its
+// WLAN subnets that the graph shows nowhere else, as the clients of a
+// managed device (GraphNode.Managed, source "Gateway ARP"), so
+// addManagedClients draws them below it and the tree lists them. A WLAN
+// subnet is a subnet of the gateway that holds a client of a managed device
+// (172.15.0.0/16 of the pfSense 172.15.1.254: the UniFi clients' subnet).
+// Left out are the hosts the graph has as nodes or as clients of a device
+// in it, the managed devices themselves (the access points) and the
+// gateway. A client its controller lists on a device the graph does not
+// have keeps the controller's name. The gateway decides who is on the
+// WLAN (its ARP table), the controller where and by which name.
+func addGatewayWLANHosts(data *GraphData) {
+	have := make(map[string]bool, len(data.Nodes))
+	shown := map[string]bool{} // the clients of devices in the graph
+	for _, n := range data.Nodes {
+		have[n.ID] = true
+		if n.Managed != nil {
+			for _, c := range n.Managed.Clients {
+				shown[canonicalMAC(c.MAC)] = true
+			}
+		}
+	}
+	// Every client the controllers list, with its device, and their IPs
+	inventoryMu.Lock()
+	known := map[string]modules.ManagedClient{}
+	var clientIPs []netip.Addr
+	managedMAC := map[string]bool{}
+	for mac, dev := range managedByMAC {
+		managedMAC[mac] = true
+		for _, c := range dev.Clients {
+			known[canonicalMAC(c.MAC)] = c
+			if a, err := netip.ParseAddr(c.IP); err == nil {
+				clientIPs = append(clientIPs, a)
+			}
+		}
+	}
+	inventoryMu.Unlock()
+	if len(clientIPs) == 0 {
+		return
+	}
+	for _, gw := range gatewayHostTables() {
+		var wlan []netip.Prefix
+		for _, p := range gw.Subnets {
+			if p.Bits() < 31 && slices.ContainsFunc(clientIPs, p.Contains) {
+				wlan = append(wlan, p)
+			}
+		}
+		if len(wlan) == 0 {
+			continue
+		}
+		router := slices.IndexFunc(data.Nodes, func(n GraphNode) bool {
+			return n.Group == "router" && slices.Contains(strings.Split(n.SysName, "\n"), gw.IP)
+		})
+		if router < 0 || data.Nodes[router].Managed != nil {
+			continue
+		}
+		var hosts []modules.ManagedClient
+		seen := map[string]bool{}
+		for _, e := range gw.ARP {
+			mac := usableMAC(e.MACAddress)
+			addr, err := netip.ParseAddr(e.IPAddress)
+			if mac == "" || err != nil || seen[mac] || have[mac] || shown[mac] || managedMAC[mac] || mac == data.Nodes[router].ID ||
+				!slices.ContainsFunc(wlan, func(p netip.Prefix) bool { return p.Contains(addr) }) {
+				continue
+			}
+			seen[mac] = true
+			h := modules.ManagedClient{MAC: mac, IP: e.IPAddress, Kind: "arp"}
+			if c, ok := known[mac]; ok {
+				h.Name, h.Kind = c.Name, c.Kind
+			}
+			hosts = append(hosts, h)
+		}
+		if len(hosts) == 0 {
+			continue
+		}
+		slices.SortFunc(hosts, func(a, b modules.ManagedClient) int { return compareIPs(a.IP, b.IP) })
+		data.Nodes[router].Managed = &ManagedView{Source: gatewayARPSource, Controller: gw.IP, Clients: hosts}
+	}
+}
+
+// inventoryResolveNames starts the reverse DNS lookups of the clients'
+// IPs, the controllers' and the WLAN hosts' of the gateways, so their
+// nodes get names (wlanDNSName); it waits a little, the rest fill the
+// cache later.
+func inventoryResolveNames() {
+	var ips []string
+	inventoryMu.Lock()
+	for _, dev := range managedByMAC {
+		for _, c := range dev.Clients {
+			if c.IP != "" {
+				ips = append(ips, c.IP)
+			}
+		}
+	}
+	inventoryMu.Unlock()
+	if len(ips) == 0 {
+		return
+	}
+	for _, gw := range gatewayHostTables() {
+		for _, e := range gw.ARP {
+			ips = append(ips, e.IPAddress)
+		}
+	}
+	slices.Sort(ips)
+	resolveHostnames(slices.Compact(ips), 20*time.Second)
 }
 
 // inventoryLoad reads inventoryFile (none is no record).
@@ -305,6 +442,7 @@ func inventoryRound() {
 			cancel()
 		}
 	}
+	inventoryResolveNames()
 }
 
 // startModuleInventory loads the kept inventories and reads them again
