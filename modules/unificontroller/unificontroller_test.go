@@ -983,6 +983,12 @@ func TestDetectDetails(t *testing.T) {
 	if got := fact(r, "Client details"); !strings.HasPrefix(got, "read with user viewer") {
 		t.Errorf("client details %q", got)
 	}
+	// The uplink the Integration API does not tell, from the older API
+	for _, row := range table(t, r, "Devices").Rows {
+		if want := map[string]string{"Core USW": "4c:ae:a3:00:00:10 GigabitEthernet1/0/12", "ap-a": "Core USW", "AP-B": "Core USW"}[row[1]]; want != "" && row[7] != want {
+			t.Errorf("uplink of %s %q, want %q", row[1], row[7], want)
+		}
+	}
 	sameRows(t, table(t, r, "Wi-Fi networks"), [][]string{
 		{"Main", "TUIT", "3", "0", "1", "1"},
 		{"Main", "TUIT-Guest", "1", "1", "0", "0"},

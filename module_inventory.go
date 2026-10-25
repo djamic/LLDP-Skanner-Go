@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/netip"
 	"os"
 	"slices"
@@ -150,11 +151,13 @@ func addManaged(data *GraphData) {
 // its name and IP, unreachable when its controller has it offline, linked
 // where it is connected. Its controller tells where (ManagedView.Uplink):
 // the switch port its LLDP sees, the UniFi switch, or the access point of
-// a mesh link, when that device is a node; else the link is the switch port
-// its MAC is learned on, by the rule of a gateway's router node
-// (gatewayPort: no other switch or gateway learned there, the fewest MACs;
-// a [MAC-REF] link); else it has none, and the tree shows it under "Not
-// connected".
+// a mesh link, when that device is a node (the port of a polled switch that
+// the controller does not name, or names by a MAC, is the one of its FDB
+// that learns the access point's MAC, with the fewest MACs); else the link
+// is the switch port its MAC is learned on, by the rule of a gateway's
+// router node (gatewayPort: no other switch or gateway learned there, the
+// fewest MACs; a [MAC-REF] link); else it has none, and the tree shows it
+// under "Not connected".
 func addManagedAPNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMACs map[string]string) {
 	known := map[string]bool{} // the IPs of the nodes
 	for id := range graph.Nodes {
@@ -215,8 +218,12 @@ func addManagedAPNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMA
 				graph.AddEdge(parent, mac, "mesh|mesh")
 				where = "linked by a mesh link from " + parent
 			default:
-				graph.AddEdge(parent, mac, strings.TrimSpace(up.Port)+"|"+strings.TrimSpace(up.LocalPort))
-				where = strings.TrimSpace(fmt.Sprintf("linked by its uplink %s %s", parent, up.Port))
+				port := strings.TrimSpace(up.Port)
+				if port == "" || canonicalMAC(port) != "" {
+					port = managedFDBPort(snapshot, parent, mac)
+				}
+				graph.AddEdge(parent, mac, port+"|"+strings.TrimSpace(up.LocalPort))
+				where = strings.TrimSpace(fmt.Sprintf("linked by its uplink %s %s", parent, port))
 			}
 		}
 		if where != "" {
@@ -239,6 +246,39 @@ func addManagedAPNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMA
 		inventoryNotice(fmt.Sprintf("📡 [Inventory] %s %s (%s) drawn from %s %s, %s", v.Name, mac, cmp.Or(v.IP, "no IP"), v.Source, v.Controller, where))
 	}
 	inventoryNotice(fmt.Sprintf("📡 [Inventory] %d access points no switch shows drawn from their controllers: %d linked by their uplink, %d by the FDB, %d not linked", len(macs), byUplink, byFDB, none))
+}
+
+// managedFDBPort is the port of the polled switch with node id switchID
+// whose FDB learns mac, the one with the fewest MACs (then the lower
+// port), normalized; "" when it learns mac on none.
+func managedFDBPort(snapshot map[string]*DeviceData, switchID, mac string) string {
+	for _, ip := range sortedDeviceIPs(snapshot) {
+		d := snapshot[ip]
+		if graphDeviceNodeID(d) != switchID {
+			continue
+		}
+		macs := map[int]int{} // port → the MACs learned there, for the ports that learn mac
+		for _, e := range d.MACTable {
+			if usableMAC(e.MACAddress) == mac {
+				macs[e.PortNumber] = 0
+			}
+		}
+		for _, e := range d.MACTable {
+			if n, ok := macs[e.PortNumber]; ok && usableMAC(e.MACAddress) != "" {
+				macs[e.PortNumber] = n + 1
+			}
+		}
+		best := -1
+		for _, port := range slices.Sorted(maps.Keys(macs)) {
+			if !isNullInterface(getFDBPortName(d, port)) && (best < 0 || macs[port] < macs[best]) {
+				best = port
+			}
+		}
+		if best >= 0 {
+			return normalizePortName(getFDBPortName(d, best))
+		}
+	}
+	return ""
 }
 
 // inventoryNotice prints a line once in a run.
@@ -343,10 +383,14 @@ const gatewayARPSource = "Gateway ARP"
 // managed device (GraphNode.Managed, source "Gateway ARP"), so
 // addManagedClients draws them below it and the tree lists them. A WLAN
 // subnet is a subnet of the gateway that holds a client of a managed device
-// (172.15.0.0/16 of the pfSense 172.15.1.254: the UniFi clients' subnet).
+// (172.15.0.0/16 of the pfSense 172.15.1.254: the UniFi clients' subnet),
+// unless the IP of another gateway is in it and its own is not: debian216
+// 172.20.1.254 has 172.15.1.253 in it too, and the hosts it talked to in
+// its ARP table, but the pfSense is that WLAN's gateway. A host goes to one
+// gateway only, the first in gateway_ip order.
 // Left out are the hosts the graph has as nodes or as clients of a device
-// in it, the managed devices themselves (the access points) and the
-// gateway. A client its controller lists on a device the graph does not
+// in it, the managed devices themselves (the access points), their
+// controllers and the gateway. A client its controller lists on a device the graph does not
 // have keeps what the controller tells of it. The gateway decides who is on the
 // WLAN (its ARP table), the controller where and by which name.
 func addGatewayWLANHosts(data *GraphData) {
@@ -365,6 +409,10 @@ func addGatewayWLANHosts(data *GraphData) {
 	known := map[string]modules.ManagedClient{}
 	var clientIPs []netip.Addr
 	managedMAC := map[string]bool{}
+	controllers := map[string]bool{} // their IPs
+	for _, rec := range inventories {
+		controllers[rec.IP] = true
+	}
 	for mac, dev := range managedByMAC {
 		managedMAC[mac] = true
 		for _, c := range dev.Clients {
@@ -378,10 +426,20 @@ func addGatewayWLANHosts(data *GraphData) {
 	if len(clientIPs) == 0 {
 		return
 	}
-	for _, gw := range gatewayHostTables() {
+	tables := gatewayHostTables()
+	var gatewayAddrs []netip.Addr
+	for _, gw := range tables {
+		if a, err := netip.ParseAddr(gw.IP); err == nil {
+			gatewayAddrs = append(gatewayAddrs, a)
+		}
+	}
+	taken := map[string]bool{} // the hosts a gateway before has
+	for _, gw := range tables {
+		own, _ := netip.ParseAddr(gw.IP)
 		var wlan []netip.Prefix
 		for _, p := range gw.Subnets {
-			if p.Bits() < 31 && slices.ContainsFunc(clientIPs, p.Contains) {
+			if p.Bits() < 31 && slices.ContainsFunc(clientIPs, p.Contains) &&
+				(p.Contains(own) || !slices.ContainsFunc(gatewayAddrs, p.Contains)) {
 				wlan = append(wlan, p)
 			}
 		}
@@ -399,7 +457,7 @@ func addGatewayWLANHosts(data *GraphData) {
 		for _, e := range gw.ARP {
 			mac := usableMAC(e.MACAddress)
 			addr, err := netip.ParseAddr(e.IPAddress)
-			if mac == "" || err != nil || seen[mac] || have[mac] || shown[mac] || managedMAC[mac] || mac == data.Nodes[router].ID ||
+			if mac == "" || err != nil || seen[mac] || taken[mac] || have[mac] || shown[mac] || managedMAC[mac] || controllers[e.IPAddress] || mac == data.Nodes[router].ID ||
 				!slices.ContainsFunc(wlan, func(p netip.Prefix) bool { return p.Contains(addr) }) {
 				continue
 			}
@@ -413,6 +471,9 @@ func addGatewayWLANHosts(data *GraphData) {
 		}
 		if len(hosts) == 0 {
 			continue
+		}
+		for mac := range seen {
+			taken[mac] = true
 		}
 		slices.SortFunc(hosts, func(a, b modules.ManagedClient) int { return compareIPs(a.IP, b.IP) })
 		data.Nodes[router].Managed = &ManagedView{Source: gatewayARPSource, Controller: gw.IP, Clients: hosts}

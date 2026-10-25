@@ -384,9 +384,11 @@ func detect(ctx context.Context, c *apiClient, info appInfo, logins []modules.Lo
 	}
 	slices.SortFunc(sites, func(a, b site) int { return cmp.Compare(strings.ToLower(a.label()), strings.ToLower(b.label())) })
 
-	// The older API: the clients' Wi-Fi details
+	// The older API: the clients' Wi-Fi details, and the devices' uplinks
+	// by site ID and MAC
 	details := ""
 	networks := modules.Table{Title: "Wi-Fi networks", Columns: []string{"Site", "SSID", "Clients", "2.4 GHz", "5 GHz", "6 GHz"}}
+	uplinks := map[string]map[string]*modules.ManagedUplink{}
 	if len(sites) > 0 {
 		cc, err := classicOpen(ctx, c, sites[0].ref(), logins)
 		if err != nil {
@@ -395,6 +397,12 @@ func detect(ctx context.Context, c *apiClient, info appInfo, logins []modules.Lo
 			details = "read with " + cc.who
 			ssids := map[[2]string]*ssidCount{}
 			for _, s := range sites {
+				if cdevs, err := cc.devices(ctx, s.ref()); err == nil {
+					uplinks[s.ID] = map[string]*modules.ManagedUplink{}
+					for _, d := range cdevs {
+						uplinks[s.ID][strings.ToLower(strings.TrimSpace(d.MAC))] = d.uplink()
+					}
+				}
 				stations, err := cc.stations(ctx, s.ref())
 				if err != nil {
 					details += fmt.Sprintf("; site %s not read: %v", s.label(), err)
@@ -448,8 +456,10 @@ func detect(ctx context.Context, c *apiClient, info appInfo, logins []modules.Lo
 			notRead = append(notRead, fmt.Sprintf("site %s: only the first %d of %d devices", s.label(), len(devs), devTotal))
 		}
 		nameOf := map[string]string{}
+		nameByMAC := map[string]string{}
 		for _, d := range devs {
 			nameOf[d.ID] = d.label()
+			nameByMAC[d.mac()] = d.label()
 		}
 		for _, d := range devs {
 			deviceCount++
@@ -460,6 +470,13 @@ func detect(ctx context.Context, c *apiClient, info appInfo, logins []modules.Lo
 			uplink := d.uplinkID()
 			if uplink != "" {
 				uplink = cmp.Or(nameOf[uplink], uplink)
+			}
+			if up := uplinks[s.ID][d.mac()]; uplink == "" && up != nil {
+				// the older API's: "Core USW 5", "4c:ae:a3:a2:01:ac GigabitEthernet1/0/12", "mesh AP-A"
+				uplink = strings.TrimSpace(cmp.Or(nameByMAC[up.MAC], up.MAC) + " " + up.Port)
+				if up.Wireless {
+					uplink = "mesh " + cmp.Or(nameByMAC[up.MAC], up.MAC)
+				}
 			}
 			devices.Rows = append(devices.Rows, []string{s.label(), d.Name, d.Model, d.MacAddress, d.IPAddress, d.State, d.FirmwareVersion, uplink})
 		}

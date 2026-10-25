@@ -393,15 +393,17 @@ func TestManagedClientsInGraph(t *testing.T) {
 // the controller when it lists them on a device the graph has not, and
 // addManagedClients draws them with "ARP" links. Left out are the hosts in
 // its other subnets, the clients shown under a device of the graph, the
-// graph's nodes, the managed devices, the gateway and a repeated or
-// unusable MAC.
+// graph's nodes, the managed devices, their controller, the gateway and a repeated or
+// unusable MAC. A WLAN another gateway's IP is in is that gateway's, and
+// a host goes to one gateway only.
 func TestGatewayWLANHosts(t *testing.T) {
 	resetState(t)
 	const gw, gwMAC = "10.9.0.1", "00:0c:29:00:00:01"
 	setGatewayIPs([]string{fixedGatewayIP, gw})
 	ap, apAway := "70:a7:41:00:00:01", "70:a7:41:00:00:02"
 	inventoryMu.Lock()
-	inventories, managedByMAC = map[string]inventoryRecord{}, map[string]ManagedView{
+	inventories = map[string]inventoryRecord{"unificontroller|10.9.1.9": {Module: "unificontroller", IP: "10.9.1.9"}}
+	managedByMAC = map[string]ManagedView{
 		ap:     {Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", Name: "Laptop", IP: "10.9.71.5", Kind: "wireless"}}},
 		apAway: {Name: "B 2", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:02", Name: "Phone-X", IP: "10.9.71.9", Kind: "wireless"}}},
 	}
@@ -423,6 +425,7 @@ func TestGatewayWLANHosts(t *testing.T) {
 		{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"},
 		{IPAddress: "10.9.80.4", MACAddress: "00:00:00:00:00:00"},
 		{IPAddress: "10.9.12.1", MACAddress: "de:ad:00:00:00:06"},
+		{IPAddress: "10.9.1.9", MACAddress: "d0:21:f9:00:00:09"}, // the controller
 	}
 	gatewayPollsMu.Lock()
 	gatewayPolls[gw] = gatewayPoll{Answered: true, ARP: arp, Subnets: []netip.Prefix{
@@ -455,6 +458,35 @@ func TestGatewayWLANHosts(t *testing.T) {
 		t.Errorf("links %q, want %q", links, want)
 	}
 
+	// Two gateways with the WLAN: the one whose IP is in it has its hosts
+	// (debian216 has an IP in the pfSense's Wi-Fi /16 too), and of a subnet
+	// neither IP is in the first gateway in gateway_ip order has them
+	const deb, debMAC = "10.20.0.1", "00:0c:29:00:00:02"
+	setGatewayIPs([]string{fixedGatewayIP, deb, gw})
+	inventoryMu.Lock()
+	managedByMAC[ap] = ManagedView{Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", IP: "10.9.71.5"}, {MAC: "de:ad:00:00:00:09", IP: "10.50.0.9"}}}
+	inventoryMu.Unlock()
+	shared := []ARPEntry{{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"}, {IPAddress: "10.50.0.7", MACAddress: "de:ad:00:00:00:07"}}
+	gatewayPollsMu.Lock()
+	gatewayPolls[gw] = gatewayPoll{Answered: true, ARP: shared, Subnets: []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.50.0.0/24")}}
+	gatewayPolls[deb] = gatewayPoll{Answered: true, ARP: shared, Subnets: []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.50.0.0/24")}}
+	gatewayPollsMu.Unlock()
+	data = GraphData{Nodes: []GraphNode{{ID: gwMAC, Group: "router", SysName: "pfSense\n" + gw}, {ID: debMAC, Group: "router", SysName: "debian216\n" + deb}}}
+	addGatewayWLANHosts(&data)
+	of := func(n GraphNode) string {
+		if n.Managed == nil {
+			return ""
+		}
+		var macs []string
+		for _, c := range n.Managed.Clients {
+			macs = append(macs, c.MAC)
+		}
+		return strings.Join(macs, ",")
+	}
+	if got, want := of(data.Nodes[0])+" / "+of(data.Nodes[1]), "de:ad:00:00:00:03 / de:ad:00:00:00:07"; got != want {
+		t.Errorf("pfSense / debian216 hosts %q, want %q", got, want)
+	}
+
 	// No managed client in a subnet of the gateway: no WLAN, no hosts
 	inventoryMu.Lock()
 	managedByMAC = map[string]ManagedView{ap: {Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", IP: "192.168.5.5"}}}}
@@ -469,8 +501,10 @@ func TestGatewayWLANHosts(t *testing.T) {
 // TestManagedAPNodes checks the access points the controllers manage that
 // the graph has no node for: a node each (group access_point, its name and
 // IP, unreachable when offline), linked by its uplink when that device is a
-// node (a switch by its chassis MAC, the parent of a mesh link), else by
-// the switch port its MAC is learned on ([MAC-REF]), else not at all; an
+// node (a switch by its chassis MAC, the parent of a mesh link; a port the
+// controller does not name, or names by a MAC, from the switch's FDB),
+// else by the switch port its MAC is learned on ([MAC-REF]), else not at
+// all; an
 // access point the graph has by MAC or IP, and a device of another kind,
 // get no node.
 func TestManagedAPNodes(t *testing.T) {
@@ -478,8 +512,10 @@ func TestManagedAPNodes(t *testing.T) {
 	const sw = "4c:ae:a3:50:00:01"
 	const apUp, apMesh, apFDB, apNone, apInGraph, apByIP, usw = "70:a7:41:50:00:01", "70:a7:41:50:00:02", "70:a7:41:50:00:03",
 		"70:a7:41:50:00:04", "70:a7:41:50:00:05", "70:a7:41:50:00:06", "70:a7:41:50:00:09"
+	const apNoPort, apMACPort = "70:a7:41:50:00:07", "70:a7:41:50:00:08"
 	snapshot := map[string]*DeviceData{"10.9.50.1": {IP: "10.9.50.1", ChassisID: sw, Interfaces: gigabitPorts(10, nil),
-		MACTable: slices.Concat(macEntries(5, apFDB, "de:ad:00:50:00:01", "de:ad:00:50:00:02"), macEntries(6, apUp))}}
+		MACTable: slices.Concat(macEntries(5, apFDB, "de:ad:00:50:00:01", "de:ad:00:50:00:02"), macEntries(6, apUp),
+			macEntries(8, apNoPort, "de:ad:00:50:00:03", "de:ad:00:50:00:04"), macEntries(9, apNoPort, "de:ad:00:50:00:05"))}}
 	switchMACs := buildSwitchOwnMACs(snapshot)
 	graph := NewDJGraph()
 	for _, id := range []string{sw, apInGraph, "10.9.50.77"} {
@@ -496,6 +532,8 @@ func TestManagedAPNodes(t *testing.T) {
 		apInGraph: {Name: "A in graph", Kind: "access_point"},
 		apByIP:    {Name: "A by IP", IP: "10.9.50.77", Kind: "access_point"},
 		usw:       {Name: "USW", Kind: "switch"},
+		apNoPort:  {Name: "A no port", Kind: "access_point", Uplink: &modules.ManagedUplink{MAC: sw, LocalPort: "eth0"}},
+		apMACPort: {Name: "A MAC port", Kind: "access_point", Uplink: &modules.ManagedUplink{MAC: sw, Port: "AA:BB:CC:DD:EE:FF"}},
 	}
 	inventoryMu.Unlock()
 	t.Cleanup(func() {
@@ -531,11 +569,12 @@ func TestManagedAPNodes(t *testing.T) {
 		links = append(links, l.Source+">"+l.Target+" "+l.Label)
 	}
 	slices.Sort(links)
-	want := []string{sw + ">" + apUp + " GigabitEthernet1/0/12|eth0", sw + ">" + apFDB + " GE1/0/5 [MAC-REF]|", apUp + ">" + apMesh + " mesh|mesh"}
+	want := []string{sw + ">" + apUp + " GigabitEthernet1/0/12|eth0", sw + ">" + apFDB + " GE1/0/5 [MAC-REF]|",
+		sw + ">" + apNoPort + " GE1/0/9|eth0", sw + ">" + apMACPort + " |", apUp + ">" + apMesh + " mesh|mesh"}
 	if !slices.Equal(links, want) {
 		t.Errorf("links\n got %q\nwant %q", links, want)
 	}
-	if !strings.Contains(out, "4 access points no switch shows drawn from their controllers: 2 linked by their uplink, 1 by the FDB, 1 not linked") ||
+	if !strings.Contains(out, "6 access points no switch shows drawn from their controllers: 4 linked by their uplink, 1 by the FDB, 1 not linked") ||
 		!strings.Contains(out, "A up "+apUp+" (10.9.50.11) drawn from UniFi 10.9.60.5, linked by its uplink "+sw+" GigabitEthernet1/0/12\n") ||
 		!strings.Contains(out, "A fdb "+apFDB+" (10.9.50.13) drawn from  , linked by the FDB of 10.9.50.1 GE1/0/5 (3 MACs on the port)") {
 		t.Errorf("log %q", out)
