@@ -378,7 +378,7 @@ function treeTitle(sp, info) {
     if (info.ips.length) lines.push(info.ips.join(', '));
     const up = sp.parent.get(info.id), l = sp.link.get(info.id);
     if (up !== null && up !== undefined && (l.up.port || l.down.port)) {
-        lines.push(`link: ${sp.infos.get(up).label} ${l.up.port || '?'} ⇄ ${l.down.port || '?'}`);
+        lines.push(`link: ${sp.infos.get(up).label} ${l.up.port || '?'} → ${l.down.port || '?'}`);
     }
     if (info.node.unreachable) lines.push('unreachable');
     return lines.join('\n');
@@ -395,7 +395,8 @@ function treeSearchText(sp, info) {
 }
 
 // treePortHTML is the port badge of a row: both ends of the link to its
-// parent, '<parent port> ⇄ <device port>' ('TGE1/0/51 ⇄ 1/1/28'), on
+// parent, '<parent port> → <device port>' ('TGE1/0/51 → 1/1/28': out of the
+// parent's port, into the device's port), on
 // whichever side of the link the parent is. A port's markers are small
 // tags ('TGE1/0/52 [T]'), its speed and traffic stay out, and a port the
 // link does not name is a muted '?'. A device that hangs on the link
@@ -415,7 +416,7 @@ function treePortHTML(sp, id, named) {
         via.unshift(sp.infos.get(p).label);
     }
     const from = sp.infos.get(at).label;
-    const lines = [`${from} ${up.port || '?'} ⇄ ${sp.infos.get(id).label} ${down.port || '?'}`];
+    const lines = [`${from} ${up.port || '?'} → ${sp.infos.get(id).label} ${down.port || '?'}`];
     if (l.kind) lines.push(`${l.kind} link`);
     if (via.length) lines.push(`via ${via.join(', ')} (filtered out)`);
     [up, down].forEach(side => { if (side.rate) lines.push(`${side.port}: ${side.rate}`); });
@@ -424,20 +425,22 @@ function treePortHTML(sp, id, named) {
         ? treeEscapeHTML(side.port) + side.marks.map(m => ` <span class="tv-mark">${treeEscapeHTML(m)}</span>`).join('')
         : '<span class="tv-unknown">?</span>');
     return `<span class="tv-port" title="${treeEscapeHTML(lines.join('\n'))}">` +
-        `${named ? treeEscapeHTML(from) + ' ' : ''}${port(up)} ⇄ ${port(down)}</span>`;
+        `${named ? treeEscapeHTML(from) + ' ' : ''}${port(up)} → ${port(down)}</span>`;
 }
 
-// treeRowHTML is the text of a jsTree node: the group's colour and icon,
-// the name, the IP or MAC, the port badge (treePortHTML) and the number of
-// devices below it, apart by spaces (the row's plain text reads the same).
+// treeRowHTML is the text of a jsTree node: the group's colour, the port
+// badge (treePortHTML) first, so the row reads "out of the parent's port,
+// into this device's port, then the device", the icon, the name, the IP or
+// MAC and the number of devices below it, apart by spaces (the row's plain text reads the same).
 // Only escaped strings and constants go in.
 function treeRowHTML(info, color, badge, count, title) {
     const unreachable = !!info.node.unreachable;
     const dot = unreachable ? treeUnreachableColor : (typeof color === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(color) ? color : treeDefaultColor);
     const icon = treeOwn(treeGroupIcons, info.group) || treeGroupIcons.unknown;
-    const parts = [`<span class="tv-icon">${icon}</span>`, `<span class="tv-name">${treeEscapeHTML(info.name)}</span>`];
-    if (info.address) parts.push(`<span class="tv-addr">${treeEscapeHTML(info.address)}</span>`);
+    const parts = [];
     if (badge) parts.push(badge);
+    parts.push(`<span class="tv-icon">${icon}</span>`, `<span class="tv-name">${treeEscapeHTML(info.name)}</span>`);
+    if (info.address) parts.push(`<span class="tv-addr">${treeEscapeHTML(info.address)}</span>`);
     if (count) parts.push(treeCountHTML(count));
     return `<span class="tv-row${unreachable ? ' tv-unreachable' : ''}" title="${treeEscapeHTML(title)}">` +
         `<span class="tv-dot" style="background:${dot}"></span>${parts.join(' ')}</span>`;

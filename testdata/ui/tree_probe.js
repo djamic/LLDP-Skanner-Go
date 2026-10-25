@@ -184,8 +184,8 @@ function outline(json) {
   const lines = [];
   const walk = (n, depth) => {
     const r = row(n);
-    lines.push('  '.repeat(depth) + `${r.icon} ${r.name}` + (r.address ? ` · ${r.address}` : '') +
-      (r.port ? ` [${r.port}]` : '') + (r.count ? ` (${r.count})` : '') + (r.unreachable ? ' !unreachable' : '') +
+    lines.push('  '.repeat(depth) + (r.port ? `[${r.port}] ` : '') + `${r.icon} ${r.name}` + (r.address ? ` · ${r.address}` : '') +
+      (r.count ? ` (${r.count})` : '') + (r.unreachable ? ' !unreachable' : '') +
       (r.id !== undefined ? `  #${r.id}` : ''));
     (n.children || []).forEach(c => walk(c, depth + 1));
   };
@@ -253,9 +253,9 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
     JSON.stringify(at(S3).json.children.map(c => row(c).id)) === JSON.stringify([Y, X2, X1, AP]),
     [at(S2).json.children.map(c => row(c).id), at(S3).json.children.map(c => row(c).id)]);
   check('synthetic: ports: both ends of the link to the parent, the parent\'s first on either side of the link, speed and traffic dropped, markers kept',
-    at(S1).row.port === 'Te1/0/1 ⇄ GE1/0/1' && at(S3).row.port === 'GE1/0/2 ⇄ GE1/0/48' && at(R2).row.port === 'GE1/0/46 ⇄ port1' &&
-    at(H).row.port === 'GE1/0/5 ⇄ ?' && at(Y).row.port === 'ge1/0/7 ⇄ ?' && at(AP).row.port === 'GE1/0/12 [MAC-REF] ⇄ eth0' &&
-    at(X2).row.port === 'GE1/0/11 ⇄ ?', rs.map(r => [r.row.id, r.row.port]));
+    at(S1).row.port === 'Te1/0/1 → GE1/0/1' && at(S3).row.port === 'GE1/0/2 → GE1/0/48' && at(R2).row.port === 'GE1/0/46 → port1' &&
+    at(H).row.port === 'GE1/0/5 → ?' && at(Y).row.port === 'ge1/0/7 → ?' && at(AP).row.port === 'GE1/0/12 [MAC-REF] → eth0' &&
+    at(X2).row.port === 'GE1/0/11 → ?', rs.map(r => [r.row.id, r.row.port]));
   check('synthetic: no port on hub members and VMs (their port is the parent row\'s)',
     [E1, E2, VM1, VM2].every(id => at(id).row.port === ''));
   check('synthetic: names: sysName, DNS name, LLDP name, vendor or OS of the tag line, hub and hypervisor by tag',
@@ -277,7 +277,7 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
     at(S2).row.dot === groupColors.switch && at(VM1).row.dot === groupColors.vm && at(S3).row.dot === '#ff4444' && at(S3).row.unreachable,
     rs.map(r => [r.row.id, r.row.icon, r.row.dot]));
   check('synthetic: the tooltip names the link and both ports',
-    at(S3).row.title.split('\n').includes('link: core-sw (10.0.1.1) GE1/0/2 ⇄ GE1/0/48'), at(S3).row.title);
+    at(S3).row.title.split('\n').includes('link: core-sw (10.0.1.1) GE1/0/2 → GE1/0/48'), at(S3).row.title);
 
   // Escaping (finding F86): names, ids, ports and DNS names are text.
   const problems = safeTree(all);
@@ -285,7 +285,7 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   check('synthetic: server strings never become markup', problems.length === 0 && !html.includes('<img') &&
     !html.includes('<svg') && !html.includes('<b ') && !html.includes('<i>'), problems);
   check('synthetic: the escaped strings are in the text', at(X1).json.text.includes('&lt;img src=x onerror=alert(1)&gt;') &&
-    at(X2).json.text.includes('&quot;&gt;&lt;svg onload=alert(2)&gt;') && at(X1).json.text.includes('GE1/0/9 &lt;i&gt;x&lt;/i&gt; ⇄ eth0 &quot;&#39;&amp;') &&
+    at(X2).json.text.includes('&quot;&gt;&lt;svg onload=alert(2)&gt;') && at(X1).json.text.includes('GE1/0/9 &lt;i&gt;x&lt;/i&gt; → eth0 &quot;&#39;&amp;') &&
     at(X2).json.text.includes('endpoint · &lt;b id=&quot;x&quot;&gt;chassis&lt;/b&gt;'));
   // The search text is data jsTree never puts into the page.
   check('synthetic: the search text keeps the raw strings', at(X1).json.data.q.includes(XSS) && at(X2).json.data.q.includes(X2.toLowerCase()));
@@ -298,13 +298,13 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   const vmRows = rows(vmOnly).filter(r => !r.row.folder);
   check('synthetic: only VM: the VMs at the top, their switch port named', vmOnly.length === 3 &&
     vmRows.length === 3 && vmRows.every(r => data.nodes.find(n => n.id === r.row.id).group === 'vm') &&
-    row(vmOnly[0]).port === 'dist-10 (10.0.1.10) ge1/0/7 ⇄ ?' && row(vmOnly[1]).port === 'dist-10 (10.0.1.10) ge1/0/7 ⇄ ?' &&
+    row(vmOnly[0]).port === 'dist-10 (10.0.1.10) ge1/0/7 → ?' && row(vmOnly[1]).port === 'dist-10 (10.0.1.10) ge1/0/7 → ?' &&
     row(vmOnly[2]).folder && row(vmOnly[2]).count === '1', outline(vmOnly));
   const swVm = T.treeProject(sp, shownBy(['switch', 'vm']), { colors: groupColors });
   const sv = rows(swVm).filter(r => !r.row.folder);
   const svAt = (id) => sv.find(r => r.row.id === id);
   check('synthetic: switch and VM: VMs move up to their switch, with its port', svAt(VM1).parent === S3 && svAt(VM2).parent === S3 &&
-    svAt(VM1).row.port === 'ge1/0/7 ⇄ ?' && svAt(S1).parent === null && svAt(S1).row.port === 'gw-1 (10.0.0.1) Te1/0/1 ⇄ GE1/0/1' &&
+    svAt(VM1).row.port === 'ge1/0/7 → ?' && svAt(S1).parent === null && svAt(S1).row.port === 'gw-1 (10.0.0.1) Te1/0/1 → GE1/0/1' &&
     svAt(S1).row.count === '4' && svAt(S3).row.count === '2' && svAt(S2).row.count === '', outline(swVm));
   const apFree = T.treeProject(sp, T.treeGroupFilter(['vm'], filterable.filter(g => g !== 'access_point')), {});
   check('synthetic: a group without a checkbox is always shown (as app.js uiGroupShown)',
@@ -320,7 +320,7 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   const crAt = (id) => cr.find(r => r.row.id === id);
   check('synthetic: data.core is the root; BFS from it takes the shortest path (dist-10 via the loop)',
     withCore.root === S2 && withCore.coreFromServer && crAt(S3).parent === S2 && crAt(R1).parent === S1 &&
-    crAt(S3).row.port === 'GE1/0/47 ⇄ GE1/0/47', outline(coreTree));
+    crAt(S3).row.port === 'GE1/0/47 → GE1/0/47', outline(coreTree));
   check('synthetic: a core that is not a node is ignored', T.treeSpanning(Object.assign(synthetic(), { core: 'gone' })).root === R1);
   const noRouters = synthetic();
   noRouters.nodes = noRouters.nodes.filter(n => n.group !== 'router');
@@ -410,68 +410,68 @@ function portGraph() {
   const unknown = '<span class="tv-unknown">?</span>', mark = (m) => `<span class="tv-mark">${m}</span>`;
 
   check('ports: the parent is the target of the link: its port first, then the child\'s, the source\'s, without its traffic',
-    at(PB).parent === PA && at(PB).row.port === 'TGE1/0/51 ⇄ 1/1/28' && at(PB).row.portHTML === 'TGE1/0/51 ⇄ 1/1/28', [at(PB).parent, at(PB).row.portHTML]);
+    at(PB).parent === PA && at(PB).row.port === 'TGE1/0/51 → 1/1/28' && at(PB).row.portHTML === 'TGE1/0/51 → 1/1/28', [at(PB).parent, at(PB).row.portHTML]);
   check('ports: the parent is the source of the link: its port first',
-    at(PE).row.port === 'GE1/0/22 [V1500] ⇄ ?' && at(PC).row.port === 'TGE1/0/52 [MAC-REF] ⇄ ?' && at(PG).row.port === 'GE1/0/40 ⇄ ?',
+    at(PE).row.port === 'GE1/0/22 [V1500] → ?' && at(PC).row.port === 'TGE1/0/52 [MAC-REF] → ?' && at(PG).row.port === 'GE1/0/40 → ?',
     rs.map(r => [r.row.id, r.row.port]));
   check('ports: a port the link does not name is a muted ?, on the child\'s end or on the parent\'s',
-    at(PC).row.portHTML.endsWith(`⇄ ${unknown}`) && at(PG).row.portHTML === `GE1/0/40 ⇄ ${unknown}` &&
-    at(PD).row.port === '? ⇄ TGE1/0/49 [T]' && at(PD).row.portHTML.startsWith(`${unknown} ⇄ `), [at(PC).row.portHTML, at(PD).row.portHTML]);
+    at(PC).row.portHTML.endsWith(`→ ${unknown}`) && at(PG).row.portHTML === `GE1/0/40 → ${unknown}` &&
+    at(PD).row.port === '? → TGE1/0/49 [T]' && at(PD).row.portHTML.startsWith(`${unknown} → `), [at(PC).row.portHTML, at(PD).row.portHTML]);
   check('ports: markers are small tags after the port they belong to, on the side that wrote them',
-    at(PC).row.portHTML === `TGE1/0/52 ${mark('[MAC-REF]')} ⇄ ${unknown}` && at(PE).row.portHTML === `GE1/0/22 ${mark('[V1500]')} ⇄ ${unknown}` &&
-    at(PD).row.portHTML === `${unknown} ⇄ TGE1/0/49 ${mark('[T]')}` && at(PF).row.portHTML === `GE1/0/45 ${mark('[T]')} ⇄ Eth1/0/49`,
+    at(PC).row.portHTML === `TGE1/0/52 ${mark('[MAC-REF]')} → ${unknown}` && at(PE).row.portHTML === `GE1/0/22 ${mark('[V1500]')} → ${unknown}` &&
+    at(PD).row.portHTML === `${unknown} → TGE1/0/49 ${mark('[T]')}` && at(PF).row.portHTML === `GE1/0/45 ${mark('[T]')} → Eth1/0/49`,
     rs.map(r => r.row.portHTML));
   check('ports: the badge tooltip: both devices with their ports, the kind of the link, the speed and traffic of a port',
-    at(PB).row.portTitle === 'HPE (172.20.254.202) TGE1/0/51 ⇄ 172.20.230.253 1/1/28\nLLDP link\n1/1/28: ↓40M ↑399M' &&
-    at(PC).row.portTitle === 'HPE (172.20.254.202) TGE1/0/52 ⇄ sw-c (10.1.0.3) ?\nMAC-REF link\nTGE1/0/52: ↓635M ↑153M\n? = port unknown' &&
-    at(PD).row.portTitle === 'HPE (172.20.254.202) ? ⇄ sw-d (10.1.0.4) TGE1/0/49\nLLDP link\nTGE1/0/49: 1G\n? = port unknown' &&
-    at(PG).row.portTitle === 'HPE (172.20.254.202) GE1/0/40 ⇄ Unmanaged ?\nFDB link\n? = port unknown',
+    at(PB).row.portTitle === 'HPE (172.20.254.202) TGE1/0/51 → 172.20.230.253 1/1/28\nLLDP link\n1/1/28: ↓40M ↑399M' &&
+    at(PC).row.portTitle === 'HPE (172.20.254.202) TGE1/0/52 → sw-c (10.1.0.3) ?\nMAC-REF link\nTGE1/0/52: ↓635M ↑153M\n? = port unknown' &&
+    at(PD).row.portTitle === 'HPE (172.20.254.202) ? → sw-d (10.1.0.4) TGE1/0/49\nLLDP link\nTGE1/0/49: 1G\n? = port unknown' &&
+    at(PG).row.portTitle === 'HPE (172.20.254.202) GE1/0/40 → Unmanaged ?\nFDB link\n? = port unknown',
     rs.map(r => r.row.portTitle));
   check('ports: a port alone does not tell how the link was found (FDB, or LLDP without a port name or speed)',
-    at(PE).row.portTitle === 'HPE (172.20.254.202) GE1/0/22 ⇄ Intel (10.1.0.5) ?\n? = port unknown', at(PE).row.portTitle);
+    at(PE).row.portTitle === 'HPE (172.20.254.202) GE1/0/22 → Intel (10.1.0.5) ?\n? = port unknown', at(PE).row.portTitle);
   check('ports: hub members have no badge: they hang on the hub row\'s link', at(PM1).row.port === '' && at(PM2).row.port === '' &&
     at(PM1).parent === PG);
-  check('ports: the row tooltip names the link with both ports', at(PD).row.title.split('\n').includes('link: HPE (172.20.254.202) ? ⇄ TGE1/0/49') &&
-    at(PB).row.title.split('\n').includes('link: HPE (172.20.254.202) TGE1/0/51 ⇄ 1/1/28'), at(PD).row.title);
+  check('ports: the row tooltip names the link with both ports', at(PD).row.title.split('\n').includes('link: HPE (172.20.254.202) ? → TGE1/0/49') &&
+    at(PB).row.title.split('\n').includes('link: HPE (172.20.254.202) TGE1/0/51 → 1/1/28'), at(PD).row.title);
 
   // A pair linked from both sides: each port as its own switch's label has it.
   const reversed = portGraph();
   reversed.nodes.reverse();
   reversed.links.reverse();
   check('ports: a pair linked from both sides takes each port, its markers and its traffic from its own switch\'s label, in any order of the links',
-    at(PF).row.port === 'GE1/0/45 [T] ⇄ Eth1/0/49' &&
-    at(PF).row.portTitle === 'HPE (172.20.254.202) GE1/0/45 ⇄ sw-f (10.1.0.6) Eth1/0/49\nLLDP link\nGE1/0/45: 1G\nEth1/0/49: 1G ↓2M ↑3M' &&
+    at(PF).row.port === 'GE1/0/45 [T] → Eth1/0/49' &&
+    at(PF).row.portTitle === 'HPE (172.20.254.202) GE1/0/45 → sw-f (10.1.0.6) Eth1/0/49\nLLDP link\nGE1/0/45: 1G\nEth1/0/49: 1G ↓2M ↑3M' &&
     JSON.stringify(T.buildTopologyTree(reversed, null, { colors: groupColors })) === JSON.stringify(tree), at(PF).row);
 
   // Filters: a hidden device in between, a hidden parent.
   const noHub = rows(T.treeProject(sp, shownBy(filterable.filter(g => g !== 'hub')), {}));
   const m1 = noHub.find(r => r.row.id === PM1);
   check('ports: the hub filtered out: its members hang on the switch port, through the hub, their own port unknown',
-    m1.parent === PA && m1.row.port === 'GE1/0/40 ⇄ ?' &&
-    m1.row.portTitle === 'HPE (172.20.254.202) GE1/0/40 ⇄ Dell (10.1.0.41) ?\nFDB link\nvia Unmanaged (filtered out)\n? = port unknown', m1.row);
+    m1.parent === PA && m1.row.port === 'GE1/0/40 → ?' &&
+    m1.row.portTitle === 'HPE (172.20.254.202) GE1/0/40 → Dell (10.1.0.41) ?\nFDB link\nvia Unmanaged (filtered out)\n? = port unknown', m1.row);
   const noSwitch = rows(T.treeProject(sp, shownBy(filterable.filter(g => g !== 'switch')), {}));
   const e = noSwitch.find(r => r.row.id === PE), hub = noSwitch.find(r => r.row.id === PG);
   check('ports: the parent filtered out: the badge names it, and the row tooltip says where the device is plugged in',
-    e.parent === null && e.row.port === 'HPE (172.20.254.202) GE1/0/22 [V1500] ⇄ ?' && e.row.title.endsWith('\nplugged into HPE (172.20.254.202) GE1/0/22') &&
-    hub.row.port === 'HPE (172.20.254.202) GE1/0/40 ⇄ ?' && noSwitch.find(r => r.row.id === PM1).row.port === '', [e.row, hub.row.port]);
+    e.parent === null && e.row.port === 'HPE (172.20.254.202) GE1/0/22 [V1500] → ?' && e.row.title.endsWith('\nplugged into HPE (172.20.254.202) GE1/0/22') &&
+    hub.row.port === 'HPE (172.20.254.202) GE1/0/40 → ?' && noSwitch.find(r => r.row.id === PM1).row.port === '', [e.row, hub.row.port]);
   const onlyEndpoints = rows(T.treeProject(sp, shownBy(['endpoint']), {}));
   const lone = onlyEndpoints.find(r => r.row.id === PM1);
   check('ports: switch and hub filtered out: a hub member names the switch port it hangs on, through the hub',
-    lone.parent === null && lone.row.port === 'HPE (172.20.254.202) GE1/0/40 ⇄ ?' &&
-    lone.row.portTitle === 'HPE (172.20.254.202) GE1/0/40 ⇄ Dell (10.1.0.41) ?\nFDB link\nvia Unmanaged (filtered out)\n? = port unknown', lone.row);
+    lone.parent === null && lone.row.port === 'HPE (172.20.254.202) GE1/0/40 → ?' &&
+    lone.row.portTitle === 'HPE (172.20.254.202) GE1/0/40 → Dell (10.1.0.41) ?\nFDB link\nvia Unmanaged (filtered out)\n? = port unknown', lone.row);
 
   // Escaping (finding F86): hostile port names, near and far, are text.
   const html = rs.map(r => r.json.text).join('\n');
   check('ports: hostile port names are text in the badge and its tooltip', safeTree(tree).length === 0 &&
-    !html.includes('<img') && !html.includes('<b>') && at(PX).row.port === '<b>GE1/0/31</b> [T] ⇄ "><img src=x onerror=alert(3)>' &&
-    at(PX).row.portHTML === `&lt;b&gt;GE1/0/31&lt;/b&gt; ${mark('[T]')} ⇄ &quot;&gt;&lt;img src=x onerror=alert(3)&gt;` &&
-    at(PX).row.portTitle === 'HPE (172.20.254.202) <b>GE1/0/31</b> ⇄ evil (10.1.0.66) "><img src=x onerror=alert(3)>\nLLDP link\n<b>GE1/0/31</b>: 1G ↓1M ↑2M',
+    !html.includes('<img') && !html.includes('<b>') && at(PX).row.port === '<b>GE1/0/31</b> [T] → "><img src=x onerror=alert(3)>' &&
+    at(PX).row.portHTML === `&lt;b&gt;GE1/0/31&lt;/b&gt; ${mark('[T]')} → &quot;&gt;&lt;img src=x onerror=alert(3)&gt;` &&
+    at(PX).row.portTitle === 'HPE (172.20.254.202) <b>GE1/0/31</b> → evil (10.1.0.66) "><img src=x onerror=alert(3)>\nLLDP link\n<b>GE1/0/31</b>: 1G ↓1M ↑2M',
     [safeTree(tree), at(PX).row]);
   check('ports: a bracket that is no marker stays in the port name, and an entity in a port name is shown as it is',
-    at(PX3).row.port === 'GE1/0/32 [V1"2] ⇄ eth0 [x]&amp;' && at(PX3).row.portHTML === 'GE1/0/32 [V1&quot;2] ⇄ eth0 [x]&amp;amp;', at(PX3).row);
+    at(PX3).row.port === 'GE1/0/32 [V1"2] → eth0 [x]&amp;' && at(PX3).row.portHTML === 'GE1/0/32 [V1&quot;2] → eth0 [x]&amp;amp;', at(PX3).row);
   check('ports: a MAC-REF link names the far switch\'s port (from its FDB) after the "|", as an LLDP link does',
-    at(PK).row.port === 'GE1/0/34 [MAC-REF] ⇄ Eth1/0/24' && at(PK).row.portHTML === `GE1/0/34 ${mark('[MAC-REF]')} ⇄ Eth1/0/24` &&
-    at(PK).row.portTitle === 'HPE (172.20.254.202) GE1/0/34 ⇄ sw-k (10.1.0.10) Eth1/0/24\nMAC-REF link\nGE1/0/34: ↓1M ↑2M', at(PK).row);
+    at(PK).row.port === 'GE1/0/34 [MAC-REF] → Eth1/0/24' && at(PK).row.portHTML === `GE1/0/34 ${mark('[MAC-REF]')} → Eth1/0/24` &&
+    at(PK).row.portTitle === 'HPE (172.20.254.202) GE1/0/34 → sw-k (10.1.0.10) Eth1/0/24\nMAC-REF link\nGE1/0/34: ↓1M ↑2M', at(PK).row);
 
   // A switch with a device below it and a hostile name, filtered out: its
   // name goes into the badge of the device below it, in the badge's text
@@ -480,9 +480,9 @@ function portGraph() {
   const below = rows(swOut).find(r => r.row.id === PHE);
   check('ports: a filtered-out switch with a hostile name is text in the badge of the device below it',
     safeTree(swOut).length === 0 && !rows(swOut).some(r => r.json.text.includes('<img')) && below.parent === null &&
-    below.row.port === `${XSW} (10.1.0.8) GE1/0/3 [V10] ⇄ ?` &&
+    below.row.port === `${XSW} (10.1.0.8) GE1/0/3 [V10] → ?` &&
     below.row.portHTML.startsWith('&lt;img src=x onerror=alert(4)&gt; (10.1.0.8) GE1/0/3 ') &&
-    below.row.portTitle === `${XSW} (10.1.0.8) GE1/0/3 ⇄ Intel (10.1.0.9) ?\n? = port unknown` &&
+    below.row.portTitle === `${XSW} (10.1.0.8) GE1/0/3 → Intel (10.1.0.9) ?\n? = port unknown` &&
     below.row.title.endsWith(`\nplugged into ${XSW} (10.1.0.8) GE1/0/3`), [safeTree(swOut), below && below.row]);
   check('ports: the device search matches both ports of the link to the parent, with their markers',
     T.treeSearchMatch('1/1/28', at(PB).json) && T.treeSearchMatch('TGE1/0/51', at(PB).json) && T.treeSearchMatch('[v1500]', at(PE).json) &&
@@ -571,7 +571,7 @@ function hops(data, root) {
     const fromParent = linkOf.get(`${r.parent}|${r.row.id}`), l = fromParent || linkOf.get(`${r.row.id}|${r.parent}`);
     const up = fromParent ? sourcePort(l.sourceLabel) : targetPort(l.targetLabel);
     const down = fromParent ? targetPort(l.targetLabel) : sourcePort(l.sourceLabel);
-    const want = up || down ? `${up || '?'} ⇄ ${down || '?'}` : '';
+    const want = up || down ? `${up || '?'} → ${down || '?'}` : '';
     if (r.row.port !== want) wrong.push([r.parent, r.row.id, l.label, r.row.port, want]);
     if (want) {
       if (fromParent) parentIsSource++;
@@ -582,8 +582,8 @@ function hops(data, root) {
     wrong.length === 0 && parentIsSource > 0 && parentIsTarget > 0, [wrong.slice(0, 3), parentIsSource, parentIsTarget]);
   const owner = devices.find(r => r.row.id === '88:22:5b:88:e2:40');
   check('fixture: the owner\'s link: 172.20.230.253 hangs from 172.20.254.202 port TGE1/0/51, on its own port Port28',
-    owner.parent === '4c:ae:a3:8d:ee:c9' && owner.row.port === 'TGE1/0/51 ⇄ Port28' &&
-    owner.row.portTitle === 'HPE (172.20.254.202) TGE1/0/51 ⇄ 172.20.230.253 Port28\nLLDP link', owner.row);
+    owner.parent === '4c:ae:a3:8d:ee:c9' && owner.row.port === 'TGE1/0/51 → Port28' &&
+    owner.row.portTitle === 'HPE (172.20.254.202) TGE1/0/51 → 172.20.230.253 Port28\nLLDP link', owner.row);
 
   // Every filter of one group, and of all groups but one: the shown devices,
   // each once, below their nearest shown ancestor of the full tree, and the
