@@ -1195,7 +1195,8 @@ function showInfoPanel(node) {
         managedSection.hidden = !m;
         if (m) {
             const clients = (m.clients || []).length;
-            const count = m.kind === 'hypervisor' ? `${clients} VM NIC${clients === 1 ? '' : 's'}` : `${clients} client${clients === 1 ? '' : 's'}`;
+            const vms = typeof treeClientCount === 'function' ? treeClientCount(m) : clients;
+            const count = m.kind === 'hypervisor' ? `${vms} VM${vms === 1 ? '' : 's'}` : `${clients} client${clients === 1 ? '' : 's'}`;
             document.getElementById('infoManaged').textContent = [`${m.source || 'Controller'} ${m.controller || ''}`.trim(),
                 m.model, m.state, m.firmware && (m.kind === 'hypervisor' ? m.firmware : 'firmware ' + m.firmware), count].filter(Boolean).join(' · ');
         }

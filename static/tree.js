@@ -408,8 +408,8 @@ function treeTitle(sp, info) {
         lines.push([`${m.source || 'controller'} ${m.controller || ''}`.trim(), m.model, m.state, m.firmware && 'firmware ' + m.firmware]
             .filter(Boolean).join(' · '));
         if (m.clients && m.clients.length) {
-            const n = m.clients.length;
-            lines.push(m.kind === 'hypervisor' ? `${n} virtual NIC${n === 1 ? '' : 's'} of its VMs` : `${n} client${n === 1 ? '' : 's'} connected`);
+            const n = treeClientCount(m);
+            lines.push(m.kind === 'hypervisor' ? `${n} VM${n === 1 ? '' : 's'}` : `${n} client${n === 1 ? '' : 's'} connected`);
         }
     }
     return lines.join('\n');
@@ -490,9 +490,9 @@ function treeRowHTML(info, color, badge, count, title) {
     if (m && m.state && String(m.state).toUpperCase() !== 'ONLINE') parts.push(`<span class="tv-state">${treeEscapeHTML(m.state)}</span>`);
     if (count) parts.push(treeCountHTML(count));
     if (m && m.clients && m.clients.length) {
-        const n = m.clients.length;
+        const n = treeClientCount(m);
         parts.push(m.kind === 'hypervisor'
-            ? `<span class="tv-clients" title="${n} virtual NIC${n === 1 ? '' : 's'} of its VMs">🖥️ ${n}</span>`
+            ? `<span class="tv-clients" title="${n} VM${n === 1 ? '' : 's'}">🖥️ ${n}</span>`
             : `<span class="tv-clients" title="${n} client${n === 1 ? '' : 's'} connected">📶 ${n}</span>`);
     }
     return `<span class="tv-row${unreachable ? ' tv-unreachable' : ''}" title="${treeEscapeHTML(title)}">` +
@@ -569,23 +569,57 @@ function treeClientDetails(c) {
     return lines.filter(Boolean);
 }
 
+// treeClientGroups groups the clients a controller lists on a device
+// (node.managed.clients): one group per client, but one per virtual
+// machine, whose clients are its virtual NICs (a vCenter lists each).
+function treeClientGroups(m) {
+    const groups = [], byVM = new Map();
+    for (const c of (m && Array.isArray(m.clients) ? m.clients : [])) {
+        if (!c || !c.mac) continue;
+        if (c.kind === 'vm' && c.name) {
+            const key = String(c.name);
+            if (byVM.has(key)) {
+                byVM.get(key).push(c);
+                continue;
+            }
+            byVM.set(key, [c]);
+            groups.push(byVM.get(key));
+            continue;
+        }
+        groups.push([c]);
+    }
+    return groups;
+}
+
+// treeClientCount is how many clients a device has: its virtual machines
+// count once, whatever number of NICs they have.
+function treeClientCount(m) {
+    return treeClientGroups(m).length;
+}
+
 // treeClientRows are the rows of the clients its controller lists on a
-// device (node.managed.clients: a UniFi access point's Wi-Fi clients):
-// leaves with the client's name, IP and MAC, its SSID and signal when the
-// controller tells them, found by the device search. They are no devices
-// of the graph: no count, no info panel; the tooltip tells the details
-// (treeClientDetails). Only escaped strings and constants go in.
+// device (node.managed.clients: a UniFi access point's Wi-Fi clients, a
+// vCenter host's VMs): leaves with the client's name, IP and MAC, its SSID
+// and signal when the controller tells them, found by the device search;
+// a VM is one row, its NICs in the tooltip. They are no devices of the
+// graph: no count, no info panel; the tooltip tells the details
+// (treeClientDetails). data.macs are the MACs of a row: treeProject drops
+// it when one is a device the filter shows. Only escaped strings and
+// constants go in.
 function treeClientRows(id, info) {
     const m = info.node.managed;
     if (!m || !Array.isArray(m.clients)) return [];
-    return m.clients.filter(c => c && c.mac).map(c => {
+    return treeClientGroups(m).map(nics => {
+        const c = Object.assign({}, nics[0], { ip: (nics.find(n => n.ip) || nics[0]).ip });
+        const macs = nics.map(n => String(n.mac));
         // a client with no name has its MAC as the name in UniFi; its DHCP
         // host name is the next best
         const named = !!c.name && String(c.name).toLowerCase() !== String(c.mac).toLowerCase();
         const name = named ? c.name : (c.hostname || c.mac);
         const icon = c.kind === 'wired' ? '🔌' : c.kind === 'vm' ? '🖥️' : '📶';
         const kind = { wired: 'wired client', wireless: 'Wi-Fi client', arp: 'WLAN host in the ARP table', vm: 'virtual machine' }[c.kind] || 'client';
-        const title = [name, c.ip, c.mac, `${kind} of ${info.name}`, ...treeClientDetails(c)].filter(Boolean).join('\n');
+        const nicLines = nics.length > 1 ? nics.map(n => [n.mac, n.ip, n.network].filter(Boolean).join(' · ')) : [c.ip, c.mac];
+        const title = [name, ...nicLines, `${kind} of ${info.name}`, ...treeClientDetails(c)].filter(Boolean).join('\n');
         const radio = [c.ssid, c.signal && `${c.signal} dBm`].filter(Boolean).join(' · ');
         return {
             id: treeClientId(id, String(c.mac)),
@@ -593,9 +627,10 @@ function treeClientRows(id, info) {
                 `<span class="tv-name">${treeEscapeHTML(name)}</span>` +
                 (c.ip ? ` <span class="tv-addr">${treeEscapeHTML(c.ip)}</span>` : '') +
                 (name !== c.mac ? ` <span class="tv-addr">${treeEscapeHTML(c.mac)}</span>` : '') +
+                (nics.length > 1 ? ` <span class="tv-addr">+${nics.length - 1} NIC${nics.length > 2 ? 's' : ''}</span>` : '') +
                 (radio ? ` <span class="tv-radio">${treeEscapeHTML(radio)}</span>` : '') + `</span>`,
             children: [],
-            data: { client: String(c.mac), q: [name, c.ip, c.mac, c.ssid, c.hostname].filter(Boolean).join('\n').toLowerCase() },
+            data: { client: String(c.mac), macs, q: [name, ...nics.map(n => n.ip), ...macs, c.ssid, c.hostname].filter(Boolean).join('\n').toLowerCase() },
         };
     });
 }
@@ -673,10 +708,10 @@ function treeProject(sp, shown, options) {
             text: treeRowHTML(info, treeOwn(colors, info.group), badge, count, title),
             // a client the filter shows as a device of its own (a Wi-Fi
             // client node, module_inventory.go) has its own row instead
-            children: rows.map(r => r.json).concat(xrefs, treeClientRows(id, info).filter(r => {
-                const node = sp.infos.get(r.data.client);
-                return !(node && isShown(node.node));
-            })),
+            children: rows.map(r => r.json).concat(xrefs, treeClientRows(id, info).filter(r => !r.data.macs.some(mac => {
+                const node = sp.infos.get(mac);
+                return node && isShown(node.node);
+            }))),
             data: { node: id, q: info.q },
         };
         return [{ info, json, count }];
