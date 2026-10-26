@@ -68,7 +68,7 @@ main() {
     # owned by root, and the next git command of the owner fails
     if [ "$(id -u)" = 0 ]; then
         die "run ./deploy.sh without sudo: it asks sudo itself for the restart. If an earlier run did, give the files back first:
-   sudo chown -R qosim:qosim $DIR/.git && git -C $DIR ls-files -z | (cd $DIR && sudo xargs -0 chown qosim:qosim)"
+   sudo chown -R qosim:qosim $DIR/.git $DIR/modules $DIR/static && git -C $DIR ls-files -z | (cd $DIR && sudo xargs -0 chown qosim:qosim)"
     fi
 
     case "${1:-}" in
