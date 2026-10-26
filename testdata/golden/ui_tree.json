@@ -12,6 +12,7 @@
     "synthetic: a client shown as a device has no client row besides",
     "synthetic: a managed device's tooltip has what its controller says",
     "synthetic: a client's SSID and signal on its row, its details in its tooltip",
+    "synthetic: a gateway shows how many Wi-Fi clients it serves, listing none",
     "synthetic: a vCenter host by its name with its VM count, a VM node by its vCenter name, a VM with no node a row below",
     "synthetic: BFS: a router behind a switch hangs below it",
     "synthetic: child order: routers/switches, hubs/hypervisors, the rest, natural by name",

@@ -237,7 +237,7 @@ type gatewayPoll struct {
 	MACPorts map[string]string
 	// ARP and Subnets are the gateway's ARP rows and its subnets
 	// (ipAddrTable) from the last walk that answered: the WLAN hosts of a
-	// Wi-Fi gateway come from them (addGatewayWLANHosts)
+	// Wi-Fi gateway join the access points' clients (addGatewayWLAN)
 	ARP     []ARPEntry
 	Subnets []netip.Prefix
 }

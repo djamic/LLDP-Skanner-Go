@@ -1202,6 +1202,14 @@ function showInfoPanel(node) {
         }
     }
 
+    // A gateway: the Wi-Fi clients of the access points it serves (node.wlan)
+    const wlanSection = document.getElementById('infoWLANSection');
+    if (wlanSection) {
+        const w = node.wlan;
+        wlanSection.hidden = !(w && w.clients);
+        if (w && w.clients) document.getElementById('infoWLAN').textContent = `the gateway of ${w.clients} Wi-Fi client${w.clients === 1 ? '' : 's'} of the access points`;
+    }
+
     // What the controller tells of it as a client (node.client: a Wi-Fi
     // client's SSID, signal, ...; a VM's vCenter name, guest OS, power;
     // tree.js treeClientDetails words it)

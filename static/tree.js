@@ -412,6 +412,8 @@ function treeTitle(sp, info) {
             lines.push(m.kind === 'hypervisor' ? `${n} VM${n === 1 ? '' : 's'}` : `${n} client${n === 1 ? '' : 's'} connected`);
         }
     }
+    const w = info.node.wlan;
+    if (w && w.clients) lines.push(`the gateway of ${w.clients} Wi-Fi client${w.clients === 1 ? '' : 's'} of the access points`);
     return lines.join('\n');
 }
 
@@ -495,6 +497,12 @@ function treeRowHTML(info, color, badge, count, title) {
             ? `<span class="tv-clients" title="${n} VM${n === 1 ? '' : 's'}">🖥️ ${n}</span>`
             : `<span class="tv-clients" title="${n} client${n === 1 ? '' : 's'} connected">📶 ${n}</span>`);
     }
+    // a gateway: how many Wi-Fi clients of the access points it serves
+    // (node.wlan); they are listed below their access points
+    const w = info.node.wlan;
+    if (w && w.clients) {
+        parts.push(`<span class="tv-clients" title="the gateway of ${w.clients} Wi-Fi client${w.clients === 1 ? '' : 's'} of the access points">📶 ${w.clients}</span>`);
+    }
     return `<span class="tv-row${unreachable ? ' tv-unreachable' : ''}" title="${treeEscapeHTML(title)}">` +
         `<span class="tv-dot" style="background:${dot}"></span>${parts.join(' ')}</span>`;
 }
@@ -565,6 +573,7 @@ function treeClientDetails(c) {
         join([c.uptime && `connected ${treeDuration(c.uptime)}`,
             c.hostname && String(c.hostname) !== String(c.name) && `${c.kind === 'vm' ? 'guest' : 'host'} name ${c.hostname}`]),
         join([c.vendor, c.network && `network ${c.network}`, c.vlan && `VLAN ${c.vlan}`]),
+        c.gateway && `gateway ${c.gateway}`,
     ];
     return lines.filter(Boolean);
 }
@@ -617,7 +626,7 @@ function treeClientRows(id, info) {
         const named = !!c.name && String(c.name).toLowerCase() !== String(c.mac).toLowerCase();
         const name = named ? c.name : (c.hostname || c.mac);
         const icon = c.kind === 'wired' ? '🔌' : c.kind === 'vm' ? '🖥️' : '📶';
-        const kind = { wired: 'wired client', wireless: 'Wi-Fi client', arp: 'WLAN host in the ARP table', vm: 'virtual machine' }[c.kind] || 'client';
+        const kind = { wired: 'wired client', wireless: 'Wi-Fi client', vm: 'virtual machine' }[c.kind] || 'client';
         const nicLines = nics.length > 1 ? nics.map(n => [n.mac, n.ip, n.network].filter(Boolean).join(' · ')) : [c.ip, c.mac];
         const title = [name, ...nicLines, `${kind} of ${info.name}`, ...treeClientDetails(c)].filter(Boolean).join('\n');
         const radio = [c.ssid, c.signal && `${c.signal} dBm`].filter(Boolean).join(' · ');

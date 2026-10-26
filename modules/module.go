@@ -168,6 +168,9 @@ type ManagedClient struct {
 	Satisfaction int    `json:"satisfaction,omitempty"` // the controller's 0-100 score
 	OS           string `json:"os,omitempty"`           // a VM's guest OS, "Ubuntu Linux (64-bit)"
 	Power        string `json:"power,omitempty"`        // a VM's "On", "Off", "Suspended"
+	// Gateway is the scanner's, not the controller's: the gateway whose
+	// ARP table has the client, "pfSense.home.arpa 172.15.1.254"
+	Gateway string `json:"gateway,omitempty"`
 }
 
 // Inventorier is a module whose devices report the devices they manage;

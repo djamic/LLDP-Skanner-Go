@@ -281,6 +281,9 @@ type GraphNode struct {
 	// device it manages (a Wi-Fi client's SSID, signal, ...); only
 	// graphHandler sets it
 	Client *ClientView `json:"client,omitempty"`
+	// WLAN is what the scanner tells of a gateway's Wi-Fi clients
+	// (addGatewayWLAN); only graphHandler sets it
+	WLAN *WLANView `json:"wlan,omitempty"`
 	X           float64  `json:"x,omitempty"`
 	Y           float64  `json:"y,omitempty"`
 }

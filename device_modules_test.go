@@ -387,117 +387,80 @@ func TestManagedClientsInGraph(t *testing.T) {
 	}
 }
 
-// TestGatewayWLANHosts checks the WLAN hosts of a gateway: the hosts of
-// its ARP table in its subnets that hold a client of a managed device go to
-// its router node as clients (source "Gateway ARP", in IP order), named by
-// the controller when it lists them on a device the graph has not, and
-// addManagedClients draws them with "ARP" links. Left out are the hosts in
-// its other subnets, the clients shown under a device of the graph, the
-// graph's nodes, the managed devices, their controller, the gateway and a repeated or
-// unusable MAC. A WLAN another gateway's IP is in is that gateway's, and
-// a host goes to one gateway only.
-func TestGatewayWLANHosts(t *testing.T) {
+// TestGatewayWLAN checks the gateways joined with the Wi-Fi clients of the
+// access points: a client's gateway is one whose ARP table has its MAC, the
+// one whose own IP is in the client's subnet first (debian216 has an IP in
+// the pfSense's Wi-Fi /16 too), else the first in gateway_ip order; a
+// client with no IP gets the ARP table's; the router node counts its
+// clients. No node or link is added, and a host only the ARP tables show
+// is not drawn; the inventory itself is not changed.
+func TestGatewayWLAN(t *testing.T) {
 	resetState(t)
-	const gw, gwMAC = "10.9.0.1", "00:0c:29:00:00:01"
-	setGatewayIPs([]string{fixedGatewayIP, gw})
-	ap, apAway := "70:a7:41:00:00:01", "70:a7:41:00:00:02"
+	const pf, pfMAC, deb, debMAC = "10.9.0.1", "18:a9:05:00:00:01", "10.20.0.1", "00:0c:29:00:00:02"
+	setGatewayIPs([]string{fixedGatewayIP, deb, pf})
+	ap := "70:a7:41:00:00:01"
 	inventoryMu.Lock()
-	inventories = map[string]inventoryRecord{"unificontroller|10.9.1.9": {Module: "unificontroller", IP: "10.9.1.9"}}
-	managedByMAC = map[string]ManagedView{
-		ap:     {Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", Name: "Laptop", IP: "10.9.71.5", Kind: "wireless"}}},
-		apAway: {Name: "B 2", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:02", Name: "Phone-X", IP: "10.9.71.9", Kind: "wireless"}}},
-	}
+	managedByMAC = map[string]ManagedView{ap: {Name: "A 1", Kind: "access_point", Clients: []modules.ManagedClient{
+		{MAC: "de:ad:00:00:00:01", Name: "Laptop", IP: "10.9.71.5", Kind: "wireless"},
+		{MAC: "de:ad:00:00:00:02", Name: "phone", Kind: "wireless"},                   // no IP from the controller
+		{MAC: "de:ad:00:00:00:03", Name: "tablet", IP: "10.50.0.7", Kind: "wireless"}, // a subnet neither gateway's IP is in
+		{MAC: "de:ad:00:00:00:04", Name: "printer", IP: "10.9.72.4", Kind: "wired"},
+		{MAC: "de:ad:00:00:00:05", Name: "far", IP: "10.9.71.50", Kind: "wireless"}, // in no ARP table
+	}}}
 	inventoryMu.Unlock()
 	t.Cleanup(func() {
 		inventoryMu.Lock()
-		inventories, managedByMAC = map[string]inventoryRecord{}, map[string]ManagedView{}
+		managedByMAC = map[string]ManagedView{}
 		inventoryMu.Unlock()
 	})
 	arp := []ARPEntry{
-		{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"},
-		{IPAddress: "10.9.71.5", MACAddress: "de:ad:00:00:00:01"}, // shown under the access point
-		{IPAddress: "10.9.71.9", MACAddress: "DE:AD:00:00:00:02"}, // its access point is no node
-		{IPAddress: "10.9.70.2", MACAddress: "de:ad:00:00:00:04"}, // a node of the graph
-		{IPAddress: "10.9.1.2", MACAddress: ap},
-		{IPAddress: "10.9.1.3", MACAddress: apAway},
-		{IPAddress: "10.9.0.1", MACAddress: gwMAC},
-		{IPAddress: "10.20.0.5", MACAddress: "de:ad:00:00:00:05"}, // not in the WLAN
-		{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"},
-		{IPAddress: "10.9.80.4", MACAddress: "00:00:00:00:00:00"},
-		{IPAddress: "10.9.12.1", MACAddress: "de:ad:00:00:00:06"},
-		{IPAddress: "10.9.1.9", MACAddress: "d0:21:f9:00:00:09"}, // the controller
+		{IPAddress: "10.9.71.5", MACAddress: "de:ad:00:00:00:01"}, {IPAddress: "10.9.71.8", MACAddress: "de:ad:00:00:00:02"},
+		{IPAddress: "10.50.0.7", MACAddress: "de:ad:00:00:00:03"}, {IPAddress: "10.9.72.4", MACAddress: "de:ad:00:00:00:04"},
+		{IPAddress: "10.9.80.9", MACAddress: "de:ad:00:00:00:09"}, // a host no controller lists
 	}
+	subnets := []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.50.0.0/24")}
 	gatewayPollsMu.Lock()
-	gatewayPolls[gw] = gatewayPoll{Answered: true, ARP: arp, Subnets: []netip.Prefix{
-		netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.20.0.0/24"), netip.MustParsePrefix("10.9.71.9/32")}}
+	gatewayPolls[pf] = gatewayPoll{Answered: true, ARP: arp, Subnets: subnets}
+	gatewayPolls[deb] = gatewayPoll{Answered: true, ARP: arp, Subnets: subnets}
 	gatewayPollsMu.Unlock()
 	data := GraphData{Nodes: []GraphNode{
-		{ID: gwMAC, Group: "router", SysName: "pfSense\n" + gw},
+		{ID: pfMAC, Group: "router", SysName: "pfSense\n" + pf},
+		{ID: debMAC, Group: "router", SysName: "debian216\n" + deb},
 		{ID: ap, Group: "access_point"},
-		{ID: "de:ad:00:00:00:04", Group: "endpoint"},
 	}}
 	addManaged(&data)
-	addGatewayWLANHosts(&data)
-	m := data.Nodes[0].Managed
-	if m == nil || m.Source != "Gateway ARP" || m.Controller != gw {
-		t.Fatalf("the router's view %+v", m)
+	addGatewayWLAN(&data)
+	var got []string
+	for _, c := range data.Nodes[2].Managed.Clients {
+		got = append(got, strings.Join([]string{c.Name, c.IP, c.Gateway}, " | "))
 	}
-	var hosts []string
-	for _, c := range m.Clients {
-		hosts = append(hosts, strings.Join([]string{c.MAC, c.IP, c.Name, c.Kind}, " "))
+	want := []string{"Laptop | 10.9.71.5 | pfSense 10.9.0.1", "phone | 10.9.71.8 | pfSense 10.9.0.1", "tablet | 10.50.0.7 | debian216 10.20.0.1",
+		"printer | 10.9.72.4 | ", "far | 10.9.71.50 | "}
+	if !slices.Equal(got, want) {
+		t.Errorf("clients\n got %q\nwant %q", got, want)
 	}
-	if want := []string{"de:ad:00:00:00:06 10.9.12.1  arp", "de:ad:00:00:00:02 10.9.71.9 Phone-X wireless", "de:ad:00:00:00:03 10.9.80.3  arp"}; !slices.Equal(hosts, want) {
-		t.Errorf("WLAN hosts %q, want %q", hosts, want)
+	if w := data.Nodes[0].WLAN; w == nil || w.Clients != 2 {
+		t.Errorf("pfSense %+v, want 2 Wi-Fi clients", w)
 	}
+	if w := data.Nodes[1].WLAN; w == nil || w.Clients != 1 {
+		t.Errorf("debian216 %+v, want 1 Wi-Fi client", w)
+	}
+	if data.Nodes[0].Managed != nil || data.Nodes[1].Managed != nil || len(data.Nodes) != 3 || len(data.Links) != 0 {
+		t.Errorf("the gateways got clients, or nodes or links were added: %+v", data)
+	}
+	if v := managedViewOf(ap); v.Clients[1].IP != "" || v.Clients[0].Gateway != "" {
+		t.Errorf("the inventory changed: %+v", v.Clients)
+	}
+
+	// The Wi-Fi client's node gets the ARP table's IP and its gateway
 	addManagedClients(&data)
-	var links []string
-	for _, l := range data.Links {
-		links = append(links, l.Source+">"+l.Target+" "+l.Label)
-	}
-	if want := []string{gwMAC + ">de:ad:00:00:00:06 ARP|wlan", gwMAC + ">de:ad:00:00:00:02 ARP|wlan", gwMAC + ">de:ad:00:00:00:03 ARP|wlan", ap + ">de:ad:00:00:00:01 WLAN|wlan"}; !slices.Equal(links, want) {
-		t.Errorf("links %q, want %q", links, want)
-	}
-
-	// Two gateways with the WLAN: the one whose IP is in it has its hosts
-	// (debian216 has an IP in the pfSense's Wi-Fi /16 too), and of a subnet
-	// neither IP is in the first gateway in gateway_ip order has them
-	const deb, debMAC = "10.20.0.1", "00:0c:29:00:00:02"
-	setGatewayIPs([]string{fixedGatewayIP, deb, gw})
-	inventoryMu.Lock()
-	managedByMAC[ap] = ManagedView{Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", IP: "10.9.71.5", Kind: "wireless"}, {MAC: "de:ad:00:00:00:09", IP: "10.50.0.9", Kind: "wireless"},
-		{MAC: "de:ad:00:00:00:0a", IP: "10.60.0.9", Kind: "vm"}}}
-	inventoryMu.Unlock()
-	shared := []ARPEntry{{IPAddress: "10.9.80.3", MACAddress: "de:ad:00:00:00:03"}, {IPAddress: "10.50.0.7", MACAddress: "de:ad:00:00:00:07"},
-		{IPAddress: "10.60.0.7", MACAddress: "de:ad:00:00:00:08"}} // the subnet of a VM only: no WLAN
-	gatewayPollsMu.Lock()
-	gatewayPolls[gw] = gatewayPoll{Answered: true, ARP: shared, Subnets: []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.50.0.0/24")}}
-	gatewayPolls[deb] = gatewayPoll{Answered: true, ARP: shared, Subnets: []netip.Prefix{netip.MustParsePrefix("10.9.0.0/16"), netip.MustParsePrefix("10.50.0.0/24"),
-		netip.MustParsePrefix("10.60.0.0/24")}}
-	gatewayPollsMu.Unlock()
-	data = GraphData{Nodes: []GraphNode{{ID: gwMAC, Group: "router", SysName: "pfSense\n" + gw}, {ID: debMAC, Group: "router", SysName: "debian216\n" + deb}}}
-	addGatewayWLANHosts(&data)
-	of := func(n GraphNode) string {
-		if n.Managed == nil {
-			return ""
+	for _, n := range data.Nodes {
+		if n.ID == "de:ad:00:00:00:02" && (n.IP != "10.9.71.8" || n.Client == nil || n.Client.Gateway != "pfSense 10.9.0.1") {
+			t.Errorf("the client's node %+v", n)
 		}
-		var macs []string
-		for _, c := range n.Managed.Clients {
-			macs = append(macs, c.MAC)
+		if n.ID == "de:ad:00:00:00:09" {
+			t.Error("a host only the ARP table shows is drawn")
 		}
-		return strings.Join(macs, ",")
-	}
-	if got, want := of(data.Nodes[0])+" / "+of(data.Nodes[1]), "de:ad:00:00:00:03 / de:ad:00:00:00:07"; got != want {
-		t.Errorf("pfSense / debian216 hosts %q, want %q", got, want)
-	}
-
-	// No managed client in a subnet of the gateway: no WLAN, no hosts
-	inventoryMu.Lock()
-	managedByMAC = map[string]ManagedView{ap: {Name: "A 1", Clients: []modules.ManagedClient{{MAC: "de:ad:00:00:00:01", IP: "192.168.5.5"}}}}
-	inventoryMu.Unlock()
-	data = GraphData{Nodes: []GraphNode{{ID: gwMAC, Group: "router", SysName: "pfSense\n" + gw}}}
-	addGatewayWLANHosts(&data)
-	if data.Nodes[0].Managed != nil {
-		t.Errorf("hosts without a WLAN subnet: %+v", data.Nodes[0].Managed)
 	}
 }
 

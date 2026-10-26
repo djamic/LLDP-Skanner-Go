@@ -367,6 +367,15 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
     JSON.stringify(details) === JSON.stringify(['TUIT · 5 GHz · channel 36 · Wi-Fi 6 (ax)', 'signal -61 dBm · experience 97%',
       'rate rx 866 / tx 1200 Mbit/s · traffic rx 1.2 KB / tx 5.7 GB', 'connected 1h 1m · host name phone<x>', 'Intel · VLAN 20']) &&
     T.treeClientDetails({ mac: 'x', channel: 0, signal: 0 }).length === 0, [dc, details]);
+  // A gateway with the Wi-Fi clients it serves (node.wlan): a 📶 count and
+  // a tooltip line, no client rows; a client's gateway in its details
+  const gwNode = { id: '18:a9:05:00:00:01', label: 'pfSense\n10.0.0.254', sysName: 'pfSense\n10.0.0.254', group: 'router', wlan: { clients: 7 } };
+  const gwTree = T.treeProject(T.treeSpanning({ nodes: [gwNode], links: [] }), null, {});
+  const gwRow = rows(gwTree)[0];
+  check('synthetic: a gateway shows how many Wi-Fi clients it serves, listing none',
+    gwRow.json.text.includes('📶 7') && clientRows(gwTree).length === 0 &&
+    T.treeSpanning({ nodes: [gwNode], links: [] }).infos.get(gwNode.id).title.includes('the gateway of 7 Wi-Fi clients of the access points') &&
+    T.treeClientDetails({ mac: 'x', gateway: 'pfSense 10.0.0.254' }).join() === 'gateway pfSense 10.0.0.254', [gwRow.row]);
   // A vCenter's host and its VMs (module_inventory.go): the host named by
   // vCenter with its VMs as a 🖥️ count, a VM node by its vCenter name, a
   // VM with no node as one 🖥️ row below its host whatever number of NICs
