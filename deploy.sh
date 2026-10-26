@@ -64,6 +64,13 @@ main() {
     set -euo pipefail
     cd "$DIR"
 
+    # Run as root (sudo ./deploy.sh), git leaves the sources it writes
+    # owned by root, and the next git command of the owner fails
+    if [ "$(id -u)" = 0 ]; then
+        die "run ./deploy.sh without sudo: it asks sudo itself for the restart. If an earlier run did, give the files back first:
+   sudo chown -R qosim:qosim $DIR/.git && git -C $DIR ls-files -z | (cd $DIR && sudo xargs -0 chown qosim:qosim)"
+    fi
+
     case "${1:-}" in
     --restart)
         restart_monitor
