@@ -790,13 +790,34 @@
         }
         .context-banner button:hover { background: rgba(74,144,226,0.5); }
         .chart-window { color: #8a9bae; font-size: 12px; font-weight: normal; margin-left: 8px; }
+
+        /* The device the page is for (renderDevicePanel) */
+        .device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 10px;
+        }
+        .device-cell {
+            background: #0d1b2a;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 10px 14px;
+            min-width: 0;
+        }
+        .device-cell .dc-label { font-size: 10px; color: #6c8ab0; text-transform: uppercase; }
+        .device-cell .dc-value { font-size: 14px; color: #e0e0e0; margin-top: 4px; overflow-wrap: anywhere; white-space: pre-line; }
+        .device-cell .dc-value a { color: #64B5F6; text-decoration: none; }
+        .device-cell .dc-value a:hover { text-decoration: underline; }
+        .device-warn { color: #FFB74D; font-size: 13px; margin-top: 12px; }
+        .dev-status-up { background: rgba(76,175,80,0.2); color: #4CAF50; }
+        .dev-status-down { background: rgba(244,67,54,0.2); color: #f44336; }
     </style>
 </head>
 
 <body>
     <div class="container" style="height: auto; min-height: 100vh;">
         <header>
-            <h1>📊 Switch History</h1>
+            <h1 id="pageTitle">📊 Switch History</h1>
             <div class="stats">
                 <a href="/" class="back-link">← Back to Topology</a>
             </div>
@@ -806,9 +827,19 @@
             <!-- Whose history: a device's switch port, a switch's uplink (renderContextBanner) -->
             <div class="context-banner" id="contextBanner" style="display: none;"></div>
 
+            <!-- The device the page is for: its facts and its switch port (renderDevicePanel) -->
+            <div class="switch-panel" id="devicePanel" style="display: none;">
+                <div class="switch-panel-header">
+                    <h2 id="devTitle"></h2>
+                    <div class="switch-port-stats"><span id="devStatus"></span></div>
+                </div>
+                <div class="device-grid" id="devGrid"></div>
+                <div class="device-warn" id="devWarn"></div>
+            </div>
+
             <!-- Filter Panel -->
             <div class="filter-panel">
-                <div class="filter-group">
+                <div class="filter-group" id="deviceGroup">
                     <label>Device IP</label>
                     <select id="deviceSelect">
                         <option value="">Select Device...</option>
@@ -826,7 +857,7 @@
                     </select>
                 </div>
 
-                <div class="filter-group">
+                <div class="filter-group" id="portGroup">
                     <label>Port</label>
                     <select id="portSelect">
                         <option value="all">All Ports</option>
@@ -1097,12 +1128,15 @@
 
         // What the page shows (app.js uiHistoryURL opens it). historyPort:
         // the port asked of /api/history ('' the whole device). historyFor:
-        // the device that hangs on that port, { name, shared, via }, or null;
-        // its history is the port's, ↓/↑ the device's own download/upload
-        // (the port's out/in). historyUp: the uplink of the switch shown,
-        // { ip, port, name }, or null. historyPortInfo: the port the server
-        // found ({ name, if_name, if_index }), historyPortError why it found
-        // none, historyWindow the aggregation of the data ('5m', or '').
+        // the device the page is for, or null for a switch's own history:
+        // { name, type, vendor, ip, mac, down, client, shared, via }.
+        // Its history is the history of the switch port it hangs on, shown
+        // as its own (↓/↑ its download/upload, the port's out/in), without
+        // the switch's other ports (renderDevicePanel). historyUp: the
+        // uplink of the switch shown, { ip, port, name }, or null.
+        // historyPortInfo: the port the server found ({ name, if_name,
+        // if_index }), historyPortError why it found none, historyWindow the
+        // aggregation of the data ('5m', or '').
         let historyPort = '';
         let historyFor = null;
         let historyUp = null;
@@ -1111,8 +1145,7 @@
         let historyWindow = '';
 
         // historyDeviceView: the data is the port a device hangs on, so
-        // ↓/↑ are the device's (the port's out/in); not when the port was
-        // not found and the page shows the whole switch.
+        // ↓/↑ are the device's (the port's out/in).
         function historyDeviceView() {
             return !!(historyFor && historyPortInfo);
         }
@@ -1141,10 +1174,12 @@
             if (deviceId) {
                 historyPort = urlParams.get('port') || '';
                 if (urlParams.get('for')) {
+                    const p = (k) => urlParams.get(k) || '';
                     historyFor = {
-                        name: urlParams.get('for'),
+                        name: p('for'), type: p('type'), vendor: p('vendor'),
+                        ip: p('ip'), mac: p('mac'), down: p('down') === '1', client: p('client'),
                         shared: parseInt(urlParams.get('shared'), 10) || 0,
-                        via: (urlParams.get('via') || '').split(',').filter(Boolean),
+                        via: p('via').split(',').filter(Boolean),
                     };
                 }
                 if (urlParams.get('up')) {
@@ -1167,6 +1202,7 @@
                     select.appendChild(opt);
                 }
                 select.value = deviceId;
+                if (historyFor) showDeviceView();
                 loadHistory();
 
                 // Auto-open connect modal if connect=true (polled hosts only)
@@ -1272,6 +1308,16 @@
                 return;
             }
 
+            // A device whose switch port the topology does not name has no
+            // history: the switch's other ports are not its
+            if (historyFor && !historyPort) {
+                historyPortInfo = null;
+                historyPortError = '';
+                renderDevicePanel(null);
+                showEmpty('The topology names no switch port for this device, so there is no history for it');
+                return;
+            }
+
             showLoading(true);
 
             try {
@@ -1285,6 +1331,8 @@
                 renderContextBanner();
                 document.getElementById('chartWindow').textContent =
                     historyWindow ? `· maximum of every ${historyWindow}` : '';
+                // the device's card, with its port's state now, whatever the history
+                if (historyFor) loadDeviceDetail(deviceIP);
 
                 if (data.error) {
                     showEmpty(data.error);
@@ -1294,8 +1342,10 @@
                 historyData = data.data || [];
 
                 if (historyData.length === 0) {
-                    showEmpty(historyPortInfo
-                        ? `No traffic recorded on ${historyPortInfo.name} for selected timeframe`
+                    showEmpty(historyPortError
+                        ? `${historyPortError}: no history for this device`
+                        : historyFor ? 'No traffic recorded for this device for selected timeframe'
+                        : historyPortInfo ? `No traffic recorded on ${historyPortInfo.name} for selected timeframe`
                         : 'No data found for selected timeframe');
                     return;
                 }
@@ -1318,7 +1368,7 @@
                 updateStateTable(historyData);
 
                 // Load device detail for switch panel
-                loadDeviceDetail(deviceIP);
+                if (!historyFor) loadDeviceDetail(deviceIP);
 
                 showLoading(false);
 
@@ -1366,14 +1416,15 @@
 
             if (selectedPort !== 'all') {
                 // Single port selected. For the device on the port the
-                // port's out is its download, and its in the upload.
+                // port's out is its download, and its in the upload, and
+                // the lines are the device's, not the port's.
                 const points = portData[selectedPort] || [];
                 const device = historyDeviceView();
                 const down = device ? 'out' : 'in', up = device ? 'in' : 'out';
-                const side = device ? [' (port out)', ' (port in)'] : ['', ''];
+                const name = device ? '' : `${selectedPort} `;
                 if (points.length > 0) {
                     datasets.push({
-                        label: `${selectedPort} ↓ Download${side[0]}`,
+                        label: `${name}↓ Download`,
                         data: points.map(p => ({ x: p.x, y: p[down] })),
                         borderColor: '#4A90E2',
                         backgroundColor: 'rgba(74, 144, 226, 0.1)',
@@ -1383,7 +1434,7 @@
                         borderWidth: 2
                     });
                     datasets.push({
-                        label: `${selectedPort} ↑ Upload${side[1]}`,
+                        label: `${name}↑ Upload`,
                         data: points.map(p => ({ x: p.x, y: p[up] })),
                         borderColor: '#4CAF50',
                         backgroundColor: 'rgba(76, 175, 80, 0.1)',
@@ -1497,34 +1548,26 @@
             select.value = [...select.options].some(o => o.value === currentVal) ? currentVal : 'all';
         }
 
-        // renderContextBanner says whose history the page shows: the device
-        // on a switch port (historyFor), with how many share the port and
-        // whether the port was found, or one port of the switch, and offers
-        // the whole switch and the uplink of a switch (historyUp).
+        // renderContextBanner says, on a switch's own history, which one port
+        // the page shows and offers the whole switch again, and the uplink of
+        // the switch (historyUp). A device's page has its card instead
+        // (renderDevicePanel).
         function renderContextBanner() {
             const el = document.getElementById('contextBanner');
             const select = document.getElementById('deviceSelect');
             const opt = select.selectedOptions[0];
             const sw = opt && opt.value ? opt.textContent : select.value;
             const port = historyPortInfo ? historyPortInfo.name : '';
-            const viaNames = { hub: 'a hub', access_point: 'an access point', hypervisor: 'a hypervisor' };
             const b = (s) => `<b>${uiEscapeHTML(s)}</b>`;
             let text = '', warn = [];
 
             if (historyFor) {
-                const via = historyFor.via.map(g => viaNames[g] || g);
-                text = `📍 ${b(historyFor.name)}: the traffic of the switch port it hangs on, ` +
-                    (port ? `${b(sw)} port ${b(port)}` : b(sw)) +
-                    (via.length ? ` (through ${uiEscapeHTML(via.join(', then '))})` : '') + '.' +
-                    (port ? `<div class="cb-note">↓ Download and ↑ Upload are the device's: the port's out and in.</div>` : '');
-                if (port && historyFor.shared > 1) {
-                    warn.push(`⚠ ${historyFor.shared} devices hang on this port: the chart is their traffic together, not this device's alone.`);
-                }
-                if (!historyPort) warn.push('⚠ The topology names no switch port for this device: the history of the whole switch.');
-            } else if (port) {
-                text = `🔌 Port ${b(port)} of ${b(sw)}.`;
+                el.style.display = 'none';
+                el.innerHTML = '';
+                return;
             }
-            if (historyPortError) warn.push(`⚠ ${historyPortError}: the history of the whole switch.`);
+            if (port) text = `🔌 Port ${b(port)} of ${b(sw)}.`;
+            if (historyPortError) warn.push(`⚠ ${historyPortError}.`);
 
             const actions = [];
             if (historyPort && historyPortInfo) actions.push('<button onclick="showWholeSwitch()">🖧 Whole switch</button>');
@@ -1554,6 +1597,77 @@
             loadHistory();
         }
 
+        // showDeviceView turns the page into the page of one device
+        // (historyFor): its card, its chart; no switch panel and no device or
+        // port choice, since the switch's other ports are not its history.
+        function showDeviceView() {
+            document.getElementById('pageTitle').textContent = '📊 Device History';
+            document.title = `${historyFor.name} - History - Network Monitor`;
+            ['deviceGroup', 'portGroup', 'switchPanel', 'contextBanner'].forEach(id => {
+                document.getElementById(id).style.display = 'none';
+            });
+            document.getElementById('devicePanel').style.display = 'block';
+            renderDevicePanel(null);
+        }
+
+        // renderDevicePanel fills the card of the device the page is for:
+        // what the topology tells of it (historyFor), the switch port it hangs
+        // on and, from detail (the switch's /api/device-detail, or null), that
+        // port's state now, its traffic as the device's (↓ the port's out).
+        function renderDevicePanel(detail) {
+            const f = historyFor;
+            if (!f) return;
+            const t = uiEscapeHTML;
+            const select = document.getElementById('deviceSelect');
+            const opt = select.selectedOptions[0];
+            const swIP = select.value;
+            const sw = opt && opt.value ? opt.textContent : swIP;
+            const port = historyPortInfo ? historyPortInfo.name : '';
+            const index = historyPortInfo ? historyPortInfo.if_index : null;
+            const iface = detail && index !== null ? (detail.interfaces || []).find(i => i.if_index === index) : null;
+            const vlan = detail && index !== null ? (detail.port_vlans || []).find(v => v.port_index === index) : null;
+            const viaNames = { hub: 'a hub', access_point: 'an access point', hypervisor: 'a hypervisor' };
+            const via = f.via.map(g => viaNames[g] || g);
+
+            document.getElementById('devTitle').textContent = `📍 ${f.name}`;
+            const status = document.getElementById('devStatus');
+            status.textContent = f.down ? '🔴 Unreachable' : '🟢 Online';
+            status.className = f.down ? 'dev-status-down' : 'dev-status-up';
+
+            const cells = [];
+            const cell = (label, html) => cells.push(
+                `<div class="device-cell"><div class="dc-label">${t(label)}</div><div class="dc-value">${html}</div></div>`);
+            if (f.type) cell('Type', t(f.type));
+            if (f.ip) cell('IP', t(f.ip));
+            if (f.mac) cell(/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(f.mac) ? 'MAC' : 'ID', t(f.mac));
+            if (f.vendor) cell('Vendor', t(f.vendor));
+            if (f.client) cell('Details', t(f.client));
+            cell('Connected to', `<a href="/history.html?id=${encodeURIComponent(swIP)}" title="The switch's own history">${t(sw)}</a>` +
+                (port ? ` · port ${t(port)}` : (historyPort ? ` · port ${t(historyPort)}` : '')) +
+                (via.length ? `\nthrough ${t(via.join(', then '))}` : ''));
+            if (iface) {
+                const state = iface.if_admin_status === 2 ? '🟠 Admin down' :
+                    iface.if_oper_status === 1 ? '🟢 Up' : iface.if_oper_status === 2 ? '🔴 Down' : 'Unknown';
+                cell('Port state', t(`${state} · ${formatPortSpeed(iface.if_speed)}`));
+                let vlanText = '';
+                if (vlan && vlan.is_trunk) vlanText = `Trunk (${vlan.vlans ? vlan.vlans.length : 0} VLANs)`;
+                else if (vlan && vlan.pvid > 0) vlanText = `Access VLAN ${vlan.pvid}`;
+                if (vlanText) cell('VLAN', t(vlanText));
+                if (iface.if_alias) cell('Port description', t(iface.if_alias));
+                cell('Traffic now', t(`↓ ${formatSpeed(iface.out_bps || 0)}  ↑ ${formatSpeed(iface.in_bps || 0)}`));
+                cell('Errors / discards', t(`${(iface.in_errors || 0) + (iface.out_errors || 0)} err / ${(iface.in_discards || 0) + (iface.out_discards || 0)} disc`));
+            }
+            document.getElementById('devGrid').innerHTML = cells.join('');
+
+            const warn = [];
+            if (port && f.shared > 1) {
+                warn.push(`⚠ ${f.shared} devices hang on this port: the chart is their traffic together, not this device's alone.`);
+            }
+            if (!historyPort) warn.push('⚠ The topology names no switch port for this device, so there is no history for it.');
+            if (historyPortError) warn.push(`⚠ ${historyPortError}, so there is no history for this device.`);
+            document.getElementById('devWarn').innerHTML = warn.map(w => `<div>${t(w)}</div>`).join('');
+        }
+
         // openUplink opens the history of the port the switch hangs on, at
         // the switch above it, for this switch (its download is that port's out).
         function openUplink() {
@@ -1563,6 +1677,7 @@
             const params = new URLSearchParams({ id: historyUp.ip });
             if (historyUp.port) params.set('port', historyUp.port);
             params.set('for', opt && opt.value ? opt.textContent : select.value);
+            params.set('ip', select.value);
             window.location.href = `/history.html?${params}`;
         }
 
@@ -1672,13 +1787,20 @@
             }
         });
 
+        // loadDeviceDetail shows the switch's ports now: the switch panel, or
+        // on a device's page (historyFor) only its own port in its card
         async function loadDeviceDetail(deviceIP) {
             try {
                 const res = await fetch(`/api/device-detail?id=${encodeURIComponent(deviceIP)}`);
                 const data = await res.json();
                 if (data.error) {
                     console.warn('Device detail error:', data.error);
-                    document.getElementById('switchPanel').style.display = 'none';
+                    if (historyFor) renderDevicePanel(null);
+                    else document.getElementById('switchPanel').style.display = 'none';
+                    return;
+                }
+                if (historyFor) {
+                    renderDevicePanel(data);
                     return;
                 }
                 deviceDetailData = data;

@@ -820,9 +820,11 @@ function updateContextFilters() {
 // open. A switch or a router: its own, by its own IP (never a VM IP from a
 // 'VMs:' line), with the port it hangs on as its uplink (up, upport,
 // upname). Any other device: the history of the switch port it hangs on
-// (tree.js treeUpstreamPort; id the switch's IP, port its port) for the
-// device (for), with how many devices share the port (shared) and the
-// groups in between (via: a hub, an access point, a hypervisor).
+// (tree.js treeUpstreamPort; id the switch's IP, port its port) shown as
+// the device's own: for (its name as its Tree row has it), type, vendor,
+// ip, mac, down (unreachable) and client (what its controller tells, as
+// the info panel has them), with how many devices share the port (shared)
+// and the groups in between (via: a hub, an access point, a hypervisor).
 function uiHistoryURL(data, node) {
     const sp = treeSpanning(data);
     const id = String(node.id);
@@ -846,6 +848,14 @@ function uiHistoryURL(data, node) {
         params.set('for', sp.infos.get(id).label);
         params.set('shared', String(treePortDevices(sp, at.device, at.port).length));
         if (at.via.length) params.set('via', at.via.map(v => sp.infos.get(v).group).join(','));
+        const info = uiParseNodeInfo(node), ips = uiNodeIPs(node);
+        params.set('type', uiTypeText(node));
+        if (info.vendor) params.set('vendor', info.vendor);
+        if (ips.length) params.set('ip', ips.join(', '));
+        params.set('mac', id);
+        if (node.unreachable) params.set('down', '1');
+        const c = node.client;
+        if (c) params.set('client', [`on ${c.device || '?'}`, ...treeClientDetails(c)].join('\n'));
     }
     return `/history.html?${params}`;
 }
@@ -1162,6 +1172,26 @@ function uiComparePorts(a, b) {
     return a.localeCompare(b);
 }
 
+// Format type for display ('Wi-Fi AP' is access_point everywhere; the
+// randomised-MAC group is 'Random MAC', as in the filter bar and the report)
+const uiTypeNames = {
+    'switch': '🔀 Switch', 'router': '🌐 Router', 'hub': '🔌 Hub',
+    'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC', 'wifi_client': '📶 WLAN client',
+    'vm': '🖥️ VM', 'hypervisor': '🏗️ Hypervisor', 'bmc': '🔧 BMC',
+    'server': '🖲️ Server', 'camera': '📹 Camera',
+    'access_point': '📡 Wi-Fi AP', 'printer': '🖨️ Printer',
+    'phone': '📱 Phone', 'iot': '🔌 IoT', 'unknown': '❓ Unknown'
+};
+
+// uiTypeText is a node's type as the info panel and the history page show
+// it: the group's name, then the detail of its tag line ('💻 Endpoint',
+// '🔧 BMC · HPE iLO').
+function uiTypeText(node) {
+    const type = node.group || 'unknown';
+    const info = uiParseNodeInfo(node);
+    return (uiTypeNames[type] || type) + (info.detail ? ` · ${info.detail}` : '');
+}
+
 // uiNodeName: DNS name, else the first name line, else the node's IP, else its id.
 function uiNodeName(node) {
     if (node.managed && node.managed.name) return node.managed.name;
@@ -1175,7 +1205,6 @@ function showInfoPanel(node) {
     if (!panel) return;
 
     // Parse node info (vendor, detail, DNS name, name line)
-    const type = node.group || 'unknown';
     const info = uiParseNodeInfo(node);
     const sysName = (node.managed && node.managed.name) || (node.client && node.client.kind === 'vm' && node.client.name) || info.hostname || info.name;
     // Same address as Connect and History; further IP lines are listed after it
@@ -1211,23 +1240,13 @@ function showInfoPanel(node) {
 
     const totalConnections = Object.values(portMap).reduce((s, arr) => s + arr.length, 0);
 
-    // Format type for display ('Wi-Fi AP' is access_point everywhere; the
-    // randomised-MAC group is 'Random MAC', as in the filter bar and the report)
-    const typeNames = {
-        'switch': '🔀 Switch', 'router': '🌐 Router', 'hub': '🔌 Hub',
-        'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC', 'wifi_client': '📶 WLAN client',
-        'vm': '🖥️ VM', 'hypervisor': '🏗️ Hypervisor', 'bmc': '🔧 BMC',
-        'server': '🖲️ Server', 'camera': '📹 Camera',
-        'access_point': '📡 Wi-Fi AP', 'printer': '🖨️ Printer',
-        'phone': '📱 Phone', 'iot': '🔌 IoT', 'unknown': '❓ Unknown'
-    };
     const groupIcons = { 'switch':'🔀','router':'🌐','hub':'🔌','endpoint':'💻',
         'wifi_random':'🎲','wifi_client':'📶','vm':'🖥️','hypervisor':'🏗️','bmc':'🔧','server':'🖲️',
         'access_point':'📡','camera':'📹','printer':'🖨️','phone':'📱','iot':'🔌','unknown':'❓' };
 
     // Update panel content
     document.getElementById('infoPanelTitle').textContent = sysName || node.id;
-    document.getElementById('infoType').textContent = (typeNames[type] || type) + (info.detail ? ` · ${info.detail}` : '');
+    document.getElementById('infoType').textContent = uiTypeText(node);
     document.getElementById('infoMAC').textContent = node.id;
     document.getElementById('infoVendor').textContent = info.vendor || 'Unknown';
     document.getElementById('infoIP').textContent = ips.length === 0 ? 'Not available'

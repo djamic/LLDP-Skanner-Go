@@ -1589,19 +1589,31 @@ async function historyChecks() {
   const same = (got, want) => JSON.stringify(got) === JSON.stringify(want);
 
   const e1 = open(E1);
-  check('history: a hub member opens the port of its hub at its switch, for itself, shared by the hub\'s devices',
-    same(e1, { path: '/history.html', id: '10.0.1.2', port: 'GE1/0/5', for: 'Intel (10.0.2.11)', shared: '2', via: 'hub' }), e1);
+  check('history: a hub member opens the port of its hub at its switch as its own page, with its facts, shared by the hub\'s devices',
+    same(e1, { path: '/history.html', id: '10.0.1.2', port: 'GE1/0/5', for: 'Intel (10.0.2.11)', shared: '2', via: 'hub',
+      type: '💻 Endpoint', vendor: 'Intel', ip: '10.0.2.11', mac: E1 }), e1);
   const vm2 = open(VM2);
   check('history: a VM opens its hypervisor\'s switch port',
-    same(vm2, { path: '/history.html', id: '10.0.1.10', port: 'ge1/0/7', for: 'win-22 (10.0.3.22)', shared: '2', via: 'hypervisor' }), vm2);
+    same(vm2, { path: '/history.html', id: '10.0.1.10', port: 'ge1/0/7', for: 'win-22 (10.0.3.22)', shared: '2', via: 'hypervisor',
+      type: '🖥️ VM · 🪟 Windows', vendor: 'VMware', ip: '10.0.3.22', mac: VM2 }), vm2);
   const e9 = open(E9);
   check('history: a device alone on its port, below a switch that is in the "Not connected" folder',
-    same(e9, { path: '/history.html', id: '10.9.9.9', port: 'GE1/0/1', for: 'HP (10.9.9.10)', shared: '1' }), e9);
+    same(e9, { path: '/history.html', id: '10.9.9.9', port: 'GE1/0/1', for: 'HP (10.9.9.10)', shared: '1',
+      type: '💻 Endpoint', vendor: 'HP', ip: '10.9.9.10', mac: E9 }), e9);
   const s2 = open(S2), r1 = open(R1);
   check('history: a switch opens its own history, with the port it hangs on as its uplink; the root has none',
     same(s2, { path: '/history.html', id: '10.0.1.2', up: '10.0.1.1', upport: 'GE1/0/10', upname: 'core-sw (10.0.1.1)' }) &&
     same(r1, { path: '/history.html', id: '10.0.0.1' }), [s2, r1]);
   check('history: a device below no switch opens nothing', open(VM9) === null);
+
+  // A Wi-Fi client the controller tells of, unreachable now.
+  const g = synthetic();
+  Object.assign(g.nodes.find(n => n.id === E2), { unreachable: true, client: { device: 'AP-1', ssid: 'office', band: '5G', signal: -61 } });
+  P.graph = g;
+  await P.run('loadNetworkData()');
+  const e2 = open(E2);
+  check('history: what the controller tells of a client goes along, and that it is unreachable',
+    e2 && e2.client === 'on AP-1\noffice · 5G\nsignal -61 dBm' && e2.down === '1', e2);
 }
 
 viewChecks().then(earlyChecks).then(searchChecks).then(panelChecks).then(historyChecks).then(() => {

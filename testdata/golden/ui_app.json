@@ -122,14 +122,14 @@
     {
       "connect_ip": null,
       "graph": "ui",
-      "history_url": "/history.html?id=10.0.9.80&port=ge1%2F0%2F2&for=VMware+ESXi&shared=2",
+      "history_url": "/history.html?id=10.0.9.80&port=ge1%2F0%2F2&for=VMware+ESXi&shared=2&type=%F0%9F%8F%97%EF%B8%8F+Hypervisor+%C2%B7+VMware+ESXi&vendor=VMware+ESXi&mac=hyp-4c%3Aae%3Aa3%3A09%3A80%3A01-ge1_0_2",
       "info_panel_ip": "Not available",
       "node": "hyp-4c:ae:a3:09:80:01-ge1_0_2"
     },
     {
       "connect_ip": "10.0.9.41",
       "graph": "ui",
-      "history_url": "/history.html?id=10.0.9.80&port=GE1%2F0%2F3&for=Intel+%2810.0.9.41%29&shared=1",
+      "history_url": "/history.html?id=10.0.9.80&port=GE1%2F0%2F3&for=Intel+%2810.0.9.41%29&shared=1&type=%F0%9F%92%BB+Endpoint&vendor=Intel&ip=10.0.9.41%2C+10.0.9.4&mac=00%3A1b%3A21%3A09%3A80%3A03",
       "info_panel_ip": "10.0.9.41 (also 10.0.9.4)",
       "node": "00:1b:21:09:80:03"
     },

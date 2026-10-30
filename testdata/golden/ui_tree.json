@@ -156,11 +156,12 @@
     "panel: a search for dist-2 hides dist-10",
     "panel: a connected device the search hides is shown, selected and in sight",
     "panel: ... and it stays in sight when the search is cleared",
-    "history: a hub member opens the port of its hub at its switch, for itself, shared by the hub's devices",
+    "history: a hub member opens the port of its hub at its switch as its own page, with its facts, shared by the hub's devices",
     "history: a VM opens its hypervisor's switch port",
     "history: a device alone on its port, below a switch that is in the \"Not connected\" folder",
     "history: a switch opens its own history, with the port it hangs on as its uplink; the root has none",
-    "history: a device below no switch opens nothing"
+    "history: a device below no switch opens nothing",
+    "history: what the controller tells of a client goes along, and that it is unreachable"
   ],
   "fixture": {
     "default": {

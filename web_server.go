@@ -489,8 +489,8 @@ func historyPort(ip, port string) (InterfaceData, bool) {
 // historyHandler returns traffic history for a device, or for one of its
 // ports: the history page of a device that is no switch shows the port it
 // hangs on (port, as historyPort reads it). The answer names the port
-// found (port: name, if_name, if_index), or says why the whole device is
-// shown (port_error), and the aggregation window (window, historyWindow).
+// found (port: name, if_name, if_index), or has no data and says why
+// (port_error), and the aggregation window (window, historyWindow).
 // Usage: GET /api/history?id=172.20.254.10&hours=24[&port=GE1/0/24]
 func historyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -531,7 +531,12 @@ func historyHandler(w http.ResponseWriter, r *http.Request) {
 				"if_index": iface.IfIndex,
 			}
 		} else {
+			// The port is a device's: the other ports are not its history
 			resp["port_error"] = fmt.Sprintf("%s has no port %s", deviceIP, port)
+			resp["count"] = 0
+			resp["data"] = []interface{}{}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
 	}
 

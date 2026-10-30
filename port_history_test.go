@@ -119,7 +119,7 @@ func TestHistoryPort(t *testing.T) {
 }
 
 // TestHistoryHandlerPort checks the answer of /api/history for one port:
-// the port it found, or why the whole device is shown, and the window.
+// the port it found, or why there is no data, and the window.
 // InfluxDB is not connected in the tests, so the data is empty.
 func TestHistoryHandlerPort(t *testing.T) {
 	resetState(t)
@@ -147,8 +147,10 @@ func TestHistoryHandlerPort(t *testing.T) {
 		t.Errorf("answer: %v", resp)
 	}
 
+	// a port it does not find: no data (not the other ports), no query
 	resp = get("id=10.0.1.2&port=GE1%2F0%2F9")
-	if resp["port"] != nil || resp["port_error"] != "10.0.1.2 has no port GE1/0/9" || resp["window"] != nil || resp["hours"] != float64(24) {
+	if data, _ := resp["data"].([]any); resp["port"] != nil || resp["port_error"] != "10.0.1.2 has no port GE1/0/9" ||
+		data == nil || len(data) != 0 || resp["count"] != float64(0) || resp["error"] != nil || resp["hours"] != float64(24) {
 		t.Errorf("unknown port: %v", resp)
 	}
 
