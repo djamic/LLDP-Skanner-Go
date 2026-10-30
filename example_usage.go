@@ -2429,11 +2429,14 @@ func updateTrafficCounters(ip string, interfaces []InterfaceData) {
 		if maxSpeed == 0 {
 			maxSpeed = 100_000_000_000 // 100 Gbps fallback
 		}
+		glitch := false
 		if inSpeed > maxSpeed {
 			inSpeed = 0
+			glitch = true
 		}
 		if outSpeed > maxSpeed {
 			outSpeed = 0
+			glitch = true
 		}
 
 		traffic.InSpeed = inSpeed
@@ -2443,6 +2446,12 @@ func updateTrafficCounters(ip string, interfaces []InterfaceData) {
 		traffic.LastInOctets = iface.IfInOctets
 		traffic.LastOutOctets = iface.IfOutOctets
 		traffic.LastPollTime = now
+
+		// A glitch that leaves both directions at 0 is no sample: written,
+		// it would read as an idle poll of an up port (WriteInterfaceMetric)
+		if glitch && inSpeed == 0 && outSpeed == 0 {
+			continue
+		}
 
 		// Write to InfluxDB with full diagnostic data
 		WriteInterfaceMetric(ip, iface.IfDescr, iface.IfDescr,

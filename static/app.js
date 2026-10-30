@@ -803,22 +803,56 @@ function updateContextFilters() {
     // They will be applied when "Show Connected Devices" is clicked
 }
 
-// View history for selected device
+// uiHistoryURL is the history page of a node, or '' when there is none to
+// open. A switch or a router: its own, by its own IP (never a VM IP from a
+// 'VMs:' line), with the port it hangs on as its uplink (up, upport,
+// upname). Any other device: the history of the switch port it hangs on
+// (tree.js treeUpstreamPort; id the switch's IP, port its port) for the
+// device (for), with how many devices share the port (shared) and the
+// groups in between (via: a hub, an access point, a hypervisor).
+function uiHistoryURL(data, node) {
+    const sp = treeSpanning(data);
+    const id = String(node.id);
+    const at = treeUpstreamPort(sp, id);
+    const upInfo = at ? sp.infos.get(at.device) : null;
+    const upIP = upInfo ? uiNodeIPs(upInfo.node)[0] : '';
+    const params = new URLSearchParams();
+    if (treeIsInfra(sp.infos.get(id))) {
+        const ip = uiNodeIPs(node)[0];
+        if (!ip) return '';
+        params.set('id', ip);
+        if (upIP) {
+            params.set('up', upIP);
+            if (at.port) params.set('upport', at.port);
+            params.set('upname', upInfo.label);
+        }
+    } else {
+        if (!upIP) return '';
+        params.set('id', upIP);
+        if (at.port) params.set('port', at.port);
+        params.set('for', sp.infos.get(id).label);
+        params.set('shared', String(treePortDevices(sp, at.device, at.port).length));
+        if (at.via.length) params.set('via', at.via.map(v => sp.infos.get(v).group).join(','));
+    }
+    return `/history.html?${params}`;
+}
+
+// View history for selected device (uiHistoryURL)
 function viewHistory() {
     if (!selectedNodeId || !rawData) {
         hideContextMenu();
         return;
     }
 
-    // Find the node to get its own IP (never a VM IP from a 'VMs:' line)
     const node = rawData.nodes.find(n => n.id === selectedNodeId);
     if (node) {
-        const ip = uiNodeIPs(node)[0];
-
-        if (ip) {
-            window.location.href = `/history.html?id=${encodeURIComponent(ip)}`;
-        } else {
+        const url = uiHistoryURL(rawData, node);
+        if (url) {
+            window.location.href = url;
+        } else if (node.group === 'switch' || node.group === 'router') {
             alert('No IP address available for this device');
+        } else {
+            alert('No switch above this device in the topology, so the port it hangs on is not known');
         }
     }
     hideContextMenu();

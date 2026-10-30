@@ -1,11 +1,13 @@
 'use strict';
 // app_probe.js runs static/app.js, unmodified, in a Node vm sandbox with a
-// small DOM stub and prints JSON describing what its helpers do with the
-// graphs it is given. It sends nothing anywhere: fetch never resolves,
+// small DOM stub, and static/tree.js after it as index.html loads them (the
+// History action finds the switch port of a device with tree.js), and
+// prints JSON describing what app.js's helpers do with the graphs it is
+// given. It sends nothing anywhere: fetch never resolves,
 // timers and WebSocket are stubs. Used by TestGoldenUIApp and, for the
 // Shadow-IT modal, by the per-port rule tests (uiShadowModalHubs):
 //
-//   node app_probe.js <app.js> <index.html> <cases.json>
+//   node app_probe.js <app.js> <index.html> <cases.json> <tree.js>
 //
 // cases.json: {"graphs": {name: /api/graph data}, "connected": [{graph,
 // node}], "info_panel": [{graph, node}], "ip_choice": [{graph, node}],
@@ -14,7 +16,7 @@
 const fs = require('fs');
 const vm = require('vm');
 
-const [appPath, indexPath, casesPath] = process.argv.slice(2);
+const [appPath, indexPath, casesPath, treePath] = process.argv.slice(2);
 const cases = JSON.parse(fs.readFileSync(casesPath, 'utf8'));
 const indexHTML = fs.readFileSync(indexPath, 'utf8');
 
@@ -82,9 +84,11 @@ const sandbox = {
   localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
   navigator: { clipboard: { writeText: () => new Promise(() => {}) } },
   WebSocket: function () { throw new Error('app_probe: no WebSocket'); },
+  URLSearchParams, // the browser's, for uiHistoryURL
 };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(appPath, 'utf8'), sandbox, { filename: 'app.js' });
+vm.runInContext(fs.readFileSync(treePath, 'utf8'), sandbox, { filename: 'tree.js' });
 const run = (code) => vm.runInContext(code, sandbox);
 
 function useGraph(name) {
@@ -143,7 +147,8 @@ for (const c of cases.info_panel) {
   });
 }
 
-// The IP that History and Connect use for a node, next to the info panel's.
+// The page History opens for a node (a switch's own history by its IP, a
+// device's switch port) and the IP Connect uses, next to the info panel's.
 out.ip_choice = [];
 for (const c of cases.ip_choice) {
   useGraph(c.graph);

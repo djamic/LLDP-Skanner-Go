@@ -756,6 +756,40 @@
             border-radius: 2px;
             flex-shrink: 0;
         }
+
+        /* Whose history the page shows (renderContextBanner) */
+        .context-banner {
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            padding: 14px 20px;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-left: 4px solid #4A90E2;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            color: #e0e0e0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .context-banner .cb-text { flex: 1 1 400px; min-width: 0; overflow-wrap: anywhere; }
+        .context-banner .cb-note { color: #8a9bae; font-size: 12px; }
+        .context-banner .cb-warn { color: #FFB74D; font-size: 13px; margin-top: 6px; }
+        .context-banner .cb-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .context-banner button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            background: rgba(74,144,226,0.3);
+            color: #64B5F6;
+        }
+        .context-banner button:hover { background: rgba(74,144,226,0.5); }
+        .chart-window { color: #8a9bae; font-size: 12px; font-weight: normal; margin-left: 8px; }
     </style>
 </head>
 
@@ -769,6 +803,9 @@
         </header>
 
         <div class="history-container">
+            <!-- Whose history: a device's switch port, a switch's uplink (renderContextBanner) -->
+            <div class="context-banner" id="contextBanner" style="display: none;"></div>
+
             <!-- Filter Panel -->
             <div class="filter-panel">
                 <div class="filter-group">
@@ -927,7 +964,7 @@
             <!-- Chart -->
             <div class="chart-container">
                 <div class="chart-header">
-                    <h2>📈 Traffic Over Time</h2>
+                    <h2>📈 Traffic Over Time<span class="chart-window" id="chartWindow"></span></h2>
                 </div>
                 <div class="chart-wrapper">
                     <canvas id="trafficChart"></canvas>
@@ -1058,6 +1095,28 @@
         let trafficChart = null;
         let historyData = [];
 
+        // What the page shows (app.js uiHistoryURL opens it). historyPort:
+        // the port asked of /api/history ('' the whole device). historyFor:
+        // the device that hangs on that port, { name, shared, via }, or null;
+        // its history is the port's, ↓/↑ the device's own download/upload
+        // (the port's out/in). historyUp: the uplink of the switch shown,
+        // { ip, port, name }, or null. historyPortInfo: the port the server
+        // found ({ name, if_name, if_index }), historyPortError why it found
+        // none, historyWindow the aggregation of the data ('5m', or '').
+        let historyPort = '';
+        let historyFor = null;
+        let historyUp = null;
+        let historyPortInfo = null;
+        let historyPortError = '';
+        let historyWindow = '';
+
+        // historyDeviceView: the data is the port a device hangs on, so
+        // ↓/↑ are the device's (the port's out/in); not when the port was
+        // not found and the page shows the whole switch.
+        function historyDeviceView() {
+            return !!(historyFor && historyPortInfo);
+        }
+
         // uiEscapeHTML makes a value safe inside innerHTML, as text or in a quoted
         // attribute. Port names and event texts come from the devices.
         const uiHTMLEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -1080,6 +1139,22 @@
             const urlParams = new URLSearchParams(window.location.search);
             const deviceId = urlParams.get('id');
             if (deviceId) {
+                historyPort = urlParams.get('port') || '';
+                if (urlParams.get('for')) {
+                    historyFor = {
+                        name: urlParams.get('for'),
+                        shared: parseInt(urlParams.get('shared'), 10) || 0,
+                        via: (urlParams.get('via') || '').split(',').filter(Boolean),
+                    };
+                }
+                if (urlParams.get('up')) {
+                    historyUp = {
+                        ip: urlParams.get('up'),
+                        port: urlParams.get('upport') || '',
+                        name: urlParams.get('upname') || urlParams.get('up'),
+                    };
+                }
+
                 const select = document.getElementById('deviceSelect');
                 const known = [...select.options].some(o => o.value === deviceId);
                 // The map's History action may send the IP of a device that is
@@ -1200,8 +1275,16 @@
             showLoading(true);
 
             try {
-                const res = await fetch(`/api/history?id=${encodeURIComponent(deviceIP)}&hours=${hours}`);
+                const portParam = historyPort ? `&port=${encodeURIComponent(historyPort)}` : '';
+                const res = await fetch(`/api/history?id=${encodeURIComponent(deviceIP)}&hours=${hours}${portParam}`);
                 const data = await res.json();
+
+                historyPortInfo = data.port || null;
+                historyPortError = data.port_error || '';
+                historyWindow = data.window || '';
+                renderContextBanner();
+                document.getElementById('chartWindow').textContent =
+                    historyWindow ? `· maximum of every ${historyWindow}` : '';
 
                 if (data.error) {
                     showEmpty(data.error);
@@ -1211,8 +1294,18 @@
                 historyData = data.data || [];
 
                 if (historyData.length === 0) {
-                    showEmpty('No data found for selected timeframe');
+                    showEmpty(historyPortInfo
+                        ? `No traffic recorded on ${historyPortInfo.name} for selected timeframe`
+                        : 'No data found for selected timeframe');
                     return;
+                }
+
+                // Update port selector; the port asked for is the one shown,
+                // and the one marked on the switch panel
+                updatePortSelector(historyData);
+                if (historyPortInfo) {
+                    document.getElementById('portSelect').value = normalizePortName(historyPortInfo.if_name);
+                    selectedPortIfDescr = historyPortInfo.if_name;
                 }
 
                 // Update chart
@@ -1220,9 +1313,6 @@
 
                 // Update summary
                 updateSummary(historyData);
-
-                // Update port selector
-                updatePortSelector(historyData);
 
                 // Update state table (find status changes)
                 updateStateTable(historyData);
@@ -1275,12 +1365,16 @@
             const colors = ['#4A90E2', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0'];
 
             if (selectedPort !== 'all') {
-                // Single port selected
+                // Single port selected. For the device on the port the
+                // port's out is its download, and its in the upload.
                 const points = portData[selectedPort] || [];
+                const device = historyDeviceView();
+                const down = device ? 'out' : 'in', up = device ? 'in' : 'out';
+                const side = device ? [' (port out)', ' (port in)'] : ['', ''];
                 if (points.length > 0) {
                     datasets.push({
-                        label: `${selectedPort} ↓ Download`,
-                        data: points.map(p => ({ x: p.x, y: p.in })),
+                        label: `${selectedPort} ↓ Download${side[0]}`,
+                        data: points.map(p => ({ x: p.x, y: p[down] })),
                         borderColor: '#4A90E2',
                         backgroundColor: 'rgba(74, 144, 226, 0.1)',
                         fill: true,
@@ -1289,8 +1383,8 @@
                         borderWidth: 2
                     });
                     datasets.push({
-                        label: `${selectedPort} ↑ Upload`,
-                        data: points.map(p => ({ x: p.x, y: p.out })),
+                        label: `${selectedPort} ↑ Upload${side[1]}`,
+                        data: points.map(p => ({ x: p.x, y: p[up] })),
                         borderColor: '#4CAF50',
                         backgroundColor: 'rgba(76, 175, 80, 0.1)',
                         fill: true,
@@ -1375,8 +1469,10 @@
             const avgIn = data.length ? totalIn / data.length : 0;
             const avgOut = data.length ? totalOut / data.length : 0;
 
-            document.getElementById('avgIn').textContent = formatSpeed(avgIn);
-            document.getElementById('avgOut').textContent = formatSpeed(avgOut);
+            // the device's download is the port's out (historyDeviceView)
+            const device = historyDeviceView();
+            document.getElementById('avgIn').textContent = formatSpeed(device ? avgOut : avgIn);
+            document.getElementById('avgOut').textContent = formatSpeed(device ? avgIn : avgOut);
             document.getElementById('totalErrors').textContent = totalErrors.toLocaleString();
             document.getElementById('totalErrors').className = 'value ' + (totalErrors > 0 ? 'down' : 'up');
             document.getElementById('dataPoints').textContent = data.length.toLocaleString();
@@ -1397,7 +1493,77 @@
                 select.appendChild(opt);
             });
 
-            select.value = currentVal || 'all';
+            // a port this data does not have (another device's) is 'all'
+            select.value = [...select.options].some(o => o.value === currentVal) ? currentVal : 'all';
+        }
+
+        // renderContextBanner says whose history the page shows: the device
+        // on a switch port (historyFor), with how many share the port and
+        // whether the port was found, or one port of the switch, and offers
+        // the whole switch and the uplink of a switch (historyUp).
+        function renderContextBanner() {
+            const el = document.getElementById('contextBanner');
+            const select = document.getElementById('deviceSelect');
+            const opt = select.selectedOptions[0];
+            const sw = opt && opt.value ? opt.textContent : select.value;
+            const port = historyPortInfo ? historyPortInfo.name : '';
+            const viaNames = { hub: 'a hub', access_point: 'an access point', hypervisor: 'a hypervisor' };
+            const b = (s) => `<b>${uiEscapeHTML(s)}</b>`;
+            let text = '', warn = [];
+
+            if (historyFor) {
+                const via = historyFor.via.map(g => viaNames[g] || g);
+                text = `📍 ${b(historyFor.name)}: the traffic of the switch port it hangs on, ` +
+                    (port ? `${b(sw)} port ${b(port)}` : b(sw)) +
+                    (via.length ? ` (through ${uiEscapeHTML(via.join(', then '))})` : '') + '.' +
+                    (port ? `<div class="cb-note">↓ Download and ↑ Upload are the device's: the port's out and in.</div>` : '');
+                if (port && historyFor.shared > 1) {
+                    warn.push(`⚠ ${historyFor.shared} devices hang on this port: the chart is their traffic together, not this device's alone.`);
+                }
+                if (!historyPort) warn.push('⚠ The topology names no switch port for this device: the history of the whole switch.');
+            } else if (port) {
+                text = `🔌 Port ${b(port)} of ${b(sw)}.`;
+            }
+            if (historyPortError) warn.push(`⚠ ${historyPortError}: the history of the whole switch.`);
+
+            const actions = [];
+            if (historyPort && historyPortInfo) actions.push('<button onclick="showWholeSwitch()">🖧 Whole switch</button>');
+            if (historyUp && !historyPort) {
+                actions.push(`<button onclick="openUplink()">⬆ Uplink: ${uiEscapeHTML(historyUp.name)}${historyUp.port ? ' ' + uiEscapeHTML(historyUp.port) : ''}</button>`);
+            }
+
+            if (!text && !warn.length && !actions.length) {
+                el.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            el.innerHTML = `<div class="cb-text">${text}${warn.map(w => `<div class="cb-warn">${uiEscapeHTML(w)}</div>`).join('')}</div>` +
+                (actions.length ? `<div class="cb-actions">${actions.join('')}</div>` : '');
+            el.style.display = 'flex';
+        }
+
+        // showWholeSwitch drops the port: every port of the switch, as the
+        // switch's own history shows them.
+        function showWholeSwitch() {
+            historyPort = '';
+            historyFor = null;
+            historyPortInfo = null;
+            historyPortError = '';
+            selectedPortIfDescr = null;
+            document.getElementById('portSelect').value = 'all';
+            loadHistory();
+        }
+
+        // openUplink opens the history of the port the switch hangs on, at
+        // the switch above it, for this switch (its download is that port's out).
+        function openUplink() {
+            if (!historyUp) return;
+            const select = document.getElementById('deviceSelect');
+            const opt = select.selectedOptions[0];
+            const params = new URLSearchParams({ id: historyUp.ip });
+            if (historyUp.port) params.set('port', historyUp.port);
+            params.set('for', opt && opt.value ? opt.textContent : select.value);
+            window.location.href = `/history.html?${params}`;
         }
 
         function updateStateTable(data) {
@@ -1488,8 +1654,16 @@
         let deviceDetailData = null;
         let selectedPortIfDescr = null;
 
-        // Auto-load switch panel when device changes
+        // Auto-load switch panel when device changes. Another device is no
+        // longer the port or the uplink the page was opened for.
         document.getElementById('deviceSelect').addEventListener('change', function() {
+            historyPort = '';
+            historyFor = null;
+            historyUp = null;
+            historyPortInfo = null;
+            historyPortError = '';
+            selectedPortIfDescr = null;
+            renderContextBanner();
             const ip = this.value;
             if (ip) {
                 loadDeviceDetail(ip);
@@ -1689,6 +1863,13 @@
                     // Update chart
                     const metric = document.getElementById('metricSelect').value;
                     if (historyData.length > 0) updateChart(historyData, metric);
+                } else if (historyPort && normalizePortName(port.if_descr)) {
+                    // The page has the data of one port: load the one
+                    // clicked, the switch's own port (no device on it)
+                    historyPort = normalizePortName(port.if_descr);
+                    historyFor = null;
+                    selectedPortIfDescr = port.if_descr;
+                    loadHistory();
                 }
             });
 
@@ -2180,7 +2361,7 @@
 
             try {
                 const typeParam = types.length > 0 ? `&type=${types.join(',')}` : '';
-                const resp = await fetch(`/api/port-events?ip=${encodeURIComponent(ip)}&hours=${hours}${typeParam}`);
+                const resp = await fetch(`/api/port-events?ip=${encodeURIComponent(ip)}&hours=${hours}${typeParam}${eventsPortParam()}`);
                 const data = await resp.json();
 
                 if (!data.events || data.events.length === 0) {
@@ -2216,9 +2397,15 @@
             }
         }
 
+        // eventsPortParam: the events of the one port the page shows (the
+        // events name a port by its ifIndex), or of the whole switch.
+        function eventsPortParam() {
+            return historyPort && historyPortInfo ? `&port=${encodeURIComponent(historyPortInfo.if_index)}` : '';
+        }
+
         async function loadEventStats(ip, hours) {
             try {
-                const resp = await fetch(`/api/port-events/stats?ip=${encodeURIComponent(ip)}&hours=${hours}`);
+                const resp = await fetch(`/api/port-events/stats?ip=${encodeURIComponent(ip)}&hours=${hours}${eventsPortParam()}`);
                 const stats = await resp.json();
                 updateEventStats(stats);
             } catch (e) {

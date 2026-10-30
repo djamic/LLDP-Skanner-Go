@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -105,9 +106,12 @@ func WriteInterfaceMetric(deviceIP, ifName, ifDescr string,
 		return
 	}
 
-	// Skip initial baseline polls where no speed is calculated yet
-	// This prevents graph starting at 0 and spiking up
-	if inBps == 0 && outBps == 0 {
+	// A port that is not up and moved nothing gives no point (a down or
+	// admin-down port); an idle poll of an up port is written as 0 bps, so
+	// the history of an idle port has no gaps. The first poll of a port (no
+	// speed yet) never gets here: updateTrafficCounters keeps it as the
+	// baseline.
+	if inBps == 0 && outBps == 0 && operStatus != 1 {
 		return
 	}
 
@@ -195,8 +199,59 @@ type TrafficHistoryPoint struct {
 	IfName      string `json:"if_name"`
 }
 
-// QueryTrafficHistory queries InfluxDB for device traffic history
-func QueryTrafficHistory(deviceIP string, hours int) ([]TrafficHistoryPoint, error) {
+// fluxString is s as a Flux string literal: quoted, with its backslashes,
+// quotes and "${" (Flux interpolation) escaped. Device IPs from the URL and
+// port names from the devices (IfDescr comes quoted) go into the queries
+// as data, never as Flux.
+func fluxString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "${", `\${`)
+	return `"` + s + `"`
+}
+
+// historyWindow is the aggregation window of a traffic history over the
+// last hours: none up to a day (every poll, about 100 points an hour a
+// port), 5 minutes up to 7 days and 30 minutes beyond. Each window keeps
+// its maximum, so a peak is not averaged away and 30 days of a whole
+// switch stay about 1500 points a port.
+func historyWindow(hours int) string {
+	switch {
+	case hours <= 24:
+		return ""
+	case hours <= 168:
+		return "5m"
+	default:
+		return "30m"
+	}
+}
+
+// trafficHistoryQuery is the Flux query of QueryTrafficHistory: the
+// interface_metrics of deviceIP over the last hours, of the one interface
+// whose if_name tag is ifName (the IfDescr as polled) when it is not "",
+// aggregated per historyWindow.
+func trafficHistoryQuery(deviceIP, ifName string, hours int) string {
+	filter := `r["_measurement"] == "interface_metrics" and r["device_ip"] == ` + fluxString(deviceIP)
+	if ifName != "" {
+		filter += ` and r["if_name"] == ` + fluxString(ifName)
+	}
+	aggregate := ""
+	if w := historyWindow(hours); w != "" {
+		aggregate = fmt.Sprintf("\n\t\t\t|> aggregateWindow(every: %s, fn: max, createEmpty: false)", w)
+	}
+	return fmt.Sprintf(`
+		from(bucket: %s)
+			|> range(start: -%dh)
+			|> filter(fn: (r) => %s)%s
+			|> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+			|> sort(columns: ["_time"], desc: false)
+	`, fluxString(influxBucket), hours, filter, aggregate)
+}
+
+// QueryTrafficHistory queries InfluxDB for device traffic history: every
+// interface of the device, or only ifName ("" for all, else the IfDescr
+// as polled)
+func QueryTrafficHistory(deviceIP, ifName string, hours int) ([]TrafficHistoryPoint, error) {
 	if !influxEnabled || influxClient == nil {
 		return nil, fmt.Errorf("InfluxDB not connected")
 	}
@@ -207,17 +262,7 @@ func QueryTrafficHistory(deviceIP string, hours int) ([]TrafficHistoryPoint, err
 	// Get query API
 	queryAPI := influxClient.QueryAPI(influxOrg)
 
-	// Flux query - get last N hours of data for this device
-	query := fmt.Sprintf(`
-		from(bucket: "%s")
-			|> range(start: -%dh)
-			|> filter(fn: (r) => r["_measurement"] == "interface_metrics")
-			|> filter(fn: (r) => r["device_ip"] == "%s")
-			|> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-			|> sort(columns: ["_time"], desc: false)
-	`, influxBucket, hours, deviceIP)
-
-	result, err := queryAPI.Query(ctx, query)
+	result, err := queryAPI.Query(ctx, trafficHistoryQuery(deviceIP, ifName, hours))
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %v", err)
 	}
@@ -477,10 +522,10 @@ func QueryNetworkEvents(ip string, hours int, eventTypes []string, portFilter in
 
 	queryAPI := influxClient.QueryAPI(influxOrg)
 
-	// Build Flux query
-	filters := fmt.Sprintf(`r["_measurement"] == "network_events"`)
+	// Build Flux query (the IP and the types come from the URL: fluxString)
+	filters := `r["_measurement"] == "network_events"`
 	if ip != "" {
-		filters += fmt.Sprintf(` and r["switch_ip"] == "%s"`, ip)
+		filters += ` and r["switch_ip"] == ` + fluxString(ip)
 	}
 	if portFilter > 0 {
 		filters += fmt.Sprintf(` and r["port"] == "%d"`, portFilter)
@@ -493,7 +538,7 @@ func QueryNetworkEvents(ip string, hours int, eventTypes []string, portFilter in
 			if i > 0 {
 				typeFilter += " or "
 			}
-			typeFilter += fmt.Sprintf(`r["event_type"] == "%s"`, t)
+			typeFilter += `r["event_type"] == ` + fluxString(t)
 		}
 		filters += fmt.Sprintf(` and (%s)`, typeFilter)
 	}

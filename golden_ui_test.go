@@ -73,12 +73,13 @@ func uiCaseGraph() GraphData {
 }
 
 // TestGoldenUIApp runs static/app.js, unmodified, in Node.js with a stub DOM
-// (testdata/ui/app_probe.js) and pins what its helpers do with the fixture
-// graph, uiCaseGraph and the rule network's graph (built by the production
-// build, with a hub whose two VM NICs sit below a hyp- node): the group
-// colours next to the filter legend, the group filter, "Show Connected
-// Devices", the info panel, the IP that History and Connect use, and the
-// Shadow-IT list. Skipped when Node.js is not installed.
+// and static/tree.js after it (testdata/ui/app_probe.js) and pins what its
+// helpers do with the fixture graph, uiCaseGraph and the rule network's
+// graph (built by the production build, with a hub whose two VM NICs sit
+// below a hyp- node): the group colours next to the filter legend, the
+// group filter, "Show Connected Devices", the info panel, the page History
+// opens (a switch's own, a device's switch port) and the IP Connect uses,
+// and the Shadow-IT list. Skipped when Node.js is not installed.
 func TestGoldenUIApp(t *testing.T) {
 	node := nodeBinary(t)
 	resetState(t)
@@ -125,7 +126,8 @@ func TestGoldenUIApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(node, filepath.Join("testdata", "ui", "app_probe.js"),
-		filepath.Join("static", "app.js"), filepath.Join("static", "index.html"), casesPath)
+		filepath.Join("static", "app.js"), filepath.Join("static", "index.html"), casesPath,
+		filepath.Join("static", "tree.js"))
 	cmd.Env = []string{}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -221,7 +223,8 @@ func uiShadowModalHubs(t *testing.T, data GraphData) (hubs []string, ok bool) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(node, filepath.Join("testdata", "ui", "app_probe.js"),
-		filepath.Join("static", "app.js"), filepath.Join("static", "index.html"), casesPath)
+		filepath.Join("static", "app.js"), filepath.Join("static", "index.html"), casesPath,
+		filepath.Join("static", "tree.js"))
 	cmd.Env = []string{}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

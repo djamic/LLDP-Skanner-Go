@@ -378,6 +378,50 @@ function treeSpanning(data) {
     return sp;
 }
 
+// treeIsInfra: a switch or a router, a device the scanner polls for the
+// traffic of its ports. The history of any other device is the history
+// of the port it hangs on (treeUpstreamPort).
+function treeIsInfra(info) {
+    return !!info && (info.group === 'switch' || info.group === 'router');
+}
+
+// treeUpstreamPort tells where a device hangs on the network, from the
+// spanning tree (treeSpanning): up its path, the nearest switch or router
+// (device) and the port that one names on the link down toward it (port,
+// '' when the link names none). A hub, an access point or a hypervisor in
+// between is in via, nearest first, so a hub member, a VM and a Wi-Fi
+// client get the port of their hub, host or access point. Of a switch it
+// is its uplink. null for a root (the core, the top of a "Not connected"
+// group) and for an id the tree does not have. attachDevice is not used:
+// below a link that names no port it is the switch's own uplink.
+function treeUpstreamPort(sp, id) {
+    const via = [];
+    for (let child = String(id), up = sp.parent.get(child); up !== null && up !== undefined; child = up, up = sp.parent.get(up)) {
+        if (treeIsInfra(sp.infos.get(up))) {
+            const l = sp.link.get(child);
+            return { device: up, port: (l && l.up && l.up.port) || '', via };
+        }
+        via.push(up);
+    }
+    return null;
+}
+
+// treePortDevices lists the devices that hang on one port of a switch or
+// router (treeUpstreamPort), in node order: the history of that port is
+// their traffic together. The scanner's hub- and hyp- nodes stand in for an
+// unmanaged hub and a VM port, so they are not counted, and a switch below
+// the port is not, with what hangs on it. None for a port that is ''.
+function treePortDevices(sp, device, port) {
+    const ids = [];
+    if (!port) return ids;
+    sp.infos.forEach((info, id) => {
+        if (treeIsInfra(info) || id.startsWith('hub-') || id.startsWith('hyp-')) return;
+        const at = treeUpstreamPort(sp, id);
+        if (at && at.device === device && at.port === port) ids.push(id);
+    });
+    return ids;
+}
+
 // treeGroupFilter is the filter of the checkboxes as a node predicate, the
 // rule of app.js uiGroupShown: a node is hidden only when its group has a
 // checkbox (filterable; every group when filterable is not given) and that

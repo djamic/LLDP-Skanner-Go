@@ -465,8 +465,32 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// historyHandler returns traffic history for a device
-// Usage: GET /api/history?id=172.20.254.10&hours=24
+// historyPort finds the interface of the polled device ip that port names:
+// as a link of the graph names it ("GE1/0/24", normalizePortName of the
+// IfDescr) or as the IfDescr itself, quotes and case aside.
+func historyPort(ip, port string) (InterfaceData, bool) {
+	want := strings.ToLower(normalizePortName(port))
+	if want == "" {
+		return InterfaceData{}, false
+	}
+	collectedDataMutex.RLock()
+	defer collectedDataMutex.RUnlock()
+	if dev := collectedData[ip]; dev != nil {
+		for _, iface := range dev.Interfaces {
+			if strings.ToLower(normalizePortName(iface.IfDescr)) == want {
+				return iface, true
+			}
+		}
+	}
+	return InterfaceData{}, false
+}
+
+// historyHandler returns traffic history for a device, or for one of its
+// ports: the history page of a device that is no switch shows the port it
+// hangs on (port, as historyPort reads it). The answer names the port
+// found (port: name, if_name, if_index), or says why the whole device is
+// shown (port_error), and the aggregation window (window, historyWindow).
+// Usage: GET /api/history?id=172.20.254.10&hours=24[&port=GE1/0/24]
 func historyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -489,24 +513,39 @@ func historyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	resp := map[string]interface{}{
+		"device": deviceIP,
+		"hours":  hours,
+	}
+	if window := historyWindow(hours); window != "" {
+		resp["window"] = window
+	}
+	ifName := ""
+	if port := r.URL.Query().Get("port"); port != "" {
+		if iface, ok := historyPort(deviceIP, port); ok {
+			ifName = iface.IfDescr
+			resp["port"] = map[string]interface{}{
+				"name":     normalizePortName(iface.IfDescr),
+				"if_name":  iface.IfDescr,
+				"if_index": iface.IfIndex,
+			}
+		} else {
+			resp["port_error"] = fmt.Sprintf("%s has no port %s", deviceIP, port)
+		}
+	}
+
 	// Query InfluxDB
-	points, err := QueryTrafficHistory(deviceIP, hours)
+	points, err := QueryTrafficHistory(deviceIP, ifName, hours)
 	if err != nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":  err.Error(),
-			"device": deviceIP,
-			"hours":  hours,
-			"data":   []interface{}{},
-		})
+		resp["error"] = err.Error()
+		resp["data"] = []interface{}{}
+		json.NewEncoder(w).Encode(resp)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"device": deviceIP,
-		"hours":  hours,
-		"count":  len(points),
-		"data":   points,
-	})
+	resp["count"] = len(points)
+	resp["data"] = points
+	json.NewEncoder(w).Encode(resp)
 }
 
 // deviceDetailHandler returns full interface + VLAN + traffic detail for a device
@@ -1166,8 +1205,16 @@ func portEventsStatsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// One port (its ifIndex, as /api/port-events filters), or every one
+	portFilter := 0
+	if p := r.URL.Query().Get("port"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil {
+			portFilter = v
+		}
+	}
+
 	// Query all events for this device
-	events, err := QueryNetworkEvents(ip, hours, nil, 0)
+	events, err := QueryNetworkEvents(ip, hours, nil, portFilter)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

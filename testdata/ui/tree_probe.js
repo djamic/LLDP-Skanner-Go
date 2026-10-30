@@ -643,6 +643,55 @@ function portGraph() {
     T.treeSearchMatch('mac-ref', at(PC).json) && !T.treeSearchMatch('↓40m', at(PB).json), [at(PB).json.data.q]);
 }
 
+// The switch port a device hangs on (treeUpstreamPort), whose history the
+// history page shows for it, and the devices that share that port
+// (treePortDevices).
+{
+  const sp = T.treeSpanning(synthetic());
+  const up = (id) => JSON.stringify(T.treeUpstreamPort(sp, id));
+  const on = (device, port) => JSON.stringify(T.treePortDevices(sp, device, port));
+  check('upstream: an endpoint hangs on its switch\'s port', up(E9) === JSON.stringify({ device: S9, port: 'GE1/0/1', via: [] }), up(E9));
+  check('upstream: a hub member hangs on the port of its hub, through the hub',
+    up(E1) === JSON.stringify({ device: S2, port: 'GE1/0/5', via: [H] }) && up(H) === JSON.stringify({ device: S2, port: 'GE1/0/5', via: [] }), [up(E1), up(H)]);
+  check('upstream: a VM hangs on the port of its hypervisor, through it', up(VM1) === JSON.stringify({ device: S3, port: 'ge1/0/7', via: [Y] }), up(VM1));
+  check('upstream: of a switch it is its uplink, of a router below a switch the switch\'s port (the target side of the link)',
+    up(S2) === JSON.stringify({ device: S1, port: 'GE1/0/10', via: [] }) && up(S1) === JSON.stringify({ device: R1, port: 'Te1/0/1', via: [] }) &&
+    up(R2) === JSON.stringify({ device: S2, port: 'GE1/0/46', via: [] }), [up(S2), up(S1), up(R2)]);
+  check('upstream: none for the root, the top of a "Not connected" group, an unlinked device and an unknown id',
+    T.treeUpstreamPort(sp, R1) === null && T.treeUpstreamPort(sp, S9) === null && T.treeUpstreamPort(sp, VM9) === null &&
+    T.treeUpstreamPort(sp, 'no-such-node') === null);
+  check('upstream: the devices on a port leave out the hub- and hyp- stand-ins', on(S2, 'GE1/0/5') === JSON.stringify([E1, E2]) &&
+    on(S3, 'ge1/0/7') === JSON.stringify([VM1, VM2]) && on(S9, 'GE1/0/1') === JSON.stringify([E9]) && on(S2, '') === '[]', [on(S2, 'GE1/0/5'), on(S3, 'ge1/0/7')]);
+
+  // Wi-Fi: clients below their access points, an access point linked to
+  // another by its port, one whose link to the switch names no port.
+  const WR = '00:00:5e:00:00:31', WS = 'aa:00:00:00:00:31';
+  const WA1 = '78:45:58:00:00:01', WA2 = '78:45:58:00:00:02', WA3 = '78:45:58:00:00:03';
+  const WC1 = 'd8:74:ef:00:00:01', WC2 = 'd8:74:ef:00:00:02', WC3 = 'd8:74:ef:00:00:03';
+  const wlan = (s, t) => Object.assign(link(s, t, 'WLAN|wlan'), { kind: 'wlan' });
+  const wsp = T.treeSpanning({
+    core: WR,
+    nodes: [
+      node(WR, 'router', 'gw\n10.2.0.254'), node(WS, 'switch', 'sw-w\n10.2.0.1'),
+      node(WA1, 'access_point', 'AP 1\n10.2.0.11'), node(WA2, 'access_point', 'AP 2\n10.2.0.12'), node(WA3, 'access_point', 'AP 3\n10.2.0.13'),
+      node(WC1, 'wifi_client', 'phone-1\n10.2.1.1'), node(WC2, 'wifi_client', 'phone-2\n10.2.1.2'), node(WC3, 'wifi_client', 'phone-3\n10.2.1.3'),
+    ],
+    links: [
+      link(WR, WS, 'port1|TGE1/0/52'), link(WS, WA1, 'GE1/0/4 [V1500] 1G ↓0M ↑2M|eth0'), link(WA1, WA2, '1|'), link(WS, WA3, '|'),
+      wlan(WA1, WC1), wlan(WA2, WC2), wlan(WA3, WC3),
+    ],
+  });
+  const wup = (id) => JSON.stringify(T.treeUpstreamPort(wsp, id));
+  check('upstream: a Wi-Fi client hangs on the switch port of its access point, through each access point in between',
+    wup(WC1) === JSON.stringify({ device: WS, port: 'GE1/0/4', via: [WA1] }) && wup(WC2) === JSON.stringify({ device: WS, port: 'GE1/0/4', via: [WA2, WA1] }),
+    [wup(WC1), wup(WC2)]);
+  check('upstream: below a link that names no port the port is unknown, not the switch\'s own uplink (as attachDevice has it)',
+    wup(WA3) === JSON.stringify({ device: WS, port: '', via: [] }) && wsp.attachDevice.get(WA3) === WR &&
+    wup(WC3) === JSON.stringify({ device: WS, port: '', via: [WA3] }), [wup(WA3), wsp.attachDevice.get(WA3), wup(WC3)]);
+  check('upstream: the access points and their clients share the access point\'s switch port',
+    JSON.stringify(T.treePortDevices(wsp, WS, 'GE1/0/4')) === JSON.stringify([WA1, WA2, WC1, WC2]), T.treePortDevices(wsp, WS, 'GE1/0/4'));
+}
+
 // ---------------------------------------------------------------------------
 // Part 2: the fixture graph
 
@@ -1108,6 +1157,7 @@ function page() {
     alert() {}, confirm: () => false, prompt: () => null,
     localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
     WebSocket: function () { throw new Error('tree_probe: no WebSocket'); },
+    URLSearchParams, // the browser's, for app.js uiHistoryURL
   };
   sandbox.window = { innerWidth: 1280, innerHeight: 800, location: { href: '' }, document: sandbox.document, addEventListener() {}, open() {} };
   sandbox.location = sandbox.window.location;
@@ -1522,7 +1572,39 @@ async function panelChecks() {
   check('panel: ... and it stays in sight when the search is cleared', tree.model.inSight(id(S3)) && !tree.model.hidden(id(S3)));
 }
 
-viewChecks().then(earlyChecks).then(searchChecks).then(panelChecks).then(() => {
+// The graph's "View History" (app.js viewHistory, uiHistoryURL): a switch
+// or a router opens its own history with its uplink, any other device the
+// history of the switch port it hangs on.
+async function historyChecks() {
+  const P = page();
+  P.graph = synthetic();
+  await P.run('loadNetworkData()');
+  const open = (id) => {
+    P.run(`window.location.href = ''; selectedNodeId = ${JSON.stringify(id)}; viewHistory();`);
+    const href = P.run('window.location.href');
+    if (!href) return null;
+    const url = new URL(href, 'http://scanner');
+    return { path: url.pathname, ...Object.fromEntries(url.searchParams) };
+  };
+  const same = (got, want) => JSON.stringify(got) === JSON.stringify(want);
+
+  const e1 = open(E1);
+  check('history: a hub member opens the port of its hub at its switch, for itself, shared by the hub\'s devices',
+    same(e1, { path: '/history.html', id: '10.0.1.2', port: 'GE1/0/5', for: 'Intel (10.0.2.11)', shared: '2', via: 'hub' }), e1);
+  const vm2 = open(VM2);
+  check('history: a VM opens its hypervisor\'s switch port',
+    same(vm2, { path: '/history.html', id: '10.0.1.10', port: 'ge1/0/7', for: 'win-22 (10.0.3.22)', shared: '2', via: 'hypervisor' }), vm2);
+  const e9 = open(E9);
+  check('history: a device alone on its port, below a switch that is in the "Not connected" folder',
+    same(e9, { path: '/history.html', id: '10.9.9.9', port: 'GE1/0/1', for: 'HP (10.9.9.10)', shared: '1' }), e9);
+  const s2 = open(S2), r1 = open(R1);
+  check('history: a switch opens its own history, with the port it hangs on as its uplink; the root has none',
+    same(s2, { path: '/history.html', id: '10.0.1.2', up: '10.0.1.1', upport: 'GE1/0/10', upname: 'core-sw (10.0.1.1)' }) &&
+    same(r1, { path: '/history.html', id: '10.0.0.1' }), [s2, r1]);
+  check('history: a device below no switch opens nothing', open(VM9) === null);
+}
+
+viewChecks().then(earlyChecks).then(searchChecks).then(panelChecks).then(historyChecks).then(() => {
   if (failed.length) {
     process.stderr.write(failed.map(f => 'FAIL ' + f).join('\n') + '\n');
     process.exit(1);
