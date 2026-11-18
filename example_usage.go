@@ -1082,11 +1082,16 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 	// node is created (first creator wins) by the same port on every build.
 	for _, p := range fdbPorts(data, switchMACs) {
 		portName := getFDBPortName(data, p.Port)
-		if p.Kind == fdbHub {
+		if p.Kind == fdbHub || p.Kind == fdbMiniHub {
 			// Non-VM hub: create aggregated hub node; every member gets a
-			// node (a hub has at most 20 MACs)
+			// node (a hub has at most 20 MACs, a mini hub 500). A mini hub
+			// is a hub- node too, so the hypervisor detection and the
+			// views take it as one; its tag makes its group (minihub)
 			nodeID := fmt.Sprintf("hub-%s-p%d", srcID, p.Port)
 			nodeLabel := fmt.Sprintf("[HUB] Unmanaged\n%d devices", len(p.MACs))
+			if p.Kind == fdbMiniHub {
+				nodeLabel = fmt.Sprintf("[MINIHUB] Mini hub\n%d devices", len(p.MACs))
+			}
 			edgeLabel := fmt.Sprintf("%s|Hub", normalizePortName(portName))
 
 			if !graph.Nodes[nodeID] {
@@ -1273,6 +1278,17 @@ const (
 	fdbHub                         // an unmanaged switch or hub: Shadow IT
 	fdbVMPort                      // most MACs are virtual NICs: a hypervisor host
 	fdbESXiPort                    // a hub candidate with an HTTP-confirmed ESXi host
+	fdbMiniHub                     // a trunk or big port no polled switch is behind: its devices, no Shadow IT
+)
+
+// fdbHubMax is the most MACs a hub has: a port with more (like a VLAN
+// trunk) is a mini hub, or an uplink when a polled switch is behind it.
+// fdbMiniHubMax is the most a mini hub has: a port with more, even with no
+// polled switch behind it, is an uplink toward switches the scanner does
+// not poll (the switches' uplinks carry thousands).
+const (
+	fdbHubMax     = 20
+	fdbMiniHubMax = 500
 )
 
 // fdbPort is one port of a switch's FDB under the per-port rule.
@@ -1296,10 +1312,14 @@ type fdbPort struct {
 // (switchMACs, buildSwitchOwnMACs: chassis MACs and ARP aliases) and
 // isInvalidID ones. A port with an accepted LLDP neighbor or a NULL0 name
 // gets nothing. A VM-majority port is direct (also on a trunk or with more
-// than 20 MACs, unless another switch's MAC is learned there); a VLAN trunk
-// or a port with more than 20 MACs is otherwise an uplink (nothing, or
-// direct for at most 3 MACs); 2-20 MACs are a hub unless one is an
-// HTTP-confirmed ESXi host (ESXi exemption).
+// than 20 MACs, unless another switch's MAC is learned there). At most 3
+// MACs are direct on any other port. A port with more where another polled
+// switch's MAC is learned is an uplink to it (Netdisco's and FortiNAC's
+// learned uplink) and gets nothing. Otherwise 2-20 MACs are a hub unless one
+// is an HTTP-confirmed ESXi host (ESXi exemption); a VLAN trunk or a port
+// with more than 20 MACs is an ESXi port, a mini hub (its devices are
+// drawn, it is no Shadow IT), or, above 500 MACs, an uplink toward switches
+// the scanner does not poll.
 func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 	// MACs already known via LLDP, and the ports with an accepted neighbor
 	knownMACs := lldpKnownMACs(data)
@@ -1383,20 +1403,20 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 			}
 		}
 
-		// Fallback heuristic: if VLAN-based trunk detection missed it,
-		// treat ports with >20 MACs as implicit uplink/trunk
-		// (e.g., D 1-2 port 51 has 58 MACs — clearly an uplink, not a hub)
-		if len(macs) > 20 && !isTrunkPort {
+		// A port with more than 20 MACs is no hub either (D 1-2 port 51 has
+		// 58 MACs), like a trunk the VLAN data missed
+		if len(macs) > fdbHubMax && !isTrunkPort {
 			isTrunkPort = true
-			logDebug("       [UPLINK] Port %d on %s has %d MACs — treating as implicit uplink", portNum, data.IP, len(macs))
+			logDebug("       [BIG] Port %d on %s has %d MACs — no hub", portNum, data.IP, len(macs))
 		}
 
 		// A port where most MACs are virtual NICs is a hypervisor host (ESXi,
 		// Proxmox, KVM), also on a VLAN trunk or with more than 20 MACs: ESXi
 		// hosts sit on trunk ports. A trunk or big port where another switch's
 		// MAC is learned is a switch link, though, whatever it carries.
-		vmPort := len(macs) >= 2 && isHypervisorPort(macs) && (!isTrunkPort || !portSeesSwitch[portNum])
-		candidate := len(macs) >= 2 && !isTrunkPort
+		uplink := portSeesSwitch[portNum]
+		vmPort := len(macs) >= 2 && isHypervisorPort(macs) && (!isTrunkPort || !uplink)
+		candidate := len(macs) >= 2 && !isTrunkPort && !uplink
 
 		port := fdbPort{Port: portNum, MACs: macs, Candidate: candidate}
 		switch {
@@ -1408,10 +1428,23 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 		case candidate:
 			port.Kind = fdbHub
 		case len(macs) <= 3:
-			// Few MACs - direct endpoint nodes
+			// Few MACs - direct endpoint nodes (on a switch link as well)
 			port.Kind = fdbDirect
+		case uplink:
+			// another polled switch is behind the port: its MACs are that
+			// switch's to draw
+			logDebug("       [UPLINK] Port %d on %s learns a polled switch's MAC — no nodes for its %d MACs", portNum, data.IP, len(macs))
+			continue
+		case len(macs) > fdbMiniHubMax:
+			logDebug("       [UPLINK] Port %d on %s has %d MACs — an uplink toward unpolled switches", portNum, data.IP, len(macs))
+			continue
+		case graphPortHasConfirmedESXi(macs):
+			// an ESXi host on a trunk port
+			port.Kind = fdbESXiPort
 		default:
-			continue // uplink: no nodes
+			// a trunk or big port with no polled switch behind it: what is
+			// there is shown, not dropped
+			port.Kind = fdbMiniHub
 		}
 		out = append(out, port)
 	}

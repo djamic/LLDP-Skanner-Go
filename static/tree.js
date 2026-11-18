@@ -19,7 +19,7 @@
 
 // Group icons, the same as the info panel's (app.js showInfoPanel).
 const treeGroupIcons = {
-    'switch': '🔀', 'router': '🌐', 'hub': '🔌', 'endpoint': '💻',
+    'switch': '🔀', 'router': '🌐', 'hub': '🔌', 'minihub': '🔗', 'endpoint': '💻',
     'wifi_random': '🎲', 'wifi_client': '📶', 'vm': '🖥️', 'hypervisor': '🏗️', 'bmc': '🔧', 'server': '🖲️',
     'access_point': '📡', 'camera': '📹', 'printer': '🖨️', 'phone': '📱', 'iot': '🔌', 'unknown': '❓'
 };
@@ -166,7 +166,7 @@ function treeNodeName(node) {
     const id = String(node.id);
     const lines = String(node.sysName || node.label || '').split('\n').map(s => s.trim()).filter(Boolean);
     const first = lines[0] || '';
-    if (first.startsWith('[HUB]') || first.startsWith('[HYPERVISOR]')) {
+    if (first.startsWith('[HUB]') || first.startsWith('[MINIHUB]') || first.startsWith('[HYPERVISOR]')) {
         const text = first.replace(treeTagPattern, '');
         if (text) return text;
     }
@@ -191,7 +191,7 @@ function treeNodeAddress(node, name, ips) {
 // Child order: routers and switches, then hubs and hypervisors, then the rest.
 function treeGroupRank(group) {
     if (group === 'router' || group === 'switch') return 0;
-    if (group === 'hub' || group === 'hypervisor') return 1;
+    if (group === 'hub' || group === 'minihub' || group === 'hypervisor') return 1;
     return 2;
 }
 

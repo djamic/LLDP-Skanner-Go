@@ -51,8 +51,8 @@
       "58:94:80:00:f7:a3",
       "58:94:80:01:01:27"
     ],
-    "nodes_after": 1029,
-    "nodes_before": 1029,
+    "nodes_after": 1265,
+    "nodes_before": 1265,
     "nodes_removed": [
       "172.20.230.40",
       "172.20.230.44"

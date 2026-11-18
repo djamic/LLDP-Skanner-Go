@@ -395,7 +395,7 @@ func TestReportAuditListsEveryGroup(t *testing.T) {
 		t.Fatalf("precondition: groups = %v", groups)
 	}
 
-	all := []string{"switch", "router", "hub", "endpoint", "access_point", "vm", "hypervisor", "bmc",
+	all := []string{"switch", "router", "hub", "minihub", "endpoint", "access_point", "vm", "hypervisor", "bmc",
 		"camera", "phone", "iot", "wifi_random", "printer", "server", "unknown"}
 	md := generateAuditMD(all)
 	section4 := reportMDSection(md, "## 4.", "## 5.")

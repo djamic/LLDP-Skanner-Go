@@ -25,6 +25,7 @@ const groupColors = {
     'switch': '#4A90E2',
     'router': '#E24A4A',
     'hub': '#FF9800',
+    'minihub': '#FFC107', // a trunk or big port with no polled switch behind it (no Shadow IT)
     'endpoint': '#8BC34A',
     'wifi_random': '#00BCD4',
     'wifi_client': '#80DEEA', // a WLAN client: of a UniFi access point, or in a gateway's ARP table (module_inventory.go)
@@ -1123,7 +1124,7 @@ function uiParseNodeInfo(node) {
             if (!out.detail) out.detail = words.slice(0, typeLen).join(' ');
             if (!out.vendor) out.vendor = words.slice(typeLen).join(' ');
             if (typeLen === 2 && !brand) brand = words[0];
-        } else if (line.startsWith('[HYPERVISOR]') || line.startsWith('[HUB]')) {
+        } else if (line.startsWith('[HYPERVISOR]') || line.startsWith('[HUB]') || line.startsWith('[MINIHUB]')) {
             const text = line.slice(line.indexOf(']') + 1).trim();
             if (!out.detail) out.detail = text;
             if (line.startsWith('[HYPERVISOR]') && !typeText) typeText = text;
@@ -1175,7 +1176,7 @@ function uiComparePorts(a, b) {
 // Format type for display ('Wi-Fi AP' is access_point everywhere; the
 // randomised-MAC group is 'Random MAC', as in the filter bar and the report)
 const uiTypeNames = {
-    'switch': '🔀 Switch', 'router': '🌐 Router', 'hub': '🔌 Hub',
+    'switch': '🔀 Switch', 'router': '🌐 Router', 'hub': '🔌 Hub', 'minihub': '🔗 Mini hub',
     'endpoint': '💻 Endpoint', 'wifi_random': '🎲 Random MAC', 'wifi_client': '📶 WLAN client',
     'vm': '🖥️ VM', 'hypervisor': '🏗️ Hypervisor', 'bmc': '🔧 BMC',
     'server': '🖲️ Server', 'camera': '📹 Camera',
@@ -1240,7 +1241,7 @@ function showInfoPanel(node) {
 
     const totalConnections = Object.values(portMap).reduce((s, arr) => s + arr.length, 0);
 
-    const groupIcons = { 'switch':'🔀','router':'🌐','hub':'🔌','endpoint':'💻',
+    const groupIcons = { 'switch':'🔀','router':'🌐','hub':'🔌','minihub':'🔗','endpoint':'💻',
         'wifi_random':'🎲','wifi_client':'📶','vm':'🖥️','hypervisor':'🏗️','bmc':'🔧','server':'🖲️',
         'access_point':'📡','camera':'📹','printer':'🖨️','phone':'📱','iot':'🔌','unknown':'❓' };
 
@@ -2234,6 +2235,7 @@ function downloadAuditReport() {
         { id: 'switch', label: '🔀 Switch', checked: true },
         { id: 'router', label: '🌐 Router', checked: false },
         { id: 'hub', label: '⚠️ Hub (Shadow IT)', checked: true },
+        { id: 'minihub', label: '🔗 Mini hub', checked: false },
         { id: 'endpoint', label: '💻 Endpoint', checked: false },
         { id: 'access_point', label: '📡 Wi-Fi AP', checked: false },
         { id: 'vm', label: '🖥️ VM', checked: false },

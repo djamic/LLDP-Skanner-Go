@@ -38,6 +38,7 @@ graph TD
   VM_VMware_VM_VMwarebr172_20_15_36["[VM] 💻 VMware VM VMware<br>172.20.15.36"]
   VM_VMware_VM_VMwarebr172_20_16_67["[VM] 💻 VMware VM VMware<br>172.20.16.67"]
   VM_VMware_VM_VMwarebr172_20_6_247["[VM] 💻 VMware VM VMware<br>172.20.6.247"]
+  VM_Linux_VMwarebr172_20_224_1["[VM] 🐧 Linux VMware<br>172.20.224.1"]
   VM_VMware_VM_VMwarebr172_20_20_100brDNS_pc_20_100["[VM] 💻 VMware VM VMware<br>172.20.20.100<br>[DNS] pc-20-100"]
   VM_VMware_VM_VMwarebr172_20_9_199["[VM] 💻 VMware VM VMware<br>172.20.9.199"]
   VM_Windows_VMwarebr172_20_14_186["[VM] 🪟 Windows VMware<br>172.20.14.186"]
@@ -65,8 +66,10 @@ graph TD
   VM_Windows_VMwarebr172_20_15_118["[VM] 🪟 Windows VMware<br>172.20.15.118"]
   VM_Windows_VMwarebr172_20_224_18["[VM] 🪟 Windows VMware<br>172.20.224.18"]
   VM_Linux_VMwarebr172_20_88_17["[VM] 🐧 Linux VMware<br>172.20.88.17"]
+  VM_Windows_VMwarebr172_20_224_2["[VM] 🪟 Windows VMware<br>172.20.224.2"]
   VM_Windows_VMwarebr10_10_10_22["[VM] 🪟 Windows VMware<br>10.10.10.22"]
   VM_Windows_VMwarebr10_10_10_26["[VM] 🪟 Windows VMware<br>10.10.10.26"]
+  ENDPOINT_HP_Arubabr172_15_81_158>" [ENDPOINT] HP Aruba<br>172.15.81.158"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_214>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.16.17.214"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_136_35>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.15.136.35"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_37_128>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.16.37.128"]
@@ -75,18 +78,62 @@ graph TD
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_37_101>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.16.37.101"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_0_19>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.16.0.19"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_203>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.16.17.203"]
+  ENDPOINT_HP_Arubabr172_15_81_154>" [ENDPOINT] HP Aruba<br>172.15.81.154"]
+  ENDPOINT_HP_Arubabr172_15_81_157>" [ENDPOINT] HP Aruba<br>172.15.81.157"]
+  ENDPOINT_HP_Arubabr172_15_81_152>" [ENDPOINT] HP Aruba<br>172.15.81.152"]
   ENDPOINT_HP_Arubabr172_16_0_199>" [ENDPOINT] HP Aruba<br>172.16.0.199"]
-  WiFibr172_15_67_15brDNS_pc_67_15>" [WiFi]<br>172.15.67.15<br>[DNS] pc-67-15"]
   WiFi>" [WiFi]"]
+  WiFibr172_15_10_104>" [WiFi]<br>172.15.10.104"]
   WiFi_2>" [WiFi]"]
+  WiFibr172_15_67_15brDNS_pc_67_15>" [WiFi]<br>172.15.67.15<br>[DNS] pc-67-15"]
+  WiFi_3>" [WiFi]"]
+  WiFi_4>" [WiFi]"]
+  WiFi_5>" [WiFi]"]
+  WiFi_6>" [WiFi]"]
+  WiFi_7>" [WiFi]"]
+  WiFi_8>" [WiFi]"]
+  WiFibr172_15_150_172>" [WiFi]<br>172.15.150.172"]
+  WiFi_9>" [WiFi]"]
+  WiFi_10>" [WiFi]"]
+  WiFibr172_15_144_142>" [WiFi]<br>172.15.144.142"]
+  WiFi_11>" [WiFi]"]
   Huawe["Huawe"]
   172_20_230_40["172.20.230.40"]
   172_20_230_44["172.20.230.44"]
   HUAWEI["HUAWEI"]
+  WiFi_12>" [WiFi]"]
+  WiFi_13>" [WiFi]"]
+  WiFibr172_15_157_96>" [WiFi]<br>172.15.157.96"]
+  WiFi_14>" [WiFi]"]
+  WiFi_15>" [WiFi]"]
+  WiFi_16>" [WiFi]"]
+  WiFi_17>" [WiFi]"]
+  WiFibr172_15_117_158>" [WiFi]<br>172.15.117.158"]
+  WiFi_18>" [WiFi]"]
+  WiFibr172_16_12_231>" [WiFi]<br>172.16.12.231"]
+  WiFi_19>" [WiFi]"]
+  WiFi_20>" [WiFi]"]
+  WiFibr172_15_178_235brDNS_pc_178_235>" [WiFi]<br>172.15.178.235<br>[DNS] pc-178-235"]
   BMC_BMC_Micro_Star_INTL_CO_LTD_br172_16_1_153brDNS_mgmt_bmc_01["[BMC] BMC Micro-Star INTL CO., LTD.<br>172.16.1.153<br>[DNS] mgmt-bmc-01"]
   WiFibr172_16_16_85brDNS_pc_16_85>" [WiFi]<br>172.16.16.85<br>[DNS] pc-16-85"]
+  WiFi_21>" [WiFi]"]
+  WiFi_22>" [WiFi]"]
+  WiFi_23>" [WiFi]"]
+  WiFi_24>" [WiFi]"]
+  WiFibr172_15_10_174>" [WiFi]<br>172.15.10.174"]
+  WiFi_25>" [WiFi]"]
+  WiFi_26>" [WiFi]"]
+  WiFi_27>" [WiFi]"]
+  WiFi_28>" [WiFi]"]
   HPbr172_20_254_247["HP<br>172.20.254.247"]
+  WiFi_29>" [WiFi]"]
+  WiFi_30>" [WiFi]"]
+  WiFibr172_16_12_195brDNS_pc_12_195>" [WiFi]<br>172.16.12.195<br>[DNS] pc-12-195"]
   BMC_Dell_iDRAC_Hewlett_Packard_Enterprisebr172_20_0_48brDNS_srv_db01_idrac["[BMC] Dell iDRAC Hewlett Packard Enterprise<br>172.20.0.48<br>[DNS] srv-db01-idrac"]
+  WiFi_31>" [WiFi]"]
+  WiFi_32>" [WiFi]"]
+  WiFi_33>" [WiFi]"]
+  WiFi_34>" [WiFi]"]
   A_Mobilbr172_20_230_50["A Mobil<br>172.20.230.50"]
   D_1br172_20_230_3["D - 1<br>172.20.230.3"]
   A_220br172_20_230_49["A 220<br>172.20.230.49"]
@@ -125,14 +172,26 @@ graph TD
   B_3183br172_20_230_1["B-318/3<br>172.20.230.1"]
   HPEbr172_20_230_5["HPE<br>172.20.230.5"]
   HPEbr172_20_230_9["HPE<br>172.20.230.9"]
+  WiFi_35>" [WiFi]"]
   WiFibr172_16_1_99>" [WiFi]<br>172.16.1.99"]
+  WiFi_36>" [WiFi]"]
   WiFibr172_15_37_175brDNS_pc_37_175>" [WiFi]<br>172.15.37.175<br>[DNS] pc-37-175"]
   WiFibr172_16_16_223brDNS_nas01>" [WiFi]<br>172.16.16.223<br>[DNS] nas01"]
+  WiFibr172_15_250_189>" [WiFi]<br>172.15.250.189"]
+  WiFi_37>" [WiFi]"]
+  WiFi_38>" [WiFi]"]
+  WiFi_39>" [WiFi]"]
   BMC_HPE_iLO_HPEbr172_20_6_139brDNS_ILOCZJ33411C3["[BMC] HPE iLO HPE<br>172.20.6.139<br>[DNS] ILOCZJ33411C3"]
   WiFibr172_15_38_48>" [WiFi]<br>172.15.38.48"]
+  WiFi_40>" [WiFi]"]
   WiFibr172_15_56_160brDNS_pc_56_160>" [WiFi]<br>172.15.56.160<br>[DNS] pc-56-160"]
+  WiFi_41>" [WiFi]"]
   WiFibr172_16_36_21>" [WiFi]<br>172.16.36.21"]
-  WiFi_3>" [WiFi]"]
+  WiFi_42>" [WiFi]"]
+  WiFi_43>" [WiFi]"]
+  WiFi_44>" [WiFi]"]
+  WiFi_45>" [WiFi]"]
+  WiFi_46>" [WiFi]"]
   LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_223_56>" [LLDP-EP] Ubiquiti<br>U6-LR<br>U6-LR, 5.60.8.12971<br>172.15.223.56"]
   LLDP_EP_UbiquitibrA1qavat118brU6_LR_6_7_57_15670br172_15_1_12>" [LLDP-EP] Ubiquiti<br>A1qavat118<br>U6-LR, 6.7.57.15670<br>172.15.1.12"]
   LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_223_55>" [LLDP-EP] Ubiquiti<br>U6-LR<br>U6-LR, 5.60.8.12971<br>172.15.223.55"]
@@ -143,21 +202,30 @@ graph TD
   LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_10_103>" [LLDP-EP] Ubiquiti<br>U6-LR<br>U6-LR, 5.60.8.12971<br>172.15.10.103"]
   LLDP_EP_UbiquitibrtuitbrU6_LR_5_60_8_12971br172_15_10_113>" [LLDP-EP] Ubiquiti<br>tuit<br>U6-LR, 5.60.8.12971<br>172.15.10.113"]
   ENDPOINT_Ubiquitibr172_15_10_14>" [ENDPOINT] Ubiquiti<br>172.15.10.14"]
+  WiFi_47>" [WiFi]"]
   LLDP_EP_Ubiquiti_IncbrUBNTbrUAP_AC_LR_4_0_66_10832br172_15_19_72>" [LLDP-EP] Ubiquiti Inc<br>UBNT<br>UAP-AC-LR, 4.0.66.10832<br>172.15.19.72"]
   LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_15_19_73>" [LLDP-EP] Ubiquiti Inc<br>UAP-AC-LR<br>UAP-AC-LR, 5.43.46.12754<br>172.15.19.73"]
   LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_16_13_253>" [LLDP-EP] Ubiquiti Inc<br>UAP-AC-LR<br>UAP-AC-LR, 5.43.46.12754<br>172.16.13.253"]
   LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_15_19_78>" [LLDP-EP] Ubiquiti Inc<br>UAP-AC-LR<br>UAP-AC-LR, 5.43.46.12754<br>172.15.19.78"]
   LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_43_12741br172_15_19_74>" [LLDP-EP] Ubiquiti Inc<br>UAP-AC-LR<br>UAP-AC-LR, 5.43.43.12741<br>172.15.19.74"]
   LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_16_12_134>" [LLDP-EP] Ubiquiti Inc<br>UAP-AC-LR<br>UAP-AC-LR, 5.43.46.12754<br>172.16.12.134"]
+  WiFibr172_15_11_140brDNS_pc_11_140>" [WiFi]<br>172.15.11.140<br>[DNS] pc-11-140"]
+  WiFibr172_15_52_184>" [WiFi]<br>172.15.52.184"]
   LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_114>" [LLDP-EP] Ubiquiti<br>Sportzal<br>UAP-AC-Mesh-Pro, 6.8.2.15592<br>172.15.121.114"]
   LLDP_EP_UbiquitibrA219brUAP_AC_Mesh_Pro_6_8_2_15592br172_15_1_26>" [LLDP-EP] Ubiquiti<br>A219<br>UAP-AC-Mesh-Pro, 6.8.2.15592<br>172.15.1.26"]
   LLDP_EP_UbiquitibrUBNTbrLEDE_Reboot_17_01_6_Linux_4_4_153_0_Thu_Aug_30_121054_2018_mipsbr172_15_13_81>" [LLDP-EP] Ubiquiti<br>UBNT<br>LEDE Reboot 17.01.6 Linux 4.4.153 #0 Thu Aug 30 12:10:54 2018 mips<br>172.15.13.81"]
+  ENDPOINT_Ubiquiti>" [ENDPOINT] Ubiquiti"]
+  ENDPOINT_Ubiquitibr172_15_1_74>" [ENDPOINT] Ubiquiti<br>172.15.1.74"]
   ENDPOINT_Ubiquitibr172_15_1_33>" [ENDPOINT] Ubiquiti<br>172.15.1.33"]
+  ENDPOINT_Ubiquitibr172_15_1_36>" [ENDPOINT] Ubiquiti<br>172.15.1.36"]
+  ENDPOINT_Ubiquitibr172_15_1_29>" [ENDPOINT] Ubiquiti<br>172.15.1.29"]
   ENDPOINT_Ubiquitibr172_15_1_35brDNS_pc_1_35>" [ENDPOINT] Ubiquiti<br>172.15.1.35<br>[DNS] pc-1-35"]
   ENDPOINT_Ubiquitibr172_15_12_243>" [ENDPOINT] Ubiquiti<br>172.15.12.243"]
   ENDPOINT_Ubiquitibr172_15_1_39>" [ENDPOINT] Ubiquiti<br>172.15.1.39"]
   ENDPOINT_Ubiquitibr172_15_12_244>" [ENDPOINT] Ubiquiti<br>172.15.12.244"]
   ENDPOINT_Ubiquitibr172_15_13_17>" [ENDPOINT] Ubiquiti<br>172.15.13.17"]
+  ENDPOINT_Ubiquitibr172_15_1_45brDNS_pc_1_45>" [ENDPOINT] Ubiquiti<br>172.15.1.45<br>[DNS] pc-1-45"]
+  ENDPOINT_Ubiquitibr172_15_1_50brDNS_pc_1_50>" [ENDPOINT] Ubiquiti<br>172.15.1.50<br>[DNS] pc-1-50"]
   ENDPOINT_Ubiquitibr172_15_1_40brDNS_pc_1_40>" [ENDPOINT] Ubiquiti<br>172.15.1.40<br>[DNS] pc-1-40"]
   ENDPOINT_Ubiquitibr172_15_1_38>" [ENDPOINT] Ubiquiti<br>172.15.1.38"]
   ENDPOINT_Ubiquitibr172_15_1_46>" [ENDPOINT] Ubiquiti<br>172.15.1.46"]
@@ -179,13 +247,38 @@ graph TD
   ENDPOINT_Ubiquitibr172_15_1_42>" [ENDPOINT] Ubiquiti<br>172.15.1.42"]
   ENDPOINT_Ubiquitibr172_15_1_44>" [ENDPOINT] Ubiquiti<br>172.15.1.44"]
   HPbr172_20_254_204["HP<br>172.20.254.204"]
+  WiFi_48>" [WiFi]"]
+  WiFi_49>" [WiFi]"]
+  WiFi_50>" [WiFi]"]
   WiFibr172_16_19_170brDNS_pc_19_170>" [WiFi]<br>172.16.19.170<br>[DNS] pc-19-170"]
+  WiFi_51>" [WiFi]"]
+  WiFibr172_20_11_126>" [WiFi]<br>172.20.11.126"]
+  WiFibr172_15_76_79>" [WiFi]<br>172.15.76.79"]
+  ENDPOINT_Ubiquiti_Incbr172_15_127_164>" [ENDPOINT] Ubiquiti Inc<br>172.15.127.164"]
+  ENDPOINT_Ubiquiti_Inc>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Incbr172_15_127_161>" [ENDPOINT] Ubiquiti Inc<br>172.15.127.161"]
+  ENDPOINT_Ubiquiti_Incbr172_15_127_165brDNS_pc_127_165>" [ENDPOINT] Ubiquiti Inc<br>172.15.127.165<br>[DNS] pc-127-165"]
   LLDP_EP_Ubiquiti_IncbrA115brU7_LR_8_0_76_16823br172_15_1_14>" [LLDP-EP] Ubiquiti Inc<br>A115<br>U7-LR, 8.0.76.16823<br>172.15.1.14"]
   LLDP_EP_Ubiquiti_IncbrA117brU7_LR_8_0_76_16823br172_15_1_28>" [LLDP-EP] Ubiquiti Inc<br>A117<br>U7-LR, 8.0.76.16823<br>172.15.1.28"]
+  ENDPOINT_Ubiquiti_Incbr172_15_127_162>" [ENDPOINT] Ubiquiti Inc<br>172.15.127.162"]
   LLDP_EP_Ubiquiti_IncbrA119brU7_LR_8_0_76_16823br172_15_1_15>" [LLDP-EP] Ubiquiti Inc<br>A119<br>U7-LR, 8.0.76.16823<br>172.15.1.15"]
   LLDP_EP_Ubiquiti_IncbrQabulSalohiddinakabrU7_LR_8_0_76_16823br172_15_101_0>" [LLDP-EP] Ubiquiti Inc<br>QabulSalohiddinaka<br>U7-LR, 8.0.76.16823<br>172.15.101.0"]
+  ENDPOINT_Ubiquiti_Incbr172_15_127_166>" [ENDPOINT] Ubiquiti Inc<br>172.15.127.166"]
+  ENDPOINT_Ubiquiti_Inc_2>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Inc_3>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Inc_4>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Incbr172_15_127_163>" [ENDPOINT] Ubiquiti Inc<br>172.15.127.163"]
+  ENDPOINT_Ubiquiti_Inc_5>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Inc_6>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Inc_7>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Inc_8>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Inc_9>" [ENDPOINT] Ubiquiti Inc"]
+  ENDPOINT_Ubiquiti_Inc_10>" [ENDPOINT] Ubiquiti Inc"]
   br172_20_230_253br172_20_7_227["<br>172.20.230.253<br>172.20.7.227"]
+  WiFibr172_15_60_212>" [WiFi]<br>172.15.60.212"]
+  WiFi_52>" [WiFi]"]
   BMC_Fujitsu_iRMCbr172_16_25_231["[BMC] Fujitsu iRMC<br>172.16.25.231"]
+  WiFi_53>" [WiFi]"]
   WiFibr172_15_10_247>" [WiFi]<br>172.15.10.247"]
   LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_79>" [LLDP-EP] Ubiquiti<br>U6Pro<br>U6-Pro, 6.8.2.15592<br>172.15.1.79"]
   LLDP_EP_UbiquitibrA2etajbrU6_Pro_6_8_2_15592br172_15_1_17>" [LLDP-EP] Ubiquiti<br>A2etaj<br>U6-Pro, 6.8.2.15592<br>172.15.1.17"]
@@ -205,13 +298,43 @@ graph TD
   LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_80>" [LLDP-EP] Ubiquiti<br>U6Pro<br>U6-Pro, 6.8.2.15592<br>172.15.1.80"]
   LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_75>" [LLDP-EP] Ubiquiti<br>U6Pro<br>U6-Pro, 6.8.2.15592<br>172.15.1.75"]
   LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_83>" [LLDP-EP] Ubiquiti<br>U6Pro<br>U6-Pro, 6.8.2.15592<br>172.15.1.83"]
+  WiFi_54>" [WiFi]"]
   WiFibr172_16_19_161>" [WiFi]<br>172.16.19.161"]
+  WiFi_55>" [WiFi]"]
+  WiFibr172_15_111_239>" [WiFi]<br>172.15.111.239"]
   WiFibr172_15_197_241>" [WiFi]<br>172.15.197.241"]
-  WiFi_4>" [WiFi]"]
+  WiFi_56>" [WiFi]"]
+  WiFi_57>" [WiFi]"]
+  WiFi_58>" [WiFi]"]
+  WiFi_59>" [WiFi]"]
+  WiFi_60>" [WiFi]"]
+  WiFi_61>" [WiFi]"]
+  WiFi_62>" [WiFi]"]
   LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_115>" [LLDP-EP] Ubiquiti<br>Sportzal<br>UAP-AC-Mesh-Pro, 6.8.2.15592<br>172.15.121.115"]
   LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_116>" [LLDP-EP] Ubiquiti<br>Sportzal<br>UAP-AC-Mesh-Pro, 6.8.2.15592<br>172.15.121.116"]
+  WiFibr172_15_34_185brDNS_pc_34_185>" [WiFi]<br>172.15.34.185<br>[DNS] pc-34-185"]
+  WiFi_63>" [WiFi]"]
   HPbr172_20_254_223["HP<br>172.20.254.223"]
+  WiFi_64>" [WiFi]"]
+  WiFi_65>" [WiFi]"]
+  WiFi_66>" [WiFi]"]
+  WiFi_67>" [WiFi]"]
+  WiFibr172_15_190_104>" [WiFi]<br>172.15.190.104"]
+  WiFibr172_15_82_105brDNS_pc_82_105>" [WiFi]<br>172.15.82.105<br>[DNS] pc-82-105"]
+  WiFi_68>" [WiFi]"]
+  WiFi_69>" [WiFi]"]
+  WiFi_70>" [WiFi]"]
+  WiFi_71>" [WiFi]"]
+  WiFi_72>" [WiFi]"]
+  WiFi_73>" [WiFi]"]
+  WiFi_74>" [WiFi]"]
+  WiFi_75>" [WiFi]"]
+  WiFi_76>" [WiFi]"]
+  WiFi_77>" [WiFi]"]
+  WiFi_78>" [WiFi]"]
   Jamicbr172_20_254_226["Jamic<br>172.20.254.226"]
+  WiFi_79>" [WiFi]"]
+  WiFi_80>" [WiFi]"]
   LLDP_EP_UbiquitibrA109brU6_Pro_6_8_2_15592br172_15_1_11>" [LLDP-EP] Ubiquiti<br>A109<br>U6-Pro, 6.8.2.15592<br>172.15.1.11"]
   LLDP_EP_UbiquitibrC44brU6_Pro_6_8_2_15592br172_15_1_58>" [LLDP-EP] Ubiquiti<br>C44<br>U6-Pro, 6.8.2.15592<br>172.15.1.58"]
   LLDP_EP_UbiquitibrA32brU6_Pro_6_8_2_15592br172_15_1_19>" [LLDP-EP] Ubiquiti<br>A32<br>U6-Pro, 6.8.2.15592<br>172.15.1.19"]
@@ -222,6 +345,13 @@ graph TD
   LLDP_EP_UbiquitibrC41brU6_Pro_6_8_2_15592br172_15_1_55>" [LLDP-EP] Ubiquiti<br>C41<br>U6-Pro, 6.8.2.15592<br>172.15.1.55"]
   LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_85>" [LLDP-EP] Ubiquiti<br>U6Pro<br>U6-Pro, 6.8.2.15592<br>172.15.1.85"]
   LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_89>" [LLDP-EP] Ubiquiti<br>U6Pro<br>U6-Pro, 6.8.2.15592<br>172.15.1.89"]
+  WiFi_81>" [WiFi]"]
+  WiFibr172_15_39_93>" [WiFi]<br>172.15.39.93"]
+  WiFi_82>" [WiFi]"]
+  WiFi_83>" [WiFi]"]
+  WiFi_84>" [WiFi]"]
+  WiFi_85>" [WiFi]"]
+  WiFi_86>" [WiFi]"]
   WiFibr172_16_11_206>" [WiFi]<br>172.16.11.206"]
   LLDP_EP_UbiquitibrA31brU6_Pro_6_8_2_15592br172_15_1_18>" [LLDP-EP] Ubiquiti<br>A31<br>U6-Pro, 6.8.2.15592<br>172.15.1.18"]
   LLDP_EP_UbiquitibrDXindmarkazbrU6_Pro_6_8_2_15592br172_15_1_65>" [LLDP-EP] Ubiquiti<br>DXindmarkaz<br>U6-Pro, 6.8.2.15592<br>172.15.1.65"]
@@ -233,6 +363,8 @@ graph TD
   LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_81>" [LLDP-EP] Ubiquiti<br>U6Pro<br>U6-Pro, 6.8.2.15592<br>172.15.1.81"]
   LLDP_EP_UbiquitibrSportzal1brU6_Pro_6_8_2_15592br172_15_1_68>" [LLDP-EP] Ubiquiti<br>Sportzal1<br>U6-Pro, 6.8.2.15592<br>172.15.1.68"]
   LLDP_EP_UbiquitibrSportzal2brU6_Pro_6_2_49_14111br172_15_1_69>" [LLDP-EP] Ubiquiti<br>Sportzal2<br>U6-Pro, 6.2.49.14111<br>172.15.1.69"]
+  WiFi_87>" [WiFi]"]
+  WiFi_88>" [WiFi]"]
   E_209_2br172_20_230_34["E-209.2<br>172.20.230.34"]
   E205_48br172_20_230_31["E205-48<br>172.20.230.31"]
   E109br172_20_230_22["E109<br>172.20.230.22"]
@@ -261,6 +393,9 @@ graph TD
   br172_20_230_77["<br>172.20.230.77"]
   br172_20_230_47["<br>172.20.230.47"]
   A_padval_SNRbr172_20_230_51["A_padval_SNR<br>172.20.230.51"]
+  WiFi_89>" [WiFi]"]
+  WiFi_90>" [WiFi]"]
+  WiFi_91>" [WiFi]"]
   HYPERVISOR_VMware_ESXibr5_VMs_on_ge104brVMs_10_10_10_25_10_10_10_24_10_10_10_31_10_10_10_31_10_10_10_66["[HYPERVISOR] VMware ESXi<br>5 VMs on ge1/0/4<br>VMs: 10.10.10.25, 10.10.10.24, 10.10.10.31, 10.10.10.31, 10.10.10.66"]
   HYPERVISOR_VMware_ESXibr3_VMs_on_ge105brVMs_10_10_10_30_10_10_10_23_10_10_10_22["[HYPERVISOR] VMware ESXi<br>3 VMs on ge1/0/5<br>VMs: 10.10.10.30, 10.10.10.23, 10.10.10.22"]
   HYPERVISOR_VMware_ESXibr7_VMs_on_ge1018brVMs_172_20_10_192_172_20_7_132_172_16_0_126_172_20_16_97_172_16_24_218["[HYPERVISOR] VMware ESXi<br>7 VMs on ge1/0/18<br>VMs: 172.20.10.192, 172.20.7.132, 172.16.0.126, 172.20.16.97, 172.16.24.218"]
@@ -274,6 +409,7 @@ graph TD
   HYPERVISOR_VMware_ESXibr13_VMs_on_ge1026brVMs_172_20_7_72_172_20_18_209_172_20_7_58_172_20_19_209_172_20_17_47_172_20_14_78_172_20_19_122_172_20_14_120_172_20_16_67_172_20_11_187_172_20_20_218_172_20_7_71_172_20_14_159["[HYPERVISOR] VMware ESXi<br>13 VMs on ge1/0/26<br>VMs: 172.20.7.72, 172.20.18.209, 172.20.7.58, 172.20.19.209, 172.20.17.47, 172.20.14.78, 172.20.19.122, 172.20.14.120, 172.20.16.67, 172.20.11.187, 172.20.20.218, 172.20.7.71, 172.20.14.159"]
   HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_13_243_172_20_6_247["[HYPERVISOR] VMware ESXi<br>2 VMs on ge1/0/32<br>VMs: 172.20.13.243, 172.20.6.247"]
   HYPERVISOR_VMware_ESXibr3_VMs_on_ge1035brVMs_172_20_1_253_172_20_1_219_172_20_11_130["[HYPERVISOR] VMware ESXi<br>3 VMs on ge1/0/35<br>VMs: 172.20.1.253, 172.20.1.219, 172.20.11.130"]
+  HYPERVISOR_VMware_ESXibr2_VMs_on_ge105brVMs_172_20_224_1_172_20_224_2["[HYPERVISOR] VMware ESXi<br>2 VMs on ge1/0/5<br>VMs: 172.20.224.1, 172.20.224.2"]
   HPbr172_20_254_247-- "GE1/0/4 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6LRbrU6_LR_6_7_57_15670br172_15_1_73
   A_Mobilbr172_20_230_50-- "TGE1/0/52 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA1qavat118brU6_LR_6_7_57_15670br172_15_1_12
   A_Mobilbr172_20_230_50-- "TGE1/0/52 [V1500] 1G ↔ eth0" -->LLDP_EP_Ubiquiti_IncbrA117brU7_LR_8_0_76_16823br172_15_1_28
@@ -497,6 +633,8 @@ graph TD
   HYPERVISOR_VMware_ESXibr3_VMs_on_ge1035brVMs_172_20_1_253_172_20_1_219_172_20_11_130-- "vNIC" -->VM_Linux_VMwarebr172_20_1_253
   HYPERVISOR_VMware_ESXibr3_VMs_on_ge1035brVMs_172_20_1_253_172_20_1_219_172_20_11_130-- "vNIC" -->VM_VMware_VM_VMwarebr172_20_1_219br172_20_12_137
   HYPERVISOR_VMware_ESXibr3_VMs_on_ge1035brVMs_172_20_1_253_172_20_1_219_172_20_11_130-- "vNIC" -->VM_Windows_VMwarebr172_20_11_130brDNS_pc_11_130
+  HYPERVISOR_VMware_ESXibr2_VMs_on_ge105brVMs_172_20_224_1_172_20_224_2-- "vNIC" -->VM_Linux_VMwarebr172_20_224_1
+  HYPERVISOR_VMware_ESXibr2_VMs_on_ge105brVMs_172_20_224_1_172_20_224_2-- "vNIC" -->VM_Windows_VMwarebr172_20_224_2
   style VM_VMware_VM_VMwarebr172_20_7_72 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Linux_VMwarebr172_20_16_109 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Windows_VMwarebr10_10_10_30brDNS_pc_10_30 fill:#9C27B0,stroke:#7B1FA2,color:#fff
@@ -533,6 +671,7 @@ graph TD
   style VM_VMware_VM_VMwarebr172_20_15_36 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_VMware_VM_VMwarebr172_20_16_67 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_VMware_VM_VMwarebr172_20_6_247 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style VM_Linux_VMwarebr172_20_224_1 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_VMware_VM_VMwarebr172_20_20_100brDNS_pc_20_100 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_VMware_VM_VMwarebr172_20_9_199 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Windows_VMwarebr172_20_14_186 fill:#9C27B0,stroke:#7B1FA2,color:#fff
@@ -560,8 +699,10 @@ graph TD
   style VM_Windows_VMwarebr172_20_15_118 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Windows_VMwarebr172_20_224_18 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Linux_VMwarebr172_20_88_17 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style VM_Windows_VMwarebr172_20_224_2 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Windows_VMwarebr10_10_10_22 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style VM_Windows_VMwarebr10_10_10_26 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style ENDPOINT_HP_Arubabr172_15_81_158 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_214 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_136_35 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_37_128 fill:#00BCD4,stroke:#0097A7,color:#fff
@@ -570,18 +711,62 @@ graph TD
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_37_101 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_0_19 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_203 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_HP_Arubabr172_15_81_154 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_HP_Arubabr172_15_81_157 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_HP_Arubabr172_15_81_152 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_HP_Arubabr172_16_0_199 fill:#00BCD4,stroke:#0097A7,color:#fff
-  style WiFibr172_15_67_15brDNS_pc_67_15 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFi fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_10_104 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFi_2 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_67_15brDNS_pc_67_15 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_3 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_4 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_5 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_6 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_7 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_8 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_150_172 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_9 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_10 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_144_142 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_11 fill:#00BCD4,stroke:#0097A7,color:#fff
   style Huawe fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style 172_20_230_40 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style 172_20_230_44 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style HUAWEI fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style WiFi_12 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_13 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_157_96 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_14 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_15 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_16 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_17 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_117_158 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_18 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_16_12_231 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_19 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_20 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_178_235brDNS_pc_178_235 fill:#00BCD4,stroke:#0097A7,color:#fff
   style BMC_BMC_Micro_Star_INTL_CO_LTD_br172_16_1_153brDNS_mgmt_bmc_01 fill:#FF6F00,stroke:#E65100,color:#fff
   style WiFibr172_16_16_85brDNS_pc_16_85 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_21 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_22 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_23 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_24 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_10_174 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_25 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_26 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_27 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_28 fill:#00BCD4,stroke:#0097A7,color:#fff
   style HPbr172_20_254_247 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style WiFi_29 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_30 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_16_12_195brDNS_pc_12_195 fill:#00BCD4,stroke:#0097A7,color:#fff
   style BMC_Dell_iDRAC_Hewlett_Packard_Enterprisebr172_20_0_48brDNS_srv_db01_idrac fill:#FF6F00,stroke:#E65100,color:#fff
+  style WiFi_31 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_32 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_33 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_34 fill:#00BCD4,stroke:#0097A7,color:#fff
   style A_Mobilbr172_20_230_50 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style D_1br172_20_230_3 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style A_220br172_20_230_49 fill:#4A90E2,stroke:#2A6FC2,color:#fff
@@ -620,14 +805,26 @@ graph TD
   style B_3183br172_20_230_1 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style HPEbr172_20_230_5 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style HPEbr172_20_230_9 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style WiFi_35 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_16_1_99 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_36 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_15_37_175brDNS_pc_37_175 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_16_16_223brDNS_nas01 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_250_189 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_37 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_38 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_39 fill:#00BCD4,stroke:#0097A7,color:#fff
   style BMC_HPE_iLO_HPEbr172_20_6_139brDNS_ILOCZJ33411C3 fill:#FF6F00,stroke:#E65100,color:#fff
   style WiFibr172_15_38_48 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_40 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_15_56_160brDNS_pc_56_160 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_41 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_16_36_21 fill:#00BCD4,stroke:#0097A7,color:#fff
-  style WiFi_3 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_42 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_43 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_44 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_45 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_46 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_223_56 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrA1qavat118brU6_LR_6_7_57_15670br172_15_1_12 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_223_55 fill:#00BCD4,stroke:#0097A7,color:#fff
@@ -638,21 +835,30 @@ graph TD
   style LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_10_103 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrtuitbrU6_LR_5_60_8_12971br172_15_10_113 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_10_14 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_47 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrUBNTbrUAP_AC_LR_4_0_66_10832br172_15_19_72 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_15_19_73 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_16_13_253 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_15_19_78 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_43_12741br172_15_19_74 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_16_12_134 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_11_140brDNS_pc_11_140 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_52_184 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_114 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrA219brUAP_AC_Mesh_Pro_6_8_2_15592br172_15_1_26 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrUBNTbrLEDE_Reboot_17_01_6_Linux_4_4_153_0_Thu_Aug_30_121054_2018_mipsbr172_15_13_81 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquitibr172_15_1_74 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_1_33 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquitibr172_15_1_36 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquitibr172_15_1_29 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_1_35brDNS_pc_1_35 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_12_243 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_1_39 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_12_244 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_13_17 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquitibr172_15_1_45brDNS_pc_1_45 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquitibr172_15_1_50brDNS_pc_1_50 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_1_40brDNS_pc_1_40 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_1_38 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_1_46 fill:#00BCD4,stroke:#0097A7,color:#fff
@@ -674,13 +880,38 @@ graph TD
   style ENDPOINT_Ubiquitibr172_15_1_42 fill:#00BCD4,stroke:#0097A7,color:#fff
   style ENDPOINT_Ubiquitibr172_15_1_44 fill:#00BCD4,stroke:#0097A7,color:#fff
   style HPbr172_20_254_204 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style WiFi_48 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_49 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_50 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_16_19_170brDNS_pc_19_170 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_51 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_20_11_126 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_76_79 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Incbr172_15_127_164 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Incbr172_15_127_161 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Incbr172_15_127_165brDNS_pc_127_165 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrA115brU7_LR_8_0_76_16823br172_15_1_14 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrA117brU7_LR_8_0_76_16823br172_15_1_28 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Incbr172_15_127_162 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrA119brU7_LR_8_0_76_16823br172_15_1_15 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrQabulSalohiddinakabrU7_LR_8_0_76_16823br172_15_101_0 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Incbr172_15_127_166 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_2 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_3 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_4 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Incbr172_15_127_163 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_5 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_6 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_7 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_8 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_9 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_Ubiquiti_Inc_10 fill:#00BCD4,stroke:#0097A7,color:#fff
   style br172_20_230_253br172_20_7_227 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style WiFibr172_15_60_212 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_52 fill:#00BCD4,stroke:#0097A7,color:#fff
   style BMC_Fujitsu_iRMCbr172_16_25_231 fill:#FF6F00,stroke:#E65100,color:#fff
+  style WiFi_53 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_15_10_247 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_79 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrA2etajbrU6_Pro_6_8_2_15592br172_15_1_17 fill:#00BCD4,stroke:#0097A7,color:#fff
@@ -700,13 +931,43 @@ graph TD
   style LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_80 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_75 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_83 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_54 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_16_19_161 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_55 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_111_239 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_15_197_241 fill:#00BCD4,stroke:#0097A7,color:#fff
-  style WiFi_4 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_56 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_57 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_58 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_59 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_60 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_61 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_62 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_115 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_116 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_34_185brDNS_pc_34_185 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_63 fill:#00BCD4,stroke:#0097A7,color:#fff
   style HPbr172_20_254_223 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style WiFi_64 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_65 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_66 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_67 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_190_104 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_82_105brDNS_pc_82_105 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_68 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_69 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_70 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_71 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_72 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_73 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_74 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_75 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_76 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_77 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_78 fill:#00BCD4,stroke:#0097A7,color:#fff
   style Jamicbr172_20_254_226 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style WiFi_79 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_80 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrA109brU6_Pro_6_8_2_15592br172_15_1_11 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrC44brU6_Pro_6_8_2_15592br172_15_1_58 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrA32brU6_Pro_6_8_2_15592br172_15_1_19 fill:#00BCD4,stroke:#0097A7,color:#fff
@@ -717,6 +978,13 @@ graph TD
   style LLDP_EP_UbiquitibrC41brU6_Pro_6_8_2_15592br172_15_1_55 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_85 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_89 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_81 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFibr172_15_39_93 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_82 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_83 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_84 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_85 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_86 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_16_11_206 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrA31brU6_Pro_6_8_2_15592br172_15_1_18 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrDXindmarkazbrU6_Pro_6_8_2_15592br172_15_1_65 fill:#00BCD4,stroke:#0097A7,color:#fff
@@ -728,6 +996,8 @@ graph TD
   style LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_81 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrSportzal1brU6_Pro_6_8_2_15592br172_15_1_68 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrSportzal2brU6_Pro_6_2_49_14111br172_15_1_69 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_87 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_88 fill:#00BCD4,stroke:#0097A7,color:#fff
   style E_209_2br172_20_230_34 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style E205_48br172_20_230_31 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style E109br172_20_230_22 fill:#4A90E2,stroke:#2A6FC2,color:#fff
@@ -756,6 +1026,9 @@ graph TD
   style br172_20_230_77 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style br172_20_230_47 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style A_padval_SNRbr172_20_230_51 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  style WiFi_89 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_90 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style WiFi_91 fill:#00BCD4,stroke:#0097A7,color:#fff
   style HYPERVISOR_VMware_ESXibr5_VMs_on_ge104brVMs_10_10_10_25_10_10_10_24_10_10_10_31_10_10_10_31_10_10_10_66 fill:#26C6DA,stroke:#0097A7,color:#fff
   style HYPERVISOR_VMware_ESXibr3_VMs_on_ge105brVMs_10_10_10_30_10_10_10_23_10_10_10_22 fill:#26C6DA,stroke:#0097A7,color:#fff
   style HYPERVISOR_VMware_ESXibr7_VMs_on_ge1018brVMs_172_20_10_192_172_20_7_132_172_16_0_126_172_20_16_97_172_16_24_218 fill:#26C6DA,stroke:#0097A7,color:#fff
@@ -769,6 +1042,7 @@ graph TD
   style HYPERVISOR_VMware_ESXibr13_VMs_on_ge1026brVMs_172_20_7_72_172_20_18_209_172_20_7_58_172_20_19_209_172_20_17_47_172_20_14_78_172_20_19_122_172_20_14_120_172_20_16_67_172_20_11_187_172_20_20_218_172_20_7_71_172_20_14_159 fill:#26C6DA,stroke:#0097A7,color:#fff
   style HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_13_243_172_20_6_247 fill:#26C6DA,stroke:#0097A7,color:#fff
   style HYPERVISOR_VMware_ESXibr3_VMs_on_ge1035brVMs_172_20_1_253_172_20_1_219_172_20_11_130 fill:#26C6DA,stroke:#0097A7,color:#fff
+  style HYPERVISOR_VMware_ESXibr2_VMs_on_ge105brVMs_172_20_224_1_172_20_224_2 fill:#26C6DA,stroke:#0097A7,color:#fff
 
 ```
 

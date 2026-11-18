@@ -716,7 +716,7 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 	// Node definitions with shapes per group
 	for _, nd := range nodes {
 		switch nd.Group {
-		case "hub":
+		case "hub", "minihub":
 			sb.WriteString(fmt.Sprintf("  %s((\"%s\"))\n", nd.SafeID, nd.Label))
 		case "router":
 			sb.WriteString(fmt.Sprintf("  %s{{\"%s\"}}\n", nd.SafeID, nd.Label))
@@ -754,6 +754,7 @@ var reportGroupColors = map[string][2]string{
 	"switch":       {"#4A90E2", "#2A6FC2"},
 	"router":       {"#E24A4A", "#C23030"},
 	"hub":          {"#FF9800", "#E68A00"},
+	"minihub":      {"#FFC107", "#FFA000"},
 	"endpoint":     {"#8BC34A", "#6B9F30"},
 	"access_point": {"#00BCD4", "#0097A7"},
 	"vm":           {"#9C27B0", "#7B1FA2"},
@@ -777,6 +778,7 @@ func GenerateTopologyLegend(groups []string) string {
 		"switch":       {"🔵", "Switch"},
 		"router":       {"🔴", "Router"},
 		"hub":          {"🟠", "Hub (Shadow IT)"},
+		"minihub":      {"🟡", "Mini hub"},
 		"endpoint":     {"🟢", "Endpoint"},
 		"access_point": {"🔷", "Wi-Fi AP"},
 		"vm":           {"🟣", "VM"},
@@ -1371,6 +1373,7 @@ func generateAuditMD(groups []string) string {
 			{"wifi_random", "4.12 Wi-Fi / Random MAC"},
 			{"access_point", "4.13 Wi-Fi nuqtalari (Access Point)"},
 			{"printer", "4.14 Printerlar"},
+			{"minihub", "4.15 Mini hub (trunk yoki ko'p MAC'li port)"},
 		}
 
 		// Group nodes

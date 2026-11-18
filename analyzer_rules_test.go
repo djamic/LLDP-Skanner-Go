@@ -37,7 +37,8 @@ func analyzerIssueIDs(suggestions []OptimizationSuggestion, typ string) []string
 func analyzerGraphHubs(g *DJGraph) []string {
 	var out []string
 	for id := range g.Nodes {
-		if !strings.HasPrefix(id, "hub-") {
+		// a mini hub is a hub- node too, but no Shadow IT
+		if !strings.HasPrefix(id, "hub-") || strings.HasPrefix(g.SwitchInfo[id], "[MINIHUB]") {
 			continue
 		}
 		n := -1

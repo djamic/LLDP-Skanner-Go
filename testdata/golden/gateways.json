@@ -3,11 +3,11 @@
     "bfs_depths": {
       "core_found": true,
       "core_switch_ip": "00:0c:29:98:7b:c2",
-      "deep_devices": 883,
+      "deep_devices": 1059,
       "deep_switches": ["4c:ae:a3:27:53:aa", "4c:ae:a3:27:5f:aa", "4c:ae:a3:27:6d:8a", "4c:ae:a3:27:70:2a", "4c:ae:a3:27:76:8a", "4c:ae:a3:27:79:ea", "4c:ae:a3:27:85:ea", "4c:ae:a3:27:8b:2a", "4c:ae:a3:27:8b:8a", "4c:ae:a3:8d:b3:79", "4c:ae:a3:8d:e0:91", "4c:ae:a3:8e:19:09", "4c:ae:a3:8e:42:11", "4c:ae:a3:a1:ff:6c", "4c:ae:a3:a2:01:ac", "4c:ae:a3:a2:03:2c", "4c:ae:a3:a2:06:2c", "4c:ae:a3:a2:06:ec", "4c:ae:a3:a2:09:ec", "4c:ae:a3:a2:0d:4c", "4c:ae:a3:a2:0d:ac", "4c:ae:a3:a2:10:4c", "4c:ae:a3:a2:12:ec", "4c:ae:a3:a2:13:4c", "4c:ae:a3:a2:15:ec", "4c:ae:a3:a2:18:2c", "4c:ae:a3:a2:18:ec", "4c:ae:a3:a2:19:ac", "78:48:59:72:ec:ee", "bc:ea:fa:46:47:ac", "e0:d9:e3:ee:19:c0", "f8:f0:82:7a:d9:5b", "f8:f0:82:7a:d9:5d", "f8:f0:82:7a:d9:69", "f8:f0:82:7a:d9:71", "f8:f0:82:7a:f7:9b", "f8:f0:82:7c:2a:03", "f8:f0:82:7c:2c:ff", "f8:f0:82:7c:2d:17", "f8:f0:82:7c:30:cf", "f8:f0:82:7c:f9:58", "f8:f0:82:7c:f9:84", "f8:f0:82:7c:f9:cc", "f8:f0:82:7c:fa:20", "f8:f0:82:7c:fa:26", "f8:f0:82:7c:fa:72", "f8:f0:82:7c:fa:ca", "f8:f0:82:7c:fb:0e", "f8:f0:82:d0:22:ce", "f8:f0:82:d0:23:0a", "f8:f0:82:d0:23:92", "f8:f0:82:d8:7d:07"],
-      "depth_distribution": {"0": 1, "1": 1, "2": 25, "3": 72, "4": 153, "5": 190, "6": 243, "7": 260, "8": 37},
+      "depth_distribution": {"0": 1, "1": 1, "2": 26, "3": 76, "4": 169, "5": 192, "6": 374, "7": 287, "8": 37},
       "max_depth": 8,
-      "total_nodes": 982
+      "total_nodes": 1163
     },
     "bot_messages": {
       "repeated_within_hour": 0,
@@ -24,8 +24,8 @@
       "edges_added": ["4c:ae:a3:8d:ee:c9 -> 00:0c:29:98:7b:c2 : \"TGE1/0/52 [MAC-REF]|eth0\"", "4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|LAN\""],
       "edges_removed": ["4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e5:e8 : \"TGE1/0/52 [T] 10G|LAN\""],
       "nodes_added": ["00:0c:29:98:7b:c2", "68:cc:ae:96:e6:08"],
-      "nodes_after": 1030,
-      "nodes_before": 1029,
+      "nodes_after": 1266,
+      "nodes_before": 1265,
       "nodes_removed": ["68:cc:ae:96:e5:e8"]
     },
     "health": {

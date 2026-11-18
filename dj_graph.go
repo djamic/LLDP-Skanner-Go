@@ -341,7 +341,7 @@ func (g *DJGraph) GetGraphData() GraphData {
 		// Build label based on info content
 		if info != "" {
 			// For endpoints, info is just "[ENDPOINT]" or "[WiFi]" etc.
-			if strings.HasPrefix(info, "[ENDPOINT]") || strings.HasPrefix(info, "[LLDP-EP]") || strings.HasPrefix(info, "[HUB]") || strings.HasPrefix(info, "[VM]") || strings.HasPrefix(info, "[WiFi]") {
+			if strings.HasPrefix(info, "[ENDPOINT]") || strings.HasPrefix(info, "[LLDP-EP]") || strings.HasPrefix(info, "[HUB]") || strings.HasPrefix(info, "[MINIHUB]") || strings.HasPrefix(info, "[VM]") || strings.HasPrefix(info, "[WiFi]") {
 				// Prioritize hostname in label if available
 				if hostname != "" {
 					label = fmt.Sprintf("%s\n%s", hostname, node)
@@ -487,6 +487,12 @@ func (g *DJGraph) determineDeviceGroup(node, info string) string {
 			}
 		}
 		return "endpoint"
+	}
+
+	// A mini hub (fdbPorts): a trunk or big port no polled switch is behind;
+	// its node is a hub- node too, so it is told by its tag first
+	if strings.Contains(info, "[MINIHUB]") {
+		return "minihub"
 	}
 
 	// Check for Virtual Hub (unmanaged switch)

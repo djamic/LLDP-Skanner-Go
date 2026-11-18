@@ -1348,3 +1348,22 @@ graph LR
 
 **Virtual mashinalar:** 3 ta
 
+### Hypervisor #20: [HYPERVISOR] VMware ESXi — 2 VMs on ge1/0/5 — VMs: 172.20.224.1, 172.20.224.2
+
+```mermaid
+graph LR
+  hyp_hub_4caea38deec9_p5_ge1_0_5{{"[HYPERVISOR] VMware ESXi<br>2 VMs on ge1/0/5<br>VMs: 172.20.224.1, 172.20.224.2"}}
+  hub_4caea38deec9_p5["[MINIHUB] Mini hub<br>4 devices"]
+  hub_4caea38deec9_p5-->hyp_hub_4caea38deec9_p5_ge1_0_5
+  style hub_4caea38deec9_p5 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  000c298114a2["[VM] 🐧 Linux VMware<br>172.20.224.1"]
+  hyp_hub_4caea38deec9_p5_ge1_0_5-->000c298114a2
+  style 000c298114a2 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  000c29f1645d["[VM] 🪟 Windows VMware<br>172.20.224.2"]
+  hyp_hub_4caea38deec9_p5_ge1_0_5-->000c29f1645d
+  style 000c29f1645d fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style hyp_hub_4caea38deec9_p5_ge1_0_5 fill:#26C6DA,stroke:#0097A7,color:#fff
+```
+
+**Virtual mashinalar:** 2 ta
+

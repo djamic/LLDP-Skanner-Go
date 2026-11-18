@@ -85,7 +85,7 @@ func TestGoldenLabelContract(t *testing.T) {
 		g.Nodes++
 		groups[n.Group] = g
 	}
-	for _, name := range []string{"switch", "router", "hub", "endpoint", "access_point", "vm", "hypervisor", "bmc", "camera", "phone", "iot", "wifi_random", "printer", "server", "unknown"} {
+	for _, name := range []string{"switch", "router", "hub", "minihub", "endpoint", "access_point", "vm", "hypervisor", "bmc", "camera", "phone", "iot", "wifi_random", "printer", "server", "unknown"} {
 		g := groups[name]
 		g.UICheckbox = strings.Contains(indexHTML, `data-group="`+name+`"`)
 		g.AppJSLiteral = strings.Contains(appJS, "'"+name+"'") || strings.Contains(appJS, `"`+name+`"`)

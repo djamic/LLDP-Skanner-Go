@@ -4,16 +4,16 @@
   ],
   "all_filter": {
     "fixture": {
-      "kept_by_group": {"access_point": 98, "bmc": 4, "camera": 56, "endpoint": 668, "hub": 33, "hypervisor": 13, "switch": 75, "vm": 65, "wifi_random": 17},
-      "kept_links": 1026,
-      "links": 1026,
-      "nodes_by_group": {"access_point": 98, "bmc": 4, "camera": 56, "endpoint": 668, "hub": 33, "hypervisor": 13, "switch": 75, "vm": 65, "wifi_random": 17}
+      "kept_by_group": {"access_point": 124, "bmc": 4, "camera": 56, "endpoint": 761, "hub": 33, "hypervisor": 14, "minihub": 6, "phone": 1, "switch": 75, "vm": 67, "wifi_random": 124},
+      "kept_links": 1262,
+      "links": 1262,
+      "nodes_by_group": {"access_point": 124, "bmc": 4, "camera": 56, "endpoint": 761, "hub": 33, "hypervisor": 14, "minihub": 6, "phone": 1, "switch": 75, "vm": 67, "wifi_random": 124}
     },
     "rule": {
-      "kept_by_group": {"endpoint": 38, "hub": 7, "hypervisor": 3, "switch": 2, "vm": 7, "wifi_random": 4},
-      "kept_links": 60,
-      "links": 60,
-      "nodes_by_group": {"endpoint": 38, "hub": 7, "hypervisor": 3, "switch": 2, "vm": 7, "wifi_random": 4}
+      "kept_by_group": {"endpoint": 59, "hub": 7, "hypervisor": 3, "minihub": 1, "switch": 2, "vm": 7, "wifi_random": 4},
+      "kept_links": 82,
+      "links": 82,
+      "nodes_by_group": {"endpoint": 59, "hub": 7, "hypervisor": 3, "minihub": 1, "switch": 2, "vm": 7, "wifi_random": 4}
     },
     "ui": {
       "kept_by_group": {"endpoint": 9, "hub": 3, "hypervisor": 1, "printer": 1, "server": 1, "switch": 2, "unknown": 1, "vm": 2},
@@ -28,7 +28,7 @@
       "kept": 55,
       "neighbors": 54,
       "node": "4c:ae:a3:a2:15:ec",
-      "nodes": 1029
+      "nodes": 1265
     },
     {
       "graph": "ui",
@@ -46,6 +46,7 @@
     "hub": "#FF9800",
     "hypervisor": "#26C6DA",
     "iot": "#607D8B",
+    "minihub": "#FFC107",
     "phone": "#3F51B5",
     "printer": "#795548",
     "router": "#E24A4A",
@@ -149,6 +150,7 @@
     "hub": "#FF9800",
     "hypervisor": "#26C6DA",
     "iot": "#607D8B",
+    "minihub": "#FFC107",
     "phone": "#3F51B5",
     "printer": "#795548",
     "router": "#E24A4A",
