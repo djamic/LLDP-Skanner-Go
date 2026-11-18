@@ -330,7 +330,8 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		}
 	}()
 
-	// 3. Collect LLDP Neighbors
+	// 3. Collect LLDP Neighbors (+ lldpLocPortTable mapping for Huawei/VRP)
+	var locPortNames map[int]string
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -341,8 +342,10 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 			data.failedWalks = append(data.failedWalks, collectWalkLLDP)
 			mu.Unlock()
 		} else {
+			lp := s.collectLLDPLocPortMap(ip)
 			mu.Lock()
 			data.Neighbors = neighbors
+			locPortNames = lp
 			mu.Unlock()
 		}
 	}()
@@ -435,6 +438,39 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 	wg.Wait()
 	if vlanLast {
 		vlanJob()
+	}
+
+	// Map lldpLocPortNum -> IfIndex (Huawei VRP uses 1..N in lldpLocPortTable
+	// while IfIndex 1=InLoopBack0, 2=NULL0, 3=Console, 4=MEth, 6=Vlanif1, 7+=ports)
+	if len(locPortNames) > 0 && len(data.Interfaces) > 0 {
+		ifByName := make(map[string]int, len(data.Interfaces))
+		for _, iface := range data.Interfaces {
+			k := strings.ToLower(strings.Trim(iface.IfDescr, "\" \t"))
+			if k != "" {
+				ifByName[k] = iface.IfIndex
+			}
+		}
+		for i := range data.Neighbors {
+			if pname, ok := locPortNames[data.Neighbors[i].LocalPortNum]; ok {
+				if ifIdx, ok := ifByName[strings.ToLower(strings.Trim(pname, "\" \t"))]; ok {
+					data.Neighbors[i].LocalPortNum = ifIdx
+				}
+			}
+		}
+	}
+	// Map dot1dBasePort -> IfIndex in PortVLANs and MACTable so all tables share IfIndex
+	if len(data.BridgePortIfIndex) > 0 {
+		for i := range data.PortVLANs {
+			if ifIdx, ok := data.BridgePortIfIndex[data.PortVLANs[i].PortIndex]; ok {
+				data.PortVLANs[i].PortIndex = ifIdx
+			}
+		}
+		for i := range data.MACTable {
+			if ifIdx, ok := data.BridgePortIfIndex[data.MACTable[i].PortNumber]; ok {
+				data.MACTable[i].PortNumber = ifIdx
+			}
+		}
+		data.BridgePortIfIndex = nil
 	}
 
 	// Phase 8: Count total parallel SNMP jobs (ChassisID, Interfaces, LLDP, MAC, ARP, VLAN, STP)
@@ -1562,3 +1598,38 @@ func (s *SNMPObject) collectPortVLANs(ip string) ([]PortVLAN, error) {
 	return result, nil
 }
 
+
+
+// collectLLDPLocPortMap walks lldpLocPortId (.1.0.8802.1.1.2.1.3.7.1.3) and
+// lldpLocPortDesc (.1.0.8802.1.1.2.1.3.7.1.4) to map lldpLocPortNum -> interface name.
+func (s *SNMPObject) collectLLDPLocPortMap(ip string) map[int]string {
+	const oidLocPortId = ".1.0.8802.1.1.2.1.3.7.1.3"
+	const oidLocPortDesc = ".1.0.8802.1.1.2.1.3.7.1.4"
+	res := make(map[int]string)
+	for _, baseOID := range []string{oidLocPortId, oidLocPortDesc} {
+		lines, err := s.runSNMPWalk(ip, baseOID)
+		if err != nil {
+			continue
+		}
+		for _, line := range lines {
+			oid, val, err := parseSNMPLine(line)
+			if err != nil {
+				continue
+			}
+			idx, ok := collectOIDIndex(oid, baseOID)
+			if !ok || len(idx) != 1 || idx[0] <= 0 {
+				continue
+			}
+			name := strings.Trim(val, "\" \t")
+			if name != "" && !graphIsSNMPException(name) {
+				if _, exists := res[idx[0]]; !exists {
+					res[idx[0]] = name
+				}
+			}
+		}
+		if len(res) > 0 {
+			break
+		}
+	}
+	return res
+}
