@@ -49,3 +49,21 @@ results/*
 
 # Generated diagram images
 instrumens/mermaid_*/
+
+# Local network configuration & runtime state
+gateway_ip
+swich_ips
+ignored_issues.json
+network_data.json
+mac_ip_cache.json
+graphs_data.txt
+modules_inventory.json
+secrets/
+results/
+captures/
+export/
+docs/
+.claude/
+*.docx
+*.bak*
+*.log
