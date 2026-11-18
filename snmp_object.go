@@ -458,20 +458,6 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 			}
 		}
 	}
-	// Map dot1dBasePort -> IfIndex in PortVLANs and MACTable so all tables share IfIndex
-	if len(data.BridgePortIfIndex) > 0 {
-		for i := range data.PortVLANs {
-			if ifIdx, ok := data.BridgePortIfIndex[data.PortVLANs[i].PortIndex]; ok {
-				data.PortVLANs[i].PortIndex = ifIdx
-			}
-		}
-		for i := range data.MACTable {
-			if ifIdx, ok := data.BridgePortIfIndex[data.MACTable[i].PortNumber]; ok {
-				data.MACTable[i].PortNumber = ifIdx
-			}
-		}
-		data.BridgePortIfIndex = nil
-	}
 
 	// Phase 8: Count total parallel SNMP jobs (ChassisID, Interfaces, LLDP, MAC, ARP, VLAN, STP)
 	const totalJobs = 7
