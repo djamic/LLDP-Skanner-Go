@@ -261,6 +261,7 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	collectedDataMutex.RLock()
 	data.Core = topologyCore(nodes, collectedData)
+	addHARoles(&data, collectedData)
 	collectedDataMutex.RUnlock()
 
 	// The devices the controllers manage and their Wi-Fi clients

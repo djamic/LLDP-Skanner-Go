@@ -14,6 +14,7 @@ let filterState = {
     selectedNodeId: null,
     allowedGroups: new Set(), // populated from checkboxes
     checkboxGroups: new Set(), // groups that have a checkbox at all
+    showPassive: true,
     contextShowEndpoints: true
 };
 
@@ -159,6 +160,7 @@ function updateTopology(newData) {
             // Detect property changes that require re-render (canvas text included)
             if (existing.unreachable !== node.unreachable ||
                 existing.group !== node.group ||
+                existing.haRole !== node.haRole ||
                 uiNodeText(existing) !== uiNodeText(node) ||
                 JSON.stringify(existing.anomalies) !== JSON.stringify(node.anomalies)) {
                 changed = true;
@@ -227,14 +229,18 @@ function updateFilterState() {
     });
     filterState.allowedGroups = allowed;
     filterState.checkboxGroups = withCheckbox;
+    const passiveCb = document.getElementById('filterPassive');
+    filterState.showPassive = passiveCb ? !!passiveCb.checked : true;
 
     // Context menu checkbox
     filterState.contextShowEndpoints = document.getElementById('contextShowEndpoints')?.checked ?? true;
 }
 
-// uiGroupShown: a node is hidden only by an unchecked checkbox of its group;
+// uiGroupShown: a node is hidden only by an unchecked checkbox of its group
+// (or when it is a passive HA switch and the Passive filter is unchecked);
 // a group without a checkbox is always drawn instead of vanishing silently.
 function uiGroupShown(n) {
+    if (n.haRole === 'passive' && !filterState.showPassive) return false;
     const group = n.group || 'endpoint';
     return filterState.allowedGroups.has(group) || !filterState.checkboxGroups.has(group);
 }
@@ -280,6 +286,7 @@ function applyFilters() {
     if (rawData) {
         updateTopology(rawData);
         updateStats(rawData);
+        updateDeviceList();
     }
     uiNotifyViews('filters');
 }
@@ -460,6 +467,8 @@ function renderGraph() {
             if (d.unreachable) cls += ' anomaly-unreachable';
             else if (d.anomalies && d.anomalies.includes('loopback')) cls += ' anomaly-loopback';
             else if (d.anomalies && (d.anomalies.includes('shadow_it') || d.anomalies.includes('congestion'))) cls += ' anomaly-shadow';
+            if (d.haRole === 'passive') cls += ' ha-passive';
+            else if (d.haRole === 'active') cls += ' ha-active';
             return cls;
         });
 
@@ -600,6 +609,10 @@ function updateFilterCounts(data) {
         const el = document.getElementById('fc-' + g);
         if (el) el.textContent = counts[g] || 0;
     });
+    const passiveEl = document.getElementById('fc-passive');
+    if (passiveEl) {
+        passiveEl.textContent = (data.nodes || []).filter(n => n.haRole === 'passive').length;
+    }
 }
 
 // E.1: Health Score Widget update
@@ -1257,6 +1270,25 @@ function showInfoPanel(node) {
         if (c) document.getElementById('infoClient').textContent = [`on ${c.device || '?'}`, ...lines].join('\n');
     }
 
+    // High-Availability (VRRP/HSRP) role and floating VIPs
+    const haSection = document.getElementById('infoHASection');
+    if (haSection) {
+        const role = node.haRole;
+        haSection.hidden = !role;
+        if (role) {
+            const roleText = role === 'active' ? '⚡ Active (Master)' : '⏸️ Passive (Standby)';
+            const vips = Array.isArray(node.vips) ? node.vips : [];
+            const vipText = vips.length === 0 ? ''
+                : vips.length <= 4 ? `Floating IPs: ${vips.join(', ')}`
+                : `Floating IPs (${vips.length}): ${vips.slice(0, 4).join(', ')} (+${vips.length - 4} more)`;
+            const haEl = document.getElementById('infoHA');
+            if (haEl) {
+                haEl.textContent = [roleText, vipText].filter(Boolean).join('\n');
+                haEl.title = vips.length > 4 ? vips.join(', ') : '';
+            }
+        }
+    }
+
     // Phase 8: Show unreachable status
     const statusEl = document.getElementById('infoStatus');
     if (statusEl) {
@@ -1269,7 +1301,12 @@ function showInfoPanel(node) {
             statusEl.innerHTML = `<span style="color:#ff4444;font-weight:bold">🔴 UNREACHABLE</span> <span style="color:#888;font-size:11px">Last seen: ${uiEscapeHTML(lastSeenText)}</span>`;
             statusEl.style.display = 'block';
         } else {
-            statusEl.innerHTML = '<span style="color:#4CAF50;font-weight:bold">🟢 Online</span>';
+            const haBadge = node.haRole === 'active'
+                ? ' · <span style="color:#81C784;font-weight:600">ACTIVE</span>'
+                : node.haRole === 'passive'
+                ? ' · <span style="color:#B0BEC5;font-weight:600">PASSIVE</span>'
+                : '';
+            statusEl.innerHTML = '<span style="color:#4CAF50;font-weight:bold">🟢 Online</span>' + haBadge;
             statusEl.style.display = 'block';
         }
     }

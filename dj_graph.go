@@ -284,7 +284,11 @@ type GraphNode struct {
 	// WLAN is what the scanner tells of a gateway's Wi-Fi clients
 	// (addGatewayWLAN); only graphHandler sets it
 	WLAN *WLANView `json:"wlan,omitempty"`
-	X           float64  `json:"x,omitempty"`
+	// HARole is "active" or "passive" for switches/routers participating in a
+	// VRRP/HSRP redundancy group; only graphHandler sets it (addHARoles).
+	HARole string   `json:"haRole,omitempty"`
+	VIPs   []string `json:"vips,omitempty"`
+	X      float64  `json:"x,omitempty"`
 	Y           float64  `json:"y,omitempty"`
 }
 

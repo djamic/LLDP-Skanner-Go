@@ -223,9 +223,10 @@ function treeCompareText(a, b) {
     return treeCompareKeys(treeSortKey(a), treeSortKey(b)) || treeCompareIds(a, b);
 }
 
-// treeCompareInfo is the child order of the tree: rank, name, address, id.
+// treeCompareInfo is the child order of the tree: rank, HA standby order
+// (active/standalone before passive), name, address, id.
 function treeCompareInfo(a, b) {
-    return (a.rank - b.rank) || treeCompareKeys(a.nameKey, b.nameKey) || treeCompareIds(a.name, b.name) ||
+    return (a.rank - b.rank) || ((a.haRank || 0) - (b.haRank || 0)) || treeCompareKeys(a.nameKey, b.nameKey) || treeCompareIds(a.name, b.name) ||
         treeCompareKeys(a.addressKey, b.addressKey) || treeCompareIds(a.id, b.id);
 }
 
@@ -255,6 +256,7 @@ function treeSpanning(data) {
         infos.set(id, {
             id, node, group, name, ips, address,
             rank: treeGroupRank(group),
+            haRank: node.haRole === 'passive' ? 1 : 0,
             nameKey: treeSortKey(name),
             addressKey: treeSortKey(address),
             // how a row names this device when it holds the port of a
@@ -299,11 +301,12 @@ function treeSpanning(data) {
     });
 
     // Root preference: routers by id, then switches and then the other
-    // nodes by link count (most first) and id.
+    // nodes by link count (most first) and id (preferring active over passive).
     const roots = Array.from(infos.values()).sort((a, b) => {
         const ca = a.group === 'router' ? 0 : a.group === 'switch' ? 1 : 2;
         const cb = b.group === 'router' ? 0 : b.group === 'switch' ? 1 : 2;
         if (ca !== cb) return ca - cb;
+        if (a.haRank !== b.haRank) return a.haRank - b.haRank;
         if (ca !== 0 && a.degree !== b.degree) return b.degree - a.degree;
         return treeCompareIds(a.id, b.id);
     });
@@ -447,6 +450,11 @@ function treeTitle(sp, info) {
         lines.push(`link: ${sp.infos.get(up).label} ${l.up.port || '?'} → ${l.down.port || '?'}`);
     }
     if (info.node.unreachable) lines.push('unreachable');
+    if (info.node.haRole === 'active' || info.node.haRole === 'passive') {
+        lines.push(info.node.haRole === 'active' ? 'HA role: active (master)' : 'HA role: passive (standby)');
+        const vips = Array.isArray(info.node.vips) ? info.node.vips : [];
+        if (vips.length) lines.push(`floating IPs: ${vips.join(', ')}`);
+    }
     const m = info.node.managed;
     if (m) {
         lines.push([`${m.source || 'controller'} ${m.controller || ''}`.trim(), m.model, m.state, m.firmware && 'firmware ' + m.firmware]
@@ -468,6 +476,7 @@ function treeTitle(sp, info) {
 function treeSearchText(sp, info) {
     const n = info.node, l = sp.link.get(info.id);
     return [info.id, info.name, info.address, info.ips.join(' '), n.hostname, n.sysName || n.label,
+        n.haRole, Array.isArray(n.vips) && n.vips.join(' '),
         n.managed && n.managed.model, info.group, l && treeSideText(l.up), l && treeSideText(l.down)].filter(Boolean).join('\n').toLowerCase();
 }
 
@@ -530,6 +539,9 @@ function treeRowHTML(info, color, badge, count, title) {
     if (badge) parts.push(badge);
     parts.push(`<span class="tv-icon">${icon}</span>`, `<span class="tv-name">${treeEscapeHTML(info.name)}</span>`);
     if (info.address) parts.push(`<span class="tv-addr">${treeEscapeHTML(info.address)}</span>`);
+    if (info.node.haRole === 'active' || info.node.haRole === 'passive') {
+        parts.push(`<span class="tv-ha tv-ha-${info.node.haRole}">${info.node.haRole.toUpperCase()}</span>`);
+    }
     // what its controller says (node.managed): a state other than online,
     // and the clients, listed below the row (treeClientRows)
     const m = info.node.managed;

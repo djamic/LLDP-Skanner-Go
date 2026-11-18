@@ -1763,3 +1763,37 @@ button:active {
 .info-lines {
     white-space: pre-line;
 }
+
+/* Active / Passive HA role indicators on Graph nodes and Tree rows */
+.node.ha-passive {
+    stroke: #90A4AE;
+    stroke-dasharray: 5, 3;
+    opacity: 0.78;
+}
+
+.node.ha-active {
+    stroke: #66BB6A;
+}
+
+.tv-ha {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding: 0 5px;
+    border-radius: 4px;
+    line-height: 15px;
+    vertical-align: baseline;
+}
+
+.tv-ha-active {
+    background: rgba(76, 175, 80, 0.2);
+    color: #81C784;
+    border: 1px solid rgba(76, 175, 80, 0.45);
+}
+
+.tv-ha-passive {
+    background: rgba(120, 144, 156, 0.2);
+    color: #B0BEC5;
+    border: 1px solid rgba(120, 144, 156, 0.45);
+}

@@ -144,6 +144,8 @@
                             onchange="applyFilters()"><span class="fc-dot" style="background:#4A90E2"></span><span>Switch</span><span class="fc-cnt" id="fc-switch">0</span></label>
                     <label class="filter-cb"><input type="checkbox" data-group="router" checked
                             onchange="applyFilters()"><span class="fc-dot" style="background:#E24A4A"></span><span>Router</span><span class="fc-cnt" id="fc-router">0</span></label>
+                    <label class="filter-cb" title="Show/hide passive (VRRP/HSRP standby) switches"><input type="checkbox" id="filterPassive" checked
+                            onchange="applyFilters()"><span class="fc-dot" style="background:#78909C"></span><span>Passive</span><span class="fc-cnt" id="fc-passive">0</span></label>
                     <label class="filter-cb"><input type="checkbox" data-group="hub" checked
                             onchange="applyFilters()"><span class="fc-dot" style="background:#FF9800"></span><span>Hub</span><span class="fc-cnt" id="fc-hub">0</span></label>
                     <label class="filter-cb"><input type="checkbox" data-group="endpoint" checked
@@ -243,6 +245,10 @@
                 <div class="info-section">
                     <div class="info-label">System Name</div>
                     <div class="info-value" id="infoSysName">-</div>
+                </div>
+                <div class="info-section" id="infoHASection" hidden>
+                    <div class="info-label">HA / VRRP</div>
+                    <div class="info-value info-lines" id="infoHA">-</div>
                 </div>
                 <div class="info-section" id="infoManagedSection" hidden>
                     <div class="info-label">Controller</div>

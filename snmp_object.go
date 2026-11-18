@@ -98,12 +98,28 @@ type DeviceData struct {
 	// MACEntry.PortNumber is a dot1dBasePort; this maps it to the ifIndex
 	// (dot1dBasePortIfIndex). Nil when the switch did not report it.
 	BridgePortIfIndex map[int]int `json:"bridgePortIfIndex,omitempty"`
+	// VRRPInfo holds VRRP router instances when the switch answers VRRP-MIB.
+	VRRPInfo *VRRPData `json:"vrrpInfo,omitempty"`
 
 	// Walks that failed in the poll that produced this data (not saved).
-	failedWalks []string
+	failedWalks    []string
+	vrrpWalkFailed bool
 	// The switch MIBs this poll found (not saved): storeCollectedDevice
 	// stores a device it has never stored only when they make it a switch.
 	polledMIBs switchMIBs
+}
+
+// VRRPInstance holds one VRRP virtual router instance from RFC 2787 VRRP-MIB.
+type VRRPInstance struct {
+	IfIndex int      `json:"ifIndex"`
+	VRID    int      `json:"vrid"`
+	State   string   `json:"state"`          // "master", "backup", "initialize"
+	VIPs    []string `json:"vips,omitempty"` // Associated virtual IPv4 addresses
+}
+
+// VRRPData holds VRRP operational state collected from VRRP-MIB (.1.3.6.1.2.1.68).
+type VRRPData struct {
+	Instances []VRRPInstance `json:"instances,omitempty"`
 }
 
 // Parts of one CollectData poll, as recorded in DeviceData.failedWalks.
@@ -151,6 +167,9 @@ func collectKeepPrevious(data, prev *DeviceData) {
 		case collectWalkSTP:
 			data.STPInfo = prev.STPInfo
 		}
+	}
+	if data.vrrpWalkFailed {
+		data.VRRPInfo = prev.VRRPInfo
 	}
 }
 
@@ -438,6 +457,18 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 	wg.Wait()
 	if vlanLast {
 		vlanJob()
+	}
+
+	// Optional: Collect VRRP operational state and virtual IPs (VRRP-MIB)
+	// after the primary table walks complete so fragile SNMP agents (Aruba)
+	// are not given extra concurrent walks, and only when at least one
+	// primary walk succeeded.
+	if len(errs) < 7 {
+		if vrrpInfo, err := s.collectVRRPInfo(ip); err != nil {
+			data.vrrpWalkFailed = true
+		} else {
+			data.VRRPInfo = vrrpInfo
+		}
 	}
 
 	// Map lldpLocPortNum -> IfIndex (Huawei VRP uses 1..N in lldpLocPortTable
@@ -1401,6 +1432,94 @@ func (s *SNMPObject) collectSTPInfo(ip string) (STPData, error) {
 	}
 
 	return data, nil
+}
+
+const (
+	oidVRRPOperState  = ".1.3.6.1.2.1.68.1.3.1.3"
+	oidVRRPAssoIpAddr = ".1.3.6.1.2.1.68.1.4.1.2"
+)
+
+// collectVRRPInfo walks RFC 2787 VRRP-MIB (vrrpOperState and
+// vrrpAssoIpAddrRowStatus). Returns nil when the device reports no VRRP
+// instances.
+func (s *SNMPObject) collectVRRPInfo(ip string) (*VRRPData, error) {
+	lines, err := s.runSNMPWalk(ip, oidVRRPOperState)
+	if err != nil {
+		return nil, err
+	}
+	type instKey struct{ ifIndex, vrid int }
+	byKey := make(map[instKey]*VRRPInstance)
+	var keys []instKey
+	for _, line := range lines {
+		oid, val, err := parseSNMPLine(line)
+		if err != nil || graphIsSNMPException(val) {
+			continue
+		}
+		idx, ok := collectOIDIndex(oid, oidVRRPOperState)
+		if !ok || len(idx) != 2 {
+			continue
+		}
+		state := ""
+		v := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(val, "INTEGER:")))
+		switch {
+		case v == "3" || strings.HasPrefix(v, "master"):
+			state = "master"
+		case v == "2" || strings.HasPrefix(v, "backup"):
+			state = "backup"
+		case v == "1" || strings.HasPrefix(v, "initialize"):
+			state = "initialize"
+		default:
+			continue
+		}
+		k := instKey{ifIndex: idx[0], vrid: idx[1]}
+		if _, exists := byKey[k]; !exists {
+			keys = append(keys, k)
+			byKey[k] = &VRRPInstance{IfIndex: k.ifIndex, VRID: k.vrid, State: state}
+		}
+	}
+	if len(keys) == 0 {
+		return nil, nil
+	}
+
+	if vipLines, vipErr := s.runSNMPWalk(ip, oidVRRPAssoIpAddr); vipErr == nil {
+		for _, line := range vipLines {
+			oid, val, err := parseSNMPLine(line)
+			if err != nil || graphIsSNMPException(val) {
+				continue
+			}
+			idx, ok := collectOIDIndex(oid, oidVRRPAssoIpAddr)
+			if !ok || len(idx) != 6 {
+				continue
+			}
+			v := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(val, "INTEGER:")))
+			if v != "1" && !strings.HasPrefix(v, "active") {
+				continue
+			}
+			k := instKey{ifIndex: idx[0], vrid: idx[1]}
+			inst, exists := byKey[k]
+			if !exists {
+				continue
+			}
+			vip := fmt.Sprintf("%d.%d.%d.%d", idx[2], idx[3], idx[4], idx[5])
+			if parseIPv4(vip) != "" && !slices.Contains(inst.VIPs, vip) {
+				inst.VIPs = append(inst.VIPs, vip)
+			}
+		}
+	}
+
+	slices.SortFunc(keys, func(a, b instKey) int {
+		if a.ifIndex != b.ifIndex {
+			return a.ifIndex - b.ifIndex
+		}
+		return a.vrid - b.vrid
+	})
+	out := &VRRPData{Instances: make([]VRRPInstance, 0, len(keys))}
+	for _, k := range keys {
+		inst := byKey[k]
+		slices.SortFunc(inst.VIPs, compareIPs)
+		out.Instances = append(out.Instances, *inst)
+	}
+	return out, nil
 }
 
 // collectVLANEgressOID is dot1qVlanCurrentEgressPorts (Q-BRIDGE-MIB): the
