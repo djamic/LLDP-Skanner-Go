@@ -45,7 +45,12 @@ restart_monitor() {
     local before now code
     before=$(pgrep -f "^$MONITOR" | head -1 || true)
     say "▶ Restarting the monitor"
-    sudo -n /usr/bin/setsid "$DIR/start_monitor.sh" || die "sudo refused the restart (see /etc/sudoers.d/lldp-deploy)"
+    # sudo is given no terminal (setsid -w; it waits and passes on sudo's
+    # status): from a terminal, sudo's use_pty runs the command in a pseudo-
+    # terminal and, closing it, kills what setsid forked before
+    # start_monitor.sh runs. Run from a script or cron, it never has one.
+    setsid -w sudo -n /usr/bin/setsid "$DIR/start_monitor.sh" </dev/null ||
+        die "sudo refused the restart (see /etc/sudoers.d/lldp-deploy)"
     for _ in $(seq 1 30); do
         now=$(pgrep -f "^$MONITOR" | head -1 || true)
         [ -n "$now" ] && [ "$now" != "$before" ] && break
