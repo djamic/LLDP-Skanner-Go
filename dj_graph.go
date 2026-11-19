@@ -38,12 +38,14 @@ type DJGraph struct {
 	// polled sysName, LLDP RemSysName and RemSysDesc), never vendor text.
 	// graphManaged holds the nodes of the access points a controller
 	// manages that no switch showed (addManagedAPNodes): such a node is an
-	// access point.
+	// access point. graphLLDPCaps holds the LLDP capabilities a node's
+	// LLDP rows enable (lldpRemSysCapEnabled, the rows' union).
 	graphSwitches map[string]bool
 	graphRouters  map[string]bool
 	graphSysText  map[string]string
 	graphManaged  map[string]bool
 	graphVoIP     map[string]voip.Profile
+	graphLLDPCaps map[string]uint8
 }
 
 // NewDJGraph creates a new graph instance
@@ -440,9 +442,9 @@ func (g *DJGraph) GetGraphData() GraphData {
 }
 
 // determineDeviceGroup is the group of a node with label info: classifyNode
-// of its evidence (classify.go).
+// of its evidence (classify.go), with the current classification choices.
 func (g *DJGraph) determineDeviceGroup(node, info string) string {
-	return classifyNode(g.nodeEvidence(node, info))
+	return classifyNode(g.nodeEvidence(node, info), currentClassify())
 }
 
 // GenerateZabbixTemplate generates template list based on device info

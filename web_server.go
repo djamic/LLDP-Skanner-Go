@@ -368,6 +368,10 @@ func hostsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// classifySettingsChanged rebuilds the graph after the classification
+// choices changed (a variable for tests).
+var classifySettingsChanged = func() { go rebuildGraph() }
+
 // settingsHandler handles settings (GET/POST)
 func settingsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -385,13 +389,20 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(GetCurrentSettings())
 
 	case "POST":
-		var settings ScanSettings
+		// A setting the request leaves out keeps its value, but the IP
+		// ranges are the request's (none: the swich_ips file's)
+		before := GetCurrentSettings()
+		settings := before
+		settings.IPRanges = nil
 		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON: " + err.Error()})
 			return
 		}
 		SetCurrentSettings(settings)
+		if settings.Classify != before.Classify {
+			classifySettingsChanged()
+		}
 
 		// Save with current hosts
 		collectedDataMutex.RLock()

@@ -801,6 +801,12 @@ button:active {
     width: auto !important;
 }
 
+.settings-classify .checkbox-label {
+    align-items: flex-start;
+    font-size: 13px;
+    margin-top: 6px;
+}
+
 .btn-primary {
     background: #4A90E2;
     color: white;

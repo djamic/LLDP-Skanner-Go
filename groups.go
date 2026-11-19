@@ -46,6 +46,12 @@ var deviceGroups = []groupDef{
 	{Key: "switch", Name: "Switch", Emoji: "🔀", Color: "#4A90E2", IconSize: 44, TreeRank: 0,
 		Filter: "Switch", ExportOn: true,
 		Stroke: "#2A6FC2", Dot: "🔵"},
+	// An LLDP neighbor that is a bridge or router by its LLDP capabilities
+	// and is not polled (classifyNode, ClassifySettings.LLDPCaps): no ports,
+	// no port history, not one of the report's switches
+	{Key: "lldp_switch", Name: "Unpolled switch", Emoji: "🔀", Color: "#64B5F6", IconSize: 40, TreeRank: 1,
+		Filter: "Unpolled", FilterTitle: "Unpolled switch: an LLDP neighbor that is a bridge or router by its LLDP capabilities, never polled (no IP to poll, or no answer)",
+		Stroke: "#1E88E5", Dot: "🔹", Section: "Poll qilinmagan switch'lar (LLDP)", SectionNo: 16},
 	{Key: "router", Name: "Router", Emoji: "🌐", Color: "#E24A4A", IconSize: 44, TreeRank: 0,
 		Filter: "Router",
 		Stroke: "#C23030", Dot: "🔴", Section: "Routerlar", SectionNo: 11, Shape: "hexagon"},

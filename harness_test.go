@@ -195,6 +195,10 @@ func resetState(t *testing.T) {
 	gatewayNotices = make(map[string]bool)
 	gatewayNoticesMu.Unlock()
 	inventoryAPsChanged = func() {} // no graph build behind a test's back
+	classifySettingsChanged = func() {}
+	currentSettingsMutex.Lock()
+	currentSettings.Classify = DefaultClassifySettings() // not a saved file's choices
+	currentSettingsMutex.Unlock()
 
 	clearConfirmedESXi()
 	collectESXiMu.Lock()

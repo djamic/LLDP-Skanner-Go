@@ -839,6 +839,7 @@ func graphMergeNode(graph *DJGraph, from, into string) {
 	if text := graph.graphSysText[from]; text != "" {
 		graphAddSysText(graph, into, strings.Split(text, "\n")...)
 	}
+	graphAddLLDPCaps(graph, into, graph.graphLLDPCaps[from])
 	delete(graph.Nodes, from)
 	delete(graph.SwitchInfo, from)
 	delete(graph.NodeStatus, from)
@@ -846,6 +847,7 @@ func graphMergeNode(graph *DJGraph, from, into string) {
 	delete(graph.IDs, from)
 	delete(graph.graphSwitches, from)
 	delete(graph.graphSysText, from)
+	delete(graph.graphLLDPCaps, from)
 }
 
 // addGatewayNodes draws every configured gateway that answered SNMP
@@ -1003,6 +1005,7 @@ func gatewayLLDPLinks(graph *DJGraph, mac string, gws []gatewayNode, merged []st
 			}
 			port := normalizePortName(getLocalPortName(dev, n.LocalPortNum))
 			graphAddSysText(graph, target, n.RemSysName, n.RemSysDesc)
+			graphAddLLDPCaps(graph, target, n.RemSysCapEnabled)
 			graphRecordVoIPNeighbor(graph, target, n, getGlobalIP(target))
 			if !graph.Nodes[target] {
 				graphAddLLDPEndpoint(graph, target, displayName, n, getGlobalIP(target))

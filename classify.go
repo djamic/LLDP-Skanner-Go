@@ -7,7 +7,8 @@ import (
 )
 
 // nodeEvidence is what a node's group is decided from: what the graph
-// build knows of it. classifyNode decides; DJGraph.nodeEvidence gathers.
+// build knows of it. classifyNode decides, with the owner's choices
+// (ClassifySettings); DJGraph.nodeEvidence gathers.
 type nodeEvidence struct {
 	ID   string // the node id: a MAC, an IP, a hub-/hyp- id or a name
 	Info string // its label (SysName): tags ([LLDP-EP], [HUB], ...), names, IPs
@@ -21,6 +22,8 @@ type nodeEvidence struct {
 	// Category is the OUI category (categorizeVendor) of the id's vendor
 	// when the id is a MAC of a known vendor, else "".
 	Category string
+	// LLDPCaps are the LLDP capabilities its LLDP rows enable (graphLLDPCaps)
+	LLDPCaps uint8
 }
 
 // nodeEvidence gathers the evidence of a node with label info.
@@ -34,6 +37,7 @@ func (g *DJGraph) nodeEvidence(node, info string) nodeEvidence {
 	}
 	ev.ESXi = graphIsConfirmedESXi(node) && !graphIsSwitchNode(g, node)
 	_, ev.VoIP = g.graphVoIP[node]
+	ev.LLDPCaps = g.graphLLDPCaps[node]
 	if len(node) >= 8 && (strings.Contains(node, ":") || strings.Contains(node, "-")) {
 		if vendor := lookupVendor(node); vendor != "Unknown" {
 			ev.Category = categorizeVendor(vendor)
@@ -53,8 +57,11 @@ func (g *DJGraph) nodeEvidence(node, info string) nodeEvidence {
 //     [LLDP-EP], [WiFi], [BMC]): hypervisor
 //  5. [WiFi], a randomised MAC: wifi_random
 //  6. a phone of the voip engine (Yealink, Grandstream, ...): phone
-//  7. [LLDP-EP] or [ENDPOINT]: its MAC's OUI category, endpoint when that is
-//     endpoint, network or none
+//  7. [LLDP-EP] or [ENDPOINT]: its MAC's OUI category when that tells a
+//     kind; else, with rules.LLDPCaps, its LLDP capabilities: a wireless
+//     access point is an access_point, a bridge or router (no phone, the
+//     rule of lldpDiscoverable) an unpolled switch, lldp_switch; else
+//     endpoint
 //  8. [MINIHUB] (fdbPorts: a trunk or big port no polled switch is behind;
 //     its node is a hub- node too): minihub
 //  9. [HUB] or a hub- node: hub
@@ -62,7 +69,7 @@ func (g *DJGraph) nodeEvidence(node, info string) nodeEvidence {
 //  11. [HYPERVISOR] or a hyp- node: hypervisor
 //  12. [VM] or a vm- node: vm
 //  13. else by its name and label (graphNameGroup)
-func classifyNode(ev nodeEvidence) string {
+func classifyNode(ev nodeEvidence, rules ClassifySettings) string {
 	node, info := ev.ID, ev.Info
 	switch {
 	case ev.Router:
@@ -80,6 +87,14 @@ func classifyNode(ev nodeEvidence) string {
 	case strings.Contains(info, "[LLDP-EP]") || strings.Contains(info, "[ENDPOINT]"):
 		if ev.Category != "" && ev.Category != "endpoint" && ev.Category != "network" {
 			return ev.Category
+		}
+		if rules.LLDPCaps {
+			switch {
+			case ev.LLDPCaps&lldpCapWLANAP != 0:
+				return "access_point"
+			case lldpDiscoverable(ev.LLDPCaps):
+				return "lldp_switch"
+			}
 		}
 		return "endpoint"
 	case strings.Contains(info, "[MINIHUB]"):

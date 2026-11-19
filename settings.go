@@ -11,11 +11,28 @@ import (
 
 // ScanSettings holds scanner configuration
 type ScanSettings struct {
-	IPRanges   []string `json:"ipRanges"`
-	Community  string   `json:"community"`
-	Timeout    int      `json:"timeout"` // seconds
-	MaxWorkers int      `json:"maxWorkers"`
-	UsePing    bool     `json:"usePing"`
+	IPRanges   []string         `json:"ipRanges"`
+	Community  string           `json:"community"`
+	Timeout    int              `json:"timeout"` // seconds
+	MaxWorkers int              `json:"maxWorkers"`
+	UsePing    bool             `json:"usePing"`
+	Classify   ClassifySettings `json:"classify"`
+}
+
+// ClassifySettings are the owner's choices of how nodes are classified
+// (Settings → Classification, classify.go): each turns one rule on, and
+// off gives the rule's behaviour before it. The defaults are the
+// recommended choices; a saved file without a choice gets its default.
+type ClassifySettings struct {
+	// LLDPCaps groups an unpolled LLDP neighbor by its LLDP capabilities
+	// when its vendor tells no kind: a wireless access point is an access
+	// point, a bridge or router (no phone) an unpolled switch (lldp_switch).
+	LLDPCaps bool `json:"lldpCaps"`
+}
+
+// DefaultClassifySettings are the recommended classification choices.
+func DefaultClassifySettings() ClassifySettings {
+	return ClassifySettings{LLDPCaps: true}
 }
 
 // SavedData holds all persistent data
@@ -40,6 +57,7 @@ func DefaultSettings() ScanSettings {
 		Timeout:    20,
 		MaxWorkers: 50,
 		UsePing:    false,
+		Classify:   DefaultClassifySettings(),
 	}
 }
 
@@ -58,6 +76,13 @@ func GetCurrentSettings() ScanSettings {
 	}
 
 	return settings
+}
+
+// currentClassify is the classification choices of the current settings.
+func currentClassify() ClassifySettings {
+	currentSettingsMutex.RLock()
+	defer currentSettingsMutex.RUnlock()
+	return currentSettings.Classify
 }
 
 // SetCurrentSettings updates current settings and syncs swich_ips file
@@ -132,7 +157,8 @@ func LoadSavedData() (*SavedData, error) {
 		return nil, err
 	}
 
-	var saved SavedData
+	// A choice the file does not have keeps its default
+	saved := SavedData{Settings: ScanSettings{Classify: DefaultClassifySettings()}}
 	if err := json.Unmarshal(data, &saved); err != nil {
 		return nil, err
 	}

@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // TestClassifyNode pins classifyNode's order of evidence, a case per rule,
 // with the quirks of today's rules (a polled device is grouped by its name
@@ -38,8 +41,34 @@ func TestClassifyNode(t *testing.T) {
 		{nodeEvidence{ID: "x", Info: "something"}, "switch"},
 		{nodeEvidence{ID: "x"}, "unknown"},
 	} {
-		if got := classifyNode(c.ev); got != c.want {
+		if got := classifyNode(c.ev, ClassifySettings{}); got != c.want {
 			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.want)
+		}
+	}
+
+	// LLDP capabilities (rules.LLDPCaps): the vendor's kind first, then an
+	// access point, then a bridge or router that is no phone
+	lldp := ClassifySettings{LLDPCaps: true}
+	for _, c := range []struct {
+		ev        nodeEvidence
+		want, off string
+	}{
+		{nodeEvidence{ID: "4c:ae:a3:27:83:4a", Info: "[LLDP-EP] HPE\nATS234", Category: "network", LLDPCaps: 0x28}, "lldp_switch", "endpoint"},
+		{nodeEvidence{ID: "58:94:80:00:be:61", Info: "[LLDP-EP]\npublic", LLDPCaps: 0x28}, "lldp_switch", "endpoint"},
+		{nodeEvidence{ID: "e0:d9:e3:ee:19:c0", Info: "[LLDP-EP]", LLDPCaps: 0x20}, "lldp_switch", "endpoint"},
+		{nodeEvidence{ID: "68:cc:ae:96:e5:e8", Info: "[LLDP-EP] Fortinet", Category: "network", LLDPCaps: 0x08}, "lldp_switch", "endpoint"},
+		{nodeEvidence{ID: "72:a7:41:9a:65:6e", Info: "[LLDP-EP]\nA1qavat124", LLDPCaps: 0x38}, "access_point", "endpoint"},
+		{nodeEvidence{ID: "70:a7:41:a8:8c:9b", Info: "[LLDP-EP] Ubiquiti\nU6-LR", Category: "access_point", LLDPCaps: 0x28}, "access_point", "access_point"},
+		{nodeEvidence{ID: "00:1b:21:00:00:04", Info: "[LLDP-EP]", LLDPCaps: 0x24}, "endpoint", "endpoint"},
+		{nodeEvidence{ID: "00:1b:21:00:00:05", Info: "[LLDP-EP]"}, "endpoint", "endpoint"},
+		{nodeEvidence{ID: "c0:74:ad:00:00:02", Info: "[LLDP-EP]", VoIP: true, LLDPCaps: 0x24}, "phone", "phone"},
+		{nodeEvidence{ID: "10.0.0.6", Polled: true, LLDPCaps: 0x38}, "switch", "switch"},
+	} {
+		if got := classifyNode(c.ev, lldp); got != c.want {
+			t.Errorf("classifyNode(%+v, lldpCaps) = %q, want %q", c.ev, got, c.want)
+		}
+		if got := classifyNode(c.ev, ClassifySettings{}); got != c.off {
+			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.off)
 		}
 	}
 
@@ -49,6 +78,62 @@ func TestClassifyNode(t *testing.T) {
 	} {
 		if got := managedGroup(c.group, c.kind); got != c.want {
 			t.Errorf("managedGroup(%q, %q) = %q, want %q", c.group, c.kind, got, c.want)
+		}
+	}
+}
+
+// TestLLDPCapsGroups builds a graph with unpolled LLDP neighbors of each
+// kind (the network's: a PiXiETECH and an Eltex switch, a UniFi access
+// point with a locally administered MAC, a U6-LR advertising no access point
+// bit, a phone, a neighbor of unknown capabilities) and checks their groups
+// with the LLDP capabilities rule on and off.
+func TestLLDPCapsGroups(t *testing.T) {
+	resetState(t)
+	sw := &DeviceData{
+		IP: "10.9.96.1", SysName: "sw-core", ChassisID: "18:56:44:00:01:01",
+		BridgePortIfIndex: map[int]int{},
+	}
+	neighbors := []struct {
+		chassis, name, desc string
+		caps                uint8
+	}{
+		{"58 94 80 00 BE 61", "public", "PiXiETECH(tm) PXT-S2790G-24FX Software", 0x28},
+		{"E0 D9 E3 EE 19 C0", "", "", 0x20},
+		{"72 A7 41 9A 65 6E", "A1qavat124", "U6-LR, 6.7.57.15670", 0x38},
+		{"70 A7 41 A8 8C 9B", "U6-LR", "U6-LR, 5.60.8.12971", 0x28},
+		{"00 1B 21 00 02 01", "desk", "", 0x24},
+		{"00 1B 21 00 02 02", "pc", "", 0},
+	}
+	for i, n := range neighbors {
+		port := 10 + i
+		sw.Interfaces = append(sw.Interfaces, InterfaceData{IfIndex: port, IfDescr: fmt.Sprintf("\"GigabitEthernet0/0/%d\"", i+1), IfOperStatus: 1})
+		sw.BridgePortIfIndex[i+1] = port
+		sw.Neighbors = append(sw.Neighbors, LLDPNeighbor{LocalPortNum: port, RemIndex: 1,
+			RemChassisIdSubtype: 4, RemChassisId: n.chassis, RemPortIdSubtype: 5, RemPortId: `"eth0"`,
+			RemSysName: n.name, RemSysDesc: n.desc, RemSysCapEnabled: n.caps})
+	}
+	g := buildGraphFromSnapshot(map[string]*DeviceData{sw.IP: sw})
+
+	want := map[string][2]string{ // on, off
+		"58:94:80:00:be:61": {"lldp_switch", "endpoint"},
+		"e0:d9:e3:ee:19:c0": {"lldp_switch", "endpoint"},
+		"72:a7:41:9a:65:6e": {"access_point", "endpoint"},
+		"70:a7:41:a8:8c:9b": {"access_point", "access_point"},
+		"00:1b:21:00:02:01": {"phone", "phone"}, // the voip engine: telephone bit
+		"00:1b:21:00:02:02": {"endpoint", "endpoint"},
+	}
+	for i, rules := range []ClassifySettings{{LLDPCaps: true}, {}} {
+		currentSettingsMutex.Lock()
+		currentSettings.Classify = rules
+		currentSettingsMutex.Unlock()
+		groups := map[string]string{}
+		for _, n := range g.GetGraphData().Nodes {
+			groups[n.ID] = n.Group
+		}
+		for id, w := range want {
+			if groups[id] != w[i] {
+				t.Errorf("%+v: %s is %q, want %q", rules, id, groups[id], w[i])
+			}
 		}
 	}
 }

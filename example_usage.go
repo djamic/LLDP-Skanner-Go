@@ -1014,6 +1014,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 		}
 		localPort := getLocalPortName(data, neighbor.LocalPortNum)
 		graphAddSysText(graph, targetID, neighbor.RemSysName, neighbor.RemSysDesc)
+		graphAddLLDPCaps(graph, targetID, neighbor.RemSysCapEnabled)
 		graphRecordVoIPNeighbor(graph, targetID, neighbor, macToIP[targetID])
 
 		logDebug("    -> Neighbor: %s (ID: %s) via LocalPort: %d", displayName, targetID, neighbor.LocalPortNum)
@@ -2977,6 +2978,18 @@ func graphAddSysText(graph *DJGraph, id string, texts ...string) {
 		}
 		graph.graphSysText[id] = text
 	}
+}
+
+// graphAddLLDPCaps records the LLDP capabilities an LLDP row of a node
+// enables.
+func graphAddLLDPCaps(graph *DJGraph, id string, caps uint8) {
+	if caps == 0 {
+		return
+	}
+	if graph.graphLLDPCaps == nil {
+		graph.graphLLDPCaps = make(map[string]uint8)
+	}
+	graph.graphLLDPCaps[id] |= caps
 }
 
 // graphSwitchSysMarkers are sysName/sysDescr words of switches (HPE/H3C
