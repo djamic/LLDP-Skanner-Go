@@ -1024,8 +1024,8 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 
 		remotePort := lldpRemotePortName(neighbor)
 
-		// Get VLAN info for local port
-		vlanStr := getPortVLANLabel(data.PortVLANs, neighbor.LocalPortNum)
+		// Get VLAN info for local port (PortVLANs is dot1d bridge-port indexed)
+		vlanStr := getPortVLANLabel(data.PortVLANs, collectBridgePort(data, neighbor.LocalPortNum))
 
 		// Get speed for local port
 		speedStr := getPortSpeed(data.Interfaces, neighbor.LocalPortNum)
@@ -1321,12 +1321,20 @@ type fdbPort struct {
 // drawn, it is no Shadow IT), or, above 500 MACs, an uplink toward switches
 // the scanner does not poll.
 func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
-	// MACs already known via LLDP, and the ports with an accepted neighbor
+	// MACs already known via LLDP, and the ports with an accepted neighbor.
+	// lldpSwitchPorts keys by LocalPortNum (ifIndex, like crossReferenceSwitchMACs)
+	// so switch links where BridgePort != IfIndex (Huawei dot1dBasePortIfIndex)
+	// are skipped too without dropping cascaded hubs, VMs or daisy-chained PCs.
 	knownMACs := lldpKnownMACs(data)
 	lldpPorts := make(map[int]bool)
+	lldpSwitchPorts := make(map[int]bool)
 	for _, n := range data.Neighbors {
-		if _, _, ok := graphLLDPNeighborTarget(data, n); ok {
+		if target, _, ok := graphLLDPNeighborTarget(data, n); ok {
 			lldpPorts[n.LocalPortNum] = true
+			isRouterOnly := n.RemSysCapEnabled&lldpCapRouter != 0 && n.RemSysCapEnabled&lldpCapBridge == 0
+			if _, polled := switchMACs[target]; polled || isRouterOnly {
+				lldpSwitchPorts[n.LocalPortNum] = true
+			}
 		}
 	}
 
@@ -1359,13 +1367,10 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 			continue
 		}
 
-		// Skip if this MAC is already known via LLDP
-		if knownMACs[normMAC] {
-			continue
-		}
-
 		// Skip switch's own MACs (usually ports have their own MACs): the
-		// chassis MAC and the ARP aliases of its node
+		// chassis MAC and the ARP aliases of its node. Checked before
+		// knownMACs so another polled switch that is also an LLDP neighbor
+		// still marks portSeesSwitch on ports where BridgePort != IfIndex.
 		switchID, isSwitch := switchMACs[normMAC]
 		if normMAC == ownMAC || (isSwitch && switchID == selfID) {
 			continue
@@ -1374,6 +1379,11 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 		// Skip if this MAC belongs to another known switch (handled by MAC cross-ref)
 		if isSwitch {
 			portSeesSwitch[macEntry.PortNumber] = true
+			continue
+		}
+
+		// Skip if this MAC is already known via LLDP
+		if knownMACs[normMAC] {
 			continue
 		}
 
@@ -1388,8 +1398,10 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 	var out []fdbPort
 	for _, portNum := range slices.Sorted(maps.Keys(portMACs)) {
 		macs := portMACs[portNum]
-		// Skip if this port already has LLDP neighbors (accepted ones)
-		if lldpPorts[portNum] {
+		// Skip if a 1:1 / unmapped port already has LLDP neighbors, or if its
+		// mapped ifIndex is a polled-switch / router LLDP link (Huawei VRP)
+		ifIdx := collectFDBIfIndex(data, portNum)
+		if (ifIdx == portNum && lldpPorts[portNum]) || lldpSwitchPorts[ifIdx] {
 			continue
 		}
 

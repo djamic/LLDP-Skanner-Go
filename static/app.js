@@ -516,6 +516,16 @@ function dragended(event, d) {
     d.fy = null;
 }
 
+// Filter rendered .device-item rows by #deviceSearch (trimmed, case-insensitive)
+function filterDeviceListItems() {
+    const searchInput = document.getElementById('deviceSearch');
+    const query = (searchInput && searchInput.value ? String(searchInput.value) : '').trim().toLowerCase();
+    document.querySelectorAll('.device-item').forEach(item => {
+        const text = (item.dataset.searchText || item.textContent || '').toLowerCase();
+        item.style.display = !query || text.includes(query) ? 'block' : 'none';
+    });
+}
+
 // Update device list
 function updateDeviceList() {
     const deviceList = document.getElementById('deviceList');
@@ -523,7 +533,13 @@ function updateDeviceList() {
 
     deviceList.innerHTML = '';
 
-    const sortedDevices = Array.from(currentNodes.values()).sort((a, b) => {
+    // Include all group-visible devices even when CONNECTED focus mode is active,
+    // preferring the live currentNodes instance so d.x / d.y are available.
+    const baseNodes = (rawData && Array.isArray(rawData.nodes))
+        ? rawData.nodes.filter(uiGroupShown).map(n => currentNodes.get(n.id) || n)
+        : Array.from(currentNodes.values());
+
+    const sortedDevices = baseNodes.sort((a, b) => {
         const aName = a.sysName || a.ip || a.id;
         const bName = b.sysName || b.ip || b.id;
         return aName.localeCompare(bName);
@@ -533,6 +549,10 @@ function updateDeviceList() {
         const item = document.createElement('div');
         item.className = 'device-item';
         item.dataset.deviceId = device.id;
+        item.dataset.searchText = [device.sysName, device.label, device.hostname, device.ip, device.id]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
 
         const name = document.createElement('div');
         name.className = 'device-name';
@@ -545,40 +565,58 @@ function updateDeviceList() {
         item.appendChild(name);
         item.appendChild(ip);
 
-        item.addEventListener('click', () => panToDevice(device));
+        item.addEventListener('click', () => {
+            if (typeof treeState !== 'undefined' && treeState.tab === 'tree') return;
+            let target = currentNodes.get(device.id) || device;
+            if (!currentNodes.has(device.id) && filterState.mode === 'CONNECTED' && rawData) {
+                filterState.mode = 'ALL';
+                filterState.selectedNodeId = null;
+                updateTopology(rawData);
+                target = currentNodes.get(device.id) || device;
+            }
+            panToDevice(target);
+        });
 
         deviceList.appendChild(item);
     });
 
-    // Setup search
+    // Setup search listener once, and always re-apply active query after rebuild
     const searchInput = document.getElementById('deviceSearch');
     if (searchInput && !searchInput.dataset.initialized) {
         searchInput.dataset.initialized = 'true';
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            document.querySelectorAll('.device-item').forEach(item => {
-                const text = item.textContent.toLowerCase();
-                item.style.display = text.includes(query) ? 'block' : 'none';
-            });
+        searchInput.addEventListener('input', () => {
+            filterDeviceListItems();
         });
     }
+    filterDeviceListItems();
 }
 
 // Pan to device
 function panToDevice(device) {
-    if (!device.x || !device.y || !svg || !zoom) return;
+    if (device.x === undefined || device.y === undefined || !svg || !zoom) return;
 
     const container = document.getElementById('network');
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    const scale = 1.5;
+    const scale = 2.0;
     const x = width / 2 - device.x * scale;
     const y = height / 2 - device.y * scale;
 
     svg.transition()
         .duration(750)
         .call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
+
+    if (g) {
+        g.selectAll('circle')
+            .filter(d => d && d.id === device.id)
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', 5)
+            .transition()
+            .duration(2500)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 2);
+    }
 }
 
 // Update statistics

@@ -187,6 +187,22 @@ func collectFDBIfIndex(data *DeviceData, bridgePort int) int {
 	return bridgePort
 }
 
+// collectBridgePort returns the dot1d bridge port that maps to ifIndex in
+// data.BridgePortIfIndex (lowest bridge port if more than one), or ifIndex
+// when no mapping is present (for bridge-port indexed tables such as PortVLANs).
+func collectBridgePort(data *DeviceData, ifIndex int) int {
+	best := 0
+	for bp, idx := range data.BridgePortIfIndex {
+		if idx == ifIndex && (best == 0 || bp < best) {
+			best = bp
+		}
+	}
+	if best > 0 {
+		return best
+	}
+	return ifIndex
+}
+
 // collectBridgePortIfIndex walks dot1dBasePortIfIndex (bridge port → ifIndex).
 // It returns nil when the walk fails or reports nothing.
 func (s *SNMPObject) collectBridgePortIfIndex(ip string) (map[int]int, error) {

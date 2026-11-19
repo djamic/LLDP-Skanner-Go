@@ -635,11 +635,11 @@ func deviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 		interfaces = append(interfaces, detail)
 	}
 
-	// Port VLANs
+	// Port VLANs (map dot1d bridge port to ifIndex when BridgePortIfIndex is present)
 	vlans := make([]PortVLANDetail, 0, len(dev.PortVLANs))
 	for _, pv := range dev.PortVLANs {
 		vlans = append(vlans, PortVLANDetail{
-			PortIndex: pv.PortIndex,
+			PortIndex: collectFDBIfIndex(dev, pv.PortIndex),
 			PVID:      pv.PVID,
 			IsTrunk:   pv.IsTrunk,
 			VLANs:     pv.VLANs,

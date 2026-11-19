@@ -112,3 +112,132 @@ func TestFDBPortsMiniHub(t *testing.T) {
 		t.Errorf("audit section 4.15:\n%s", section)
 	}
 }
+
+// TestFDBPortsHuaweiBridgePortMapping checks Huawei VRP switches where
+// MACEntry.PortNumber and PortVLAN.PortIndex are dot1dBasePort numbers while
+// LLDPNeighbor.LocalPortNum is an ifIndex (mapped via BridgePortIfIndex):
+//   - a switch-to-switch trunk port (Core1 bp=5 -> ifIdx=9) whose LLDP
+//     neighbor is a polled switch (L4Acc4_7) produces no fake [MINIHUB], so
+//     L4Acc4_7's own LLDP AP and IP phone stay [LLDP-EP] instead of [ENDPOINT];
+//   - LLDP edge VLAN labels look up the mapped bridge port (bp=42 [T], not
+//     bp=48 [V20]);
+//   - a cascaded DownLink hub port (bp=33 -> ifIdx=39) with an LLDP phone and
+//     5 non-LLDP PCs keeps its [HUB] and endpoints;
+//   - an FDB port (bp=32 -> ifIdx=38) is not dropped just because another port
+//     has ifIndex=32 with an LLDP neighbor.
+func TestFDBPortsHuaweiBridgePortMapping(t *testing.T) {
+	resetState(t)
+	const (
+		coreMAC  = "18:56:44:21:58:d0"
+		accMAC   = "ac:8d:34:89:8a:52"
+		apMAC    = "18:56:44:d7:df:a0"
+		phoneMAC = "c0:74:ad:40:61:c2"
+		pc32MAC  = "00:1b:21:32:00:01"
+	)
+
+	downstreamPCs := graphMACRange("00:1b:21:47:01", 1, 16)
+	coreFDB := macEntries(5, append([]string{accMAC, apMAC, phoneMAC}, downstreamPCs...)...)
+
+	core := &DeviceData{
+		IP:        "10.67.100.2",
+		SysName:   "Core1",
+		ChassisID: coreMAC,
+		Interfaces: []InterfaceData{
+			{IfIndex: 9, IfDescr: "\"XGigabitEthernet0/0/3\"", IfSpeed: 10_000_000_000, IfOperStatus: 1},
+		},
+		BridgePortIfIndex: map[int]int{5: 9},
+		PortVLANs:         []PortVLAN{{PortIndex: 5, PVID: 1, IsTrunk: true}},
+		Neighbors: []LLDPNeighbor{{
+			LocalPortNum: 9, RemIndex: 1,
+			RemChassisIdSubtype: 4, RemChassisId: accMAC,
+			RemPortIdSubtype: 5, RemPortId: "XGigabitEthernet0/0/1",
+			RemSysName: "L4Acc4_7", RemMgmtIP: "10.67.100.30",
+		}},
+		MACTable: coreFDB,
+	}
+
+	cascadedPCs := graphMACRange("00:1b:21:33:01", 1, 5)
+	var accFDB []MACEntry
+	for i, m := range downstreamPCs {
+		accFDB = append(accFDB, MACEntry{PortNumber: i + 1, MACAddress: m})
+	}
+	accFDB = append(accFDB, macEntries(26, phoneMAC)...)
+	accFDB = append(accFDB, macEntries(32, pc32MAC)...)
+	accFDB = append(accFDB, macEntries(33, cascadedPCs...)...)
+	accFDB = append(accFDB, macEntries(42, apMAC, "9e:67:61:a4:9f:21")...)
+
+	accIfaces := make([]InterfaceData, 0, 50)
+	accBridge := make(map[int]int, 50)
+	for bp := 1; bp <= 48; bp++ {
+		ifIdx := bp + 6
+		accBridge[bp] = ifIdx
+		accIfaces = append(accIfaces, InterfaceData{
+			IfIndex: ifIdx, IfDescr: fmt.Sprintf("\"GigabitEthernet0/0/%d\"", bp), IfSpeed: 1_000_000_000, IfOperStatus: 1,
+		})
+	}
+	accBridge[49] = 55
+	accIfaces = append(accIfaces, InterfaceData{IfIndex: 55, IfDescr: "\"XGigabitEthernet0/0/1\"", IfSpeed: 10_000_000_000, IfOperStatus: 1})
+
+	acc := &DeviceData{
+		IP:                "10.67.100.30",
+		SysName:           "L4Acc4_7",
+		ChassisID:         accMAC,
+		Interfaces:        accIfaces,
+		BridgePortIfIndex: accBridge,
+		PortVLANs: []PortVLAN{
+			{PortIndex: 42, PVID: 1, IsTrunk: true},
+			{PortIndex: 48, PVID: 20, IsTrunk: false},
+			{PortIndex: 49, PVID: 1, IsTrunk: true},
+		},
+		Neighbors: []LLDPNeighbor{
+			{
+				LocalPortNum: 32, RemIndex: 1, // bp=26 -> ifIdx=32 (must NOT silence bp=32 -> ifIdx=38!)
+				RemChassisIdSubtype: 4, RemChassisId: phoneMAC,
+				RemPortIdSubtype: 3, RemPortId: phoneMAC,
+				RemSysName: "GXP1625", RemMgmtIP: "192.168.176.181",
+			},
+			{
+				LocalPortNum: 39, RemIndex: 1, // bp=33 -> ifIdx=39 cascaded hub with 1 LLDP phone + 5 non-LLDP PCs
+				RemChassisIdSubtype: 4, RemChassisId: "c0:74:ad:40:99:99",
+				RemPortIdSubtype: 3, RemPortId: "c0:74:ad:40:99:99",
+				RemSysName: "GRP2613", RemMgmtIP: "192.168.176.199",
+			},
+			{
+				LocalPortNum: 48, RemIndex: 1, // bp=42 -> ifIdx=48 Huawei AP on trunk port
+				RemChassisIdSubtype: 4, RemChassisId: apMAC,
+				RemPortIdSubtype: 5, RemPortId: "MultiGE0/0/0",
+				RemSysName: "1856-44d7-dfa0", RemSysDesc: "Huawei AP AP7060DN", RemMgmtIP: "10.67.150.17",
+			},
+			{
+				LocalPortNum: 55, RemIndex: 1,
+				RemChassisIdSubtype: 4, RemChassisId: coreMAC,
+				RemPortIdSubtype: 5, RemPortId: "XGigabitEthernet0/0/3",
+				RemSysName: "Core1", RemMgmtIP: "10.67.100.2",
+			},
+		},
+		MACTable: accFDB,
+	}
+
+	devices := map[string]*DeviceData{core.IP: core, acc.IP: acc}
+	g := buildGraphFromSnapshot(devices)
+
+	if fakeHub := "hub-" + coreMAC + "-p5"; g.Nodes[fakeHub] {
+		t.Errorf("Core1 switch link created fake mini hub %s: %q", fakeHub, g.SwitchInfo[fakeHub])
+	}
+	if got := g.SwitchInfo[apMAC]; !strings.HasPrefix(got, "[LLDP-EP]") {
+		t.Errorf("AP node %s = %q, want [LLDP-EP] prefix", apMAC, got)
+	}
+	if got := g.SwitchInfo[phoneMAC]; !strings.HasPrefix(got, "[LLDP-EP]") {
+		t.Errorf("IP phone node %s = %q, want [LLDP-EP] prefix", phoneMAC, got)
+	}
+	if got := g.GetEdgeLabel(accMAC, apMAC); !strings.Contains(got, "GE0/0/42 [T]") {
+		t.Errorf("AP edge label = %q, want GE0/0/42 [T] (mapped from ifIdx=48 -> bp=42)", got)
+	}
+	realHub := "hub-" + accMAC + "-p33"
+	if !g.Nodes[realHub] || len(g.Edges[realHub]) != 5 {
+		t.Errorf("cascaded hub %s: exists=%v members=%d, want true and 5", realHub, g.Nodes[realHub], len(g.Edges[realHub]))
+	}
+	if !g.GetEdge(accMAC, pc32MAC) {
+		t.Errorf("endpoint %s on bp=32 (ifIdx=38) was falsely dropped by ifIdx=32 LLDP collision", pc32MAC)
+	}
+}
