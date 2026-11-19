@@ -3,6 +3,8 @@ package voip
 import (
 	"regexp"
 	"strings"
+
+	"lldp_scanner/modules/kit"
 )
 
 // Yealink model and firmware patterns observed across T19/T2x/T3x/T4x/T5x/T6x,
@@ -26,9 +28,9 @@ func init() {
 }
 
 func matchYealink(ev Evidence) (model, firmware string, ok bool) {
-	isVendor := HasWord(ev.Vendor, "yealink") ||
-		HasWord(ev.SysName, "yealink") ||
-		HasWord(ev.SysDesc, "yealink")
+	isVendor := kit.HasWord(ev.Vendor, "yealink") ||
+		kit.HasWord(ev.SysName, "yealink") ||
+		kit.HasWord(ev.SysDesc, "yealink")
 
 	combined := strings.TrimSpace(ev.SysName + " " + firstLine(ev.SysDesc))
 	if m := yealinkModelRe.FindStringSubmatch(combined); len(m) > 1 {
@@ -53,7 +55,7 @@ func matchYealink(ev Evidence) (model, firmware string, ok bool) {
 	desc := firstLine(ev.SysDesc)
 	if m := yealinkFirmwareRe.FindStringSubmatch(desc); len(m) > 1 {
 		firmware = m[1]
-	} else if desc != "" && !strings.EqualFold(desc, model) && !HasWord(desc, "yealink") {
+	} else if desc != "" && !strings.EqualFold(desc, model) && !kit.HasWord(desc, "yealink") {
 		firmware = desc
 	}
 

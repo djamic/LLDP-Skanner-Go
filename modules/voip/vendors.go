@@ -3,11 +3,13 @@ package voip
 import (
 	"regexp"
 	"strings"
+
+	"lldp_scanner/modules/kit"
 )
 
 var (
-	avayaModelRe     = regexp.MustCompile(`(?i)\b(AVX[A-Z0-9]{4,}|J1[235678]9|96[01245]1G?|96[02345]8G?|B1[789]9)\b`)
-	panasonicModelRe = regexp.MustCompile(`(?i)\b(KX-(?:HDV|UT|NT|TGP|TPA)\d{2,4}[A-Z0-9]*)\b`)
+	avayaModelRe      = regexp.MustCompile(`(?i)\b(AVX[A-Z0-9]{4,}|J1[235678]9|96[01245]1G?|96[02345]8G?|B1[789]9)\b`)
+	panasonicModelRe  = regexp.MustCompile(`(?i)\b(KX-(?:HDV|UT|NT|TGP|TPA)\d{2,4}[A-Z0-9]*)\b`)
 	ciscoPhoneModelRe = regexp.MustCompile(`(?i)\b(CP-\d{4}[A-Z0-9]*)\b`)
 	fanvilModelRe     = regexp.MustCompile(`(?i)\b(X[1-7][A-Z0-9]{0,3}|V6[1-7][A-Z0-9]*|H[2358]\d?[A-Z0-9]*|i[1-6]\d[A-Z0-9]*)\b`)
 )
@@ -24,7 +26,7 @@ func init() {
 			return strings.Contains(low, "ethernet routing switch") || strings.Contains(low, "ers-")
 		},
 		Match: func(ev Evidence) (string, string, bool) {
-			isVendor := HasWord(ev.Vendor, "avaya") || HasWord(ev.SysDesc, "avaya")
+			isVendor := kit.HasWord(ev.Vendor, "avaya") || kit.HasWord(ev.SysDesc, "avaya")
 			combined := strings.TrimSpace(ev.SysName + " " + firstLine(ev.SysDesc))
 			model := ""
 			if m := avayaModelRe.FindStringSubmatch(combined); len(m) > 1 {
@@ -59,7 +61,7 @@ func init() {
 				}
 				return strings.ToUpper(m[1]), fw, true
 			}
-			if ev.Capabilities&CapPhone != 0 && (HasWord(ev.Vendor, "panasonic") || HasWord(ev.SysDesc, "panasonic")) {
+			if ev.Capabilities&CapPhone != 0 && (kit.HasWord(ev.Vendor, "panasonic") || kit.HasWord(ev.SysDesc, "panasonic")) {
 				model := strings.TrimSpace(ev.SysName)
 				fw := firstLine(ev.SysDesc)
 				if strings.EqualFold(fw, "panasonic") {
@@ -78,7 +80,7 @@ func init() {
 		Priority:         90,
 		DedicatedVendors: []string{"fanvil"},
 		Match: func(ev Evidence) (string, string, bool) {
-			isVendor := HasWord(ev.Vendor, "fanvil") || HasWord(ev.SysDesc, "fanvil")
+			isVendor := kit.HasWord(ev.Vendor, "fanvil") || kit.HasWord(ev.SysDesc, "fanvil")
 			sn := strings.TrimSpace(ev.SysName)
 			// Some Fanvil hotel phones (e.g. H81 on OUI 68:69:2e) have CapPhone + WAN Port
 			if !isVendor && !(ev.Capabilities&CapPhone != 0 && strings.HasPrefix(strings.ToLower(cleanPortDesc(ev.PortDesc)), "wan port") && fanvilModelRe.MatchString(sn)) {
@@ -108,7 +110,7 @@ func init() {
 				}
 				return model, fw, true
 			}
-			if hasCiscoIPPhone || (ev.Capabilities&CapPhone != 0 && (HasWord(ev.Vendor, "cisco") || strings.HasPrefix(strings.ToUpper(strings.TrimSpace(ev.SysName)), "SEP"))) {
+			if hasCiscoIPPhone || (ev.Capabilities&CapPhone != 0 && (kit.HasWord(ev.Vendor, "cisco") || strings.HasPrefix(strings.ToUpper(strings.TrimSpace(ev.SysName)), "SEP"))) {
 				return strings.TrimSpace(ev.SysName), firstLine(ev.SysDesc), true
 			}
 			return "", "", false
@@ -137,7 +139,7 @@ func init() {
 			Match: func(ev Evidence) (string, string, bool) {
 				matched := false
 				for _, w := range v.words {
-					if HasWord(ev.Vendor, w) || HasWord(ev.SysDesc, w) || HasWord(ev.SysName, w) {
+					if kit.HasWord(ev.Vendor, w) || kit.HasWord(ev.SysDesc, w) || kit.HasWord(ev.SysName, w) {
 						matched = true
 						break
 					}

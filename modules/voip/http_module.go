@@ -2,17 +2,16 @@ package voip
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"time"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/kit"
 )
 
 func init() {
@@ -161,14 +160,7 @@ func (m YealinkModule) Run(ctx context.Context, req modules.Request) (modules.Re
 }
 
 func newPhoneHTTPClient(ctx context.Context, override, ip string) (*http.Client, string, error) {
-	jar, _ := cookiejar.New(nil)
-	client := &http.Client{
-		Jar:     jar,
-		Timeout: 4 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
+	client := kit.NewHTTPClient(kit.HTTPOptions{Timeout: 4 * time.Second, Cookies: true})
 	if override != "" {
 		return client, strings.TrimRight(override, "/"), nil
 	}
@@ -189,12 +181,7 @@ func newPhoneHTTPClient(ctx context.Context, override, ip string) (*http.Client,
 }
 
 func fetchRoot(ctx context.Context, override, ip string) (http.Header, string, int, error) {
-	client := &http.Client{
-		Timeout: 2 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
+	client := kit.NewHTTPClient(kit.HTTPOptions{Timeout: 2 * time.Second})
 	candidates := []string{"http://" + ip + "/", "https://" + ip + "/"}
 	if override != "" {
 		candidates = []string{strings.TrimRight(override, "/") + "/"}

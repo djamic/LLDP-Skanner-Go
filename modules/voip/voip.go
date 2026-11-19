@@ -10,14 +10,16 @@ import (
 	"slices"
 	"strings"
 	"sync"
+
+	"lldp_scanner/modules/kit"
 )
 
-// LLDP system capability bits (IEEE 802.1AB LldpSystemCapabilitiesMap, first octet).
+// LLDP system capability bits (kit.LLDPCap*).
 const (
-	CapBridge = 0x80 >> 2 // 0x20: 2-port PC bridge inside desk phones
-	CapWLANAP = 0x80 >> 3 // 0x10: wireless access point
-	CapRouter = 0x80 >> 4 // 0x08: router
-	CapPhone  = 0x80 >> 5 // 0x04: telephone
+	CapBridge = kit.LLDPCapBridge // 0x20: also the 2-port PC bridge inside desk phones
+	CapWLANAP = kit.LLDPCapWLANAP // 0x10: wireless access point
+	CapRouter = kit.LLDPCapRouter // 0x08: router
+	CapPhone  = kit.LLDPCapPhone  // 0x04: telephone
 )
 
 // ChassisSubtypeNetworkAddr is LLDP chassis ID subtype 5 (IANA AddressFamily + IP).
@@ -123,7 +125,7 @@ func BrandForDedicatedVendor(vendor string) (string, bool) {
 	defer rulesMu.RUnlock()
 	for _, r := range rules {
 		for _, w := range r.DedicatedVendors {
-			if HasWord(v, w) {
+			if kit.HasWord(v, w) {
 				return r.Brand, true
 			}
 		}
@@ -240,31 +242,6 @@ func DecodeChassisIPv4(subtype int, raw string) string {
 		return ""
 	}
 	return ip.String()
-}
-
-// HasWord reports whether s contains w as a whole word (case-insensitive).
-func HasWord(s, w string) bool {
-	s = strings.ToLower(s)
-	w = strings.ToLower(w)
-	if w == "" {
-		return false
-	}
-	for i := 0; ; {
-		j := strings.Index(s[i:], w)
-		if j < 0 {
-			return false
-		}
-		j += i
-		end := j + len(w)
-		if (j == 0 || !isWordByte(s[j-1])) && (end == len(s) || !isWordByte(s[end])) {
-			return true
-		}
-		i = j + 1
-	}
-}
-
-func isWordByte(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '\'' || b >= 0x80
 }
 
 func firstLine(s string) string {

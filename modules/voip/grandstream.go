@@ -3,6 +3,8 @@ package voip
 import (
 	"regexp"
 	"strings"
+
+	"lldp_scanner/modules/kit"
 )
 
 // Grandstream VoIP phones, video phones, DECT, Wi-Fi phones, and ATAs:
@@ -30,9 +32,9 @@ func init() {
 }
 
 func matchGrandstream(ev Evidence) (model, firmware string, ok bool) {
-	isVendor := HasWord(ev.Vendor, "grandstream") ||
-		HasWord(ev.SysName, "grandstream") ||
-		HasWord(ev.SysDesc, "grandstream")
+	isVendor := kit.HasWord(ev.Vendor, "grandstream") ||
+		kit.HasWord(ev.SysName, "grandstream") ||
+		kit.HasWord(ev.SysDesc, "grandstream")
 
 	// Try SysDesc first ("GRP2613 1.0.7.33") then SysName ("GRP2613_c0:74:ad:...")
 	desc := firstLine(ev.SysDesc)
