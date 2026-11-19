@@ -7,18 +7,17 @@ package vsphere
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"strings"
 	"time"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/kit"
 )
 
 // Client talks the vSphere Web Services API (SOAP, urn:vim25) of one ESXi
@@ -37,17 +36,9 @@ var SDKURL = func(ip string) string { return "https://" + net.JoinHostPort(ip, "
 
 // NewClient is a client of the API at ip, not yet connected.
 func NewClient(ip string) *Client {
-	jar, _ := cookiejar.New(nil)
 	return &Client{
-		http: &http.Client{
-			Jar:     jar,
-			Timeout: 60 * time.Second,
-			Transport: &http.Transport{
-				TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-				TLSHandshakeTimeout: 10 * time.Second,
-				DisableKeepAlives:   true,
-			},
-		},
+		http: kit.NewHTTPClient(kit.HTTPOptions{Timeout: 60 * time.Second, HandshakeTimeout: 10 * time.Second,
+			Cookies: true, NoKeepAlives: true}),
 		url:    SDKURL(ip),
 		action: "urn:vim25/6.5",
 	}

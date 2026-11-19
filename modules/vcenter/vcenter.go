@@ -14,11 +14,11 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/kit"
 	"lldp_scanner/modules/vsphere"
 )
 
@@ -97,7 +97,7 @@ type host struct {
 }
 
 // connected tells whether the vCenter talks to the host.
-func (h host) connected() bool { return h.state == "ONLINE" || h.state == "MAINTENANCE" }
+func (h host) connected() bool { return h.state == modules.StateOnline || h.state == "MAINTENANCE" }
 
 var hostStates = map[string]string{"disconnected": "DISCONNECTED", "notResponding": "NOT_RESPONDING"}
 
@@ -111,7 +111,7 @@ func hostState(connection, power string, maintenance bool) string {
 	case power != "" && power != "poweredOn":
 		return strings.ToUpper(strings.TrimPrefix(power, "powered"))
 	}
-	return "ONLINE"
+	return modules.StateOnline
 }
 
 // readAll reads every host of the vCenter, with its cluster and its
@@ -239,16 +239,8 @@ func detect(ctx context.Context, c *vsphere.Client) (modules.Result, error) {
 	r.AddFact("ESXi hosts", hostFact+")")
 	r.AddFact("Virtual machines", fmt.Sprintf("%d (%d on)", vmCount, vmsOn))
 	r.Tables = append(r.Tables, hostTable, nics, vmTable)
-	r.Summary = fmt.Sprintf("%s: %s (%d connected), %s (%d on)", about.FullName, plural(len(hosts), "host"), connected, plural(vmCount, "VM"), vmsOn)
+	r.Summary = fmt.Sprintf("%s: %s (%d connected), %s (%d on)", about.FullName, kit.Plural(len(hosts), "host"), connected, kit.Plural(vmCount, "VM"), vmsOn)
 	return r, nil
-}
-
-// plural is "1 host", "2 hosts".
-func plural(n int, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return strconv.Itoa(n) + " " + noun + "s"
 }
 
 // ─── Enable SNMP on all hosts ─────────────────────────────────────────────────
@@ -286,7 +278,7 @@ func enableSNMPAll(ctx context.Context, c *vsphere.Client, community string) (mo
 		}
 	}
 	r.Tables = append(r.Tables, outcome)
-	r.Summary = fmt.Sprintf("SNMP is on, community %s, on %d of %s", community, on, plural(len(hosts), "host"))
+	r.Summary = fmt.Sprintf("SNMP is on, community %s, on %d of %s", community, on, kit.Plural(len(hosts), "host"))
 	if failed > 0 {
 		r.Summary += fmt.Sprintf("; %d failed", failed)
 	}
@@ -347,7 +339,7 @@ func (Module) Inventory(ctx context.Context, req modules.Request) (modules.Inven
 		}
 		for i, mac := range macs {
 			d := modules.ManagedDevice{MAC: mac, Name: h.Name, Model: h.Server, IP: h.ManagementIP(), State: h.state,
-				Firmware: h.Product, Kind: "hypervisor"}
+				Firmware: h.Product, Kind: modules.KindHypervisor}
 			if i == 0 {
 				d.Clients = clients
 			}

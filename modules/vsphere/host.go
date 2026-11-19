@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"lldp_scanner/modules/kit"
 )
 
 // ─── What an ESXi host tells ──────────────────────────────────────────────────
@@ -521,7 +523,7 @@ func ParseVM(p map[string]RawValue) VM {
 			if !strings.EqualFold(g.MacAddress, d.MacAddress) {
 				continue
 			}
-			n.Network = firstOf(n.Network, g.Network)
+			n.Network = kit.FirstOf(n.Network, g.Network)
 			for _, ip := range g.IPAddress {
 				if !strings.Contains(ip, ":") {
 					n.IPs = append(n.IPs, ip)
@@ -531,13 +533,4 @@ func ParseVM(p map[string]RawValue) VM {
 		v.NICs = append(v.NICs, n)
 	}
 	return v
-}
-
-func firstOf(values ...string) string {
-	for _, s := range values {
-		if s = strings.TrimSpace(s); s != "" {
-			return s
-		}
-	}
-	return ""
 }
