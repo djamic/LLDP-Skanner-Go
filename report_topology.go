@@ -713,14 +713,14 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 	var sb strings.Builder
 	sb.WriteString("graph TD\n")
 
-	// Node definitions with shapes per group
+	// Node definitions with shapes per group (groups.go)
 	for _, nd := range nodes {
-		switch nd.Group {
-		case "hub", "minihub":
+		switch reportGroupShapes[nd.Group] {
+		case "circle":
 			sb.WriteString(fmt.Sprintf("  %s((\"%s\"))\n", nd.SafeID, nd.Label))
-		case "router":
+		case "hexagon":
 			sb.WriteString(fmt.Sprintf("  %s{{\"%s\"}}\n", nd.SafeID, nd.Label))
-		case "access_point", "wifi_random":
+		case "flag":
 			sb.WriteString(fmt.Sprintf("  %s>\" %s\"]\n", nd.SafeID, nd.Label))
 		default:
 			sb.WriteString(fmt.Sprintf("  %s[\"%s\"]\n", nd.SafeID, nd.Label))
@@ -746,58 +746,20 @@ func GenerateMermaidTopology(graph *DJGraph, groups []string) string {
 	return sb.String()
 }
 
-// reportGroupColors are the fill and stroke colours of each node group in
-// the report's Mermaid diagrams; they match the UI (static/app.js
-// groupColors), and the DOCX converter (instrumens/md2docx_gost_linux.py
-// group_label_map) names each fill colour in its legend.
-var reportGroupColors = map[string][2]string{
-	"switch":       {"#4A90E2", "#2A6FC2"},
-	"router":       {"#E24A4A", "#C23030"},
-	"hub":          {"#FF9800", "#E68A00"},
-	"minihub":      {"#FFC107", "#FFA000"},
-	"endpoint":     {"#8BC34A", "#6B9F30"},
-	"access_point": {"#00BCD4", "#0097A7"},
-	"vm":           {"#9C27B0", "#7B1FA2"},
-	"hypervisor":   {"#26C6DA", "#0097A7"},
-	"bmc":          {"#FF6F00", "#E65100"},
-	"camera":       {"#E91E63", "#C2185B"},
-	"phone":        {"#3F51B5", "#303F9F"},
-	"iot":          {"#607D8B", "#455A64"},
-	"wifi_random":  {"#00BCD4", "#0097A7"},
-	"printer":      {"#795548", "#5D4037"},
-	"server":       {"#FF5722", "#E64A19"},
-	"unknown":      {"#9E9E9E", "#757575"},
-}
-
 // GenerateTopologyLegend returns a markdown legend table for the topology colors
 func GenerateTopologyLegend(groups []string) string {
-	type legendItem struct {
-		Color, Label string
-	}
-	allItems := map[string]legendItem{
-		"switch":       {"🔵", "Switch"},
-		"router":       {"🔴", "Router"},
-		"hub":          {"🟠", "Hub (Shadow IT)"},
-		"minihub":      {"🟡", "Mini hub"},
-		"endpoint":     {"🟢", "Endpoint"},
-		"access_point": {"🔷", "Wi-Fi AP"},
-		"vm":           {"🟣", "VM"},
-		"hypervisor":   {"💠", "Hypervisor"},
-		"bmc":          {"🟧", "BMC/iLO"},
-		"camera":       {"🩷", "Camera"},
-		"phone":        {"🔵", "Phone"},
-		"iot":          {"⬜", "IoT"},
-		"wifi_random":  {"🔷", "Random MAC"},
-		"printer":      {"🟤", "Printer"},
-		"server":       {"🔶", "Server"},
-		"unknown":      {"⚪", "Unknown"},
+	allItems := make(map[string][2]string)
+	for _, d := range deviceGroups {
+		if d.Dot != "" {
+			allItems[d.Key] = [2]string{d.Dot, d.longName()}
+		}
 	}
 
 	var sb strings.Builder
 	sb.WriteString("| Rang | Turi |\n|---|---|\n")
 	for _, g := range groups {
 		if item, ok := allItems[g]; ok {
-			sb.WriteString(fmt.Sprintf("| %s | %s |\n", item.Color, item.Label))
+			sb.WriteString(fmt.Sprintf("| %s | %s |\n", item[0], item[1]))
 		}
 	}
 	return sb.String()
@@ -936,14 +898,12 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 					colors = reportGroupColors["vm"]
 				}
 				sb.WriteString(fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", tgtSafe, colors[0], colors[1]))
-			case tgtGroup == "phone":
-				sb.WriteString(fmt.Sprintf("  style %s fill:#3F51B5,stroke:#303F9F,color:#fff\n", tgtSafe))
-			case tgtGroup == "camera":
-				sb.WriteString(fmt.Sprintf("  style %s fill:#E91E63,stroke:#C2185B,color:#fff\n", tgtSafe))
-			case tgtGroup == "iot":
-				sb.WriteString(fmt.Sprintf("  style %s fill:#607D8B,stroke:#455A64,color:#fff\n", tgtSafe))
+			case tgtGroup == "phone", tgtGroup == "camera", tgtGroup == "iot":
+				colors := reportGroupColors[tgtGroup]
+				sb.WriteString(fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", tgtSafe, colors[0], colors[1]))
 			default: // endpoint and the other groups
-				sb.WriteString(fmt.Sprintf("  style %s fill:#8BC34A,stroke:#6B9F30,color:#fff\n", tgtSafe))
+				colors := reportGroupColors["endpoint"]
+				sb.WriteString(fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", tgtSafe, colors[0], colors[1]))
 			}
 			if !strings.HasPrefix(tgtID, "hyp-") {
 				childCount++
@@ -1354,27 +1314,8 @@ func generateAuditMD(groups []string) string {
 	if graph != nil {
 		data := reportGraphData(graph)
 
-		// Group order and display names
-		type groupDef struct {
-			key   string
-			title string
-		}
-		groupOrder := []groupDef{
-			{"endpoint", "4.2 Endpoint qurilmalar"},
-			{"hypervisor", "4.3 Hypervisor serverlar"},
-			{"vm", "4.4 Virtual mashinalar"},
-			{"hub", "4.5 Hub / Unmanaged switch"},
-			{"phone", "4.6 Telefonlar (VoIP)"},
-			{"camera", "4.7 Kameralar"},
-			{"iot", "4.8 IoT qurilmalar"},
-			{"bmc", "4.9 BMC/iLO"},
-			{"server", "4.10 Serverlar"},
-			{"router", "4.11 Routerlar"},
-			{"wifi_random", "4.12 Wi-Fi / Random MAC"},
-			{"access_point", "4.13 Wi-Fi nuqtalari (Access Point)"},
-			{"printer", "4.14 Printerlar"},
-			{"minihub", "4.15 Mini hub (trunk yoki ko'p MAC'li port)"},
-		}
+		// Group order and display names (groups.go)
+		groupOrder := reportGroupSections()
 
 		// Group nodes
 		grouped := make(map[string][]GraphNode)
@@ -1391,7 +1332,7 @@ func generateAuditMD(groups []string) string {
 		}
 		for _, group := range slices.Sorted(maps.Keys(grouped)) {
 			if !titled[group] {
-				groupOrder = append(groupOrder, groupDef{group, fmt.Sprintf("4.%d %s", len(groupOrder)+2, group)})
+				groupOrder = append(groupOrder, reportGroupDef{group, fmt.Sprintf("4.%d %s", len(groupOrder)+2, group)})
 			}
 		}
 

@@ -704,7 +704,8 @@ func TestCalculateDepthsFollowsLinksBothWays(t *testing.T) {
 // TestAuditPickerOffersEveryReportGroup (reports and UI handoffs, F74, F77):
 // the audit export dialog of static/app.js offers every node group the
 // report can draw and colour (reportGroupColors), so printers, servers and
-// unknown nodes can be put into the topology diagram too.
+// unknown nodes can be put into the topology diagram too. Its groups are
+// uiExportGroups, generated from groups.go.
 func TestAuditPickerOffersEveryReportGroup(t *testing.T) {
 	src, err := os.ReadFile(filepath.Join("static", "app.js"))
 	if err != nil {
@@ -713,8 +714,13 @@ func TestAuditPickerOffersEveryReportGroup(t *testing.T) {
 	js := string(src)
 	start := strings.Index(js, "function downloadAuditReport()")
 	end := strings.Index(js[max(start, 0):], "let checkboxesHTML")
+	if start < 0 || end < 0 || !strings.Contains(js[start:start+end], "const groupOptions = uiExportGroups;") {
+		t.Fatal("app.js: no audit group picker (downloadAuditReport groupOptions = uiExportGroups)")
+	}
+	start = strings.Index(js, "const uiExportGroups = [")
+	end = strings.Index(js[max(start, 0):], "];")
 	if start < 0 || end < 0 {
-		t.Fatal("app.js: no audit group picker (downloadAuditReport groupOptions)")
+		t.Fatal("app.js: no uiExportGroups")
 	}
 	offered := map[string]bool{}
 	for _, m := range regexp.MustCompile(`\{ id: '([a-z_]+)'`).FindAllStringSubmatch(js[start:start+end], -1) {
