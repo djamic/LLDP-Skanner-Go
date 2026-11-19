@@ -342,23 +342,12 @@ func (g *DJGraph) GetGraphData() GraphData {
 			}
 		}
 
-		// Build label based on info content
+		// The label: the DNS hostname, else the info, then the node id
 		if info != "" {
-			// For endpoints, info is just "[ENDPOINT]" or "[WiFi]" etc.
-			if strings.HasPrefix(info, "[ENDPOINT]") || strings.HasPrefix(info, "[LLDP-EP]") || strings.HasPrefix(info, "[HUB]") || strings.HasPrefix(info, "[MINIHUB]") || strings.HasPrefix(info, "[VM]") || strings.HasPrefix(info, "[WiFi]") {
-				// Prioritize hostname in label if available
-				if hostname != "" {
-					label = fmt.Sprintf("%s\n%s", hostname, node)
-				} else {
-					label = fmt.Sprintf("%s\n%s", info, node)
-				}
+			if hostname != "" {
+				label = fmt.Sprintf("%s\n%s", hostname, node)
 			} else {
-				// For switches/routers — prioritize hostname over SysName
-				if hostname != "" {
-					label = fmt.Sprintf("%s\n%s", hostname, node)
-				} else {
-					label = fmt.Sprintf("%s\n%s", info, node)
-				}
+				label = fmt.Sprintf("%s\n%s", info, node)
 			}
 		}
 
