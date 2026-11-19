@@ -2,6 +2,7 @@ package keriooperator
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,6 +70,9 @@ func newFakePBX() *fakePBX {
 	}
 }
 
+// serve starts the PBX with the TLS of the real one's "Kerio Embedded
+// WebServer 1.0": TLS 1.2 with RSA key exchange only (AES256-GCM-SHA384),
+// which Go's clients no longer offer unless asked.
 func (f *fakePBX) serve(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -76,7 +80,9 @@ func (f *fakePBX) serve(t *testing.T) *httptest.Server {
 		fmt.Fprint(w, `x_2rc.x_4v = "Kerio Operator Administration";x_2rc.x_9t = "Kerio Operator Administration";`)
 	})
 	mux.HandleFunc("/admin/api/jsonrpc/", f.api)
-	srv := httptest.NewTLSServer(mux)
+	srv := httptest.NewUnstartedServer(mux)
+	srv.TLS = &tls.Config{MaxVersion: tls.VersionTLS12, CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_256_GCM_SHA384}}
+	srv.StartTLS()
 	t.Cleanup(srv.Close)
 	old := adminBase
 	adminBase = func(string) string { return srv.URL + "/admin" }

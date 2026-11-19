@@ -40,6 +40,20 @@ const (
 // application is how the scanner names itself to Session.login.
 var application = map[string]string{"name": "LLDP scanner", "vendor": "lldp_scanner", "version": "1.0"}
 
+// cipherSuites are the TLS 1.2 suites offered: Go's secure ones, then
+// AES-GCM with RSA key exchange, which Go no longer offers unless asked
+// (Go 1.22 took it off the defaults, Go 1.25 lists it as insecure). The
+// PBX's "Kerio Embedded WebServer 1.0" speaks TLS 1.2 with AES256-GCM-SHA384
+// (TLS_RSA_WITH_AES_256_GCM_SHA384) only: the default suites end in a
+// handshake failure.
+var cipherSuites = func() []uint16 {
+	var ids []uint16
+	for _, s := range tls.CipherSuites() {
+		ids = append(ids, s.ID)
+	}
+	return append(ids, tls.TLS_RSA_WITH_AES_256_GCM_SHA384, tls.TLS_RSA_WITH_AES_128_GCM_SHA256)
+}()
+
 // newHTTPClient is an HTTP client for the PBX, with the cookie jar the
 // session cookie needs. Its certificate is its own self-signed one, so it
 // is not checked: the scanner only talks to devices of the local network.
@@ -51,7 +65,7 @@ func newHTTPClient(timeout time.Duration) *http.Client {
 		Timeout: timeout,
 		Jar:     jar,
 		Transport: &http.Transport{
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true, CipherSuites: cipherSuites},
 			TLSHandshakeTimeout: timeout,
 		},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
