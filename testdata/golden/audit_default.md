@@ -436,7 +436,7 @@ graph TD
 | 172.20.254.247 | HP | Hewlett Packard | 30 | 0 |
 | 172.20.254.249 | HUAWEI | Huawei | 33 | 1261 |
 
-### 4.2 Endpoint qurilmalar (761 ta)
+### 4.2 Endpoint qurilmalar (743 ta)
 
 | # | ID / MAC | Ma'lumot | IP | Connected to |
 |---|---|---|---|---|
@@ -1059,148 +1059,130 @@ graph TD
 | 617 | c0:18:03:88:71:f5 | [ENDPOINT] HP Inc. | 172.16.2.90 |  (GE1/0/36 [V160]) |
 | 618 | c0:18:03:88:72:16 | [LLDP-EP] HP Inc. | 172.16.0.43 |  (Eth1/0/6 [V160] 100M) |
 | 619 | c0:4a:00:e1:d9:49 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.0.163 | HP (GE1/0/10 [V160]) |
-| 620 | c0:74:ad:90:01:75 | [ENDPOINT] Grandstream Networks, Inc. | 172.16.25.219 | - |
-| 621 | c0:74:ad:90:01:7f | [ENDPOINT] Grandstream Networks, Inc. | 172.16.0.30 |  (GE1/0/34 [V160]) |
-| 622 | c0:74:ad:90:01:8e | [ENDPOINT] Grandstream Networks, Inc. | 172.16.1.105 | - |
-| 623 | c0:bf:be:d9:9b:d7 | [ENDPOINT] AzureWave Technology Inc. | 172.16.14.151 | - |
-| 624 | c0:c9:e3:32:95:1d | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.32.17 | F-8 (Eth1/0/13 [V1632]) |
-| 625 | c4:34:6b:b8:41:94 | [ENDPOINT] Hewlett Packard | 10.10.10.68 | - |
-| 626 | c4:6e:1f:5d:ea:7c | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. |  | F-9 (GE1/0/24 [V1632]) |
-| 627 | c8:15:4e:74:4c:4e | [ENDPOINT] Intel Corporate | 172.15.124.103 | - |
-| 628 | c8:26:e2:e2:aa:54 | [ENDPOINT] CHINA DRAGON TECHNOLOGY LIMITED |  | - |
-| 629 | c8:41:8a:20:51:72 | [LLDP-EP] Samsung Electronics.,LTD | 172.16.25.131 | A_padval_SNR (Eth1/0/4 [V1624] 1G) |
-| 630 | c8:41:8a:22:08:b3 | [LLDP-EP] Samsung Electronics.,LTD | 172.16.32.154 | A_padval_SNR (Eth1/0/1 [V1632] 1G) |
-| 631 | c8:41:8a:22:0e:38 | [LLDP-EP] Samsung Electronics.,LTD | 172.20.8.206 | HPE (GE1/0/39 [T] 1G) |
-| 632 | c8:54:4b:fe:74:d4 | [ENDPOINT] Zyxel Communications Corporation |  | F-5 (Eth1/0/24 [V1632]) |
-| 633 | c8:7e:a1:ba:ec:91 | [ENDPOINT] TCL MOKA International Limited | 172.16.0.223 |  (GE1/0/27 [V160]) |
-| 634 | c8:7e:a1:ba:ec:92 | [ENDPOINT] TCL MOKA International Limited | 172.16.1.143 |  (GE1/0/25 [V160]) |
-| 635 | c8:7e:a1:ba:ec:ab | [ENDPOINT] TCL MOKA International Limited | 172.16.2.168 |  (GE1/0/19 [V160]) |
-| 636 | c8:7e:a1:ba:ed:0d | [ENDPOINT] TCL MOKA International Limited | 172.16.2.56 |  (GE1/0/31 [V160]) |
-| 637 | c8:d3:ff:bb:28:90 | [ENDPOINT] Hewlett Packard | 172.16.1.135 | - |
-| 638 | c8:d9:d2:7f:8b:3b | [LLDP-EP] Hewlett Packard | 172.16.24.51 | A 3 Etaj (GE1/0/7 [V1624] 100M) |
-| 639 | cc:2d:21:7f:64:39 | [ENDPOINT] Tenda Technology Co.,Ltd.Dongguan branch | 172.16.20.175 | A Mobil (GE1/0/19 [V1620]) |
-| 640 | cc:2d:21:c1:46:29 | [ENDPOINT] Tenda Technology Co.,Ltd.Dongguan branch | 172.16.18.21 | MEDIA MARKAZ (GE1/0/47 [V1616]) |
-| 641 | cc:3e:5f:18:83:cf | [LLDP-EP] Hewlett Packard |  | HPE (GE1/0/47 [V1624] 1G) |
-| 642 | cc:3e:5f:d2:35:ac | [LLDP-EP] Hewlett Packard |  | D 1-2 (GE1/0/25 [V164] 100M) |
-| 643 | cc:47:40:24:97:2c | [ENDPOINT] AzureWave Technology Inc. | 172.15.225.8 | - |
-| 644 | d0:ad:08:f0:8a:88 | [LLDP-EP] HP Inc. | 172.16.6.70 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 645 | d4:61:37:03:81:dd | [LLDP-EP] | 172.16.4.255 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 646 | d4:61:37:03:81:e0 | [LLDP-EP] | 172.16.4.212 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 647 | d4:61:37:03:82:54 | [LLDP-EP] | 172.16.6.122 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 648 | d4:61:37:03:82:6c | [LLDP-EP] | 172.16.6.78 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 649 | d4:61:37:03:82:6d | [LLDP-EP] | 172.16.5.193 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 650 | d4:9e:3b:42:84:e2 | [ENDPOINT] Guangzhou Shiyuan Electronic Technology Company Limited | 172.15.188.92 | - |
-| 651 | d4:f5:ef:4d:b5:cf | [ENDPOINT] Hewlett Packard Enterprise | 10.10.10.69 | HPE (GE1/0/4 [V10]) |
-| 652 | d8:43:ae:b6:79:46 | [LLDP-EP] Micro-Star INTL CO., LTD. | 172.16.35.114 | F-9 (GE1/0/5 [V1632] 1G) |
-| 653 | d8:47:32:70:a9:31 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.23.174 | A-332 (GE1/0/13 [V1620]) |
-| 654 | d8:47:32:cb:92:af | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.27.152 | A 3 Etaj (GE1/0/12 [V1624]) |
-| 655 | d8:47:32:e9:b4:63 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.33.94 | F-5 (Eth1/0/11 [V1632]) |
-| 656 | d8:47:32:e9:c0:d9 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.0.21 | B-423 (GE1/0/11 [V160]) |
-| 657 | d8:5e:d3:78:9c:78 | [LLDP-EP] GIGA-BYTE TECHNOLOGY CO.,LTD. | 172.15.27.150 | MEDIA MARKAZ (GE1/0/18 [V1500] 1G) |
-| 658 | d8:bb:c1:d4:98:b6 | [ENDPOINT] Micro-Star INTL CO., LTD. | 172.16.33.75 | F-2 (GE1/0/11 [V1632]) |
-| 659 | d8:bb:c1:df:5b:04 | [LLDP-EP] Micro-Star INTL CO., LTD. | 172.16.16.12 | MEDIA MARKAZ (GE1/0/22 [V1616] 1G) |
-| 660 | d8:e2:df:f8:8a:91 | [LLDP-EP] Microsoft Corporation | 172.16.0.34 | B-318/1 (GE1/0/39 [V160] 100M) |
-| 661 | dc:90:09:c1:10:c9 | [ENDPOINT] Intel Corporate | 172.15.109.112 | - |
-| 662 | e0:07:1b:f2:e6:e8 | [ENDPOINT] Hewlett Packard Enterprise | 10.10.10.37 | HPE (GE1/0/6 [V10]) |
-| 663 | e0:73:e7:c3:cd:44 | [LLDP-EP] HP Inc. | 172.16.6.75 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 664 | e0:73:e7:c3:ce:13 | [LLDP-EP] HP Inc. | 172.16.5.10 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 665 | e0:73:e7:c3:ce:8c | [LLDP-EP] HP Inc. | 172.16.6.119 | D 1-2 (GE1/0/1 [V164] 1G) |
-| 666 | e0:d5:5e:6e:83:0e | [LLDP-EP] Gigabyte | 172.16.11.40 | HPE (GE1/0/12 [V168] 1G) |
-| 667 | e0:d5:5e:f6:f1:bd | [LLDP-EP] Gigabyte | 172.16.4.161 | D - 1 (GE1/0/16 [V164] 1G) |
-| 668 | e0:d9:e3:d4:b4:c0 | [LLDP-EP] Eltex |  | A-332 (GE1/0/47 [V1620] 1G) |
-| 669 | e0:d9:e3:f1:05:40 | [LLDP-EP] Eltex | 172.16.1.115 | HPE (GE1/0/8 [V160] 100M) |
-| 670 | e4:54:e8:d0:2a:55 | [LLDP-EP] Dell Inc. | 172.16.11.27 | HPE (GE1/0/25 [V168] 1G) |
-| 671 | e4:5a:d4:44:1d:c0 | [ENDPOINT] Eltex Enterprise Ltd. | 172.16.14.252 | - |
-| 672 | e4:5a:d4:44:1d:da | [ENDPOINT] Eltex Enterprise Ltd. |  | - |
-| 673 | e4:5a:d4:6b:3a:00 | [ENDPOINT] Eltex Enterprise Ltd. | 172.17.3.47 | - |
-| 674 | e4:5a:d4:6b:3a:1b | [ENDPOINT] Eltex Enterprise Ltd. |  | - |
-| 675 | e4:a8:df:87:0d:94 | [ENDPOINT] Compal | 172.16.1.138 |  (GE1/0/9 [V160]) |
-| 676 | e4:a8:df:87:18:27 | [ENDPOINT] Compal | 172.16.2.130 |  (GE1/0/3 [V160]) |
-| 677 | e4:a8:df:89:1d:4f | [LLDP-EP] Compal | 172.16.34.242 | F-2 (GE1/0/47 [V1632] 100M) |
-| 678 | e4:a8:df:89:1e:12 | [ENDPOINT] Compal | 172.16.34.73 | F-2 (GE1/0/5 [V1632]) |
-| 679 | e4:a8:df:89:b4:33 | [LLDP-EP] Compal | 172.16.8.61 | HPE (GE1/0/30 [V168] 1G) |
-| 680 | e4:a8:df:89:b5:81 | [ENDPOINT] Compal | 172.16.0.202 |  (GE1/0/13 [V160]) |
-| 681 | e4:a8:df:89:b6:68 | [ENDPOINT] Compal | 172.16.24.84 | - |
-| 682 | e4:a8:df:89:b6:da | [ENDPOINT] Compal | 172.16.27.229 | - |
-| 683 | e4:a8:df:89:b7:72 | [LLDP-EP] Compal | 172.16.8.24 | HPE (GE1/0/43 [V168] 1G) |
-| 684 | e4:a8:df:9d:ed:04 | [LLDP-EP] Compal |  | HPE (GE1/0/43 [V168] 100M) |
-| 685 | e4:a8:df:9f:44:26 | [LLDP-EP] Compal |  | A 3 Etaj (GE1/0/8 [V1624] 10M) |
-| 686 | e4:a8:df:a2:4e:e6 | [LLDP-EP] Compal | 172.16.9.172 | HPE (GE1/0/32 [V168] 1G) |
-| 687 | e4:a8:df:a2:4f:04 | [LLDP-EP] Compal | 172.16.11.60 | HPE (GE1/0/46 [V168] 100M) |
-| 688 | e4:a8:df:a2:4f:20 | [LLDP-EP] Compal | 172.16.10.92 | HPE (GE1/0/32 [V168] 1G) |
-| 689 | e4:a8:df:a2:4f:67 | [LLDP-EP] Compal | 172.16.9.76 | HPE (GE1/0/42 [V168] 100M) |
-| 690 | e4:c3:2a:db:89:31 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.2.246 | - |
-| 691 | e8:48:b8:f7:43:f1 | [ENDPOINT] TP-Link Systems Inc | 172.16.2.219 | B-423 (GE1/0/19 [V160]) |
-| 692 | e8:5a:8b:a9:80:0a | [ENDPOINT] Xiaomi Communications Co Ltd |  | - |
-| 693 | e8:65:d4:9e:a7:d8 | [ENDPOINT] Tenda Technology Co.,Ltd.Dongguan branch | 172.16.33.160 | F-4_48P (Eth1/0/16 [V1632]) |
-| 694 | e8:94:f6:ca:86:dd | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.20.19.132 | SNR-S2985G-24TC (Eth1/0/1) |
-| 695 | e8:c6:e6:74:87:eb | [ENDPOINT] CHANGHONG (HONGKONG) TRADING LIMITED | 172.16.2.129 |  (GE1/0/17 [V160]) |
-| 696 | e8:de:27:db:9b:f3 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.0.88 | HPE (GE1/0/24 [V160]) |
-| 697 | e8:f4:08:cf:65:1b | [ENDPOINT] Intel Corporate | 172.15.170.202 | - |
-| 698 | ea:38:83:16:b0:cc | [LLDP-EP] |  | HPE (GE1/0/47 [V1500] 1G) |
-| 699 | ec:3a:56:7c:83:e0 | [ENDPOINT] AzureWave Technology Inc. |  | - |
-| 700 | ec:4c:8c:8f:28:b1 | [ENDPOINT] Intel Corporate | 172.15.44.142 | - |
-| 701 | ec:74:d7:64:cb:9f | [ENDPOINT] Grandstream Networks Inc | 172.16.2.189 | - |
-| 702 | ec:74:d7:64:cb:a3 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.28 |  (Eth1/0/20 [V160] 100M) |
-| 703 | ec:74:d7:64:cb:a5 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.25 |  (Eth1/0/9 [V160] 100M) |
-| 704 | ec:74:d7:64:cb:a6 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.18 |  (Eth1/0/11 [V160] 100M) |
-| 705 | ec:74:d7:64:cb:a7 | [LLDP-EP] Grandstream Networks Inc | 172.16.3.4 |  (Eth1/0/14 [V160] 100M) |
-| 706 | ec:74:d7:64:cb:a8 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.191 |  (Eth1/0/5 [V160] 100M) |
-| 707 | ec:74:d7:64:cb:ab | [LLDP-EP] Grandstream Networks Inc | 172.16.3.208 |  (Eth1/0/13 [V160] 100M) |
-| 708 | ec:74:d7:64:cb:ac | [LLDP-EP] Grandstream Networks Inc | 172.16.1.15 |  (Eth1/0/15 [V160] 100M) |
-| 709 | ec:74:d7:64:cb:ad | [LLDP-EP] Grandstream Networks Inc | 172.16.1.45 |  (Eth1/0/1 [V160] 100M) |
-| 710 | ec:74:d7:64:cb:ae | [LLDP-EP] Grandstream Networks Inc | 172.16.1.19 |  (Eth1/0/3 [V160] 100M) |
-| 711 | ec:74:d7:64:cb:b1 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.37 |  (Eth1/0/4 [V160] 100M) |
-| 712 | ec:74:d7:64:cb:b2 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.106 |  (Eth1/0/7 [V160] 100M) |
-| 713 | ec:74:d7:64:cb:b8 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.206 |  (Eth1/0/12 [V160] 100M) |
-| 714 | ec:74:d7:64:ce:58 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.0 |  (Eth1/0/6 [V160] 100M) |
-| 715 | ec:74:d7:64:ce:5b | [LLDP-EP] Grandstream Networks Inc | 172.16.3.237 |  (Eth1/0/8 [V160] 100M) |
-| 716 | ec:8e:77:19:60:13 | [ENDPOINT] Intel Corporate |  | - |
-| 717 | f0:2f:74:1e:ac:2e | [LLDP-EP] ASUS | 172.16.18.110 | HPE (GE1/0/14 [V1616] 1G) |
-| 718 | f0:2f:74:86:c8:f9 | [LLDP-EP] ASUS | 172.16.10.34 | HPE (GE1/0/5 [V168] 1G) |
-| 719 | f0:68:e3:20:37:76 | [ENDPOINT] AzureWave Technology Inc. | 172.16.12.205 | - |
-| 720 | f0:d4:e2:e6:ee:99 | [ENDPOINT] Dell Inc. | 172.16.32.117 | HPE (GE1/0/31 [V1632]) |
-| 721 | f4:28:9d:35:37:41 | [ENDPOINT] CLOUD NETWORK TECHNOLOGY SINGAPORE PTE. LTD. |  | - |
-| 722 | f4:4d:30:c7:f2:58 | [LLDP-EP] EliteGroup | 172.16.0.213 | B-318/3 (GE1/0/28 [V160] 1G) |
-| 723 | f4:4d:30:c7:f2:6e | [LLDP-EP] EliteGroup | 172.16.2.239 | HPE (GE1/0/12 [V160] 1G) |
-| 724 | f4:4d:30:c7:f4:26 | [LLDP-EP] EliteGroup | 172.16.34.236 | F-6(1) (Eth1/0/13 [V1632] 100M) |
-| 725 | f4:4d:30:c7:f4:6d | [ENDPOINT] EliteGroup | 172.16.24.142 | - |
-| 726 | f4:4d:30:c7:f4:76 | [LLDP-EP] EliteGroup | 172.16.4.165 | D - 1 (GE1/0/16 [V164] 1G) |
-| 727 | f4:4d:30:c7:f4:78 | [LLDP-EP] EliteGroup | 172.16.11.30 | HPE (GE1/0/41 [V168] 1G) |
-| 728 | f4:4d:30:c7:f4:81 | [LLDP-EP] EliteGroup | 172.16.2.143 | B-318/1 (GE1/0/32 [V160] 1G) |
-| 729 | f4:4d:30:c7:f4:ad | [LLDP-EP] EliteGroup | 172.16.8.37 | HPE (GE1/0/20 [V168] 1G) |
-| 730 | f4:4d:30:c7:f4:bc | [LLDP-EP] EliteGroup | 172.16.16.21 | C 424/a (GE1/0/45 [V1616] 1G) |
-| 731 | f4:4d:30:c7:f5:82 | [ENDPOINT] EliteGroup | 172.16.24.213 | - |
-| 732 | f4:4d:30:c7:f5:f6 | [LLDP-EP] EliteGroup | 172.16.24.68 | A RRT Kalidor (GE1/0/37 [V1624] 1G) |
-| 733 | f4:4d:30:c7:f6:1f | [LLDP-EP] EliteGroup | 172.16.11.28 | HPE (GE1/0/36 [V168] 100M) |
-| 734 | f4:4d:30:c7:f6:3a | [LLDP-EP] EliteGroup | 172.16.27.208 | A 3 Etaj (GE1/0/43 [V1624] 100M) |
-| 735 | f4:4d:30:c7:f6:61 | [LLDP-EP] EliteGroup | 172.16.4.20 | D - 1 (GE1/0/16 [V164] 1G) |
-| 736 | f4:4d:30:c7:f6:6d | [LLDP-EP] EliteGroup | 172.16.8.147 | HPE (GE1/0/39 [V168] 100M) |
-| 737 | f4:4d:30:c7:f6:74 | [ENDPOINT] EliteGroup | 172.16.25.193 | - |
-| 738 | f4:4d:30:c7:f6:79 | [LLDP-EP] EliteGroup | 172.16.3.18 | HPE (GE1/0/18 [V160] 100M) |
-| 739 | f4:4d:30:c7:f6:7e | [LLDP-EP] EliteGroup | 172.16.8.47 | HPE (GE1/0/42 [V168] 1G) |
-| 740 | f4:4d:30:c7:f6:a0 | [LLDP-EP] EliteGroup | 169.254.170.19 | C 424/a (GE1/0/45 [V1616] 1G) |
-| 741 | f4:4d:30:c7:f6:f7 | [LLDP-EP] EliteGroup | 172.16.16.223 | HPE (GE1/0/6 [V1616] 1G) |
-| 742 | f4:4d:30:c7:f7:25 | [LLDP-EP] EliteGroup | 172.16.18.88 | HPE (GE1/0/32 [V1616] 1G) |
-| 743 | f4:4d:30:c7:f7:9a | [LLDP-EP] EliteGroup | 172.16.0.54 | B-318/2 (GE1/0/35 [V160] 100M) |
-| 744 | f4:4d:30:c7:f7:a8 | [LLDP-EP] EliteGroup | 172.16.8.53 | HPE (GE1/0/34 [V168] 1G) |
-| 745 | f4:4d:30:c7:f7:ae | [LLDP-EP] EliteGroup | 172.16.16.158 | C 424/a (GE1/0/31 [V1616] 100M) |
-| 746 | f4:4d:30:c7:f8:75 | [ENDPOINT] EliteGroup | 172.16.3.252 | HPE (GE1/0/11 [V160]) |
-| 747 | f4:4d:30:c7:f8:81 | [LLDP-EP] EliteGroup | 172.16.4.92 | D 1-2 (GE1/0/18 [V164] 100M) |
-| 748 | f4:4d:30:c7:f8:d7 | [LLDP-EP] EliteGroup | 172.16.3.174 | HP (GE1/0/9 [V160] 100M) |
-| 749 | f4:4d:30:c7:f8:e1 | [LLDP-EP] EliteGroup | 172.16.18.163 | C 424/a (GE1/0/35 [V1616] 1G) |
-| 750 | f4:4d:30:c7:f9:0f | [ENDPOINT] EliteGroup | 172.16.25.169 | - |
-| 751 | f4:4d:30:c7:f9:7f | [LLDP-EP] EliteGroup | 172.16.16.46 | C 424/a (GE1/0/45 [V1616] 1G) |
-| 752 | f4:4d:30:c7:f9:ba | [LLDP-EP] EliteGroup | 172.16.7.115 | D - 1 (GE1/0/16 [V164] 1G) |
-| 753 | f4:4d:30:c7:fb:9f | [LLDP-EP] EliteGroup | 172.16.18.218 | C 424/a (GE1/0/45 [V1616] 1G) |
-| 754 | f4:4d:30:c7:fc:a3 | [LLDP-EP] EliteGroup | 172.16.10.121 | HPE (GE1/0/9 [V168] 1G) |
-| 755 | f4:8e:38:aa:12:5d | [ENDPOINT] Dell Inc. | 172.16.22.194 | HPE (GE1/0/11 [V1620]) |
-| 756 | f4:b5:20:0e:2a:21 | [LLDP-EP] Biostar Microtech international corp. | 172.16.1.229 | B-423 (GE1/0/26 [V160] 1G) |
-| 757 | f4:b5:20:1e:88:f2 | [LLDP-EP] Biostar Microtech international corp. | 172.16.17.171 | HPE (GE1/0/6 [V1616] 1G) |
-| 758 | f4:b5:20:1f:51:55 | [LLDP-EP] Biostar Microtech international corp. | 172.16.16.138 | HPE (GE1/0/6 [V1616] 1G) |
-| 759 | f4:b5:20:1f:52:15 | [LLDP-EP] Biostar Microtech international corp. | 172.16.18.60 | HPE (GE1/0/6 [V1616] 1G) |
-| 760 | f8:f0:82:d8:73:c6 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/39 [V164]) |
-| 761 | f8:f0:82:d8:78:90 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/19 [V164]) |
+| 620 | c0:bf:be:d9:9b:d7 | [ENDPOINT] AzureWave Technology Inc. | 172.16.14.151 | - |
+| 621 | c0:c9:e3:32:95:1d | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.32.17 | F-8 (Eth1/0/13 [V1632]) |
+| 622 | c4:34:6b:b8:41:94 | [ENDPOINT] Hewlett Packard | 10.10.10.68 | - |
+| 623 | c4:6e:1f:5d:ea:7c | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. |  | F-9 (GE1/0/24 [V1632]) |
+| 624 | c8:15:4e:74:4c:4e | [ENDPOINT] Intel Corporate | 172.15.124.103 | - |
+| 625 | c8:26:e2:e2:aa:54 | [ENDPOINT] CHINA DRAGON TECHNOLOGY LIMITED |  | - |
+| 626 | c8:41:8a:20:51:72 | [LLDP-EP] Samsung Electronics.,LTD | 172.16.25.131 | A_padval_SNR (Eth1/0/4 [V1624] 1G) |
+| 627 | c8:41:8a:22:08:b3 | [LLDP-EP] Samsung Electronics.,LTD | 172.16.32.154 | A_padval_SNR (Eth1/0/1 [V1632] 1G) |
+| 628 | c8:41:8a:22:0e:38 | [LLDP-EP] Samsung Electronics.,LTD | 172.20.8.206 | HPE (GE1/0/39 [T] 1G) |
+| 629 | c8:54:4b:fe:74:d4 | [ENDPOINT] Zyxel Communications Corporation |  | F-5 (Eth1/0/24 [V1632]) |
+| 630 | c8:7e:a1:ba:ec:91 | [ENDPOINT] TCL MOKA International Limited | 172.16.0.223 |  (GE1/0/27 [V160]) |
+| 631 | c8:7e:a1:ba:ec:92 | [ENDPOINT] TCL MOKA International Limited | 172.16.1.143 |  (GE1/0/25 [V160]) |
+| 632 | c8:7e:a1:ba:ec:ab | [ENDPOINT] TCL MOKA International Limited | 172.16.2.168 |  (GE1/0/19 [V160]) |
+| 633 | c8:7e:a1:ba:ed:0d | [ENDPOINT] TCL MOKA International Limited | 172.16.2.56 |  (GE1/0/31 [V160]) |
+| 634 | c8:d3:ff:bb:28:90 | [ENDPOINT] Hewlett Packard | 172.16.1.135 | - |
+| 635 | c8:d9:d2:7f:8b:3b | [LLDP-EP] Hewlett Packard | 172.16.24.51 | A 3 Etaj (GE1/0/7 [V1624] 100M) |
+| 636 | cc:2d:21:7f:64:39 | [ENDPOINT] Tenda Technology Co.,Ltd.Dongguan branch | 172.16.20.175 | A Mobil (GE1/0/19 [V1620]) |
+| 637 | cc:2d:21:c1:46:29 | [ENDPOINT] Tenda Technology Co.,Ltd.Dongguan branch | 172.16.18.21 | MEDIA MARKAZ (GE1/0/47 [V1616]) |
+| 638 | cc:3e:5f:18:83:cf | [LLDP-EP] Hewlett Packard |  | HPE (GE1/0/47 [V1624] 1G) |
+| 639 | cc:3e:5f:d2:35:ac | [LLDP-EP] Hewlett Packard |  | D 1-2 (GE1/0/25 [V164] 100M) |
+| 640 | cc:47:40:24:97:2c | [ENDPOINT] AzureWave Technology Inc. | 172.15.225.8 | - |
+| 641 | d0:ad:08:f0:8a:88 | [LLDP-EP] HP Inc. | 172.16.6.70 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 642 | d4:61:37:03:81:dd | [LLDP-EP] | 172.16.4.255 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 643 | d4:61:37:03:81:e0 | [LLDP-EP] | 172.16.4.212 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 644 | d4:61:37:03:82:54 | [LLDP-EP] | 172.16.6.122 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 645 | d4:61:37:03:82:6c | [LLDP-EP] | 172.16.6.78 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 646 | d4:61:37:03:82:6d | [LLDP-EP] | 172.16.5.193 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 647 | d4:9e:3b:42:84:e2 | [ENDPOINT] Guangzhou Shiyuan Electronic Technology Company Limited | 172.15.188.92 | - |
+| 648 | d4:f5:ef:4d:b5:cf | [ENDPOINT] Hewlett Packard Enterprise | 10.10.10.69 | HPE (GE1/0/4 [V10]) |
+| 649 | d8:43:ae:b6:79:46 | [LLDP-EP] Micro-Star INTL CO., LTD. | 172.16.35.114 | F-9 (GE1/0/5 [V1632] 1G) |
+| 650 | d8:47:32:70:a9:31 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.23.174 | A-332 (GE1/0/13 [V1620]) |
+| 651 | d8:47:32:cb:92:af | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.27.152 | A 3 Etaj (GE1/0/12 [V1624]) |
+| 652 | d8:47:32:e9:b4:63 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.33.94 | F-5 (Eth1/0/11 [V1632]) |
+| 653 | d8:47:32:e9:c0:d9 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.0.21 | B-423 (GE1/0/11 [V160]) |
+| 654 | d8:5e:d3:78:9c:78 | [LLDP-EP] GIGA-BYTE TECHNOLOGY CO.,LTD. | 172.15.27.150 | MEDIA MARKAZ (GE1/0/18 [V1500] 1G) |
+| 655 | d8:bb:c1:d4:98:b6 | [ENDPOINT] Micro-Star INTL CO., LTD. | 172.16.33.75 | F-2 (GE1/0/11 [V1632]) |
+| 656 | d8:bb:c1:df:5b:04 | [LLDP-EP] Micro-Star INTL CO., LTD. | 172.16.16.12 | MEDIA MARKAZ (GE1/0/22 [V1616] 1G) |
+| 657 | d8:e2:df:f8:8a:91 | [LLDP-EP] Microsoft Corporation | 172.16.0.34 | B-318/1 (GE1/0/39 [V160] 100M) |
+| 658 | dc:90:09:c1:10:c9 | [ENDPOINT] Intel Corporate | 172.15.109.112 | - |
+| 659 | e0:07:1b:f2:e6:e8 | [ENDPOINT] Hewlett Packard Enterprise | 10.10.10.37 | HPE (GE1/0/6 [V10]) |
+| 660 | e0:73:e7:c3:cd:44 | [LLDP-EP] HP Inc. | 172.16.6.75 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 661 | e0:73:e7:c3:ce:13 | [LLDP-EP] HP Inc. | 172.16.5.10 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 662 | e0:73:e7:c3:ce:8c | [LLDP-EP] HP Inc. | 172.16.6.119 | D 1-2 (GE1/0/1 [V164] 1G) |
+| 663 | e0:d5:5e:6e:83:0e | [LLDP-EP] Gigabyte | 172.16.11.40 | HPE (GE1/0/12 [V168] 1G) |
+| 664 | e0:d5:5e:f6:f1:bd | [LLDP-EP] Gigabyte | 172.16.4.161 | D - 1 (GE1/0/16 [V164] 1G) |
+| 665 | e0:d9:e3:d4:b4:c0 | [LLDP-EP] Eltex |  | A-332 (GE1/0/47 [V1620] 1G) |
+| 666 | e0:d9:e3:f1:05:40 | [LLDP-EP] Eltex | 172.16.1.115 | HPE (GE1/0/8 [V160] 100M) |
+| 667 | e4:54:e8:d0:2a:55 | [LLDP-EP] Dell Inc. | 172.16.11.27 | HPE (GE1/0/25 [V168] 1G) |
+| 668 | e4:5a:d4:44:1d:c0 | [ENDPOINT] Eltex Enterprise Ltd. | 172.16.14.252 | - |
+| 669 | e4:5a:d4:44:1d:da | [ENDPOINT] Eltex Enterprise Ltd. |  | - |
+| 670 | e4:5a:d4:6b:3a:00 | [ENDPOINT] Eltex Enterprise Ltd. | 172.17.3.47 | - |
+| 671 | e4:5a:d4:6b:3a:1b | [ENDPOINT] Eltex Enterprise Ltd. |  | - |
+| 672 | e4:a8:df:87:0d:94 | [ENDPOINT] Compal | 172.16.1.138 |  (GE1/0/9 [V160]) |
+| 673 | e4:a8:df:87:18:27 | [ENDPOINT] Compal | 172.16.2.130 |  (GE1/0/3 [V160]) |
+| 674 | e4:a8:df:89:1d:4f | [LLDP-EP] Compal | 172.16.34.242 | F-2 (GE1/0/47 [V1632] 100M) |
+| 675 | e4:a8:df:89:1e:12 | [ENDPOINT] Compal | 172.16.34.73 | F-2 (GE1/0/5 [V1632]) |
+| 676 | e4:a8:df:89:b4:33 | [LLDP-EP] Compal | 172.16.8.61 | HPE (GE1/0/30 [V168] 1G) |
+| 677 | e4:a8:df:89:b5:81 | [ENDPOINT] Compal | 172.16.0.202 |  (GE1/0/13 [V160]) |
+| 678 | e4:a8:df:89:b6:68 | [ENDPOINT] Compal | 172.16.24.84 | - |
+| 679 | e4:a8:df:89:b6:da | [ENDPOINT] Compal | 172.16.27.229 | - |
+| 680 | e4:a8:df:89:b7:72 | [LLDP-EP] Compal | 172.16.8.24 | HPE (GE1/0/43 [V168] 1G) |
+| 681 | e4:a8:df:9d:ed:04 | [LLDP-EP] Compal |  | HPE (GE1/0/43 [V168] 100M) |
+| 682 | e4:a8:df:9f:44:26 | [LLDP-EP] Compal |  | A 3 Etaj (GE1/0/8 [V1624] 10M) |
+| 683 | e4:a8:df:a2:4e:e6 | [LLDP-EP] Compal | 172.16.9.172 | HPE (GE1/0/32 [V168] 1G) |
+| 684 | e4:a8:df:a2:4f:04 | [LLDP-EP] Compal | 172.16.11.60 | HPE (GE1/0/46 [V168] 100M) |
+| 685 | e4:a8:df:a2:4f:20 | [LLDP-EP] Compal | 172.16.10.92 | HPE (GE1/0/32 [V168] 1G) |
+| 686 | e4:a8:df:a2:4f:67 | [LLDP-EP] Compal | 172.16.9.76 | HPE (GE1/0/42 [V168] 100M) |
+| 687 | e4:c3:2a:db:89:31 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.2.246 | - |
+| 688 | e8:48:b8:f7:43:f1 | [ENDPOINT] TP-Link Systems Inc | 172.16.2.219 | B-423 (GE1/0/19 [V160]) |
+| 689 | e8:5a:8b:a9:80:0a | [ENDPOINT] Xiaomi Communications Co Ltd |  | - |
+| 690 | e8:65:d4:9e:a7:d8 | [ENDPOINT] Tenda Technology Co.,Ltd.Dongguan branch | 172.16.33.160 | F-4_48P (Eth1/0/16 [V1632]) |
+| 691 | e8:94:f6:ca:86:dd | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.20.19.132 | SNR-S2985G-24TC (Eth1/0/1) |
+| 692 | e8:c6:e6:74:87:eb | [ENDPOINT] CHANGHONG (HONGKONG) TRADING LIMITED | 172.16.2.129 |  (GE1/0/17 [V160]) |
+| 693 | e8:de:27:db:9b:f3 | [ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD. | 172.16.0.88 | HPE (GE1/0/24 [V160]) |
+| 694 | e8:f4:08:cf:65:1b | [ENDPOINT] Intel Corporate | 172.15.170.202 | - |
+| 695 | ea:38:83:16:b0:cc | [LLDP-EP] |  | HPE (GE1/0/47 [V1500] 1G) |
+| 696 | ec:3a:56:7c:83:e0 | [ENDPOINT] AzureWave Technology Inc. |  | - |
+| 697 | ec:4c:8c:8f:28:b1 | [ENDPOINT] Intel Corporate | 172.15.44.142 | - |
+| 698 | ec:8e:77:19:60:13 | [ENDPOINT] Intel Corporate |  | - |
+| 699 | f0:2f:74:1e:ac:2e | [LLDP-EP] ASUS | 172.16.18.110 | HPE (GE1/0/14 [V1616] 1G) |
+| 700 | f0:2f:74:86:c8:f9 | [LLDP-EP] ASUS | 172.16.10.34 | HPE (GE1/0/5 [V168] 1G) |
+| 701 | f0:68:e3:20:37:76 | [ENDPOINT] AzureWave Technology Inc. | 172.16.12.205 | - |
+| 702 | f0:d4:e2:e6:ee:99 | [ENDPOINT] Dell Inc. | 172.16.32.117 | HPE (GE1/0/31 [V1632]) |
+| 703 | f4:28:9d:35:37:41 | [ENDPOINT] CLOUD NETWORK TECHNOLOGY SINGAPORE PTE. LTD. |  | - |
+| 704 | f4:4d:30:c7:f2:58 | [LLDP-EP] EliteGroup | 172.16.0.213 | B-318/3 (GE1/0/28 [V160] 1G) |
+| 705 | f4:4d:30:c7:f2:6e | [LLDP-EP] EliteGroup | 172.16.2.239 | HPE (GE1/0/12 [V160] 1G) |
+| 706 | f4:4d:30:c7:f4:26 | [LLDP-EP] EliteGroup | 172.16.34.236 | F-6(1) (Eth1/0/13 [V1632] 100M) |
+| 707 | f4:4d:30:c7:f4:6d | [ENDPOINT] EliteGroup | 172.16.24.142 | - |
+| 708 | f4:4d:30:c7:f4:76 | [LLDP-EP] EliteGroup | 172.16.4.165 | D - 1 (GE1/0/16 [V164] 1G) |
+| 709 | f4:4d:30:c7:f4:78 | [LLDP-EP] EliteGroup | 172.16.11.30 | HPE (GE1/0/41 [V168] 1G) |
+| 710 | f4:4d:30:c7:f4:81 | [LLDP-EP] EliteGroup | 172.16.2.143 | B-318/1 (GE1/0/32 [V160] 1G) |
+| 711 | f4:4d:30:c7:f4:ad | [LLDP-EP] EliteGroup | 172.16.8.37 | HPE (GE1/0/20 [V168] 1G) |
+| 712 | f4:4d:30:c7:f4:bc | [LLDP-EP] EliteGroup | 172.16.16.21 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 713 | f4:4d:30:c7:f5:82 | [ENDPOINT] EliteGroup | 172.16.24.213 | - |
+| 714 | f4:4d:30:c7:f5:f6 | [LLDP-EP] EliteGroup | 172.16.24.68 | A RRT Kalidor (GE1/0/37 [V1624] 1G) |
+| 715 | f4:4d:30:c7:f6:1f | [LLDP-EP] EliteGroup | 172.16.11.28 | HPE (GE1/0/36 [V168] 100M) |
+| 716 | f4:4d:30:c7:f6:3a | [LLDP-EP] EliteGroup | 172.16.27.208 | A 3 Etaj (GE1/0/43 [V1624] 100M) |
+| 717 | f4:4d:30:c7:f6:61 | [LLDP-EP] EliteGroup | 172.16.4.20 | D - 1 (GE1/0/16 [V164] 1G) |
+| 718 | f4:4d:30:c7:f6:6d | [LLDP-EP] EliteGroup | 172.16.8.147 | HPE (GE1/0/39 [V168] 100M) |
+| 719 | f4:4d:30:c7:f6:74 | [ENDPOINT] EliteGroup | 172.16.25.193 | - |
+| 720 | f4:4d:30:c7:f6:79 | [LLDP-EP] EliteGroup | 172.16.3.18 | HPE (GE1/0/18 [V160] 100M) |
+| 721 | f4:4d:30:c7:f6:7e | [LLDP-EP] EliteGroup | 172.16.8.47 | HPE (GE1/0/42 [V168] 1G) |
+| 722 | f4:4d:30:c7:f6:a0 | [LLDP-EP] EliteGroup | 169.254.170.19 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 723 | f4:4d:30:c7:f6:f7 | [LLDP-EP] EliteGroup | 172.16.16.223 | HPE (GE1/0/6 [V1616] 1G) |
+| 724 | f4:4d:30:c7:f7:25 | [LLDP-EP] EliteGroup | 172.16.18.88 | HPE (GE1/0/32 [V1616] 1G) |
+| 725 | f4:4d:30:c7:f7:9a | [LLDP-EP] EliteGroup | 172.16.0.54 | B-318/2 (GE1/0/35 [V160] 100M) |
+| 726 | f4:4d:30:c7:f7:a8 | [LLDP-EP] EliteGroup | 172.16.8.53 | HPE (GE1/0/34 [V168] 1G) |
+| 727 | f4:4d:30:c7:f7:ae | [LLDP-EP] EliteGroup | 172.16.16.158 | C 424/a (GE1/0/31 [V1616] 100M) |
+| 728 | f4:4d:30:c7:f8:75 | [ENDPOINT] EliteGroup | 172.16.3.252 | HPE (GE1/0/11 [V160]) |
+| 729 | f4:4d:30:c7:f8:81 | [LLDP-EP] EliteGroup | 172.16.4.92 | D 1-2 (GE1/0/18 [V164] 100M) |
+| 730 | f4:4d:30:c7:f8:d7 | [LLDP-EP] EliteGroup | 172.16.3.174 | HP (GE1/0/9 [V160] 100M) |
+| 731 | f4:4d:30:c7:f8:e1 | [LLDP-EP] EliteGroup | 172.16.18.163 | C 424/a (GE1/0/35 [V1616] 1G) |
+| 732 | f4:4d:30:c7:f9:0f | [ENDPOINT] EliteGroup | 172.16.25.169 | - |
+| 733 | f4:4d:30:c7:f9:7f | [LLDP-EP] EliteGroup | 172.16.16.46 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 734 | f4:4d:30:c7:f9:ba | [LLDP-EP] EliteGroup | 172.16.7.115 | D - 1 (GE1/0/16 [V164] 1G) |
+| 735 | f4:4d:30:c7:fb:9f | [LLDP-EP] EliteGroup | 172.16.18.218 | C 424/a (GE1/0/45 [V1616] 1G) |
+| 736 | f4:4d:30:c7:fc:a3 | [LLDP-EP] EliteGroup | 172.16.10.121 | HPE (GE1/0/9 [V168] 1G) |
+| 737 | f4:8e:38:aa:12:5d | [ENDPOINT] Dell Inc. | 172.16.22.194 | HPE (GE1/0/11 [V1620]) |
+| 738 | f4:b5:20:0e:2a:21 | [LLDP-EP] Biostar Microtech international corp. | 172.16.1.229 | B-423 (GE1/0/26 [V160] 1G) |
+| 739 | f4:b5:20:1e:88:f2 | [LLDP-EP] Biostar Microtech international corp. | 172.16.17.171 | HPE (GE1/0/6 [V1616] 1G) |
+| 740 | f4:b5:20:1f:51:55 | [LLDP-EP] Biostar Microtech international corp. | 172.16.16.138 | HPE (GE1/0/6 [V1616] 1G) |
+| 741 | f4:b5:20:1f:52:15 | [LLDP-EP] Biostar Microtech international corp. | 172.16.18.60 | HPE (GE1/0/6 [V1616] 1G) |
+| 742 | f8:f0:82:d8:73:c6 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/39 [V164]) |
+| 743 | f8:f0:82:d8:78:90 | [ENDPOINT] SNR |  | D 1-2 (GE1/0/19 [V164]) |
 
 ### 4.3 Hypervisor serverlar (14 ta)
 
@@ -1331,11 +1313,29 @@ graph TD
 | 32 | hub-f8:f0:82:d0:23:92-p48 | [HUB] Unmanaged |  | F-4_48P (Eth1/0/48) |
 | 33 | hub-f8:f0:82:d8:7e:81-p3 | [HUB] Unmanaged |  | A_padval_SNR (Eth1/0/3) |
 
-### 4.6 Telefonlar (VoIP) (1 ta)
+### 4.6 Telefonlar (VoIP) (19 ta)
 
 | # | ID / MAC | Ma'lumot | IP | Connected to |
 |---|---|---|---|---|
 | 1 | 3c:22:fb:9b:9d:cd | [ENDPOINT] Apple | 172.15.72.184 | - |
+| 2 | c0:74:ad:90:01:75 | [ENDPOINT] Grandstream Networks, Inc. | 172.16.25.219 | - |
+| 3 | c0:74:ad:90:01:7f | [ENDPOINT] Grandstream Networks, Inc. | 172.16.0.30 |  (GE1/0/34 [V160]) |
+| 4 | c0:74:ad:90:01:8e | [ENDPOINT] Grandstream Networks, Inc. | 172.16.1.105 | - |
+| 5 | ec:74:d7:64:cb:9f | [ENDPOINT] Grandstream Networks Inc | 172.16.2.189 | - |
+| 6 | ec:74:d7:64:cb:a3 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.28 |  (Eth1/0/20 [V160] 100M) |
+| 7 | ec:74:d7:64:cb:a5 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.25 |  (Eth1/0/9 [V160] 100M) |
+| 8 | ec:74:d7:64:cb:a6 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.18 |  (Eth1/0/11 [V160] 100M) |
+| 9 | ec:74:d7:64:cb:a7 | [LLDP-EP] Grandstream Networks Inc | 172.16.3.4 |  (Eth1/0/14 [V160] 100M) |
+| 10 | ec:74:d7:64:cb:a8 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.191 |  (Eth1/0/5 [V160] 100M) |
+| 11 | ec:74:d7:64:cb:ab | [LLDP-EP] Grandstream Networks Inc | 172.16.3.208 |  (Eth1/0/13 [V160] 100M) |
+| 12 | ec:74:d7:64:cb:ac | [LLDP-EP] Grandstream Networks Inc | 172.16.1.15 |  (Eth1/0/15 [V160] 100M) |
+| 13 | ec:74:d7:64:cb:ad | [LLDP-EP] Grandstream Networks Inc | 172.16.1.45 |  (Eth1/0/1 [V160] 100M) |
+| 14 | ec:74:d7:64:cb:ae | [LLDP-EP] Grandstream Networks Inc | 172.16.1.19 |  (Eth1/0/3 [V160] 100M) |
+| 15 | ec:74:d7:64:cb:b1 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.37 |  (Eth1/0/4 [V160] 100M) |
+| 16 | ec:74:d7:64:cb:b2 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.106 |  (Eth1/0/7 [V160] 100M) |
+| 17 | ec:74:d7:64:cb:b8 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.206 |  (Eth1/0/12 [V160] 100M) |
+| 18 | ec:74:d7:64:ce:58 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.0 |  (Eth1/0/6 [V160] 100M) |
+| 19 | ec:74:d7:64:ce:5b | [LLDP-EP] Grandstream Networks Inc | 172.16.3.237 |  (Eth1/0/8 [V160] 100M) |
 
 ### 4.7 Kameralar (56 ta)
 
@@ -1874,7 +1874,7 @@ graph LR
   style c018035b6542 fill:#8BC34A,stroke:#6B9F30,color:#fff
   c074ad90018e["[ENDPOINT] Grandstream Networks, Inc.<br>172.16.1.105"]
   hub_4caea38decc1_p28-->c074ad90018e
-  style c074ad90018e fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style c074ad90018e fill:#3F51B5,stroke:#303F9F,color:#fff
   style hub_4caea38decc1_p28 fill:#FF9800,stroke:#E68A00,color:#fff
 ```
 
@@ -1894,7 +1894,7 @@ graph LR
   style 902e169d3d37 fill:#8BC34A,stroke:#6B9F30,color:#fff
   ec74d764cb9f["[ENDPOINT] Grandstream Networks Inc<br>172.16.2.189"]
   hub_4caea38decc1_p4-->ec74d764cb9f
-  style ec74d764cb9f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style ec74d764cb9f fill:#3F51B5,stroke:#303F9F,color:#fff
   style hub_4caea38decc1_p4 fill:#FF9800,stroke:#E68A00,color:#fff
 ```
 

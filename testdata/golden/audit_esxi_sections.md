@@ -92,7 +92,7 @@ graph LR
   style c018035b6542 fill:#8BC34A,stroke:#6B9F30,color:#fff
   c074ad90018e["[ENDPOINT] Grandstream Networks, Inc.<br>172.16.1.105"]
   hub_4caea38decc1_p28-->c074ad90018e
-  style c074ad90018e fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style c074ad90018e fill:#3F51B5,stroke:#303F9F,color:#fff
   style hub_4caea38decc1_p28 fill:#FF9800,stroke:#E68A00,color:#fff
 ```
 
@@ -112,7 +112,7 @@ graph LR
   style 902e169d3d37 fill:#8BC34A,stroke:#6B9F30,color:#fff
   ec74d764cb9f["[ENDPOINT] Grandstream Networks Inc<br>172.16.2.189"]
   hub_4caea38decc1_p4-->ec74d764cb9f
-  style ec74d764cb9f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style ec74d764cb9f fill:#3F51B5,stroke:#303F9F,color:#fff
   style hub_4caea38decc1_p4 fill:#FF9800,stroke:#E68A00,color:#fff
 ```
 

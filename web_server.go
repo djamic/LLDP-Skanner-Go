@@ -263,6 +263,7 @@ func graphHandler(w http.ResponseWriter, r *http.Request) {
 	data.Core = topologyCore(nodes, collectedData)
 	addHARoles(&data, collectedData)
 	collectedDataMutex.RUnlock()
+	addVoIPProfiles(&data, graph)
 
 	// The devices the controllers manage and their Wi-Fi clients
 	// (module_inventory.go)

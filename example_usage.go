@@ -1014,6 +1014,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 		}
 		localPort := getLocalPortName(data, neighbor.LocalPortNum)
 		graphAddSysText(graph, targetID, neighbor.RemSysName, neighbor.RemSysDesc)
+		graphRecordVoIPNeighbor(graph, targetID, neighbor, macToIP[targetID])
 
 		logDebug("    -> Neighbor: %s (ID: %s) via LocalPort: %d", displayName, targetID, neighbor.LocalPortNum)
 

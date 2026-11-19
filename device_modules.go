@@ -17,6 +17,7 @@ import (
 	_ "lldp_scanner/modules/esxi"
 	_ "lldp_scanner/modules/unificontroller"
 	_ "lldp_scanner/modules/vcenter"
+	_ "lldp_scanner/modules/voip"
 )
 
 // ─── Device modules ───────────────────────────────────────────────────────────
@@ -75,6 +76,11 @@ func deviceTypesOf(ctx context.Context, ip string) []string {
 	types := credentialsDeclaredTypes(ip)
 	if esxiConfirmedIP(ip) && !slices.Contains(types, "esxi") {
 		types = append(types, "esxi")
+	}
+	for _, vt := range voipKnownTypesForIP(ip) {
+		if !slices.Contains(types, vt) {
+			types = append(types, vt)
+		}
 	}
 	for _, m := range modules.All() {
 		p, ok := m.(modules.Prober)

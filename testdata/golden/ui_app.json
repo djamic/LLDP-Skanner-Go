@@ -4,10 +4,10 @@
   ],
   "all_filter": {
     "fixture": {
-      "kept_by_group": {"access_point": 124, "bmc": 4, "camera": 56, "endpoint": 761, "hub": 33, "hypervisor": 14, "minihub": 6, "phone": 1, "switch": 75, "vm": 67, "wifi_random": 124},
+      "kept_by_group": {"access_point": 124, "bmc": 4, "camera": 56, "endpoint": 743, "hub": 33, "hypervisor": 14, "minihub": 6, "phone": 19, "switch": 75, "vm": 67, "wifi_random": 124},
       "kept_links": 1262,
       "links": 1262,
-      "nodes_by_group": {"access_point": 124, "bmc": 4, "camera": 56, "endpoint": 761, "hub": 33, "hypervisor": 14, "minihub": 6, "phone": 1, "switch": 75, "vm": 67, "wifi_random": 124}
+      "nodes_by_group": {"access_point": 124, "bmc": 4, "camera": 56, "endpoint": 743, "hub": 33, "hypervisor": 14, "minihub": 6, "phone": 19, "switch": 75, "vm": 67, "wifi_random": 124}
     },
     "rule": {
       "kept_by_group": {"endpoint": 59, "hub": 7, "hypervisor": 3, "minihub": 1, "switch": 2, "vm": 7, "wifi_random": 4},

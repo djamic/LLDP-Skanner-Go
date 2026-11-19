@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/klauspost/oui"
+	"lldp_scanner/modules/voip"
 )
 
 // ============================================================
@@ -820,6 +821,9 @@ var ouiCategoryWords = []struct {
 func categorizeVendor(vendor string) string {
 	if category, ok := ouiVendorCategory[vendor]; ok {
 		return category
+	}
+	if voip.IsDedicatedVoIPVendor(vendor) {
+		return "phone"
 	}
 	v := strings.ToLower(vendor)
 	for _, rule := range ouiCategoryWords {

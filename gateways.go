@@ -1003,6 +1003,7 @@ func gatewayLLDPLinks(graph *DJGraph, mac string, gws []gatewayNode, merged []st
 			}
 			port := normalizePortName(getLocalPortName(dev, n.LocalPortNum))
 			graphAddSysText(graph, target, n.RemSysName, n.RemSysDesc)
+			graphRecordVoIPNeighbor(graph, target, n, getGlobalIP(target))
 			if !graph.Nodes[target] {
 				graphAddLLDPEndpoint(graph, target, displayName, n, getGlobalIP(target))
 			}

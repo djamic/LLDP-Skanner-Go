@@ -549,7 +549,10 @@ function updateDeviceList() {
         const item = document.createElement('div');
         item.className = 'device-item';
         item.dataset.deviceId = device.id;
-        item.dataset.searchText = [device.sysName, device.label, device.hostname, device.ip, device.id]
+        item.dataset.searchText = [
+            device.sysName, device.label, device.hostname, device.ip, device.id,
+            device.voip && device.voip.brand, device.voip && device.voip.model, device.voip && device.voip.firmware
+        ]
             .filter(Boolean)
             .join(' ')
             .toLowerCase();
@@ -1344,6 +1347,22 @@ function showInfoPanel(node) {
                 haEl.textContent = [roleText, vipText].filter(Boolean).join('\n');
                 haEl.title = vips.length > 4 ? vips.join(', ') : '';
             }
+        }
+    }
+
+    // VoIP IP Phone metadata (Yealink, Grandstream, Avaya, Panasonic, Fanvil, ...)
+    const voipSection = document.getElementById('infoVoIPSection');
+    if (voipSection) {
+        const v = node.voip;
+        voipSection.hidden = !v;
+        if (v) {
+            const lines = [];
+            if (v.brand || v.model) lines.push([v.brand, v.model].filter(Boolean).join(' '));
+            if (v.firmware) lines.push(`Firmware: ${v.firmware}`);
+            if (v.port) lines.push(`Phone Port: ${v.port}`);
+            if (v.pcBridge) lines.push('PC Port Bridge: Enabled');
+            const voipEl = document.getElementById('infoVoIP');
+            if (voipEl) voipEl.textContent = lines.join('\n') || 'VoIP Phone';
         }
     }
 

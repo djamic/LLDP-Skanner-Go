@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"lldp_scanner/modules/voip"
 )
 
 // Coordinate represents x,y position
@@ -41,6 +43,7 @@ type DJGraph struct {
 	graphRouters  map[string]bool
 	graphSysText  map[string]string
 	graphManaged  map[string]bool
+	graphVoIP     map[string]voip.Profile
 }
 
 // NewDJGraph creates a new graph instance
@@ -286,9 +289,10 @@ type GraphNode struct {
 	WLAN *WLANView `json:"wlan,omitempty"`
 	// HARole is "active" or "passive" for switches/routers participating in a
 	// VRRP/HSRP redundancy group; only graphHandler sets it (addHARoles).
-	HARole string   `json:"haRole,omitempty"`
-	VIPs   []string `json:"vips,omitempty"`
-	X      float64  `json:"x,omitempty"`
+	HARole string        `json:"haRole,omitempty"`
+	VIPs   []string      `json:"vips,omitempty"`
+	VoIP   *voip.Profile `json:"voip,omitempty"`
+	X      float64       `json:"x,omitempty"`
 	Y           float64  `json:"y,omitempty"`
 }
 
@@ -472,6 +476,12 @@ func (g *DJGraph) determineDeviceGroup(node, info string) string {
 	// Check for Wi-Fi random MAC endpoints
 	if strings.Contains(info, "[WiFi]") {
 		return "wifi_random"
+	}
+
+	// VoIP phones detected by the standalone modules/voip engine (Yealink,
+	// Grandstream, Avaya, Panasonic KX-HDV, Fanvil, Cisco IP Phone, etc.)
+	if _, ok := g.graphVoIP[node]; ok {
+		return "phone"
 	}
 
 	// Check for Endpoints — use OUI vendor categorization

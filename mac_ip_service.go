@@ -1408,6 +1408,11 @@ func enrichGraphWithIPs(graph *DJGraph) {
 		}
 		ip := ipMap[mac] // may be empty
 		info := graph.SwitchInfo[mac]
+		if ip == "" {
+			if p, ok := graph.graphVoIP[mac]; ok && p.IP != "" && p.IP != p.Firmware {
+				ip = p.IP
+			}
+		}
 		changed := false
 
 		// Check if actively confirmed ESXi (works even without IP); a switch
