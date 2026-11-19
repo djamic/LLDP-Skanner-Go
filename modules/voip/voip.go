@@ -201,8 +201,8 @@ func buildProfile(ev Evidence, brand, model, firmware, source string) Profile {
 
 // DecodeChassisIPv4 extracts a valid host IPv4 address from an LLDP
 // networkAddress chassis ID (subtype 5: 0x01 IANA IPv4 family + 4 octets,
-// e.g. "01 C0 A8 B0 0F" -> "192.168.176.15"). Incomplete or network/broadcast
-// addresses (such as SNR-truncated "01 AC 10" or "172.16.1.0") return "".
+// e.g. "01 C0 00 02 0F" -> "192.0.2.15"). Incomplete or network/broadcast
+// addresses (such as truncated "01 C0 00" or "192.0.2.0") return "".
 func DecodeChassisIPv4(subtype int, raw string) string {
 	if subtype != ChassisSubtypeNetworkAddr {
 		return ""

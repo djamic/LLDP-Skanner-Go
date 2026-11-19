@@ -6,20 +6,21 @@ import (
 	"testing"
 )
 
+// Uses synthetic 10.9.x.x / RFC 5737 192.0.2.x test addresses matching the rest of the test suite.
 func TestVoIPIntegrationGraphAndModules(t *testing.T) {
 	resetState(t)
 	const (
-		swMAC   = "18:56:44:21:58:d0"
-		ylMAC   = "c4:fc:22:21:0b:90"
-		gsMAC   = "c0:74:ad:96:03:25"
-		gsFDB   = "c0:74:ad:ae:9b:91"
-		panaMAC = "4c:36:4e:7b:1b:45"
-		pcMAC   = "00:1b:21:77:00:01"
+		swMAC   = "18:56:44:00:00:01"
+		ylMAC   = "c4:fc:22:00:00:11"
+		gsMAC   = "c0:74:ad:00:00:12"
+		gsFDB   = "c0:74:ad:00:00:13"
+		panaMAC = "4c:36:4e:00:00:14"
+		pcMAC   = "00:1b:21:00:00:21"
 	)
 
 	sw := &DeviceData{
-		IP:        "10.67.100.29",
-		SysName:   "L4Acc4_8",
+		IP:        "10.9.95.1",
+		SysName:   "sw-access-1",
 		ChassisID: swMAC,
 		Interfaces: []InterfaceData{
 			{IfIndex: 10, IfDescr: "\"GigabitEthernet0/0/4\"", IfSpeed: 1_000_000_000, IfOperStatus: 1},
@@ -31,19 +32,19 @@ func TestVoIPIntegrationGraphAndModules(t *testing.T) {
 		Neighbors: []LLDPNeighbor{
 			{
 				LocalPortNum: 10, RemIndex: 1,
-				RemChassisIdSubtype: 5, RemChassisId: "01 C0 A8 B1 1D", // 192.168.177.29
+				RemChassisIdSubtype: 5, RemChassisId: "01 C0 00 02 1D", // 192.0.2.29 (RFC 5737)
 				RemPortIdSubtype: 3, RemPortId: ylMAC, RemPortDesc: "\"WAN PORT\"",
 				RemSysName: "SIP-T48U", RemSysDesc: "108.86.0.90", RemSysCapEnabled: 0x24,
 			},
 			{
 				LocalPortNum: 11, RemIndex: 1,
-				RemChassisIdSubtype: 5, RemChassisId: "01 0A 43 0A 5C", // 10.67.10.92
+				RemChassisIdSubtype: 5, RemChassisId: "01 C0 00 02 5C", // 192.0.2.92 (RFC 5737)
 				RemPortIdSubtype: 3, RemPortId: gsMAC, RemPortDesc: "\"eth0\"",
 				RemSysName: "GRP2613_" + gsMAC, RemSysDesc: "GRP2613 1.0.7.33", RemSysCapEnabled: 0x24,
 			},
 			{
 				LocalPortNum: 12, RemIndex: 1,
-				RemChassisIdSubtype: 5, RemChassisId: "01 C0 A8 B2 50", // 192.168.178.80
+				RemChassisIdSubtype: 5, RemChassisId: "01 C0 00 02 50", // 192.0.2.80 (RFC 5737)
 				RemPortIdSubtype: 3, RemPortId: panaMAC, RemPortDesc: "\"LAN PORT\"",
 				RemSysName: "KX-HDV230RU", RemSysDesc: "Panasonic", RemSysCapEnabled: 0x04,
 			},
@@ -79,7 +80,7 @@ func TestVoIPIntegrationGraphAndModules(t *testing.T) {
 	}
 
 	// ChassisSubtype=5 IP enrichment when ARP table did not know the phones
-	if !strings.Contains(byID[ylMAC].SysName, "192.168.177.29") {
+	if !strings.Contains(byID[ylMAC].SysName, "192.0.2.29") {
 		t.Errorf("Yealink SysName missing decoded Chassis IP: %q", byID[ylMAC].SysName)
 	}
 	if byID[ylMAC].VoIP.Brand != "Yealink" || byID[ylMAC].VoIP.Model != "SIP-T48U" || byID[ylMAC].VoIP.Firmware != "108.86.0.90" || !byID[ylMAC].VoIP.PCBridge {
@@ -93,10 +94,10 @@ func TestVoIPIntegrationGraphAndModules(t *testing.T) {
 	}
 
 	// Active module auto-association by known phone IP
-	if types := voipKnownTypesForIP("10.67.10.92"); !slices.Contains(types, "voip-grandstream") {
-		t.Errorf("voipKnownTypesForIP(10.67.10.92) = %v, want voip-grandstream", types)
+	if types := voipKnownTypesForIP("192.0.2.92"); !slices.Contains(types, "voip-grandstream") {
+		t.Errorf("voipKnownTypesForIP(192.0.2.92) = %v, want voip-grandstream", types)
 	}
-	if types := voipKnownTypesForIP("192.168.177.29"); !slices.Contains(types, "voip-yealink") {
-		t.Errorf("voipKnownTypesForIP(192.168.177.29) = %v, want voip-yealink", types)
+	if types := voipKnownTypesForIP("192.0.2.29"); !slices.Contains(types, "voip-yealink") {
+		t.Errorf("voipKnownTypesForIP(192.0.2.29) = %v, want voip-yealink", types)
 	}
 }

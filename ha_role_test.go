@@ -12,7 +12,7 @@ import (
 
 func TestCollectVRRPInfoAndKeepPrevious(t *testing.T) {
 	resetState(t)
-	const ip = "10.67.100.3"
+	const ip = "10.9.92.3"
 	obj := newRescanSNMPObject()
 
 	agent := collectTestAgent()
@@ -21,17 +21,17 @@ func TestCollectVRRPInfoAndKeepPrevious(t *testing.T) {
 		oidVRRPOperState + ".38.10 = INTEGER: 2",
 	}
 	agent[oidVRRPAssoIpAddr] = []string{
-		oidVRRPAssoIpAddr + ".37.100.10.67.100.1 = INTEGER: 1",
-		oidVRRPAssoIpAddr + ".38.10.10.67.10.1 = INTEGER: 1",
+		oidVRRPAssoIpAddr + ".37.100.10.9.92.1 = INTEGER: 1",
+		oidVRRPAssoIpAddr + ".38.10.10.9.10.1 = INTEGER: 1",
 	}
 	fakeSNMP.set(ip, agent)
-	obj.CollectData(ip, "Core2")
+	obj.CollectData(ip, "sw-core-2")
 
 	first := collectStored(ip)
 	if first == nil || first.VRRPInfo == nil || len(first.VRRPInfo.Instances) != 2 {
 		t.Fatalf("expected 2 VRRP instances, got %+v", first)
 	}
-	if first.VRRPInfo.Instances[0].State != "backup" || !slices.Equal(first.VRRPInfo.Instances[0].VIPs, []string{"10.67.100.1"}) {
+	if first.VRRPInfo.Instances[0].State != "backup" || !slices.Equal(first.VRRPInfo.Instances[0].VIPs, []string{"10.9.92.1"}) {
 		t.Errorf("unexpected VRRP instance[0]: %+v", first.VRRPInfo.Instances[0])
 	}
 
@@ -39,7 +39,7 @@ func TestCollectVRRPInfoAndKeepPrevious(t *testing.T) {
 	partial := collectTestAgent()
 	delete(partial, oidVRRPOperState)
 	fakeSNMP.set(ip, partial)
-	obj.CollectData(ip, "Core2")
+	obj.CollectData(ip, "sw-core-2")
 
 	second := collectStored(ip)
 	if second == nil || second.VRRPInfo == nil || len(second.VRRPInfo.Instances) != 2 {
@@ -49,32 +49,32 @@ func TestCollectVRRPInfoAndKeepPrevious(t *testing.T) {
 	// Non-VRRP switch ("No Such Instance") stores nil VRRPInfo.
 	noVRRP := collectTestAgent()
 	noVRRP[oidVRRPOperState] = []string{oidVRRPOperState + " = No Such Instance currently exists at this OID"}
-	fakeSNMP.set("10.67.100.40", noVRRP)
-	obj.CollectData("10.67.100.40", "DC1")
-	if dc1 := collectStored("10.67.100.40"); dc1 == nil || dc1.VRRPInfo != nil {
+	fakeSNMP.set("10.9.92.40", noVRRP)
+	obj.CollectData("10.9.92.40", "sw-dc-1")
+	if dc1 := collectStored("10.9.92.40"); dc1 == nil || dc1.VRRPInfo != nil {
 		t.Errorf("expected nil VRRPInfo for non-VRRP switch, got %+v", dc1)
 	}
 }
 
 func TestComputeHARolesSNMPAndFallback(t *testing.T) {
-	// 1. Fallback mode (before VRRP-MIB poll, or HSRP): Core1 active, Core2 passive, DC1/Acc L2 untouched.
+	// 1. Fallback mode (before VRRP-MIB poll, or HSRP): Core1 active, Core2 passive, DC2 L2 untouched.
 	core1 := &DeviceData{
-		IP:        "10.67.100.2",
-		SysName:   "Core1",
-		ChassisID: "18:56:44:21:58:d0",
+		IP:        "10.9.92.2",
+		SysName:   "sw-core-1",
+		ChassisID: "18:56:44:00:00:01",
 		Interfaces: []InterfaceData{
 			{IfIndex: 37, IfDescr: `"Vlanif100"`, IfOperStatus: 1},
 			{IfIndex: 38, IfDescr: `"Vlanif10"`, IfOperStatus: 1},
 			{IfIndex: 39, IfDescr: `"Vlanif20"`, IfOperStatus: 1},
 		},
 		ARPTable: []ARPEntry{
-			{IPAddress: "10.67.100.2", MACAddress: "18:56:44:21:58:db", Interface: 37},
+			{IPAddress: "10.9.92.2", MACAddress: "18:56:44:00:00:0b", Interface: 37},
 		},
 	}
 	core2 := &DeviceData{
-		IP:        "10.67.100.3",
-		SysName:   "Core2",
-		ChassisID: "18:56:44:21:5a:60",
+		IP:        "10.9.92.3",
+		SysName:   "sw-core-2",
+		ChassisID: "18:56:44:00:00:02",
 		Interfaces: []InterfaceData{
 			{IfIndex: 37, IfDescr: `"Vlanif100"`, IfOperStatus: 1},
 			{IfIndex: 38, IfDescr: `"Vlanif10"`, IfOperStatus: 1},
@@ -86,16 +86,16 @@ func TestComputeHARolesSNMPAndFallback(t *testing.T) {
 			{MACAddress: "00:00:5e:00:01:14", PortNumber: 1, Status: "learned"},
 		},
 		ARPTable: []ARPEntry{
-			{IPAddress: "10.67.100.1", MACAddress: "00:00:5e:00:01:64", Interface: 37},
-			{IPAddress: "10.67.10.1", MACAddress: "00:00:5e:00:01:0a", Interface: 38},
-			{IPAddress: "192.168.101.101", MACAddress: "00:00:5e:00:01:14", Interface: 39},
+			{IPAddress: "10.9.92.1", MACAddress: "00:00:5e:00:01:64", Interface: 37},
+			{IPAddress: "10.9.10.1", MACAddress: "00:00:5e:00:01:0a", Interface: 38},
+			{IPAddress: "192.0.2.1", MACAddress: "00:00:5e:00:01:14", Interface: 39},
 		},
 	}
 	// Downstream L2 switch with management SVI learning the gateway VRRP MAC: must NOT be marked passive.
 	dc2 := &DeviceData{
-		IP:        "10.67.100.41",
-		SysName:   "DC2",
-		ChassisID: "f4:e5:f2:c0:2b:00",
+		IP:        "10.9.92.41",
+		SysName:   "sw-dc-2",
+		ChassisID: "f4:e5:f2:00:00:41",
 		Interfaces: []InterfaceData{
 			{IfIndex: 37, IfDescr: `"Vlanif100"`, IfOperStatus: 1},
 		},
@@ -103,7 +103,7 @@ func TestComputeHARolesSNMPAndFallback(t *testing.T) {
 			{MACAddress: "00:00:5e:00:01:64", PortNumber: 2, Status: "learned"},
 		},
 		ARPTable: []ARPEntry{
-			{IPAddress: "10.67.100.1", MACAddress: "00:00:5e:00:01:64", Interface: 37},
+			{IPAddress: "10.9.92.1", MACAddress: "00:00:5e:00:01:64", Interface: 37},
 		},
 	}
 
@@ -124,15 +124,15 @@ func TestComputeHARolesSNMPAndFallback(t *testing.T) {
 	}
 
 	// 2. Direct SNMP VRRP-MIB failover: Core1 becomes backup, Core2 becomes master.
-	core1.VRRPInfo = &VRRPData{Instances: []VRRPInstance{{IfIndex: 37, VRID: 100, State: "backup", VIPs: []string{"10.67.100.1"}}}}
-	core2.VRRPInfo = &VRRPData{Instances: []VRRPInstance{{IfIndex: 37, VRID: 100, State: "master", VIPs: []string{"10.67.100.1"}}}}
+	core1.VRRPInfo = &VRRPData{Instances: []VRRPInstance{{IfIndex: 37, VRID: 100, State: "backup", VIPs: []string{"10.9.92.1"}}}}
+	core2.VRRPInfo = &VRRPData{Instances: []VRRPInstance{{IfIndex: 37, VRID: 100, State: "master", VIPs: []string{"10.9.92.1"}}}}
 
 	g := NewDJGraph()
 	g.AddNode(core1.ChassisID)
-	g.SwitchInfo[core1.ChassisID] = "Core1\n10.67.100.2"
+	g.SwitchInfo[core1.ChassisID] = "sw-core-1\n10.9.92.2"
 	g.graphSwitches = map[string]bool{core1.ChassisID: true, core2.ChassisID: true}
 	g.AddNode(core2.ChassisID)
-	g.SwitchInfo[core2.ChassisID] = "Core2\n10.67.100.3"
+	g.SwitchInfo[core2.ChassisID] = "sw-core-2\n10.9.92.3"
 	g.AddEdge(core1.ChassisID, core2.ChassisID, "XGE0/0/23 10G|XGE0/0/24")
 
 	resetState(t)

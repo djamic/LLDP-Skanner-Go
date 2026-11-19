@@ -198,6 +198,22 @@ header h1 {
     flex-shrink: 0;
 }
 
+.fc-dot.fc-icon-wrap {
+    width: 16px;
+    height: 16px;
+    border-radius: 0;
+    background: transparent !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fc-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
 .fc-cnt {
     font-size: 9px;
     font-weight: 700;
@@ -322,14 +338,32 @@ button:active {
     color: #8a9bae;
 }
 
+.node-group {
+    cursor: pointer;
+}
+
+.node-visual {
+    pointer-events: none;
+    transition: transform 0.18s ease, filter 0.18s ease;
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.55));
+}
+
+.node-group:hover .node-visual {
+    transform: scale(1.16);
+    filter: brightness(1.22) drop-shadow(0 0 10px rgba(255, 255, 255, 0.35));
+}
+
+.node-group.is-ha-passive {
+    opacity: 0.78;
+}
+
+.node-group.is-unreachable .node-visual {
+    animation: pulse-unreachable 1.5s infinite;
+}
+
 .node {
     cursor: pointer;
     transition: all 0.2s ease;
-}
-
-.node:hover {
-    stroke-width: 5px;
-    filter: brightness(1.3) drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
 }
 
 .link {
@@ -1146,11 +1180,11 @@ button:active {
 }
 
 .node.anomaly-unreachable {
-    fill: #ff4444 !important;
-    stroke: #cc0000 !important;
-    stroke-width: 4px !important;
+    fill: rgba(255, 68, 68, 0.12) !important;
+    stroke: #ff4444 !important;
+    stroke-width: 3px !important;
+    stroke-dasharray: 4, 3;
     animation: pulse-unreachable 1.5s infinite;
-    opacity: 0.6;
 }
 
 .link.link-unreachable {

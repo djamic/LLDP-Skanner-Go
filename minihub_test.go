@@ -128,10 +128,10 @@ func TestFDBPortsMiniHub(t *testing.T) {
 func TestFDBPortsHuaweiBridgePortMapping(t *testing.T) {
 	resetState(t)
 	const (
-		coreMAC  = "18:56:44:21:58:d0"
-		accMAC   = "ac:8d:34:89:8a:52"
-		apMAC    = "18:56:44:d7:df:a0"
-		phoneMAC = "c0:74:ad:40:61:c2"
+		coreMAC  = "18:56:44:00:00:01"
+		accMAC   = "18:56:44:00:00:02"
+		apMAC    = "18:56:44:00:00:a1"
+		phoneMAC = "c0:74:ad:00:00:b1"
 		pc32MAC  = "00:1b:21:32:00:01"
 	)
 
@@ -139,8 +139,8 @@ func TestFDBPortsHuaweiBridgePortMapping(t *testing.T) {
 	coreFDB := macEntries(5, append([]string{accMAC, apMAC, phoneMAC}, downstreamPCs...)...)
 
 	core := &DeviceData{
-		IP:        "10.67.100.2",
-		SysName:   "Core1",
+		IP:        "10.9.91.1",
+		SysName:   "sw-core-1",
 		ChassisID: coreMAC,
 		Interfaces: []InterfaceData{
 			{IfIndex: 9, IfDescr: "\"XGigabitEthernet0/0/3\"", IfSpeed: 10_000_000_000, IfOperStatus: 1},
@@ -151,7 +151,7 @@ func TestFDBPortsHuaweiBridgePortMapping(t *testing.T) {
 			LocalPortNum: 9, RemIndex: 1,
 			RemChassisIdSubtype: 4, RemChassisId: accMAC,
 			RemPortIdSubtype: 5, RemPortId: "XGigabitEthernet0/0/1",
-			RemSysName: "L4Acc4_7", RemMgmtIP: "10.67.100.30",
+			RemSysName: "sw-acc-7", RemMgmtIP: "10.9.91.30",
 		}},
 		MACTable: coreFDB,
 	}
@@ -164,7 +164,7 @@ func TestFDBPortsHuaweiBridgePortMapping(t *testing.T) {
 	accFDB = append(accFDB, macEntries(26, phoneMAC)...)
 	accFDB = append(accFDB, macEntries(32, pc32MAC)...)
 	accFDB = append(accFDB, macEntries(33, cascadedPCs...)...)
-	accFDB = append(accFDB, macEntries(42, apMAC, "9e:67:61:a4:9f:21")...)
+	accFDB = append(accFDB, macEntries(42, apMAC, "9e:00:00:00:00:21")...)
 
 	accIfaces := make([]InterfaceData, 0, 50)
 	accBridge := make(map[int]int, 50)
@@ -179,8 +179,8 @@ func TestFDBPortsHuaweiBridgePortMapping(t *testing.T) {
 	accIfaces = append(accIfaces, InterfaceData{IfIndex: 55, IfDescr: "\"XGigabitEthernet0/0/1\"", IfSpeed: 10_000_000_000, IfOperStatus: 1})
 
 	acc := &DeviceData{
-		IP:                "10.67.100.30",
-		SysName:           "L4Acc4_7",
+		IP:                "10.9.91.30",
+		SysName:           "sw-acc-7",
 		ChassisID:         accMAC,
 		Interfaces:        accIfaces,
 		BridgePortIfIndex: accBridge,
@@ -194,25 +194,25 @@ func TestFDBPortsHuaweiBridgePortMapping(t *testing.T) {
 				LocalPortNum: 32, RemIndex: 1, // bp=26 -> ifIdx=32 (must NOT silence bp=32 -> ifIdx=38!)
 				RemChassisIdSubtype: 4, RemChassisId: phoneMAC,
 				RemPortIdSubtype: 3, RemPortId: phoneMAC,
-				RemSysName: "GXP1625", RemMgmtIP: "192.168.176.181",
+				RemSysName: "GXP1625", RemMgmtIP: "192.0.2.81",
 			},
 			{
 				LocalPortNum: 39, RemIndex: 1, // bp=33 -> ifIdx=39 cascaded hub with 1 LLDP phone + 5 non-LLDP PCs
-				RemChassisIdSubtype: 4, RemChassisId: "c0:74:ad:40:99:99",
-				RemPortIdSubtype: 3, RemPortId: "c0:74:ad:40:99:99",
-				RemSysName: "GRP2613", RemMgmtIP: "192.168.176.199",
+				RemChassisIdSubtype: 4, RemChassisId: "c0:74:ad:00:99:99",
+				RemPortIdSubtype: 3, RemPortId: "c0:74:ad:00:99:99",
+				RemSysName: "GRP2613", RemMgmtIP: "192.0.2.99",
 			},
 			{
 				LocalPortNum: 48, RemIndex: 1, // bp=42 -> ifIdx=48 Huawei AP on trunk port
 				RemChassisIdSubtype: 4, RemChassisId: apMAC,
 				RemPortIdSubtype: 5, RemPortId: "MultiGE0/0/0",
-				RemSysName: "1856-44d7-dfa0", RemSysDesc: "Huawei AP AP7060DN", RemMgmtIP: "10.67.150.17",
+				RemSysName: "ap-42", RemSysDesc: "Huawei AP AP7060DN", RemMgmtIP: "192.0.2.17",
 			},
 			{
 				LocalPortNum: 55, RemIndex: 1,
 				RemChassisIdSubtype: 4, RemChassisId: coreMAC,
 				RemPortIdSubtype: 5, RemPortId: "XGigabitEthernet0/0/3",
-				RemSysName: "Core1", RemMgmtIP: "10.67.100.2",
+				RemSysName: "sw-core-1", RemMgmtIP: "10.9.91.1",
 			},
 		},
 		MACTable: accFDB,

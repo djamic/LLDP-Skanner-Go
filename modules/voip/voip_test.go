@@ -3,6 +3,7 @@ package voip
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,9 @@ import (
 	"lldp_scanner/modules"
 )
 
+// Test cases use RFC 5737 documentation/test subnets (192.0.2.0/24 = C0 00 02 xx,
+// 198.51.100.0/24 = C6 33 64 xx, 203.0.113.0/24 = CB 00 71 xx) and synthetic
+// host MAC suffixes (:00:00:xx) so tests are completely portable and environment-independent.
 func TestDetectYealinkAndGrandstream(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -23,58 +27,58 @@ func TestDetectYealinkAndGrandstream(t *testing.T) {
 		wantBridge   bool
 	}{
 		{
-			name: "Grandstream GRP2613 live LLDP",
+			name: "Grandstream GRP2613 LLDP",
 			ev: Evidence{
-				MAC:            "c0:74:ad:96:03:25",
+				MAC:            "c0:74:ad:00:00:11",
 				Vendor:         "Grandstream Networks, Inc.",
-				SysName:        "GRP2613_c0:74:ad:96:03:25",
+				SysName:        "GRP2613_c0:74:ad:00:00:11",
 				SysDesc:        "GRP2613 1.0.7.33",
 				PortDesc:       "\"eth0\"",
 				Capabilities:   0x24,
 				ChassisSubtype: 5,
-				ChassisID:      "01 C0 A8 B1 AB",
+				ChassisID:      "01 C0 00 02 11", // 192.0.2.17 (RFC 5737 TEST-NET-1)
 			},
 			wantOK:       true,
 			wantBrand:    "Grandstream",
 			wantModel:    "GRP2613",
 			wantFirmware: "1.0.7.33",
-			wantIP:       "192.168.177.171",
+			wantIP:       "192.0.2.17",
 			wantBridge:   true,
 		},
 		{
-			name: "Grandstream GXP1625 live LLDP",
+			name: "Grandstream GXP1625 LLDP",
 			ev: Evidence{
-				MAC:            "c0:74:ad:40:61:c6",
+				MAC:            "c0:74:ad:00:00:12",
 				Vendor:         "Grandstream Networks, Inc.",
-				SysName:        "GXP1625_c0:74:ad:40:61:c6",
+				SysName:        "GXP1625_c0:74:ad:00:00:12",
 				SysDesc:        "GXP1625 1.0.7.8",
 				PortDesc:       "\"eth0\"",
 				Capabilities:   0x24,
 				ChassisSubtype: 5,
-				ChassisID:      "01 0A 43 0A 5C",
+				ChassisID:      "01 C6 33 64 12", // 198.51.100.18 (RFC 5737 TEST-NET-2)
 			},
 			wantOK:       true,
 			wantBrand:    "Grandstream",
 			wantModel:    "GXP1625",
 			wantFirmware: "1.0.7.8",
-			wantIP:       "10.67.10.92",
+			wantIP:       "198.51.100.18",
 			wantBridge:   true,
 		},
 		{
 			name: "Grandstream FDB-only OUI",
 			ev: Evidence{
-				MAC:    "c0:74:ad:ae:9b:91",
+				MAC:    "c0:74:ad:00:00:13",
 				Vendor: "Grandstream Networks, Inc.",
-				MgmtIP: "192.168.176.179",
+				MgmtIP: "192.0.2.19",
 			},
 			wantOK:    true,
 			wantBrand: "Grandstream",
-			wantIP:    "192.168.176.179",
+			wantIP:    "192.0.2.19",
 		},
 		{
 			name: "Grandstream GWN7660 Wi-Fi AP is NOT a phone",
 			ev: Evidence{
-				MAC:          "c0:74:ad:11:22:33",
+				MAC:          "c0:74:ad:00:00:14",
 				Vendor:       "Grandstream Networks, Inc.",
 				SysName:      "GWN7660",
 				SysDesc:      "GWN7660 1.0.25.30",
@@ -85,7 +89,7 @@ func TestDetectYealinkAndGrandstream(t *testing.T) {
 		{
 			name: "Grandstream GWN7802P switch is NOT a phone even without WLAN bit",
 			ev: Evidence{
-				MAC:     "c0:74:ad:aa:bb:cc",
+				MAC:     "c0:74:ad:00:00:15",
 				Vendor:  "Grandstream Networks, Inc.",
 				SysName: "GWN7802P",
 				SysDesc: "Grandstream GWN7802P Switch",
@@ -93,116 +97,116 @@ func TestDetectYealinkAndGrandstream(t *testing.T) {
 			wantOK: false,
 		},
 		{
-			name: "Yealink SIP-T48U live LLDP",
+			name: "Yealink SIP-T48U LLDP",
 			ev: Evidence{
-				MAC:            "c4:fc:22:21:0b:90",
+				MAC:            "c4:fc:22:00:00:21",
 				Vendor:         "YEALINK(XIAMEN) NETWORK TECHNOLOGY CO.,LTD.",
 				SysName:        "SIP-T48U",
 				SysDesc:        "108.86.0.90",
 				PortDesc:       "\"WAN PORT\"",
 				Capabilities:   0x24,
 				ChassisSubtype: 5,
-				ChassisID:      "01 C0 A8 B1 1D",
+				ChassisID:      "01 C0 00 02 21", // 192.0.2.33
 			},
 			wantOK:       true,
 			wantBrand:    "Yealink",
 			wantModel:    "SIP-T48U",
 			wantFirmware: "108.86.0.90",
-			wantIP:       "192.168.177.29",
+			wantIP:       "192.0.2.33",
 			wantBridge:   true,
 		},
 		{
-			name: "Yealink SIP-T30P live LLDP",
+			name: "Yealink SIP-T30P LLDP",
 			ev: Evidence{
-				MAC:            "80:5e:c0:eb:e1:80",
+				MAC:            "80:5e:c0:00:00:22",
 				Vendor:         "YEALINK(XIAMEN) NETWORK TECHNOLOGY CO.,LTD.",
 				SysName:        "SIP-T30P",
 				SysDesc:        "124.85.0.35",
 				PortDesc:       "\"WAN PORT\"",
 				Capabilities:   0x24,
 				ChassisSubtype: 5,
-				ChassisID:      "01 C0 A8 B0 0F",
+				ChassisID:      "01 C0 00 02 22", // 192.0.2.34
 			},
 			wantOK:       true,
 			wantBrand:    "Yealink",
 			wantModel:    "SIP-T30P",
 			wantFirmware: "124.85.0.35",
-			wantIP:       "192.168.176.15",
+			wantIP:       "192.0.2.34",
 			wantBridge:   true,
 		},
 		{
 			name: "Yealink FDB-only OUI",
 			ev: Evidence{
-				MAC:    "c4:fc:22:c8:ce:40",
+				MAC:    "c4:fc:22:00:00:23",
 				Vendor: "YEALINK(XIAMEN) NETWORK TECHNOLOGY CO.,LTD.",
 			},
 			wantOK:    true,
 			wantBrand: "Yealink",
 		},
 		{
-			name: "Avaya AVXC28D65 live LLDP",
+			name: "Avaya AVX phone LLDP",
 			ev: Evidence{
-				MAC:          "c8:1f:ea:c2:8d:65",
+				MAC:          "c8:1f:ea:00:00:31",
 				Vendor:       "Avaya Inc",
-				SysName:      "AVXC28D65",
+				SysName:      "AVXC00031",
 				Capabilities: 0x20,
-				MgmtIP:       "10.67.10.67",
+				MgmtIP:       "198.51.100.31",
 			},
 			wantOK:     true,
 			wantBrand:  "Avaya",
-			wantModel:  "AVXC28D65",
-			wantIP:     "10.67.10.67",
+			wantModel:  "AVXC00031",
+			wantIP:     "198.51.100.31",
 			wantBridge: true,
 		},
 		{
-			name: "Panasonic KX-HDV230RU live LLDP",
+			name: "Panasonic KX-HDV230RU LLDP",
 			ev: Evidence{
-				MAC:            "4c:36:4e:7b:1b:45",
+				MAC:            "4c:36:4e:00:00:41",
 				Vendor:         "Panasonic Communications Co., Ltd.",
 				SysName:        "KX-HDV230RU",
 				SysDesc:        "Panasonic",
 				PortDesc:       "\"LAN PORT\"",
 				Capabilities:   0x04,
 				ChassisSubtype: 5,
-				ChassisID:      "01 C0 A8 B2 50",
+				ChassisID:      "01 CB 00 71 41", // 203.0.113.65 (RFC 5737 TEST-NET-3)
 			},
 			wantOK:       true,
 			wantBrand:    "Panasonic",
 			wantModel:    "KX-HDV230RU",
 			wantFirmware: "",
-			wantIP:       "192.168.178.80",
+			wantIP:       "203.0.113.65",
 			wantBridge:   false,
 		},
 		{
 			name: "Panasonic laptop without CapPhone or KX-* stays non-phone",
 			ev: Evidence{
-				MAC:    "4c:36:4e:00:11:22",
+				MAC:    "4c:36:4e:00:00:42",
 				Vendor: "Panasonic Corporation",
 			},
 			wantOK: false,
 		},
 		{
-			name: "Fanvil H81 live LLDP",
+			name: "Fanvil H81 LLDP",
 			ev: Evidence{
-				MAC:          "68:69:2e:01:21:7f",
-				Vendor:       "ZyXEL / Unknown",
+				MAC:          "68:69:2e:00:00:51",
+				Vendor:       "Unknown",
 				SysName:      "H81",
 				SysDesc:      "2.0.4-93-g25fa5ef build 3455",
 				PortDesc:     "\"WAN Port 10M/100M\"",
 				Capabilities: 0x24,
-				MgmtIP:       "192.168.176.148",
+				MgmtIP:       "192.0.2.51",
 			},
 			wantOK:       true,
 			wantBrand:    "Fanvil",
 			wantModel:    "H81",
 			wantFirmware: "2.0.4-93-g25fa5ef build 3455",
-			wantIP:       "192.168.176.148",
+			wantIP:       "192.0.2.51",
 			wantBridge:   true,
 		},
 		{
 			name: "Cisco switch without CapPhone stays non-phone",
 			ev: Evidence{
-				MAC:          "58:94:80:00:f7:a3",
+				MAC:          "58:94:80:00:00:61",
 				Vendor:       "Cisco Systems, Inc",
 				SysName:      "SW-CORE",
 				SysDesc:      "Cisco IOS Software",
@@ -213,9 +217,9 @@ func TestDetectYealinkAndGrandstream(t *testing.T) {
 		{
 			name: "Cisco CP-8841 IP Phone is detected",
 			ev: Evidence{
-				MAC:          "00:1b:54:11:22:33",
+				MAC:          "00:1b:54:00:00:62",
 				Vendor:       "Cisco Systems, Inc",
-				SysName:      "SEP001B54112233",
+				SysName:      "SEP001B54000062",
 				SysDesc:      "Cisco IP Phone CP-8841, V12",
 				Capabilities: CapBridge | CapPhone,
 			},
@@ -244,14 +248,14 @@ func TestDetectYealinkAndGrandstream(t *testing.T) {
 }
 
 func TestDecodeChassisIPv4EdgeCases(t *testing.T) {
-	if got := DecodeChassisIPv4(5, "01 AC 10"); got != "" {
-		t.Errorf("truncated SNR chassis IP = %q, want empty", got)
+	if got := DecodeChassisIPv4(5, "01 C0 00"); got != "" {
+		t.Errorf("truncated chassis IP = %q, want empty", got)
 	}
-	if got := DecodeChassisIPv4(5, "01 AC 10 01 00"); got != "" {
+	if got := DecodeChassisIPv4(5, "01 C0 00 02 00"); got != "" {
 		t.Errorf(".0 network address = %q, want empty", got)
 	}
-	if got := DecodeChassisIPv4(5, "01 AC 10 01 0F"); got != "172.16.1.15" {
-		t.Errorf("valid chassis IP = %q, want 172.16.1.15", got)
+	if got := DecodeChassisIPv4(5, "01 C0 00 02 0F"); got != "192.0.2.15" {
+		t.Errorf("valid chassis IP = %q, want 192.0.2.15", got)
 	}
 }
 
@@ -296,15 +300,16 @@ func TestGrandstreamAndYealinkHTTPModules(t *testing.T) {
 		}
 	}))
 	defer gsSrv.Close()
+	gsHost, _, _ := net.SplitHostPort(gsSrv.Listener.Addr().String())
 
 	gs := GrandstreamModule{BaseURL: gsSrv.URL}
-	if !gs.CheckWebUI(context.Background(), "127.0.0.1") {
+	if !gs.CheckWebUI(context.Background(), gsHost) {
 		t.Fatal("GrandstreamModule.CheckWebUI = false, want true")
 	}
-	if _, err := gs.Run(context.Background(), modules.Request{IP: "127.0.0.1", Action: "detect", Login: modules.Login{Username: "admin", Password: "wrong"}}); !errors.Is(err, modules.ErrLoginRejected) {
+	if _, err := gs.Run(context.Background(), modules.Request{IP: gsHost, Action: "detect", Login: modules.Login{Username: "admin", Password: "wrong"}}); !errors.Is(err, modules.ErrLoginRejected) {
 		t.Fatalf("wrong password err = %v, want ErrLoginRejected", err)
 	}
-	res, err := gs.Run(context.Background(), modules.Request{IP: "127.0.0.1", Action: "detect", Login: modules.Login{Username: "admin", Password: "secret"}})
+	res, err := gs.Run(context.Background(), modules.Request{IP: gsHost, Action: "detect", Login: modules.Login{Username: "admin", Password: "secret"}})
 	if err != nil || !strings.Contains(res.Summary, "Grandstream") || len(res.Facts) < 4 {
 		t.Fatalf("Grandstream Run = (%+v, %v)", res, err)
 	}
@@ -323,12 +328,13 @@ func TestGrandstreamAndYealinkHTTPModules(t *testing.T) {
 		}
 	}))
 	defer ylSrv.Close()
+	ylHost, _, _ := net.SplitHostPort(ylSrv.Listener.Addr().String())
 
 	yl := YealinkModule{BaseURL: ylSrv.URL}
-	if !yl.CheckWebUI(context.Background(), "127.0.0.1") {
+	if !yl.CheckWebUI(context.Background(), ylHost) {
 		t.Fatal("YealinkModule.CheckWebUI = false, want true")
 	}
-	if _, err := yl.Run(context.Background(), modules.Request{IP: "127.0.0.1", Action: "detect", Login: modules.Login{Username: "admin", Password: "ylpass"}}); err != nil {
+	if _, err := yl.Run(context.Background(), modules.Request{IP: ylHost, Action: "detect", Login: modules.Login{Username: "admin", Password: "ylpass"}}); err != nil {
 		t.Fatalf("Yealink Run err = %v", err)
 	}
 }

@@ -134,7 +134,7 @@ function uiRenderNodeLabel(el, d) {
     displayText.split('\n').forEach((line, i) => {
         textEl.append('tspan')
             .attr('x', 0)
-            .attr('dy', i === 0 ? '1.5em' : '1.1em')
+            .attr('dy', i === 0 ? '2.35em' : '1.15em')
             .text(line);
     });
 }
@@ -292,6 +292,172 @@ function applyFilters() {
     uiNotifyViews('filters');
 }
 
+const topoIconSymbolsMarkup = `
+        <symbol id="topo-icon-switch" viewBox="0 0 32 32">
+            <rect x="2" y="9" width="28" height="14" rx="3" fill="#0f2137" stroke="currentColor" stroke-width="2.2"/>
+            <circle cx="5.8" cy="13.5" r="1.3" fill="currentColor"/>
+            <circle cx="5.8" cy="18.5" r="1.3" fill="#69F0AE"/>
+            <path d="M10 13.5H23M20 11L23 13.5L20 16" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M25 18.5H12M15 16L12 18.5L15 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="topo-icon-passive" viewBox="0 0 32 32">
+            <rect x="2" y="9" width="28" height="14" rx="3" fill="#0f2137" stroke="currentColor" stroke-width="2.1" stroke-dasharray="4,2.5"/>
+            <path d="M12.5 12.5V19.5M19.5 12.5V19.5" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
+        </symbol>
+        <symbol id="topo-icon-router" viewBox="0 0 32 32">
+            <circle cx="16" cy="16" r="13" fill="#0f2137" stroke="currentColor" stroke-width="2.3"/>
+            <path d="M16 6.5V12.5M13.5 10L16 12.5L18.5 10M16 25.5V19.5M13.5 22L16 19.5L18.5 22" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12.5 16H6.5M9 13.5L6.5 16L9 18.5M19.5 16H25.5M23 13.5L25.5 16L23 18.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="topo-icon-hub" viewBox="0 0 32 32">
+            <rect x="3" y="8" width="26" height="16" rx="3" fill="#0f2137" stroke="currentColor" stroke-width="2.2"/>
+            <path d="M8 12H24M8 12V15.5M13.3 12V15.5M18.7 12V15.5M24 12V15.5" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>
+            <rect x="6.2" y="15.5" width="3.6" height="4.8" rx="0.8" fill="currentColor"/>
+            <rect x="11.5" y="15.5" width="3.6" height="4.8" rx="0.8" fill="currentColor"/>
+            <rect x="16.9" y="15.5" width="3.6" height="4.8" rx="0.8" fill="currentColor"/>
+            <rect x="22.2" y="15.5" width="3.6" height="4.8" rx="0.8" fill="currentColor"/>
+        </symbol>
+        <symbol id="topo-icon-minihub" viewBox="0 0 32 32">
+            <rect x="4" y="6" width="24" height="20" rx="4" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
+            <circle cx="16" cy="10.5" r="2.1" fill="#ffffff"/>
+            <path d="M16 12.6V16M9.5 16H22.5M9.5 16V19.5M16 16V19.5M22.5 16V19.5" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="7.7" y="19.5" width="3.6" height="3.6" rx="0.8" fill="currentColor"/>
+            <rect x="14.2" y="19.5" width="3.6" height="3.6" rx="0.8" fill="currentColor"/>
+            <rect x="20.7" y="19.5" width="3.6" height="3.6" rx="0.8" fill="currentColor"/>
+        </symbol>
+        <symbol id="topo-icon-phone" viewBox="0 0 32 32">
+            <rect x="4.5" y="5.5" width="23" height="21" rx="3.5" fill="#0f2137" stroke="currentColor" stroke-width="2.2"/>
+            <rect x="7.2" y="8" width="5.2" height="16" rx="2.3" fill="currentColor"/>
+            <rect x="14.2" y="8.5" width="10.5" height="5.2" rx="1" fill="#E8EAF6"/>
+            <circle cx="15.8" cy="16.8" r="1" fill="#ffffff"/><circle cx="19.5" cy="16.8" r="1" fill="#ffffff"/><circle cx="23.2" cy="16.8" r="1" fill="#ffffff"/>
+            <circle cx="15.8" cy="19.8" r="1" fill="#ffffff"/><circle cx="19.5" cy="19.8" r="1" fill="#ffffff"/><circle cx="23.2" cy="19.8" r="1" fill="#ffffff"/>
+            <circle cx="15.8" cy="22.8" r="1" fill="#ffffff"/><circle cx="19.5" cy="22.8" r="1" fill="#ffffff"/><circle cx="23.2" cy="22.8" r="1" fill="#ffffff"/>
+        </symbol>
+        <symbol id="topo-icon-endpoint" viewBox="0 0 32 32">
+            <rect x="4" y="5.5" width="24" height="15.5" rx="2.5" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
+            <path d="M8 10L12 7.8" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" opacity="0.7"/>
+            <path d="M16 21V25.5M10 25.5H22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </symbol>
+        <symbol id="topo-icon-access_point" viewBox="0 0 32 32">
+            <circle cx="16" cy="16" r="13.5" fill="#0f2137" stroke="currentColor" stroke-width="1.4" stroke-opacity="0.45"/>
+            <path d="M7.5 12A11.5 11.5 0 0 1 24.5 12" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>
+            <path d="M10.5 15.2A7.5 7.5 0 0 1 21.5 15.2" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round"/>
+            <ellipse cx="16" cy="21.5" rx="8.8" ry="4" fill="#132b46" stroke="currentColor" stroke-width="2"/>
+            <circle cx="16" cy="21" r="1.5" fill="#ffffff"/>
+        </symbol>
+        <symbol id="topo-icon-wifi_random" viewBox="0 0 32 32">
+            <rect x="9.5" y="5" width="13" height="22" rx="2.6" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
+            <path d="M12.5 13.5A4.8 4.8 0 0 1 19.5 13.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="16" cy="16.8" r="1.3" fill="#ffffff"/>
+            <path d="M14 23.8H18" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>
+        </symbol>
+        <symbol id="topo-icon-wifi_client" viewBox="0 0 32 32">
+            <rect x="6" y="7" width="20" height="13" rx="2" fill="#0f2137" stroke="currentColor" stroke-width="2"/>
+            <path d="M12.2 13.8A5.2 5.2 0 0 1 19.8 13.8" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="16" cy="16.5" r="1.1" fill="currentColor"/>
+            <path d="M3.5 20.5H28.5L26.5 24H5.5Z" fill="currentColor"/>
+        </symbol>
+        <symbol id="topo-icon-server" viewBox="0 0 32 32">
+            <rect x="5" y="4.5" width="22" height="6.5" rx="1.6" fill="#0f2137" stroke="currentColor" stroke-width="1.9"/>
+            <rect x="5" y="12.8" width="22" height="6.5" rx="1.6" fill="#0f2137" stroke="currentColor" stroke-width="1.9"/>
+            <rect x="5" y="21" width="22" height="6.5" rx="1.6" fill="#0f2137" stroke="currentColor" stroke-width="1.9"/>
+            <circle cx="8.5" cy="7.8" r="1.1" fill="#ffffff"/><path d="M18 7.8H23.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="8.5" cy="16" r="1.1" fill="#ffffff"/><path d="M18 16H23.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="8.5" cy="24.2" r="1.1" fill="#ffffff"/><path d="M18 24.2H23.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </symbol>
+        <symbol id="topo-icon-hypervisor" viewBox="0 0 32 32">
+            <polygon points="16,3.5 27,9.8 27,22.2 16,28.5 5,22.2 5,9.8" fill="#0f2137" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+            <path d="M5 9.8L16 16L27 9.8M16 16V28.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            <polygon points="16,9.5 21,12.4 21,18.2 16,21 11,18.2 11,12.4" fill="currentColor" fill-opacity="0.85" stroke="#ffffff" stroke-width="1.1"/>
+        </symbol>
+        <symbol id="topo-icon-vm" viewBox="0 0 32 32">
+            <polygon points="16,5 25.5,10.5 25.5,21.5 16,27 6.5,21.5 6.5,10.5" fill="#0f2137" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/>
+            <path d="M6.5 10.5L16 16L25.5 10.5M16 16V27" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="topo-icon-bmc" viewBox="0 0 32 32">
+            <path d="M11 4.5V8M16 4.5V8M21 4.5V8M11 24V27.5M16 24V27.5M21 24V27.5M4.5 11H8M4.5 16H8M4.5 21H8M24 11H27.5M24 16H27.5M24 21H27.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <rect x="8" y="8" width="16" height="16" rx="2.5" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
+            <rect x="12.2" y="12.2" width="7.6" height="7.6" rx="1.2" fill="currentColor"/>
+        </symbol>
+        <symbol id="topo-icon-camera" viewBox="0 0 32 32">
+            <rect x="3.5" y="9" width="18.5" height="12" rx="3" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
+            <path d="M22 11.8L28 9V21L22 18.2Z" fill="currentColor"/>
+            <circle cx="12.8" cy="15" r="3.2" fill="none" stroke="#ffffff" stroke-width="1.7"/>
+            <path d="M11 21L8 26H16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="topo-icon-printer" viewBox="0 0 32 32">
+            <rect x="9" y="4.5" width="14" height="6.5" rx="1" fill="#0f2137" stroke="currentColor" stroke-width="1.8"/>
+            <rect x="4" y="10.5" width="24" height="11.5" rx="2.5" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
+            <circle cx="23.5" cy="14.2" r="1.2" fill="#ffffff"/>
+            <rect x="9" y="18.5" width="14" height="8.5" rx="1" fill="#162b44" stroke="#ffffff" stroke-width="1.5"/>
+            <path d="M11.5 22H20.5M11.5 24.5H17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </symbol>
+        <symbol id="topo-icon-iot" viewBox="0 0 32 32">
+            <path d="M16 11V6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="16" cy="5.5" r="1.8" fill="#ffffff"/>
+            <rect x="6.5" y="11" width="19" height="15" rx="4" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
+            <path d="M9.5 18.5H12.5L14.2 15L17.5 22L19.2 18.5H22.5" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="topo-icon-unknown" viewBox="0 0 32 32">
+            <rect x="5.5" y="5.5" width="21" height="21" rx="6" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
+            <path d="M13.2 12.5A2.8 2.8 0 1 1 17.5 15C16.5 15.7 16 16.4 16 17.8" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="16" cy="21.5" r="1.3" fill="currentColor"/>
+        </symbol>
+`;
+
+let topoSpriteMounted = false;
+
+// Mount shared SVG <symbol> sprite once so both #network and the filter bar can <use> icons
+function ensureTopologyIconDefs(svgSel) {
+    if (!topoSpriteMounted && typeof document !== 'undefined' && document.body) {
+        topoSpriteMounted = true;
+        const holder = document.createElement('div');
+        holder.id = 'topoIconSpriteHolder';
+        holder.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
+        holder.innerHTML = `<svg id="topoIconSprite" aria-hidden="true" width="0" height="0"><defs id="topoSharedDefs">${topoIconSymbolsMarkup}</defs></svg>`;
+        document.body.appendChild(holder);
+    }
+    if (!svgSel || svgSel.select('defs#topoIconDefs').size?.() > 0) return;
+    svgSel.append('defs').attr('id', 'topoIconDefs').html(topoIconSymbolsMarkup);
+}
+
+// Replace the plain .fc-dot circles in the top Filter Bar with matching SVG device icons
+function initFilterBarIcons() {
+    ensureTopologyIconDefs(null);
+    if (typeof document === 'undefined') return;
+    document.querySelectorAll('.filter-cb').forEach(label => {
+        const input = label.querySelector && label.querySelector('input[type="checkbox"]');
+        const dot = label.querySelector && label.querySelector('.fc-dot');
+        if (!input || !dot || dot.dataset.iconified) return;
+        const group = input.dataset ? input.dataset.group : '';
+        const isPassive = input.id === 'filterPassive';
+        const iconKey = isPassive ? 'passive' : (group && groupColors[group] ? group : '');
+        if (!iconKey) return;
+        const color = isPassive ? '#90A4AE' : uiNodeCanvasColor({ group });
+        dot.dataset.iconified = 'true';
+        dot.classList.add('fc-icon-wrap');
+        dot.style.color = color;
+        dot.innerHTML = `<svg class="fc-icon" viewBox="0 0 32 32" aria-hidden="true"><use href="#topo-icon-${iconKey}"></use></svg>`;
+    });
+}
+
+function uiNodeIconHref(group) {
+    return groupColors[group] ? `#topo-icon-${group}` : '#topo-icon-unknown';
+}
+
+function uiNodeCanvasColor(d) {
+    if (d.unreachable) return '#ff4444';
+    if (d.group === 'phone') return '#5C6BC0';   // brighter indigo against dark canvas
+    if (d.group === 'printer') return '#A1887F'; // brighter bronze against dark canvas
+    return groupColors[d.group] || '#9E9E9E';
+}
+
+function uiNodeIconSize(group) {
+    if (group === 'switch' || group === 'router' || group === 'hypervisor' || group === 'server') return 44;
+    if (group === 'hub' || group === 'minihub' || group === 'access_point') return 40;
+    return 36;
+}
+
 // Render the network (incremental)
 function renderGraph() {
     const container = document.getElementById('network');
@@ -306,6 +472,7 @@ function renderGraph() {
         svg = d3.select('#network')
             .attr('width', width)
             .attr('height', height);
+        ensureTopologyIconDefs(svg);
 
         zoom = d3.zoom()
             .scaleExtent([0.1, 4])
@@ -413,18 +580,15 @@ function renderGraph() {
     const targetLabelUpdate = targetLabelEnter.merge(targetLinkLabel)
         .text(d => d.targetLabel || '');
 
-    // UPDATE NODES
-    const node = g.selectAll('circle.node')
+    // UPDATE NODES (functional SVG icons grouped in g.node-group with circle.node halo/hit ring)
+    const nodeGroup = g.selectAll('g.node-group')
         .data(nodes, d => d.id);
 
-    node.exit().remove();
+    nodeGroup.exit().remove();
 
-    const nodeEnter = node.enter()
-        .append('circle')
-        .attr('class', 'node')
-        .attr('r', 25)
-        .attr('stroke', '#0d1b2a')
-        .attr('stroke-width', 3)
+    const nodeGroupEnter = nodeGroup.enter()
+        .append('g')
+        .attr('class', 'node-group')
         .call(d3.drag()
             .on('start', dragstarted)
             .on('drag', dragged)
@@ -438,8 +602,45 @@ function renderGraph() {
             showContextMenu(event, d);
         });
 
-    const nodeUpdate = nodeEnter.merge(node)
-        .attr('fill', d => groupColors[d.group] || '#9E9E9E');
+    nodeGroupEnter.append('circle')
+        .attr('class', 'node')
+        .attr('r', 25)
+        .attr('fill', 'transparent');
+
+    const visualEnter = nodeGroupEnter.append('g')
+        .attr('class', 'node-visual');
+
+    visualEnter.append('use')
+        .attr('class', 'node-icon');
+
+    const nodeGroupUpdate = nodeGroupEnter.merge(nodeGroup)
+        .attr('class', d => {
+            let cls = 'node-group';
+            if (d.unreachable) cls += ' is-unreachable';
+            if (d.haRole === 'passive') cls += ' is-ha-passive';
+            return cls;
+        });
+
+    // Update halo/hit ring classes for anomaly, HA active/passive, and Tree focus
+    nodeGroupUpdate.select('circle.node')
+        .attr('class', d => {
+            let cls = 'node';
+            if (d.unreachable) cls += ' anomaly-unreachable';
+            else if (d.anomalies && d.anomalies.includes('loopback')) cls += ' anomaly-loopback';
+            else if (d.anomalies && (d.anomalies.includes('shadow_it') || d.anomalies.includes('congestion'))) cls += ' anomaly-shadow';
+            if (d.haRole === 'passive') cls += ' ha-passive';
+            else if (d.haRole === 'active') cls += ' ha-active';
+            return cls;
+        });
+
+    // Update functional SVG icon symbol, size, and semantic color
+    nodeGroupUpdate.select('use.node-icon')
+        .attr('href', d => uiNodeIconHref(d.group))
+        .attr('width', d => uiNodeIconSize(d.group))
+        .attr('height', d => uiNodeIconSize(d.group))
+        .attr('x', d => -uiNodeIconSize(d.group) / 2)
+        .attr('y', d => -uiNodeIconSize(d.group) / 2)
+        .style('color', d => uiNodeCanvasColor(d));
 
     // UPDATE NODE LABELS
     const nodeLabel = g.selectAll('text.node-label')
@@ -459,20 +660,6 @@ function renderGraph() {
     const nodeLabelUpdate = nodeLabelEnter.merge(nodeLabel)
         .each(function (d) { uiRenderNodeLabel(this, d); });
 
-    // E.2 + Phase 8: Apply anomaly/unreachable glow classes
-    nodeUpdate
-        .attr('fill', d => d.unreachable ? '#ff4444' : (groupColors[d.group] || '#9E9E9E'))
-        .attr('class', d => {
-            let cls = 'node';
-            // Phase 8: Unreachable takes highest priority
-            if (d.unreachable) cls += ' anomaly-unreachable';
-            else if (d.anomalies && d.anomalies.includes('loopback')) cls += ' anomaly-loopback';
-            else if (d.anomalies && (d.anomalies.includes('shadow_it') || d.anomalies.includes('congestion'))) cls += ' anomaly-shadow';
-            if (d.haRole === 'passive') cls += ' ha-passive';
-            else if (d.haRole === 'active') cls += ' ha-active';
-            return cls;
-        });
-
     // Update positions on tick
     simulation.on('tick', () => {
         linkUpdate
@@ -489,9 +676,8 @@ function renderGraph() {
             .attr('x', d => d.source.x + (d.target.x - d.source.x) * 0.75)
             .attr('y', d => d.source.y + (d.target.y - d.source.y) * 0.75);
 
-        nodeUpdate
-            .attr('cx', d => d.x)
-            .attr('cy', d => d.y);
+        nodeGroupUpdate
+            .attr('transform', d => `translate(${d.x},${d.y})`);
 
         nodeLabelUpdate
             .attr("transform", d => `translate(${d.x},${d.y})`);
@@ -611,14 +797,14 @@ function panToDevice(device) {
         .call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
 
     if (g) {
-        g.selectAll('circle')
+        g.selectAll('circle.node')
             .filter(d => d && d.id === device.id)
             .attr('stroke', '#ffffff')
-            .attr('stroke-width', 5)
+            .attr('stroke-width', 4)
             .transition()
             .duration(2500)
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 2);
+            .attr('stroke', null)
+            .attr('stroke-width', null);
     }
 }
 
@@ -749,6 +935,7 @@ function resetView() {
 setInterval(refreshData, 10000);
 
 // Initial load
+initFilterBarIcons();
 loadNetworkData();
 
 // ==================== Events Panel ====================

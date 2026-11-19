@@ -6,7 +6,7 @@ import (
 )
 
 // Grandstream VoIP phones, video phones, DECT, Wi-Fi phones, and ATAs:
-//   - SysName: "GRP2613_c0:74:ad:96:03:25", "GXP1625_c0:74:ad:40:61:56", "GXP1610_ec:74:d7:64:cb:b1"
+//   - SysName: "GRP2613_c0:74:ad:00:00:11", "GXP1625_c0:74:ad:00:00:12"
 //   - SysDesc: "GRP2613 1.0.7.33", "GXP1625 1.0.7.8", "GRP2614 1.0.9.99"
 //   - PortDesc: "eth0"
 //   - Non-phone exclusions: GWN76xx access points, GWN78xx switches, GWN70xx routers
