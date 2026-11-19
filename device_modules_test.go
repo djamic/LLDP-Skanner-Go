@@ -588,3 +588,51 @@ func TestManagedVMNames(t *testing.T) {
 		t.Errorf("the host %+v", m)
 	}
 }
+
+// TestManagedPhones checks the phones a PBX (Kerio Operator) lists: one by
+// its MAC goes to the node of that MAC, one with no MAC to the node of its
+// IP (the node's IP or a label line), but never a switch's or router's;
+// an endpoint a PBX names a phone is one, a camera stays one.
+func TestManagedPhones(t *testing.T) {
+	resetState(t)
+	inventoryMu.Lock()
+	inventories = map[string]inventoryRecord{"keriooperator|10.9.16.97": {Module: "keriooperator", IP: "10.9.16.97", Time: time.Now(),
+		Inventory: modules.Inventory{Devices: []modules.ManagedDevice{
+			{MAC: "00:0B:82:AA:BB:01", Name: "101, 102 · Ali Valiyev", Model: "Grandstream GXP1610", State: "ONLINE", Kind: "phone"},
+			{IP: "10.9.16.40", Name: "305 · Lola", State: "ONLINE", Kind: "phone"},
+			{IP: "10.9.16.41", Name: "306", State: "OFFLINE", Kind: "phone"},
+			{IP: "10.9.16.42", Name: "307", Kind: "phone"},
+			{Name: "no address", Kind: "phone"},
+		}}}}
+	inventoryIndex()
+	inventoryMu.Unlock()
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+	data := GraphData{Nodes: []GraphNode{
+		{ID: "00:0b:82:aa:bb:01", Group: "phone"},
+		{ID: "aa:00:00:00:00:40", Group: "endpoint", IP: "10.9.16.40"},
+		{ID: "aa:00:00:00:00:41", Group: "camera", SysName: "[ENDPOINT] Hikvision\n10.9.16.41"},
+		{ID: "4c:ae:a3:00:00:42", Group: "switch", IP: "10.9.16.42"},
+		{ID: "aa:00:00:00:00:99", Group: "endpoint", IP: "10.9.16.99"},
+	}}
+	addManaged(&data)
+	want := []struct{ name, group string }{
+		{"101, 102 · Ali Valiyev", "phone"}, {"305 · Lola", "phone"}, {"306", "camera"}, {"", "switch"}, {"", "endpoint"},
+	}
+	for i, w := range want {
+		n := data.Nodes[i]
+		name := ""
+		if n.Managed != nil {
+			name = n.Managed.Name
+			if n.Managed.Source != "Kerio Operator" || n.Managed.Controller != "10.9.16.97" {
+				t.Errorf("%s: managed by %q %q", n.ID, n.Managed.Source, n.Managed.Controller)
+			}
+		}
+		if name != w.name || n.Group != w.group {
+			t.Errorf("%s: managed %q group %q, want %q %q", n.ID, name, n.Group, w.name, w.group)
+		}
+	}
+}

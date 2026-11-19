@@ -194,7 +194,7 @@ function credRender() {
 // picking the type picks it (the first protocol, vSphere, is no switch's).
 const credTypeProtocol = {
     'esxi': 'vsphere', 'vcenter': 'vsphere', 'bmc': 'redfish', 'ilo': 'redfish', 'idrac': 'redfish',
-    'fortigate': 'https', 'unifi-controller': 'https',
+    'fortigate': 'https', 'unifi-controller': 'https', 'kerio-operator': 'https',
 };
 
 function credTypeChanged() {

@@ -116,14 +116,16 @@ type Inventory struct {
 
 // ManagedDevice is one device of an Inventory.
 type ManagedDevice struct {
-	MAC      string `json:"mac"` // "70:a7:41:a8:a2:ff"
+	// MAC is "70:a7:41:a8:a2:ff"; "" for a device known by its IP only (a
+	// phone a PBX knows by the address it registered from)
+	MAC      string `json:"mac"`
 	Name     string `json:"name"`
 	Model    string `json:"model,omitempty"`
 	IP       string `json:"ip,omitempty"`
 	State    string `json:"state,omitempty"` // "ONLINE", "OFFLINE", ...
 	Firmware string `json:"firmware,omitempty"`
-	// Kind is "access_point", "switch", "gateway" or "hypervisor", "" when
-	// unknown
+	// Kind is "access_point", "switch", "gateway", "hypervisor" or "phone"
+	// (a PBX's), "" when unknown
 	Kind string `json:"kind,omitempty"`
 	// Uplink is the device it is connected through, nil when unknown
 	Uplink  *ManagedUplink  `json:"uplink,omitempty"`

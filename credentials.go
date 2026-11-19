@@ -97,6 +97,7 @@ var credentialTypes = []credentialOption{
 	{"router", "Gateways and routers"},
 	{"fortigate", "FortiGate"},
 	{"unifi-controller", "UniFi Network controllers"},
+	{"kerio-operator", "Kerio Operator (IP PBX)"},
 	{"voip-grandstream", "Grandstream IP phones"},
 	{"voip-yealink", "Yealink IP phones"},
 	{"linux", "Linux servers"},

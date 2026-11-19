@@ -1483,7 +1483,8 @@ function showInfoPanel(node) {
     document.getElementById('infoSysName').textContent = sysName || node.id;
     document.getElementById('infoConnections').textContent = totalConnections;
 
-    // What its controller tells of it (node.managed: a UniFi access point)
+    // What its controller tells of it (node.managed: a UniFi access point, a
+    // vCenter host, a PBX's phone; a phone has no clients to count)
     const managedSection = document.getElementById('infoManagedSection');
     if (managedSection) {
         const m = node.managed;
@@ -1491,7 +1492,7 @@ function showInfoPanel(node) {
         if (m) {
             const clients = (m.clients || []).length;
             const vms = typeof treeClientCount === 'function' ? treeClientCount(m) : clients;
-            const count = m.kind === 'hypervisor' ? `${vms} VM${vms === 1 ? '' : 's'}` : `${clients} client${clients === 1 ? '' : 's'}`;
+            const count = m.kind === 'phone' ? '' : m.kind === 'hypervisor' ? `${vms} VM${vms === 1 ? '' : 's'}` : `${clients} client${clients === 1 ? '' : 's'}`;
             document.getElementById('infoManaged').textContent = [`${m.source || 'Controller'} ${m.controller || ''}`.trim(),
                 m.model, m.state, m.firmware && (m.kind === 'hypervisor' ? m.firmware : 'firmware ' + m.firmware), count].filter(Boolean).join(' · ');
         }

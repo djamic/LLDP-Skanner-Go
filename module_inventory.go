@@ -25,8 +25,12 @@ import (
 // each. /api/graph gives a node the managed device of its MAC
 // (GraphNode.Managed), so the tree and the info panel name an access point
 // as its controller does ("A 1 qavat 118" for the LLDP name A1qavat118),
-// with its state and its clients. The last inventory of each device is
-// kept in inventoryFile, so a restart shows it at once.
+// with its state and its clients. A PBX (Kerio Operator) manages the
+// phones: a phone it knows by the address its extension registered from
+// (no MAC) is given to the node of that IP, and a node it names a phone is
+// one (group "phone"), named by its extensions and user. The last
+// inventory of each device is kept in inventoryFile, so a restart shows it
+// at once.
 
 const inventoryInterval = 5 * time.Minute
 
@@ -42,13 +46,14 @@ type inventoryRecord struct {
 }
 
 // inventories holds the records by "module|ip", managedByMAC the devices
-// they manage by canonical MAC, inventoryNotices what was logged (the
-// failures and notes by "module|ip", the lines of inventoryNotice);
-// inventoryMu guards them.
+// they manage by canonical MAC, managedByIP those with no MAC by IP,
+// inventoryNotices what was logged (the failures and notes by
+// "module|ip", the lines of inventoryNotice); inventoryMu guards them.
 var (
 	inventoryMu      sync.Mutex
 	inventories      = make(map[string]inventoryRecord)
 	managedByMAC     = make(map[string]ManagedView)
+	managedByIP      = make(map[string]ManagedView)
 	inventoryNotices = make(map[string]string)
 )
 
@@ -62,7 +67,7 @@ type ManagedView struct {
 	IP         string                  `json:"ip,omitempty"`
 	State      string                  `json:"state,omitempty"`
 	Firmware   string                  `json:"firmware,omitempty"`
-	Kind       string                  `json:"kind,omitempty"` // "access_point", "switch", "gateway"
+	Kind       string                  `json:"kind,omitempty"` // "access_point", "switch", "gateway", "hypervisor", "phone"
 	Uplink     *modules.ManagedUplink  `json:"uplink,omitempty"`
 	Updated    time.Time               `json:"updated"`
 	Clients    []modules.ManagedClient `json:"clients,omitempty"`
@@ -97,8 +102,8 @@ func inventoryAPs() string {
 	return strings.Join(lines, "\n")
 }
 
-// inventoryIndex rebuilds managedByMAC from the records, the newest record
-// of a MAC winning (inventoryMu held).
+// inventoryIndex rebuilds managedByMAC and managedByIP from the records,
+// the newest record of a MAC (an IP) winning (inventoryMu held).
 func inventoryIndex() {
 	keys := make([]string, 0, len(inventories))
 	for k := range inventories {
@@ -106,6 +111,7 @@ func inventoryIndex() {
 	}
 	slices.SortFunc(keys, func(a, b string) int { return inventories[a].Time.Compare(inventories[b].Time) })
 	index := make(map[string]ManagedView)
+	byIP := make(map[string]ManagedView)
 	for _, k := range keys {
 		rec := inventories[k]
 		label := rec.Module
@@ -113,15 +119,16 @@ func inventoryIndex() {
 			label = m.Label()
 		}
 		for _, d := range rec.Inventory.Devices {
-			mac := canonicalMAC(d.MAC)
-			if mac == "" {
-				continue
-			}
-			index[mac] = ManagedView{Source: label, Controller: rec.IP, Name: d.Name, Model: d.Model, IP: d.IP,
+			v := ManagedView{Source: label, Controller: rec.IP, Name: d.Name, Model: d.Model, IP: d.IP,
 				State: d.State, Firmware: d.Firmware, Kind: d.Kind, Uplink: d.Uplink, Updated: rec.Time, Clients: d.Clients}
+			if mac := canonicalMAC(d.MAC); mac != "" {
+				index[mac] = v
+			} else if ip := parseIPv4(d.IP); ip != "" {
+				byIP[ip] = v
+			}
 		}
 	}
-	managedByMAC = index
+	managedByMAC, managedByIP = index, byIP
 }
 
 // managedViewOf returns the managed device under a node id, or nil.
@@ -138,10 +145,33 @@ func managedViewOf(id string) *ManagedView {
 	return nil
 }
 
-// addManaged gives the graph data's nodes their managed devices.
+// managedViewByIP returns the managed device known by ip only, or nil.
+func managedViewByIP(ip string) *ManagedView {
+	if ip == "" {
+		return nil
+	}
+	inventoryMu.Lock()
+	defer inventoryMu.Unlock()
+	if v, ok := managedByIP[ip]; ok {
+		return &v
+	}
+	return nil
+}
+
+// addManaged gives the graph data's nodes their managed devices: by the
+// node's MAC, else, for a node that is no switch or router, the device
+// known by the node's IP only. A node a PBX names a phone is one when its
+// own data made it no more than an endpoint.
 func addManaged(data *GraphData) {
 	for i := range data.Nodes {
-		data.Nodes[i].Managed = managedViewOf(data.Nodes[i].ID)
+		n := &data.Nodes[i]
+		n.Managed = managedViewOf(n.ID)
+		if n.Managed == nil && n.Group != "switch" && n.Group != "router" {
+			n.Managed = managedViewByIP(cmp.Or(n.IP, graphLabelIP(n.SysName)))
+		}
+		if n.Managed != nil && n.Managed.Kind == "phone" && (n.Group == "endpoint" || n.Group == "unknown") {
+			n.Group = "phone"
+		}
 	}
 }
 

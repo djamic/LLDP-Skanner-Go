@@ -15,6 +15,7 @@ import (
 
 	"lldp_scanner/modules"
 	_ "lldp_scanner/modules/esxi"
+	_ "lldp_scanner/modules/keriooperator"
 	_ "lldp_scanner/modules/unificontroller"
 	_ "lldp_scanner/modules/vcenter"
 	_ "lldp_scanner/modules/voip"
