@@ -122,15 +122,31 @@ type ManagedDevice struct {
 	Name     string `json:"name"`
 	Model    string `json:"model,omitempty"`
 	IP       string `json:"ip,omitempty"`
-	State    string `json:"state,omitempty"` // "ONLINE", "OFFLINE", ...
+	State    string `json:"state,omitempty"` // StateOnline, StateOffline, ...
 	Firmware string `json:"firmware,omitempty"`
-	// Kind is "access_point", "switch", "gateway", "hypervisor" or "phone"
-	// (a PBX's), "" when unknown
+	// Kind is one of the Kind constants, "" when unknown
 	Kind string `json:"kind,omitempty"`
 	// Uplink is the device it is connected through, nil when unknown
 	Uplink  *ManagedUplink  `json:"uplink,omitempty"`
 	Clients []ManagedClient `json:"clients,omitempty"`
 }
+
+// The kinds of a managed device (ManagedDevice.Kind).
+const (
+	KindAccessPoint = "access_point"
+	KindSwitch      = "switch"
+	KindGateway     = "gateway"
+	KindHypervisor  = "hypervisor"
+	KindPhone       = "phone" // a PBX's
+)
+
+// The states of a managed device every module tells alike
+// (ManagedDevice.State); a module may tell others ("MAINTENANCE",
+// "PENDING_ADOPTION").
+const (
+	StateOnline  = "ONLINE"
+	StateOffline = "OFFLINE"
+)
 
 // ManagedUplink is the link of a managed device to the device it is
 // connected through.

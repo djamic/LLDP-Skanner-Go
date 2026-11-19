@@ -3,7 +3,6 @@ package keriooperator
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,12 +10,12 @@ import (
 	"maps"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"slices"
 	"strings"
 	"time"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/kit"
 )
 
 // adminBase gives the administration of the PBX at ip (a variable for
@@ -40,36 +39,15 @@ const (
 // application is how the scanner names itself to Session.login.
 var application = map[string]string{"name": "LLDP scanner", "vendor": "lldp_scanner", "version": "1.0"}
 
-// cipherSuites are the TLS 1.2 suites offered: Go's secure ones, then
-// AES-GCM with RSA key exchange, which Go no longer offers unless asked
-// (Go 1.22 took it off the defaults, Go 1.25 lists it as insecure). The
-// PBX's "Kerio Embedded WebServer 1.0" speaks TLS 1.2 with AES256-GCM-SHA384
-// (TLS_RSA_WITH_AES_256_GCM_SHA384) only: the default suites end in a
-// handshake failure.
-var cipherSuites = func() []uint16 {
-	var ids []uint16
-	for _, s := range tls.CipherSuites() {
-		ids = append(ids, s.ID)
-	}
-	return append(ids, tls.TLS_RSA_WITH_AES_256_GCM_SHA384, tls.TLS_RSA_WITH_AES_128_GCM_SHA256)
-}()
-
 // newHTTPClient is an HTTP client for the PBX, with the cookie jar the
-// session cookie needs. Its certificate is its own self-signed one, so it
-// is not checked: the scanner only talks to devices of the local network.
-// A redirect is not followed: the API answers itself, while a web server
-// that is not the API sends to a login page.
+// session cookie needs. A redirect is not followed: the API answers
+// itself, while a web server that is not the API sends to a login page.
+// The PBX's "Kerio Embedded WebServer 1.0" speaks TLS 1.2 with AES-GCM and
+// RSA key exchange only (TLS_RSA_WITH_AES_256_GCM_SHA384): Go's default
+// suites end in a handshake failure.
 func newHTTPClient(timeout time.Duration) *http.Client {
-	jar, _ := cookiejar.New(nil)
-	return &http.Client{
-		Timeout: timeout,
-		Jar:     jar,
-		Transport: &http.Transport{
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true, CipherSuites: cipherSuites},
-			TLSHandshakeTimeout: timeout,
-		},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
+	return kit.NewHTTPClient(kit.HTTPOptions{Timeout: timeout, HandshakeTimeout: timeout,
+		Cookies: true, NoRedirects: true, RSAKeyExchange: true})
 }
 
 // client talks the administration API (JSON-RPC 2.0) of one PBX, in a
@@ -90,14 +68,6 @@ type rpcError struct {
 }
 
 func (e *rpcError) Error() string { return fmt.Sprintf("%s (error %d)", e.Message, e.Code) }
-
-// httpError is an HTTP answer other than 200.
-type httpError struct {
-	URL    string
-	Status int
-}
-
-func (e *httpError) Error() string { return fmt.Sprintf("HTTP %d from %s", e.Status, e.URL) }
 
 // call runs one method with params and reads its result into out (nil:
 // the result is not read). An error of the API is an *rpcError, wrapped
@@ -124,7 +94,7 @@ func (c *client) call(ctx context.Context, method string, params any, out any) e
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return &httpError{URL: c.url, Status: resp.StatusCode}
+		return &kit.HTTPError{URL: c.url, Status: resp.StatusCode}
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {

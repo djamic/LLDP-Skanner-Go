@@ -34,6 +34,7 @@ import (
 	"strings"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/kit"
 )
 
 func init() { modules.Register(Module{}) }
@@ -202,7 +203,7 @@ func read(ctx context.Context, c *client) (*pbx, error) {
 func (p *pbx) phoneOf(r row) *phone {
 	ph := &phone{id: r.text("id", "guid"), hwAddress: r.text("hwAddress"), model: r.text("phoneType"),
 		desc: r.text("description", "label")}
-	ph.mac = normMAC(ph.hwAddress)
+	ph.mac = kit.NormMAC(ph.hwAddress)
 	add := func(num string) {
 		if num != "" && !slices.Contains(ph.nums, num) {
 			ph.nums = append(ph.nums, num)
@@ -307,24 +308,24 @@ func regState(status string) string {
 	s := strings.ToLower(status)
 	for _, w := range []string{"offline", "disconnect", "fail"} {
 		if strings.Contains(s, w) {
-			return "OFFLINE"
+			return modules.StateOffline
 		}
 	}
 	online := []string{"regist", "online", "reachable", "available"}
 	for _, w := range online {
 		for _, neg := range []string{"un", "not ", "no ", "non"} {
 			if strings.Contains(s, neg+w) {
-				return "OFFLINE"
+				return modules.StateOffline
 			}
 		}
 	}
 	for _, w := range online {
 		if strings.Contains(s, w) {
-			return "ONLINE"
+			return modules.StateOnline
 		}
 	}
 	if s == "ok" {
-		return "ONLINE"
+		return modules.StateOnline
 	}
 	return ""
 }
@@ -335,10 +336,10 @@ func stateOf(lines []*line) string {
 	state := ""
 	for _, l := range lines {
 		switch l.state {
-		case "ONLINE":
-			return "ONLINE"
-		case "OFFLINE":
-			state = "OFFLINE"
+		case modules.StateOnline:
+			return modules.StateOnline
+		case modules.StateOffline:
+			state = modules.StateOffline
 		}
 	}
 	return state
@@ -355,29 +356,6 @@ func firstIPv4(s string) string {
 		}
 	}
 	return ""
-}
-
-// normMAC is a MAC address in canonical form ("00:0b:82:12:34:56") from
-// any of the usual spellings, "" when s is none.
-func normMAC(s string) string {
-	var hex []byte
-	for _, r := range strings.ToLower(s) {
-		switch {
-		case r >= '0' && r <= '9', r >= 'a' && r <= 'f':
-			hex = append(hex, byte(r))
-		case r == ':' || r == '-' || r == '.' || r == ' ':
-		default:
-			return ""
-		}
-	}
-	if len(hex) != 12 {
-		return ""
-	}
-	parts := make([]string, 6)
-	for i := range parts {
-		parts[i] = string(hex[2*i : 2*i+2])
-	}
-	return strings.Join(parts, ":")
 }
 
 // label names a phone by its extensions and their user: "101 · Ali
@@ -429,7 +407,7 @@ func (p *pbx) devices() []modules.ManagedDevice {
 		}
 		lines := p.linesOf(ph.nums)
 		d := modules.ManagedDevice{MAC: ph.mac, Name: p.label(ph.nums, cmp.Or(ph.desc, ph.mac)), Model: ph.model,
-			State: stateOf(lines), Kind: "phone"}
+			State: stateOf(lines), Kind: modules.KindPhone}
 		for _, l := range lines {
 			d.IP = cmp.Or(d.IP, l.ip)
 			d.Model = cmp.Or(d.Model, l.userAgent)
@@ -449,7 +427,7 @@ func (p *pbx) devices() []modules.ManagedDevice {
 		}
 		seen[l.ip] = true
 		out = append(out, modules.ManagedDevice{IP: l.ip, Name: p.label([]string{l.num}, l.sipUser), Model: l.userAgent,
-			State: l.state, Kind: "phone"})
+			State: l.state, Kind: modules.KindPhone})
 	}
 	slices.SortFunc(out, func(a, b modules.ManagedDevice) int {
 		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.MAC, b.MAC), cmp.Compare(a.IP, b.IP))
@@ -474,9 +452,9 @@ func detect(c *client, p *pbx) modules.Result {
 	registered, unregistered, disabled, fromStatus, fromHistory := 0, 0, 0, 0, 0
 	for _, l := range p.lines {
 		switch l.state {
-		case "ONLINE":
+		case modules.StateOnline:
 			registered++
-		case "OFFLINE":
+		case modules.StateOffline:
 			unregistered++
 		}
 		if l.disabled {
@@ -537,12 +515,12 @@ func detect(c *client, p *pbx) modules.Result {
 	r.AddFact("SIP status values", strings.Join(p.statuses, " | "))
 	r.AddFact("Not read", strings.Join(p.notes, "; "))
 
-	parts := []string{plural(len(p.lines), "extension") + fmt.Sprintf(" (%d registered)", registered)}
+	parts := []string{kit.Plural(len(p.lines), "extension") + fmt.Sprintf(" (%d registered)", registered)}
 	if p.phonesRead {
-		parts = append(parts, plural(len(p.phones), "provisioned phone"))
+		parts = append(parts, kit.Plural(len(p.phones), "provisioned phone"))
 	}
 	if p.callsRead {
-		parts = append(parts, plural(len(p.calls), "call")+" in progress")
+		parts = append(parts, kit.Plural(len(p.calls), "call")+" in progress")
 	}
 	r.Summary = "Kerio Operator: " + strings.Join(parts, ", ")
 	return r
@@ -557,12 +535,4 @@ func numCompare(a, b string) int {
 		return cmp.Compare(x, y)
 	}
 	return cmp.Compare(a, b)
-}
-
-// plural is "1 extension", "2 extensions".
-func plural(n int, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return strconv.Itoa(n) + " " + noun + "s"
 }

@@ -402,14 +402,6 @@ func TestReadHelpers(t *testing.T) {
 		}
 	}
 	for in, want := range map[string]string{
-		"000B82AABB01": "00:0b:82:aa:bb:01", "00-0b-82-aa-bb-01": "00:0b:82:aa:bb:01", "000b.82aa.bb01": "00:0b:82:aa:bb:01",
-		"00:0b:82:aa:bb": "", "zz0b82aabb01": "", "": "",
-	} {
-		if got := normMAC(in); got != want {
-			t.Errorf("normMAC(%q) = %q, want %q", in, got, want)
-		}
-	}
-	for in, want := range map[string]string{
 		`"x "`: "x", `12`: "12", `true`: "true", `null`: "", `["a",1,null]`: "a, 1",
 		`{"status":"ok","sipPassword":"s3cret","ip":"10.0.0.1"}`: "ip: 10.0.0.1, status: ok",
 	} {
