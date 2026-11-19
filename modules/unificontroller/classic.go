@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"slices"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	"time"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/kit"
 )
 
 // ─── The older API ────────────────────────────────────────────────────────────
@@ -153,9 +153,7 @@ func classicLogin(ctx context.Context, root string, l modules.Login) (*classicCl
 		{"/api/auth/login", "/api/auth/logout", root + "/proxy/network"}, // UniFi OS
 		{"/api/login", "/api/logout", root},                              // self-hosted
 	} {
-		jar, _ := cookiejar.New(nil)
-		hc := newHTTPClient(requestTimeout)
-		hc.Jar = jar
+		hc := kit.NewHTTPClient(kit.HTTPOptions{Timeout: requestTimeout, HandshakeTimeout: requestTimeout, Cookies: true, NoRedirects: true})
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, root+way.login, bytes.NewReader(body))
 		if err != nil {
 			return nil, err
@@ -229,7 +227,7 @@ func (c *classicClient) get(ctx context.Context, path string, out any) error {
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return fmt.Errorf("%w: HTTP %d from %s", modules.ErrLoginRejected, resp.StatusCode, u)
 	default:
-		return &httpError{URL: u, Status: resp.StatusCode}
+		return &kit.HTTPError{URL: u, Status: resp.StatusCode}
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 	if err != nil {
@@ -355,7 +353,7 @@ type classicDevice struct {
 }
 
 // classicKinds names the device types of stat/device.
-var classicKinds = map[string]string{"uap": "access_point", "usw": "switch", "ugw": "gateway", "udm": "gateway", "uxg": "gateway"}
+var classicKinds = map[string]string{"uap": modules.KindAccessPoint, "usw": modules.KindSwitch, "ugw": modules.KindGateway, "udm": modules.KindGateway, "uxg": modules.KindGateway}
 
 // uplink is the device's uplink: the parent access point of a mesh link;
 // else its LLDP neighbor, which names the switch's port (the one that is
@@ -363,14 +361,14 @@ var classicKinds = map[string]string{"uap": "access_point", "usw": "switch", "ug
 // port number.
 func (d classicDevice) uplink() *modules.ManagedUplink {
 	lower := func(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
-	if parent := lower(firstOf(d.Uplink.UplinkMAC, d.Uplink.APMAC)); strings.EqualFold(d.Uplink.Type, "wireless") && parent != "" {
+	if parent := lower(kit.FirstOf(d.Uplink.UplinkMAC, d.Uplink.APMAC)); strings.EqualFold(d.Uplink.Type, "wireless") && parent != "" {
 		return &modules.ManagedUplink{MAC: parent, Wireless: true}
 	}
-	up := lower(firstOf(d.Uplink.UplinkMAC, d.LastUplink.UplinkMAC))
+	up := lower(kit.FirstOf(d.Uplink.UplinkMAC, d.LastUplink.UplinkMAC))
 	for _, n := range d.LLDP {
 		if chassis := lower(n.ChassisID); chassis != "" && (up == "" || chassis == up) {
 			return &modules.ManagedUplink{MAC: chassis, Port: strings.TrimSpace(n.PortID),
-				LocalPort: firstOf(n.LocalPortName, d.Uplink.Name)}
+				LocalPort: kit.FirstOf(n.LocalPortName, d.Uplink.Name)}
 		}
 	}
 	if up == "" {

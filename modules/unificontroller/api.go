@@ -2,7 +2,6 @@ package unificontroller
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/kit"
 )
 
 // apiBases gives the addresses of the Network Integration API (v1) of the
@@ -51,20 +51,12 @@ const (
 	maxItems = 5000
 )
 
-// newHTTPClient is an HTTP client for the application. Its certificate is
-// its own self-signed one, so it is not checked: the scanner only talks to
-// devices of the local network. A redirect is not followed: the API answers
-// itself, while a web server that is not the API sends to its login page,
-// and Go would send the X-API-KEY header along, also to another host.
+// newHTTPClient is an HTTP client for the application. A redirect is not
+// followed: the API answers itself, while a web server that is not the API
+// sends to its login page, and Go would send the X-API-KEY header along,
+// also to another host.
 func newHTTPClient(timeout time.Duration) *http.Client {
-	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-			TLSHandshakeTimeout: timeout,
-		},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
+	return kit.NewHTTPClient(kit.HTTPOptions{Timeout: timeout, HandshakeTimeout: timeout, NoRedirects: true})
 }
 
 // apiClient talks the Network Integration API of one UniFi Network
@@ -74,15 +66,6 @@ type apiClient struct {
 	base string // "https://10.9.60.5:443/proxy/network/integration/v1"
 	key  string
 }
-
-// httpError is an answer of the API other than 200 (and 401/403, which are
-// a refused key).
-type httpError struct {
-	URL    string
-	Status int
-}
-
-func (e *httpError) Error() string { return fmt.Sprintf("HTTP %d from %s", e.Status, e.URL) }
 
 // get reads one answer of the API into out. A 401 or 403 (the key is not
 // valid, or not for this application) wraps modules.ErrLoginRejected; the
@@ -108,7 +91,7 @@ func (c *apiClient) get(ctx context.Context, path string, query url.Values, out 
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return fmt.Errorf("%w: HTTP %d from %s", modules.ErrLoginRejected, resp.StatusCode, u)
 	default:
-		return &httpError{URL: u, Status: resp.StatusCode}
+		return &kit.HTTPError{URL: u, Status: resp.StatusCode}
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {

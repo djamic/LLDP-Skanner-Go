@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"lldp_scanner/modules"
+	"lldp_scanner/modules/kit"
 )
 
 func init() { modules.Register(Module{}) }
@@ -102,10 +103,10 @@ type site struct {
 	Name              string `json:"name"`              // "Default"
 }
 
-func (s site) label() string { return firstOf(s.Name, s.InternalReference, s.ID) }
+func (s site) label() string { return kit.FirstOf(s.Name, s.InternalReference, s.ID) }
 
 // ref is the site's name in the older API.
-func (s site) ref() string { return firstOf(s.InternalReference, "default") }
+func (s site) ref() string { return kit.FirstOf(s.InternalReference, "default") }
 
 // device is one device the application manages (an access point, a
 // switch, a gateway). Firmware and uplink are not in every version's list.
@@ -129,7 +130,7 @@ type device struct {
 	Features json.RawMessage `json:"features"`
 }
 
-func (d device) label() string { return firstOf(d.Name, d.MacAddress, d.ID) }
+func (d device) label() string { return kit.FirstOf(d.Name, d.MacAddress, d.ID) }
 
 func (d device) mac() string { return strings.ToLower(strings.TrimSpace(d.MacAddress)) }
 
@@ -146,9 +147,9 @@ func (d device) kind() string {
 	}
 	switch {
 	case slices.Contains(names, "accessPoint"):
-		return "access_point"
+		return modules.KindAccessPoint
 	case slices.Contains(names, "switching"):
-		return "switch"
+		return modules.KindSwitch
 	}
 	return ""
 }
@@ -167,15 +168,6 @@ type clientInfo struct {
 	Name           string `json:"name"`
 	MacAddress     string `json:"macAddress"`
 	IPAddress      string `json:"ipAddress"`
-}
-
-func firstOf(values ...string) string {
-	for _, v := range values {
-		if v = strings.TrimSpace(v); v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
@@ -324,7 +316,7 @@ func siteDevices(devs []device, clients []clientInfo, stations map[string]statio
 		if st, ok := stations[mc.MAC]; ok {
 			st.apply(&mc)
 			if mc.Name == "" || strings.EqualFold(mc.Name, mc.MAC) {
-				mc.Name = firstOf(st.Name, st.Hostname, mc.Name)
+				mc.Name = kit.FirstOf(st.Name, st.Hostname, mc.Name)
 			}
 		}
 		listed[mc.MAC] = true
@@ -335,7 +327,7 @@ func siteDevices(devs []device, clients []clientInfo, stations map[string]statio
 		if _, known := kindOf[ap]; listed[mac] || st.IsWired || ap == "" || !known {
 			continue
 		}
-		mc := modules.ManagedClient{MAC: mac, Name: firstOf(st.Name, st.Hostname), Kind: "wireless"}
+		mc := modules.ManagedClient{MAC: mac, Name: kit.FirstOf(st.Name, st.Hostname), Kind: "wireless"}
 		st.apply(&mc)
 		onDevice[ap] = append(onDevice[ap], mc)
 	}
@@ -344,7 +336,7 @@ func siteDevices(devs []device, clients []clientInfo, stations map[string]statio
 		mac := d.mac()
 		cls := onDevice[mac]
 		slices.SortFunc(cls, func(a, b modules.ManagedClient) int {
-			return cmp.Or(cmp.Compare(strings.ToLower(firstOf(a.Name, a.MAC)), strings.ToLower(firstOf(b.Name, b.MAC))), cmp.Compare(a.MAC, b.MAC))
+			return cmp.Or(cmp.Compare(strings.ToLower(kit.FirstOf(a.Name, a.MAC)), strings.ToLower(kit.FirstOf(b.Name, b.MAC))), cmp.Compare(a.MAC, b.MAC))
 		})
 		md := modules.ManagedDevice{MAC: mac, Name: d.label(), Model: d.Model, IP: d.IPAddress, State: d.State,
 			Firmware: d.FirmwareVersion, Kind: kindOf[mac], Clients: cls}
@@ -352,10 +344,10 @@ func siteDevices(devs []device, clients []clientInfo, stations map[string]statio
 			md.Uplink = cd.uplink()
 		}
 		if up := macOf[d.uplinkID()]; md.Uplink == nil && up != "" {
-			md.Uplink = &modules.ManagedUplink{MAC: up, Wireless: md.Kind == "access_point" && kindOf[up] == "access_point"}
+			md.Uplink = &modules.ManagedUplink{MAC: up, Wireless: md.Kind == modules.KindAccessPoint && kindOf[up] == modules.KindAccessPoint}
 		}
 		if md.Kind == "" && slices.ContainsFunc(cls, func(c modules.ManagedClient) bool { return c.Kind == "wireless" }) {
-			md.Kind = "access_point"
+			md.Kind = modules.KindAccessPoint
 		}
 		out = append(out, md)
 	}
@@ -416,7 +408,7 @@ func detect(ctx context.Context, c *apiClient, info appInfo, logins []modules.Lo
 					st.apply(&mc)
 					n := ssids[[2]string{s.ID, mc.SSID}]
 					if n == nil {
-						n = &ssidCount{site: s.label(), ssid: firstOf(mc.SSID, "(none)")}
+						n = &ssidCount{site: s.label(), ssid: kit.FirstOf(mc.SSID, "(none)")}
 						ssids[[2]string{s.ID, mc.SSID}] = n
 					}
 					n.all++
@@ -463,10 +455,10 @@ func detect(ctx context.Context, c *apiClient, info appInfo, logins []modules.Lo
 		}
 		for _, d := range devs {
 			deviceCount++
-			if strings.EqualFold(d.State, "ONLINE") {
+			if strings.EqualFold(d.State, modules.StateOnline) {
 				online++
 			}
-			states[firstOf(d.State, "unknown")]++
+			states[kit.FirstOf(d.State, "unknown")]++
 			uplink := d.uplinkID()
 			if uplink != "" {
 				uplink = cmp.Or(nameOf[uplink], uplink)
@@ -546,7 +538,7 @@ func detect(ctx context.Context, c *apiClient, info appInfo, logins []modules.Lo
 	}
 
 	r.Summary = fmt.Sprintf("%s: %s, %s (%d online), %s", strings.TrimSpace("UniFi Network "+info.ApplicationVersion),
-		plural(len(sites), "site"), plural(deviceCount, "device"), online, plural(clientTotal, "client"))
+		kit.Plural(len(sites), "site"), kit.Plural(deviceCount, "device"), online, kit.Plural(clientTotal, "client"))
 	return r, nil
 }
 
@@ -563,12 +555,4 @@ func stateCounts(states map[string]int) string {
 		parts[i] = fmt.Sprintf("%s %d", s, states[s])
 	}
 	return strings.Join(parts, ", ")
-}
-
-// plural is "1 site", "2 sites".
-func plural(n int, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return strconv.Itoa(n) + " " + noun + "s"
 }
