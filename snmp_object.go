@@ -14,6 +14,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"lldp_scanner/modules/kit"
 )
 
 // InterfaceData holds interface statistics from IF-MIB
@@ -1045,10 +1047,10 @@ func collectLLDPRemIndex(oid string) (col int, key string, localPort, remIndex i
 // repeater 1, bridge 2, wlanAccessPoint 3, router 4, telephone 5,
 // docsisCableDevice 6, stationOnly 7.
 const (
-	lldpCapBridge = 0x80 >> 2
-	lldpCapWLANAP = 0x80 >> 3
-	lldpCapRouter = 0x80 >> 4
-	lldpCapPhone  = 0x80 >> 5
+	lldpCapBridge = kit.LLDPCapBridge
+	lldpCapWLANAP = kit.LLDPCapWLANAP
+	lldpCapRouter = kit.LLDPCapRouter
+	lldpCapPhone  = kit.LLDPCapPhone
 )
 
 // lldpCapabilities reads an lldpRemSysCapEnabled value as net-snmp prints

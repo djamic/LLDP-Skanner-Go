@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"lldp_scanner/modules"
+)
 
 // nodeEvidence is what a node's group is decided from: what the graph
 // build knows of it. classifyNode decides; DJGraph.nodeEvidence gathers.
@@ -133,7 +137,7 @@ func graphNameGroup(node, info string, polled bool) string {
 // tells the kind of (addManaged, at /api/graph time): a PBX's phone is a
 // phone when nothing else told what it is.
 func managedGroup(group, kind string) string {
-	if kind == "phone" && (group == "endpoint" || group == "unknown") {
+	if kind == modules.KindPhone && (group == "endpoint" || group == "unknown") {
 		return "phone"
 	}
 	return group

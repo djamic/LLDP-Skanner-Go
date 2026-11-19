@@ -90,7 +90,7 @@ var inventoryAPsChanged = func() { go rebuildGraph() }
 func inventoryAPs() string {
 	var lines []string
 	for mac, v := range managedByMAC {
-		if v.Kind == "access_point" {
+		if v.Kind == modules.KindAccessPoint {
 			line := strings.Join([]string{mac, v.Name, v.IP, v.State}, "|")
 			if v.Uplink != nil {
 				line += fmt.Sprintf("|%+v", *v.Uplink)
@@ -202,7 +202,7 @@ func addManagedAPNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMA
 	var macs []string
 	views := map[string]ManagedView{}
 	for mac, v := range managedByMAC {
-		if v.Kind == "access_point" && !graph.Nodes[mac] && (v.IP == "" || !known[v.IP]) {
+		if v.Kind == modules.KindAccessPoint && !graph.Nodes[mac] && (v.IP == "" || !known[v.IP]) {
 			macs = append(macs, mac)
 			views[mac] = v
 		}
@@ -220,7 +220,7 @@ func addManagedAPNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMA
 		graph.AddNode(mac)
 		graph.graphManaged[mac] = true
 		graph.SwitchInfo[mac] = strings.Trim(v.Name+"\n"+v.IP, "\n")
-		if strings.EqualFold(v.State, "OFFLINE") {
+		if strings.EqualFold(v.State, modules.StateOffline) {
 			graph.NodeStatus[mac] = "unreachable"
 		}
 	}
