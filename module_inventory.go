@@ -169,8 +169,8 @@ func addManaged(data *GraphData) {
 		if n.Managed == nil && n.Group != "switch" && n.Group != "router" {
 			n.Managed = managedViewByIP(cmp.Or(n.IP, graphLabelIP(n.SysName)))
 		}
-		if n.Managed != nil && n.Managed.Kind == "phone" && (n.Group == "endpoint" || n.Group == "unknown") {
-			n.Group = "phone"
+		if n.Managed != nil {
+			n.Group = managedGroup(n.Group, n.Managed.Kind)
 		}
 	}
 }
