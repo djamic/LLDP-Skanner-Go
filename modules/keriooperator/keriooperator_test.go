@@ -387,6 +387,8 @@ func TestReadHelpers(t *testing.T) {
 	for in, want := range map[string]string{
 		"Registered": "ONLINE", "registered (10.0.0.5)": "ONLINE", "Not registered": "OFFLINE", "UNREGISTERED": "OFFLINE",
 		"Unreachable": "OFFLINE", "OK": "ONLINE", "": "", "Ringing": "",
+		"Not available": "OFFLINE", "not reachable": "OFFLINE", "Not online": "OFFLINE", "Available": "ONLINE",
+		"Disconnected": "OFFLINE", "Registration failed": "OFFLINE", "Online": "ONLINE",
 	} {
 		if got := regState(in); got != want {
 			t.Errorf("regState(%q) = %q, want %q", in, got, want)

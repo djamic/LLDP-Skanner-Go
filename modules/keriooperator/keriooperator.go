@@ -301,15 +301,24 @@ func (p *pbx) historyAddresses(ctx context.Context, c *client) error {
 
 // regState reads a SIP status as a device state: "ONLINE" when it tells a
 // registration, "OFFLINE" when it tells none, "" when it tells neither
-// (the status is not documented: its words are read).
+// (the status is not documented: its words are read). A word of a
+// registration negated ("Not available", "unreachable") tells none.
 func regState(status string) string {
 	s := strings.ToLower(status)
-	for _, w := range []string{"unregist", "not regist", "no regist", "offline", "unreachable", "unavailable"} {
+	for _, w := range []string{"offline", "disconnect", "fail"} {
 		if strings.Contains(s, w) {
 			return "OFFLINE"
 		}
 	}
-	for _, w := range []string{"regist", "online", "reachable", "available"} {
+	online := []string{"regist", "online", "reachable", "available"}
+	for _, w := range online {
+		for _, neg := range []string{"un", "not ", "no ", "non"} {
+			if strings.Contains(s, neg+w) {
+				return "OFFLINE"
+			}
+		}
+	}
+	for _, w := range online {
 		if strings.Contains(s, w) {
 			return "ONLINE"
 		}
