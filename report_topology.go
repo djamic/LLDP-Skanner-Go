@@ -898,7 +898,7 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 					colors = reportGroupColors["vm"]
 				}
 				sb.WriteString(fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", tgtSafe, colors[0], colors[1]))
-			case tgtGroup == "phone", tgtGroup == "camera", tgtGroup == "iot":
+			case tgtGroup == "phone", tgtGroup == "mobile", tgtGroup == "camera", tgtGroup == "iot":
 				colors := reportGroupColors[tgtGroup]
 				sb.WriteString(fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", tgtSafe, colors[0], colors[1]))
 			default: // endpoint and the other groups

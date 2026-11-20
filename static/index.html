@@ -167,8 +167,10 @@
                             onchange="applyFilters()"><span class="fc-dot" style="background:#FF6F00"></span><span>BMC</span><span class="fc-cnt" id="fc-bmc">0</span></label>
                     <label class="filter-cb"><input type="checkbox" data-group="camera" checked
                             onchange="applyFilters()"><span class="fc-dot" style="background:#E91E63"></span><span>Cam</span><span class="fc-cnt" id="fc-camera">0</span></label>
-                    <label class="filter-cb"><input type="checkbox" data-group="phone" checked
+                    <label class="filter-cb" title="Phone: an IP phone (VoIP)"><input type="checkbox" data-group="phone" checked
                             onchange="applyFilters()"><span class="fc-dot" style="background:#3F51B5"></span><span>Phone</span><span class="fc-cnt" id="fc-phone">0</span></label>
+                    <label class="filter-cb" title="Mobile: a smartphone or tablet by its maker's OUI (Apple, Samsung, Xiaomi, OPPO, vivo, ...), not an IP phone"><input type="checkbox" data-group="mobile" checked
+                            onchange="applyFilters()"><span class="fc-dot" style="background:#9575CD"></span><span>Mobile</span><span class="fc-cnt" id="fc-mobile">0</span></label>
                     <label class="filter-cb"><input type="checkbox" data-group="iot" checked
                             onchange="applyFilters()"><span class="fc-dot" style="background:#607D8B"></span><span>IoT</span><span class="fc-cnt" id="fc-iot">0</span></label>
                     <label class="filter-cb"><input type="checkbox" data-group="wifi_random" checked
@@ -375,6 +377,10 @@
                     <label class="checkbox-label" title="Off: they are drawn under the AP hub">
                         <input type="checkbox" id="settingsClassify-wifiClientsCountOnly">
                         <span>Wi-Fi clients count only: the MACs behind an AP hub (its access points' clients) are counted in its label, not drawn</span>
+                    </label>
+                    <label class="checkbox-label" title="Off: they are phones, with the IP phones, as before">
+                        <input type="checkbox" id="settingsClassify-mobileGroup">
+                        <span>Mobile group: a smartphone or tablet by its maker's OUI (Apple, Samsung, Xiaomi, ...) is a mobile device, not a phone (the IP phones)</span>
                     </label>
                 </div>
             </div>

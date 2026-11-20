@@ -428,7 +428,7 @@ def mermaid_to_graphviz(mermaid_code):
         '#4A90E2': 'Switch', '#64B5F6': 'Unpolled switch', '#E24A4A': 'Router', '#FF9800': 'Hub', '#FFC107': 'Mini hub', '#4DB6AC': 'AP hub',
         '#8BC34A': 'Endpoint', '#00BCD4': 'Wi-Fi AP / Random MAC',
         '#9C27B0': 'VM', '#26C6DA': 'Hypervisor', '#FF6F00': 'BMC/iLO',
-        '#E91E63': 'Camera', '#3F51B5': 'Phone', '#607D8B': 'IoT',
+        '#E91E63': 'Camera', '#3F51B5': 'Phone', '#9575CD': 'Mobile', '#607D8B': 'IoT',
         '#795548': 'Printer', '#FF5722': 'Server', '#9E9E9E': 'Unknown',
     }
     # Collect unique colors used in this diagram

@@ -138,7 +138,7 @@ func TestOUICategorizeVendor(t *testing.T) {
 		{"SNR", "network"}, {"HPE", "network"}, {"H3C", "network"}, {"Eltex", "network"},
 		{"Fortinet", "network"}, {"Ubiquiti", "access_point"}, {"Hikvision", "camera"},
 		{"Huawei", "endpoint"}, {"ZTE", "endpoint"}, {"Wistron", "endpoint"},
-		{"Apple", "phone"}, {"Samsung", "phone"}, {"Epson", "printer"},
+		{"Apple", "mobile"}, {"Samsung", "mobile"}, {"Epson", "printer"},
 		{"ESP (Espressif)", "iot"}, {"VMware", "vm"}, {"QEMU/KVM", "vm"}, {"Hyper-V", "vm"},
 		// IEEE organization names
 		{"VIVOTEK INC.", "camera"}, {"Vivotek, Inc.", "camera"},
@@ -149,8 +149,8 @@ func TestOUICategorizeVendor(t *testing.T) {
 		{"Seiko Epson Corporation", "printer"}, {"Brother industries, LTD.", "printer"},
 		{"Brother, Brother & Sons ApS", "endpoint"},
 		{"KYOCERA Document Solutions Inc.", "printer"}, {"KYOCERA Corporation", "endpoint"},
-		{"GUANGDONG OPPO MOBILE TELECOMMUNICATIONS CORP.,LTD", "phone"}, {"OPPO Digital, Inc.", "endpoint"},
-		{"vivo Mobile Communication Co., Ltd.", "phone"}, {"HMD Global Oy", "phone"},
+		{"GUANGDONG OPPO MOBILE TELECOMMUNICATIONS CORP.,LTD", "mobile"}, {"OPPO Digital, Inc.", "endpoint"},
+		{"vivo Mobile Communication Co., Ltd.", "mobile"}, {"HMD Global Oy", "mobile"},
 		{"Espressif Inc.", "iot"}, {"Shenzhen Lianrui Electronics Co.,Ltd", "endpoint"},
 		{"Hewlett Packard Enterprise", "network"}, {"Hewlett Packard", "network"}, {"HP Inc.", "network"},
 		{"Cisco Systems, Inc", "network"}, {"Routerboard.com", "network"}, {"NAGTECH LLC", "network"},
@@ -346,7 +346,7 @@ func TestNetworkMakerWordsReachable(t *testing.T) {
 // TestOUICuratedCategories: every curated vendor has an explicit category,
 // one per vendor name, and "vm" belongs exactly to the virtual-NIC OUIs.
 func TestOUICuratedCategories(t *testing.T) {
-	valid := map[string]bool{"camera": true, "access_point": true, "printer": true, "phone": true,
+	valid := map[string]bool{"camera": true, "access_point": true, "printer": true, "mobile": true,
 		"iot": true, "vm": true, "network": true, "endpoint": true}
 	byName := map[string]string{}
 	for prefix, role := range ouiRegistry {

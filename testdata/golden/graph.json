@@ -3,7 +3,7 @@
     "nodes": 1343,
     "links": 1340,
     "edges": 1340,
-    "groups": {"access_point": 124, "ap_hub": 10, "bmc": 4, "camera": 57, "endpoint": 774, "hub": 66, "hypervisor": 14, "minihub": 6, "phone": 19, "printer": 1, "switch": 75, "vm": 69, "wifi_random": 124},
+    "groups": {"access_point": 124, "ap_hub": 10, "bmc": 4, "camera": 57, "endpoint": 774, "hub": 66, "hypervisor": 14, "minihub": 6, "mobile": 1, "phone": 18, "printer": 1, "switch": 75, "vm": 69, "wifi_random": 124},
     "unreachable_nodes": 2
   },
   "nodes": [
@@ -410,7 +410,7 @@
     {"id": "3a:72:53:fd:6a:d9", "group": "wifi_random", "type": "wifi_random", "label": "[WiFi]\n3a:72:53:fd:6a:d9", "sysName": "[WiFi]"},
     {"id": "3a:c7:23:7f:94:4d", "group": "wifi_random", "type": "wifi_random", "label": "[WiFi]\n172.15.10.174\n3a:c7:23:7f:94:4d", "sysName": "[WiFi]\n172.15.10.174"},
     {"id": "3c:0a:f3:a2:cf:83", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] CLOUD NETWORK TECHNOLOGY SINGAPORE PTE. LTD.\n172.15.164.78\n3c:0a:f3:a2:cf:83", "sysName": "[ENDPOINT] CLOUD NETWORK TECHNOLOGY SINGAPORE PTE. LTD.\n172.15.164.78"},
-    {"id": "3c:22:fb:9b:9d:cd", "group": "phone", "type": "phone", "label": "[ENDPOINT] Apple\n172.15.72.184\n3c:22:fb:9b:9d:cd", "sysName": "[ENDPOINT] Apple\n172.15.72.184"},
+    {"id": "3c:22:fb:9b:9d:cd", "group": "mobile", "type": "mobile", "label": "[ENDPOINT] Apple\n172.15.72.184\n3c:22:fb:9b:9d:cd", "sysName": "[ENDPOINT] Apple\n172.15.72.184"},
     {"id": "3c:2c:30:e1:12:11", "group": "endpoint", "type": "endpoint", "label": "[LLDP-EP] Dell Inc.\n172.16.3.160\n3c:2c:30:e1:12:11", "sysName": "[LLDP-EP] Dell Inc.\n172.16.3.160"},
     {"id": "3c:52:82:71:30:a6", "group": "endpoint", "type": "endpoint", "label": "pc-26-65\n3c:52:82:71:30:a6", "sysName": "[ENDPOINT] Hewlett Packard\n172.16.26.65\n[DNS] pc-26-65", "hostname": "pc-26-65"},
     {"id": "3c:52:a1:35:47:36", "group": "endpoint", "type": "endpoint", "label": "[ENDPOINT] TP-Link Systems Inc\n172.15.190.51\n3c:52:a1:35:47:36", "sysName": "[ENDPOINT] TP-Link Systems Inc\n172.15.190.51"},

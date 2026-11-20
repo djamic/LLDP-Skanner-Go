@@ -58,10 +58,11 @@ func (g *DJGraph) nodeEvidence(node, info string) nodeEvidence {
 //  5. [WiFi], a randomised MAC: wifi_random
 //  6. a phone of the voip engine (Yealink, Grandstream, ...): phone
 //  7. [LLDP-EP] or [ENDPOINT]: its MAC's OUI category when that tells a
-//     kind; else, with rules.LLDPCaps, its LLDP capabilities: a wireless
-//     access point is an access_point, a bridge or router (no phone, the
-//     rule of lldpDiscoverable) an unpolled switch, lldp_switch; else
-//     endpoint
+//     kind (a smartphone maker's, mobile: with rules.MobileGroup mobile,
+//     else phone, as before); else, with rules.LLDPCaps, its LLDP
+//     capabilities: a wireless access point is an access_point, a bridge
+//     or router (no phone, the rule of lldpDiscoverable) an unpolled
+//     switch, lldp_switch; else endpoint
 //  8. [MINIHUB] (fdbPorts: a trunk or big port no polled switch is behind;
 //     its node is a hub- node too): minihub
 //  9. [APHUB] (lldpPortPlans: access points behind an unmanaged switch;
@@ -87,7 +88,14 @@ func classifyNode(ev nodeEvidence, rules ClassifySettings) string {
 	case ev.VoIP:
 		return "phone"
 	case strings.Contains(info, "[LLDP-EP]") || strings.Contains(info, "[ENDPOINT]"):
-		if ev.Category != "" && ev.Category != "endpoint" && ev.Category != "network" {
+		switch ev.Category {
+		case "", "endpoint", "network":
+		case "mobile":
+			if !rules.MobileGroup {
+				return "phone"
+			}
+			return "mobile"
+		default:
 			return ev.Category
 		}
 		if rules.LLDPCaps {

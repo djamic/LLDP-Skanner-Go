@@ -546,32 +546,34 @@ var ouiRegistry = map[string]ouiRole{
 	"0c:37:96": {Vendor: "BizLink", Category: "endpoint"},
 	"a0:3b:1b": {Vendor: "Inspire Tech", Category: "endpoint"},
 
-	// Phones
-	"00:03:93": {Vendor: "Apple", Category: "phone"},
-	"00:0a:95": {Vendor: "Apple", Category: "phone"},
-	"00:1c:b3": {Vendor: "Apple", Category: "phone"},
-	"28:cf:e9": {Vendor: "Apple", Category: "phone"},
-	"3c:22:fb": {Vendor: "Apple", Category: "phone"},
-	"a4:5e:60": {Vendor: "Apple", Category: "phone"},
-	"00:26:37": {Vendor: "Samsung", Category: "phone"},
-	"00:f4:6f": {Vendor: "Samsung", Category: "phone"},
-	"5c:0a:5b": {Vendor: "Samsung", Category: "phone"},
-	"84:25:db": {Vendor: "Samsung", Category: "phone"},
-	"8c:f5:a3": {Vendor: "Samsung", Category: "phone"},
-	"94:01:c2": {Vendor: "Samsung", Category: "phone"},
-	"ec:1f:72": {Vendor: "Samsung", Category: "phone"},
-	"f4:09:d8": {Vendor: "Samsung", Category: "phone"},
-	"28:6c:07": {Vendor: "Xiaomi", Category: "phone"},
-	"38:a4:ed": {Vendor: "Xiaomi", Category: "phone"},
-	"48:fd:a3": {Vendor: "Xiaomi", Category: "phone"},
-	"58:44:98": {Vendor: "Xiaomi", Category: "phone"},
-	"64:b4:73": {Vendor: "Xiaomi", Category: "phone"},
-	"78:11:dc": {Vendor: "Xiaomi", Category: "phone"},
-	"b0:e2:35": {Vendor: "Xiaomi", Category: "phone"},
-	"f8:a4:5f": {Vendor: "Xiaomi", Category: "phone"},
-	"88:44:36": {Vendor: "OPPO", Category: "phone"},
-	"a4:3d:78": {Vendor: "OPPO", Category: "phone"},
-	"5c:69:60": {Vendor: "vivo", Category: "phone"},
+	// Smartphones and tablets (mobile; with Settings' mobileGroup off, phone).
+	// Not IP phones: those are the dedicated VoIP vendors' (voip) and the
+	// voip engine's. Apple's and Samsung's OUIs are not all phones'.
+	"00:03:93": {Vendor: "Apple", Category: "mobile"},
+	"00:0a:95": {Vendor: "Apple", Category: "mobile"},
+	"00:1c:b3": {Vendor: "Apple", Category: "mobile"},
+	"28:cf:e9": {Vendor: "Apple", Category: "mobile"},
+	"3c:22:fb": {Vendor: "Apple", Category: "mobile"},
+	"a4:5e:60": {Vendor: "Apple", Category: "mobile"},
+	"00:26:37": {Vendor: "Samsung", Category: "mobile"},
+	"00:f4:6f": {Vendor: "Samsung", Category: "mobile"},
+	"5c:0a:5b": {Vendor: "Samsung", Category: "mobile"},
+	"84:25:db": {Vendor: "Samsung", Category: "mobile"},
+	"8c:f5:a3": {Vendor: "Samsung", Category: "mobile"},
+	"94:01:c2": {Vendor: "Samsung", Category: "mobile"},
+	"ec:1f:72": {Vendor: "Samsung", Category: "mobile"},
+	"f4:09:d8": {Vendor: "Samsung", Category: "mobile"},
+	"28:6c:07": {Vendor: "Xiaomi", Category: "mobile"},
+	"38:a4:ed": {Vendor: "Xiaomi", Category: "mobile"},
+	"48:fd:a3": {Vendor: "Xiaomi", Category: "mobile"},
+	"58:44:98": {Vendor: "Xiaomi", Category: "mobile"},
+	"64:b4:73": {Vendor: "Xiaomi", Category: "mobile"},
+	"78:11:dc": {Vendor: "Xiaomi", Category: "mobile"},
+	"b0:e2:35": {Vendor: "Xiaomi", Category: "mobile"},
+	"f8:a4:5f": {Vendor: "Xiaomi", Category: "mobile"},
+	"88:44:36": {Vendor: "OPPO", Category: "mobile"},
+	"a4:3d:78": {Vendor: "OPPO", Category: "mobile"},
+	"5c:69:60": {Vendor: "vivo", Category: "mobile"},
 
 	// Printers
 	"00:00:48": {Vendor: "Epson", Category: "printer"},
@@ -799,9 +801,11 @@ func getMACVendor(mac string) string {
 // ouiCategoryWords are the rules categorizeVendor applies to vendor names
 // that are not curated (IEEE organization names); the first match wins. Each
 // rule is a whole word or phrase of a vendor that makes one kind of device.
-// Vendors that make several kinds (Huawei, Apple, Samsung, Microsoft, ...)
-// have no rule and stay "endpoint", and no rule gives "vm": that comes only
-// from a virtual-NIC OUI.
+// The IEEE names of vendors that make several kinds ("HUAWEI TECHNOLOGIES",
+// "Apple, Inc.", "Samsung Electronics", "Microsoft", ...) have no rule and
+// stay "endpoint"; only the curated OUIs of ouiRegistry give Apple, Samsung
+// and Xiaomi "mobile". No rule gives "vm": that comes only from a
+// virtual-NIC OUI.
 var ouiCategoryWords = []struct {
 	category string
 	words    []string
@@ -809,7 +813,7 @@ var ouiCategoryWords = []struct {
 	{"camera", []string{"hikvision", "dahua", "uniview", "axis communications", "hanwha vision", "hanwha techwin", "vivotek"}},
 	{"access_point", []string{"ubiquiti", "aruba", "ruckus", "meraki"}},
 	{"printer", []string{"epson", "canon", "brother industries", "kyocera document", "lexmark", "xerox", "ricoh", "konica"}},
-	{"phone", []string{"oppo mobile", "vivo mobile", "oneplus", "realme", "hmd global"}},
+	{"mobile", []string{"oppo mobile", "vivo mobile", "oneplus", "realme", "hmd global"}},
 	{"iot", []string{"espressif", "tuya"}},
 	{"network", []string{"cisco", "juniper networks", "routerboard", "mikrotik", "d-link", "tp-link", "nagtech",
 		"h3c", "hewlett packard", "hp inc", "procurve", "dell", "fortinet", "eltex"}},

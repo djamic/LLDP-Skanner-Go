@@ -9,7 +9,7 @@
     {"group": "printer", "info": "[ENDPOINT] Epson", "node": "00:26:ab:11:22:33"},
     {"group": "access_point", "info": "[ENDPOINT] Ubiquiti", "node": "e4:38:83:11:22:33"},
     {"group": "camera", "info": "[LLDP-EP] Hikvision", "node": "54:c4:15:11:22:33"},
-    {"group": "phone", "info": "[ENDPOINT] Xiaomi", "node": "28:6c:07:11:22:33"},
+    {"group": "mobile", "info": "[ENDPOINT] Xiaomi", "node": "28:6c:07:11:22:33"},
     {"group": "iot", "info": "[ENDPOINT] ESP (Espressif)", "node": "cc:50:e3:11:22:33"},
     {"group": "vm", "info": "[ENDPOINT] VMware", "node": "00:0c:29:11:22:33"},
     {"group": "wifi_random", "info": "[WiFi] QEMU/KVM", "node": "52:54:00:11:22:33"},

@@ -39,11 +39,15 @@ type ClassifySettings struct {
 	// WiFiClientsCountOnly counts the FDB MACs behind an AP hub (its access
 	// points' clients) in its label instead of drawing them.
 	WiFiClientsCountOnly bool `json:"wifiClientsCountOnly"`
+	// MobileGroup gives the smartphones and tablets of their makers' OUIs
+	// (Apple, Samsung, Xiaomi, ...: OUI category "mobile") their own group,
+	// mobile, instead of phone, the IP phones' group.
+	MobileGroup bool `json:"mobileGroup"`
 }
 
 // DefaultClassifySettings are the recommended classification choices.
 func DefaultClassifySettings() ClassifySettings {
-	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true}
+	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true, MobileGroup: true}
 }
 
 // SavedData holds all persistent data

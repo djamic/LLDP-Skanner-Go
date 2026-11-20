@@ -75,6 +75,27 @@ func TestClassifyNode(t *testing.T) {
 		}
 	}
 
+	// A smartphone maker's OUI (rules.MobileGroup): mobile, else a phone as
+	// before; an IP phone is a phone either way
+	mobile := ClassifySettings{MobileGroup: true}
+	for _, c := range []struct {
+		ev        nodeEvidence
+		want, off string
+	}{
+		{nodeEvidence{ID: "3c:22:fb:9b:9d:cd", Info: "[ENDPOINT] Apple", Category: "mobile"}, "mobile", "phone"},
+		{nodeEvidence{ID: "28:6c:07:00:00:01", Info: "[LLDP-EP] Xiaomi", Category: "mobile"}, "mobile", "phone"},
+		{nodeEvidence{ID: "c0:74:ad:00:00:03", Info: "[ENDPOINT] Grandstream", Category: "phone"}, "phone", "phone"},
+		{nodeEvidence{ID: "3c:22:fb:00:00:02", Info: "[LLDP-EP]", VoIP: true, Category: "mobile"}, "phone", "phone"},
+		{nodeEvidence{ID: "3c:22:fb:00:00:03", Info: "[WiFi]", Category: "mobile"}, "wifi_random", "wifi_random"},
+	} {
+		if got := classifyNode(c.ev, mobile); got != c.want {
+			t.Errorf("classifyNode(%+v, mobileGroup) = %q, want %q", c.ev, got, c.want)
+		}
+		if got := classifyNode(c.ev, ClassifySettings{}); got != c.off {
+			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.off)
+		}
+	}
+
 	for _, c := range []struct{ group, kind, want string }{
 		{"endpoint", "phone", "phone"}, {"unknown", "phone", "phone"}, {"camera", "phone", "camera"},
 		{"switch", "phone", "switch"}, {"endpoint", "access_point", "endpoint"}, {"endpoint", "", "endpoint"},

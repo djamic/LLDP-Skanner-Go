@@ -37,6 +37,7 @@ const groupColors = {
     'bmc': '#FF6F00',
     'camera': '#E91E63',
     'phone': '#3F51B5',
+    'mobile': '#9575CD',
     'iot': '#607D8B',
     'wifi_random': '#00BCD4',
     'wifi_client': '#80DEEA',
@@ -72,7 +73,8 @@ const uiTypeNames = {
     'hypervisor': '🏗️ Hypervisor',
     'bmc': '🔧 BMC',
     'camera': '📹 Camera',
-    'phone': '📱 Phone',
+    'phone': '📞 Phone',
+    'mobile': '📱 Mobile',
     'iot': '🔌 IoT',
     'wifi_random': '🎲 Random MAC',
     'wifi_client': '📶 WLAN client',
@@ -93,7 +95,8 @@ const groupIcons = {
     'hypervisor': '🏗️',
     'bmc': '🔧',
     'camera': '📹',
-    'phone': '📱',
+    'phone': '📞',
+    'mobile': '📱',
     'iot': '🔌',
     'wifi_random': '🎲',
     'wifi_client': '📶',
@@ -115,6 +118,7 @@ const uiExportGroups = [
     { id: 'bmc', label: '🔧 BMC/iLO', checked: false },
     { id: 'camera', label: '📷 Camera', checked: false },
     { id: 'phone', label: '📞 Phone', checked: false },
+    { id: 'mobile', label: '📱 Mobile', checked: false },
     { id: 'iot', label: '🌡️ IoT', checked: false },
     { id: 'wifi_random', label: '🎲 Random MAC', checked: false },
     { id: 'wifi_client', label: '📶 WLAN client', checked: false },
@@ -427,6 +431,12 @@ const topoIconSymbolsMarkup = `
             <circle cx="15.8" cy="16.8" r="1" fill="#ffffff"/><circle cx="19.5" cy="16.8" r="1" fill="#ffffff"/><circle cx="23.2" cy="16.8" r="1" fill="#ffffff"/>
             <circle cx="15.8" cy="19.8" r="1" fill="#ffffff"/><circle cx="19.5" cy="19.8" r="1" fill="#ffffff"/><circle cx="23.2" cy="19.8" r="1" fill="#ffffff"/>
             <circle cx="15.8" cy="22.8" r="1" fill="#ffffff"/><circle cx="19.5" cy="22.8" r="1" fill="#ffffff"/><circle cx="23.2" cy="22.8" r="1" fill="#ffffff"/>
+        </symbol>
+        <symbol id="topo-icon-mobile" viewBox="0 0 32 32">
+            <rect x="9" y="3.5" width="14" height="25" rx="3" fill="#0f2137" stroke="currentColor" stroke-width="2.2"/>
+            <rect x="11.6" y="7.5" width="8.8" height="15" rx="1" fill="currentColor" opacity="0.85"/>
+            <path d="M14 5.6H18" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+            <circle cx="16" cy="25.4" r="1.2" fill="#ffffff"/>
         </symbol>
         <symbol id="topo-icon-endpoint" viewBox="0 0 32 32">
             <rect x="4" y="5.5" width="24" height="15.5" rx="2.5" fill="#0f2137" stroke="currentColor" stroke-width="2.1"/>
@@ -1750,7 +1760,7 @@ uiOnNodeClick('infoNeighbors', id => highlightNodeFromPanel(id), true);
 
 // The classification choices (settings.go ClassifySettings): the settings
 // modal has a checkbox settingsClassify-<choice> for each.
-const uiClassifyChoices = ['lldpCaps', 'lldpHubs', 'apHubAlert', 'wifiClientsCountOnly'];
+const uiClassifyChoices = ['lldpCaps', 'lldpHubs', 'apHubAlert', 'wifiClientsCountOnly', 'mobileGroup'];
 
 // Open settings modal
 function openSettings() {

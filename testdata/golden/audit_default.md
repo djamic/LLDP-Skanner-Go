@@ -1478,29 +1478,28 @@ graph TD
 | 65 | hub-f8:f0:82:d0:23:92-p48 | [HUB] Unmanaged |  | F-4_48P (Eth1/0/48) |
 | 66 | hub-f8:f0:82:d8:7e:81-p3 | [HUB] Unmanaged |  | A_padval_SNR (Eth1/0/3) |
 
-### 4.6 Telefonlar (VoIP) (19 ta)
+### 4.6 Telefonlar (VoIP) (18 ta)
 
 | # | ID / MAC | Ma'lumot | IP | Connected to |
 |---|---|---|---|---|
-| 1 | 3c:22:fb:9b:9d:cd | [ENDPOINT] Apple | 172.15.72.184 | - |
-| 2 | c0:74:ad:90:01:75 | [ENDPOINT] Grandstream Networks, Inc. | 172.16.25.219 | - |
-| 3 | c0:74:ad:90:01:7f | [ENDPOINT] Grandstream Networks, Inc. | 172.16.0.30 |  (GE1/0/34 [V160]) |
-| 4 | c0:74:ad:90:01:8e | [ENDPOINT] Grandstream Networks, Inc. | 172.16.1.105 | - |
-| 5 | ec:74:d7:64:cb:9f | [ENDPOINT] Grandstream Networks Inc | 172.16.2.189 | - |
-| 6 | ec:74:d7:64:cb:a3 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.28 |  (Eth1/0/20 [V160] 100M) |
-| 7 | ec:74:d7:64:cb:a5 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.25 |  (Eth1/0/9 [V160] 100M) |
-| 8 | ec:74:d7:64:cb:a6 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.18 |  (Eth1/0/11 [V160] 100M) |
-| 9 | ec:74:d7:64:cb:a7 | [LLDP-EP] Grandstream Networks Inc | 172.16.3.4 |  (Eth1/0/14 [V160] 100M) |
-| 10 | ec:74:d7:64:cb:a8 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.191 |  (Eth1/0/5 [V160] 100M) |
-| 11 | ec:74:d7:64:cb:ab | [LLDP-EP] Grandstream Networks Inc | 172.16.3.208 |  (Eth1/0/13 [V160] 100M) |
-| 12 | ec:74:d7:64:cb:ac | [LLDP-EP] Grandstream Networks Inc | 172.16.1.15 |  (Eth1/0/15 [V160] 100M) |
-| 13 | ec:74:d7:64:cb:ad | [LLDP-EP] Grandstream Networks Inc | 172.16.1.45 |  (Eth1/0/1 [V160] 100M) |
-| 14 | ec:74:d7:64:cb:ae | [LLDP-EP] Grandstream Networks Inc | 172.16.1.19 |  (Eth1/0/3 [V160] 100M) |
-| 15 | ec:74:d7:64:cb:b1 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.37 |  (Eth1/0/4 [V160] 100M) |
-| 16 | ec:74:d7:64:cb:b2 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.106 |  (Eth1/0/7 [V160] 100M) |
-| 17 | ec:74:d7:64:cb:b8 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.206 |  (Eth1/0/12 [V160] 100M) |
-| 18 | ec:74:d7:64:ce:58 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.0 |  (Eth1/0/6 [V160] 100M) |
-| 19 | ec:74:d7:64:ce:5b | [LLDP-EP] Grandstream Networks Inc | 172.16.3.237 |  (Eth1/0/8 [V160] 100M) |
+| 1 | c0:74:ad:90:01:75 | [ENDPOINT] Grandstream Networks, Inc. | 172.16.25.219 | - |
+| 2 | c0:74:ad:90:01:7f | [ENDPOINT] Grandstream Networks, Inc. | 172.16.0.30 |  (GE1/0/34 [V160]) |
+| 3 | c0:74:ad:90:01:8e | [ENDPOINT] Grandstream Networks, Inc. | 172.16.1.105 | - |
+| 4 | ec:74:d7:64:cb:9f | [ENDPOINT] Grandstream Networks Inc | 172.16.2.189 | - |
+| 5 | ec:74:d7:64:cb:a3 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.28 |  (Eth1/0/20 [V160] 100M) |
+| 6 | ec:74:d7:64:cb:a5 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.25 |  (Eth1/0/9 [V160] 100M) |
+| 7 | ec:74:d7:64:cb:a6 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.18 |  (Eth1/0/11 [V160] 100M) |
+| 8 | ec:74:d7:64:cb:a7 | [LLDP-EP] Grandstream Networks Inc | 172.16.3.4 |  (Eth1/0/14 [V160] 100M) |
+| 9 | ec:74:d7:64:cb:a8 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.191 |  (Eth1/0/5 [V160] 100M) |
+| 10 | ec:74:d7:64:cb:ab | [LLDP-EP] Grandstream Networks Inc | 172.16.3.208 |  (Eth1/0/13 [V160] 100M) |
+| 11 | ec:74:d7:64:cb:ac | [LLDP-EP] Grandstream Networks Inc | 172.16.1.15 |  (Eth1/0/15 [V160] 100M) |
+| 12 | ec:74:d7:64:cb:ad | [LLDP-EP] Grandstream Networks Inc | 172.16.1.45 |  (Eth1/0/1 [V160] 100M) |
+| 13 | ec:74:d7:64:cb:ae | [LLDP-EP] Grandstream Networks Inc | 172.16.1.19 |  (Eth1/0/3 [V160] 100M) |
+| 14 | ec:74:d7:64:cb:b1 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.37 |  (Eth1/0/4 [V160] 100M) |
+| 15 | ec:74:d7:64:cb:b2 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.106 |  (Eth1/0/7 [V160] 100M) |
+| 16 | ec:74:d7:64:cb:b8 | [LLDP-EP] Grandstream Networks Inc | 172.16.0.206 |  (Eth1/0/12 [V160] 100M) |
+| 17 | ec:74:d7:64:ce:58 | [LLDP-EP] Grandstream Networks Inc | 172.16.1.0 |  (Eth1/0/6 [V160] 100M) |
+| 18 | ec:74:d7:64:ce:5b | [LLDP-EP] Grandstream Networks Inc | 172.16.3.237 |  (Eth1/0/8 [V160] 100M) |
 
 ### 4.7 Kameralar (57 ta)
 
@@ -1862,6 +1861,12 @@ graph TD
 | 8 | hub-4c:ae:a3:a2:15:ec-p51 | [APHUB] AP hub |  | D 1-2 (TGE1/0/51) |
 | 9 | hub-f8:f0:82:d1:67:5e-p24 | [APHUB] AP hub |  | SNR-S2995G-24FX (Eth1/0/24) |
 | 10 | hub-f8:f0:82:d8:7e:81-p25 | [APHUB] AP hub |  | A_padval_SNR (Eth1/0/25) |
+
+### 4.18 Smartfon va planshetlar (1 ta)
+
+| # | ID / MAC | Ma'lumot | IP | Connected to |
+|---|---|---|---|---|
+| 1 | 3c:22:fb:9b:9d:cd | [ENDPOINT] Apple | 172.15.72.184 | - |
 
 ## 5. VLAN Ro'yxati
 
