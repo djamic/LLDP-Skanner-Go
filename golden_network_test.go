@@ -115,12 +115,20 @@ func httpAnswer(req *http.Request, status int, body string, header map[string]st
 	return resp
 }
 
-// fakeESXiNetwork answers the ESXi /ui/ check per host: an ESXi host, a 404
-// page that mentions ESXi, a redirect within the host, a redirect to another
-// site, a host that is down, and a vCenter page.
+// fakeESXiNetwork answers the ESXi check per host: an ESXi host's /ui/
+// (no vSphere API answer), a 404 page that mentions ESXi, a redirect within
+// the host, a redirect to another site, a host that is down, a vCenter
+// (its API's type VirtualCenter, its page), and an ESXi host whose API
+// says HostAgent and whose host client is off.
 func fakeESXiNetwork() *fakeTransport {
 	return &fakeTransport{answer: func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Host + req.URL.Path {
+		case "10.9.9.6:443/sdk":
+			return httpAnswer(req, 200, fakeServiceContent("VirtualCenter"), nil), nil
+		case "10.9.9.7:443/sdk":
+			return httpAnswer(req, 200, fakeServiceContent("HostAgent"), nil), nil
+		case "10.9.9.7/ui/":
+			return httpAnswer(req, 404, "<h1>Not Found</h1>", nil), nil
 		case "10.9.9.1/ui/":
 			return httpAnswer(req, 200, `<html><body ng-app="esxUiApp"></body></html>`, nil), nil
 		case "10.9.9.2/ui/":
@@ -140,13 +148,21 @@ func fakeESXiNetwork() *fakeTransport {
 	}}
 }
 
+// fakeServiceContent is a vSphere API's answer to RetrieveServiceContent
+// with API type apiType.
+func fakeServiceContent(apiType string) string {
+	return `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Body>` +
+		`<RetrieveServiceContentResponse xmlns="urn:vim25"><returnval><about><apiType>` + apiType + `</apiType></about></returnval></RetrieveServiceContentResponse>` +
+		`</soapenv:Body></soapenv:Envelope>`
+}
+
 // esxiUICheck runs probeESXiHost (the HTTP check after the TCP :443 check)
 // with the worker's client settings and a fake transport.
 func esxiUICheck() map[string]any {
 	transport := fakeESXiNetwork()
 	client := newESXiClient(transport)
 	out := map[string]any{}
-	for _, ip := range []string{"10.9.9.1", "10.9.9.2", "10.9.9.3", "10.9.9.4", "10.9.9.5", "10.9.9.6"} {
+	for _, ip := range []string{"10.9.9.1", "10.9.9.2", "10.9.9.3", "10.9.9.4", "10.9.9.5", "10.9.9.6", "10.9.9.7"} {
 		ok := probeESXiHost(client, ip)
 		out[ip] = map[string]any{"confirmed": ok, "requests": transport.taken()}
 	}

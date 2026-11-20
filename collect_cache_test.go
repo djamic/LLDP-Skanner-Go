@@ -622,16 +622,26 @@ func TestCollectESXiFingerprint(t *testing.T) {
 		"10.7.8.4/ui/index.html": collectFakePage(200, app, ""),
 		"10.7.8.5/ui/":           collectFakePage(200, "<title>VMware ESXi</title>", ""),
 		"10.7.8.7/ui/":           collectFakePage(500, app, ""),
+		// the vSphere API decides when it answers
+		"10.7.8.8:443/sdk":  collectFakePage(200, fakeServiceContent("HostAgent"), ""),
+		"10.7.8.8/ui/":      collectFakePage(404, "Not Found", ""),
+		"10.7.8.9:443/sdk":  collectFakePage(200, fakeServiceContent("VirtualCenter"), ""),
+		"10.7.8.9/ui/":      collectFakePage(200, app, ""),
+		"10.7.8.10:443/sdk": collectFakePage(404, "<html><body>Not Found</body></html>", ""),
+		"10.7.8.10/ui/":     collectFakePage(200, app, ""),
 	}}
 	client := newESXiClient(fake)
 	for ip, want := range map[string]bool{
-		"10.7.8.1": true,  // the host client
-		"10.7.8.2": false, // 404 that mentions ESXi
-		"10.7.8.3": false, // redirect to another host's page
-		"10.7.8.4": true,  // redirect on the same host
-		"10.7.8.5": false, // the phrase without the host client app
-		"10.7.8.6": false, // no answer
-		"10.7.8.7": false, // server error
+		"10.7.8.1":  true,  // the host client
+		"10.7.8.2":  false, // 404 that mentions ESXi
+		"10.7.8.3":  false, // redirect to another host's page
+		"10.7.8.4":  true,  // redirect on the same host
+		"10.7.8.5":  false, // the phrase without the host client app
+		"10.7.8.6":  false, // no answer
+		"10.7.8.7":  false, // server error
+		"10.7.8.8":  true,  // the API's HostAgent, the host client off
+		"10.7.8.9":  false, // the API's VirtualCenter: a vCenter, whatever its page
+		"10.7.8.10": true,  // no SOAP answer: the host client
 	} {
 		if got := probeESXiHost(client, ip); got != want {
 			t.Errorf("probeESXiHost(%s) = %v, want %v", ip, got, want)
@@ -639,6 +649,9 @@ func TestCollectESXiFingerprint(t *testing.T) {
 	}
 	if slices.Contains(fake.requested, "10.7.8.33/portal") {
 		t.Error("the probe followed a redirect to another host")
+	}
+	if slices.Contains(fake.requested, "10.7.8.9/ui/") || slices.Contains(fake.requested, "10.7.8.8/ui/") {
+		t.Errorf("the probe read the host client page after the API answered: %v", fake.requested)
 	}
 	for body, want := range map[string]bool{
 		app:                          true,

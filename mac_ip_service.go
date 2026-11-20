@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -15,14 +16,19 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
+
+	"lldp_scanner/modules/vsphere"
 )
 
 // ─── ESXi HTTP Fingerprinting ──────────────────────────────────────────────────
 
 // ConfirmedESXiMACs holds the MACs whose IP answered as an ESXi host. The
-// value is that IP (readers only test presence).
+// value is that IP (readers only test presence). esxiConfirmedFile keeps
+// it over a restart (loadESXiConfirmed); a change builds the graph again
+// (esxiConfirmationsChanged).
 var ConfirmedESXiMACs sync.Map
 var validationQueue = make(chan esxiJob, 2000)
 
@@ -95,11 +101,18 @@ func collectESXiReachable(ip string) bool {
 	return true
 }
 
-// probeESXiHost reports whether https://ip/ui/ is the ESXi host client: an
-// HTTP 200 page from that host with the host client's app (isESXiResponse).
-// Error pages and other hosts' pages that mention ESXi do not count (F66).
-// The TCP :443 check comes before it (collectESXiReachable).
+// probeESXiHost reports whether ip is an ESXi host, by the one test of the
+// esxi module too: the vSphere API at https://ip/sdk says so (API type
+// HostAgent; a vCenter Server's VirtualCenter is none), read with no login.
+// When ip has no vSphere API answer, https://ip/ui/ is the ESXi host
+// client: an HTTP 200 page from that host with the host client's app
+// (isESXiResponse); error pages and other hosts' pages that mention ESXi
+// do not count (F66). The TCP :443 check comes before it
+// (collectESXiReachable).
 func probeESXiHost(client *http.Client, ip string) bool {
+	if c := vsphere.NewClientHTTP(ip, client); c.Connect(context.Background()) == nil {
+		return c.Content.About.APIType == vsphere.APIHostAgent
+	}
 	resp, err := client.Get("https://" + ip + "/ui/")
 	if err != nil {
 		return false
@@ -287,12 +300,113 @@ func collectCheckESXi(job esxiJob, reachable, isESXi func(ip string) bool, now t
 	delete(collectESXiRetry, job.mac)
 	collectESXiMu.Unlock()
 	if !confirmed {
-		ConfirmedESXiMACs.Delete(job.mac)
+		if _, was := ConfirmedESXiMACs.LoadAndDelete(job.mac); was {
+			fmt.Printf("❎ [Active-Check] No longer ESXi: %s (MAC: %s)\n", job.ip, job.mac)
+			esxiConfirmedChanged()
+		}
 		return
 	}
 	if previous, _ := ConfirmedESXiMACs.Swap(job.mac, job.ip); previous != job.ip {
 		fmt.Printf("✅ [Active-Check] Confirmed ESXi via HTTP: %s (MAC: %s)\n", job.ip, job.mac)
+		esxiConfirmedChanged()
 	}
+}
+
+// esxiConfirmedFile keeps ConfirmedESXiMACs over a restart, as a "mac":
+// "ip" map (a variable for tests).
+var esxiConfirmedFile = "esxi_confirmed.json"
+
+// esxiConfirmedSaveMu orders the writes of esxiConfirmedFile (the check
+// workers confirm concurrently).
+var esxiConfirmedSaveMu sync.Mutex
+
+// esxiConfirmationsChanged runs when a check confirmed an ESXi host or
+// took a confirmation back: the graph is built again (esxiRebuildSoon), so
+// its hypervisor tags, its hubs (an ESXi port is no Shadow IT) and its
+// groups follow at once instead of at the next scan (a variable for
+// tests).
+var esxiConfirmationsChanged = esxiRebuildSoon
+
+// esxiRebuildDelay gathers the confirmations of a burst of checks (a
+// sweep, the re-checks of a start) into one graph build (variables for
+// tests: the wait and the build).
+var (
+	esxiRebuildDelay = 10 * time.Second
+	esxiRebuild      = func() { rebuildGraph() }
+)
+
+var esxiRebuildPending atomic.Bool
+
+// esxiRebuildSoon builds the graph again esxiRebuildDelay from now, once
+// for all the changes until then.
+func esxiRebuildSoon() {
+	if esxiRebuildPending.CompareAndSwap(false, true) {
+		time.AfterFunc(esxiRebuildDelay, func() {
+			esxiRebuildPending.Store(false)
+			esxiRebuild()
+		})
+	}
+}
+
+// esxiConfirmedChanged saves the confirmations and announces the change.
+func esxiConfirmedChanged() {
+	saveESXiConfirmed()
+	esxiConfirmationsChanged()
+}
+
+// saveESXiConfirmed writes ConfirmedESXiMACs to esxiConfirmedFile
+// (writeJSONAtomic).
+func saveESXiConfirmed() {
+	esxiConfirmedSaveMu.Lock()
+	defer esxiConfirmedSaveMu.Unlock()
+	confirmed := map[string]string{}
+	ConfirmedESXiMACs.Range(func(mac, ip any) bool {
+		if ip, ok := ip.(string); ok {
+			confirmed[fmt.Sprint(mac)] = ip
+		}
+		return true
+	})
+	writeJSONAtomic(esxiConfirmedFile, confirmed)
+}
+
+// loadESXiConfirmed reads esxiConfirmedFile into ConfirmedESXiMACs, so a
+// restart knows the ESXi hosts at once: their ports are no Shadow-IT hubs
+// and their nodes hypervisors in the first graph, not after the probes
+// (the warm-up checks 500 cached MACs per sweep). Each MAC whose cached IP
+// is still the confirmed one is checked again (a host reinstalled at the
+// same address loses its confirmation; one that does not answer keeps it
+// and is retried); a MAC at another IP now is checked by the sweeps (Q18).
+// Called after loadMacIPCache. Returns the confirmations loaded.
+func loadESXiConfirmed() int {
+	data, err := os.ReadFile(esxiConfirmedFile)
+	if err != nil {
+		return 0
+	}
+	var confirmed map[string]string
+	if err := json.Unmarshal(data, &confirmed); err != nil {
+		fmt.Printf("⚠️ [MacIPService] Ignoring %s: %v\n", esxiConfirmedFile, err)
+		return 0
+	}
+	var jobs []esxiJob
+	for key, ip := range confirmed {
+		mac := canonicalMAC(key)
+		if mac == "" || parseIPv4(ip) == "" {
+			continue
+		}
+		if _, known := ConfirmedESXiMACs.LoadOrStore(mac, ip); !known {
+			jobs = append(jobs, esxiJob{mac: mac, ip: ip})
+		}
+	}
+	slices.SortFunc(jobs, func(a, b esxiJob) int { return strings.Compare(a.mac, b.mac) })
+	for _, job := range jobs {
+		if collectMACIPCurrent(job.mac, job.ip) {
+			esxiEnqueue(job)
+		}
+	}
+	if len(jobs) > 0 {
+		fmt.Printf("📂 [MacIPService] Loaded %d ESXi confirmations from %s (checked again)\n", len(jobs), esxiConfirmedFile)
+	}
+	return len(jobs)
 }
 
 // collectESXiRetryDelay is the wait before retry n of a host that did not
@@ -1482,6 +1596,7 @@ func startMacIPService() {
 
 	// Load persistent cache first
 	loadMacIPCache()
+	loadESXiConfirmed()
 
 	startMacIPCollector()
 }

@@ -61,6 +61,8 @@ var (
 	guardGraphDebugFile string
 	guardMacIPCacheFile string
 	guardCapturesDir    string
+
+	guardESXiConfirmedFile string
 )
 
 // guard counts attempts to reach the network through a seam that tests never
@@ -115,6 +117,7 @@ func installSeams(dir string) {
 	guardExportsDir = filepath.Join(dir, "results")
 	guardGraphDebugFile = filepath.Join(dir, "graphs_data.txt")
 	guardMacIPCacheFile = filepath.Join(dir, "mac_ip_cache.json")
+	guardESXiConfirmedFile = filepath.Join(dir, "esxi_confirmed.json")
 	guardCapturesDir = filepath.Join(dir, "captures")
 
 	runPing = fakePing
@@ -143,6 +146,8 @@ func installSeams(dir string) {
 	exportsDir = guardExportsDir
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
+	esxiConfirmedFile = guardESXiConfirmedFile
+	esxiConfirmationsChanged = func() {} // no graph build behind a test's back
 	globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
 	setGatewayIPs([]string{fixedGatewayIP})
 	ignoredIssuesMutex.Lock()
@@ -257,11 +262,14 @@ func resetState(t *testing.T) {
 	exportsDir = guardExportsDir
 	graphDebugFile = guardGraphDebugFile
 	macIPCacheFile = guardMacIPCacheFile
+	esxiConfirmedFile = filepath.Join(t.TempDir(), "esxi_confirmed.json")
+	esxiConfirmationsChanged = func() {} // no graph build behind a test's back
 	globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
 	t.Cleanup(func() {
 		exportsDir = guardExportsDir
 		graphDebugFile = guardGraphDebugFile
 		macIPCacheFile = guardMacIPCacheFile
+		esxiConfirmedFile = guardESXiConfirmedFile
 		globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
 		clearConfirmedESXi()
 		influxRec.stop()

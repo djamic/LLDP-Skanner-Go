@@ -27,27 +27,31 @@
   "esxi_ui_check": {
     "10.9.9.1": {
       "confirmed": true,
-      "requests": ["GET https://10.9.9.1/ui/"]
+      "requests": ["POST https://10.9.9.1:443/sdk", "GET https://10.9.9.1/ui/"]
     },
     "10.9.9.2": {
       "confirmed": false,
-      "requests": ["GET https://10.9.9.2/ui/"]
+      "requests": ["POST https://10.9.9.2:443/sdk", "GET https://10.9.9.2/ui/"]
     },
     "10.9.9.3": {
       "confirmed": false,
-      "requests": ["GET https://10.9.9.3/ui/", "GET https://10.9.9.3/ui/login"]
+      "requests": ["POST https://10.9.9.3:443/sdk", "GET https://10.9.9.3/ui/", "GET https://10.9.9.3/ui/login"]
     },
     "10.9.9.4": {
       "confirmed": false,
-      "requests": ["GET https://10.9.9.4/ui/"]
+      "requests": ["POST https://10.9.9.4:443/sdk", "GET https://10.9.9.4/ui/"]
     },
     "10.9.9.5": {
       "confirmed": false,
-      "requests": ["GET https://10.9.9.5/ui/"]
+      "requests": ["POST https://10.9.9.5:443/sdk", "GET https://10.9.9.5/ui/"]
     },
     "10.9.9.6": {
       "confirmed": false,
-      "requests": ["GET https://10.9.9.6/ui/"]
+      "requests": ["POST https://10.9.9.6:443/sdk"]
+    },
+    "10.9.9.7": {
+      "confirmed": true,
+      "requests": ["POST https://10.9.9.7:443/sdk"]
     }
   },
   "esxi_worker": {

@@ -320,6 +320,16 @@ func TestNotESXi(t *testing.T) {
 	if _, err := run(t, "detect", modules.Login{Username: "root", Password: "x"}); err == nil || !strings.Contains(err.Error(), "not an ESXi host") {
 		t.Errorf("a vCenter: %v", err)
 	}
+	// An API of no type is no ESXi host either (the scanner's ESXi check
+	// asks for HostAgent too)
+	untyped := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, fakeEnvelope, `<RetrieveServiceContentResponse xmlns="urn:vim25"><returnval><about><fullName>Some SOAP service</fullName></about></returnval></RetrieveServiceContentResponse>`)
+	}))
+	defer untyped.Close()
+	vsphere.SDKURL = func(string) string { return untyped.URL + "/sdk" }
+	if _, err := run(t, "detect", modules.Login{Username: "root", Password: "x"}); err == nil || !strings.Contains(err.Error(), "device of no API type") {
+		t.Errorf("an API of no type: %v", err)
+	}
 	vsphere.SDKURL = func(string) string { return "https://127.0.0.1:1/sdk" }
 	if _, err := run(t, "detect", modules.Login{}); err == nil || errors.Is(err, modules.ErrLoginRejected) {
 		t.Errorf("no API: %v, want an error that is no refused login", err)

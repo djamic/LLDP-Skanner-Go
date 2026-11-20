@@ -21,6 +21,7 @@ __pycache__/
 network_data.json
 mac_ip_cache.json
 mac_ip_cache_seen.json
+esxi_confirmed.json
 modules_inventory.json
 # temporary files of the atomic writes (mac_ip_cache.json.tmp holds the
 # network's MAC->IP inventory when the process dies before the rename)

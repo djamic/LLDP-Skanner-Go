@@ -41,8 +41,8 @@ func (Module) Run(ctx context.Context, req modules.Request) (modules.Result, err
 	if err := c.Connect(ctx); err != nil {
 		return modules.Result{}, err
 	}
-	if t := c.Content.About.APIType; t != "" && t != "HostAgent" {
-		return modules.Result{}, fmt.Errorf("%s is a %s (%s), not an ESXi host", c.URL(), t, c.Content.About.FullName)
+	if t := c.Content.About.APIType; t != vsphere.APIHostAgent {
+		return modules.Result{}, fmt.Errorf("%s is a %s (%s), not an ESXi host", c.URL(), cmp.Or(t, "device of no API type"), c.Content.About.FullName)
 	}
 	if err := c.Login(ctx, req.Login); err != nil {
 		return modules.Result{}, err

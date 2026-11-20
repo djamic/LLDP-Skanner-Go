@@ -50,7 +50,7 @@ func connect(ctx context.Context, ip string) (*vsphere.Client, error) {
 	if err := c.Connect(ctx); err != nil {
 		return nil, err
 	}
-	if t := c.Content.About.APIType; t != "VirtualCenter" {
+	if t := c.Content.About.APIType; t != vsphere.APIVirtualCenter {
 		return nil, fmt.Errorf("%s is a %s (%s), not a vCenter Server", c.URL(), cmp.Or(t, "device of no API type"), c.Content.About.FullName)
 	}
 	return c, nil
@@ -81,7 +81,7 @@ func (Module) Probe(ctx context.Context, ip string) bool {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	c := vsphere.NewClient(ip)
-	return c.Connect(ctx) == nil && c.Content.About.APIType == "VirtualCenter"
+	return c.Connect(ctx) == nil && c.Content.About.APIType == vsphere.APIVirtualCenter
 }
 
 // ─── What the vCenter tells ───────────────────────────────────────────────────

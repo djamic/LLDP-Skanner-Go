@@ -36,13 +36,24 @@ var SDKURL = func(ip string) string { return "https://" + net.JoinHostPort(ip, "
 
 // NewClient is a client of the API at ip, not yet connected.
 func NewClient(ip string) *Client {
-	return &Client{
-		http: kit.NewHTTPClient(kit.HTTPOptions{Timeout: 60 * time.Second, HandshakeTimeout: 10 * time.Second,
-			Cookies: true, NoKeepAlives: true}),
-		url:    SDKURL(ip),
-		action: "urn:vim25/6.5",
-	}
+	return NewClientHTTP(ip, kit.NewHTTPClient(kit.HTTPOptions{Timeout: 60 * time.Second, HandshakeTimeout: 10 * time.Second,
+		Cookies: true, NoKeepAlives: true}))
 }
+
+// NewClientHTTP is a client of the API at ip that sends its requests with
+// hc (the scanner's ESXi check, with its short timeouts), not yet
+// connected.
+func NewClientHTTP(ip string, hc *http.Client) *Client {
+	return &Client{http: hc, url: SDKURL(ip), action: "urn:vim25/6.5"}
+}
+
+// The API types of ServiceContent.About.APIType: the one test of an ESXi
+// host (the esxi module's, the scanner's ESXi check) and of a vCenter
+// Server (the vcenter module's).
+const (
+	APIHostAgent     = "HostAgent"
+	APIVirtualCenter = "VirtualCenter"
+)
 
 // Fault is a SOAP fault of the API: its fault type (InvalidLogin,
 // RestrictedVersion, ...) and text.
