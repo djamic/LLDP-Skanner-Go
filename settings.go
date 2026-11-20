@@ -43,11 +43,20 @@ type ClassifySettings struct {
 	// (Apple, Samsung, Xiaomi, ...: OUI category "mobile") their own group,
 	// mobile, instead of phone, the IP phones' group.
 	MobileGroup bool `json:"mobileGroup"`
+	// ControllerKindWins groups a node by what the owner or a controller
+	// tells, above its tags and its OUI (classifyNode): the device type the
+	// Credentials logins for its IP declare, else the kind a controller
+	// manages its MAC as (a UniFi access point, switch or gateway, a
+	// vCenter host, a Kerio phone); a PBX's phone known by its IP only
+	// makes an endpoint a phone. Off, only /api/graph gives a PBX's phone
+	// its group, as before, and the reports, the analyzer and Telegram do
+	// not see it.
+	ControllerKindWins bool `json:"controllerKindWins"`
 }
 
 // DefaultClassifySettings are the recommended classification choices.
 func DefaultClassifySettings() ClassifySettings {
-	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true, MobileGroup: true}
+	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true, MobileGroup: true, ControllerKindWins: true}
 }
 
 // SavedData holds all persistent data

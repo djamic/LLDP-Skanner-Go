@@ -40,7 +40,7 @@ func TestClassifySettings(t *testing.T) {
 		`{"settings":{"community":"x","classify":{}}}`:                 DefaultClassifySettings(),
 		`{"settings":{"community":"x","classify":{"lldpCaps":false}}}`: lldpCapsOff,
 		`{"settings":{"community":"x","classify":{"lldpCaps":true}}}`:  DefaultClassifySettings(),
-		`{"settings":{"community":"x","classify":{"lldpCaps":false,"lldpHubs":false,"apHubAlert":true,"wifiClientsCountOnly":false,"mobileGroup":false}}}`: {APHubAlert: true},
+		`{"settings":{"community":"x","classify":{"lldpCaps":false,"lldpHubs":false,"apHubAlert":true,"wifiClientsCountOnly":false,"mobileGroup":false,"controllerKindWins":false}}}`: {APHubAlert: true},
 	} {
 		if err := os.WriteFile(savedDataFile, []byte(body), 0o644); err != nil {
 			t.Fatal(err)

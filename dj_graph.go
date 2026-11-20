@@ -328,6 +328,8 @@ type GraphData struct {
 // GetGraphData returns graph data formatted for D3.js
 func (g *DJGraph) GetGraphData() GraphData {
 	nodes := []GraphNode{}
+	rules := currentClassify()
+	facts := currentClassifyFacts(rules)
 	for node := range g.Nodes {
 		// Calculate Label and SysName
 		label := node
@@ -354,7 +356,7 @@ func (g *DJGraph) GetGraphData() GraphData {
 		}
 
 		// Determine group based on device info (or node ID itself)
-		group := g.determineDeviceGroup(node, info)
+		group := classifyNode(g.nodeEvidence(node, info, facts), rules)
 
 		graphNode := GraphNode{
 			ID:       node,
@@ -442,9 +444,11 @@ func (g *DJGraph) GetGraphData() GraphData {
 }
 
 // determineDeviceGroup is the group of a node with label info: classifyNode
-// of its evidence (classify.go), with the current classification choices.
+// of its evidence (classify.go), with the current classification choices
+// (GetGraphData reads the facts once for all its nodes).
 func (g *DJGraph) determineDeviceGroup(node, info string) string {
-	return classifyNode(g.nodeEvidence(node, info), currentClassify())
+	rules := currentClassify()
+	return classifyNode(g.nodeEvidence(node, info, currentClassifyFacts(rules)), rules)
 }
 
 // GenerateZabbixTemplate generates template list based on device info

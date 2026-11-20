@@ -310,6 +310,30 @@ func credentialsDeclaredTypes(ip string) []string {
 	return types
 }
 
+// credentialsDeclaredByIP returns, by IP, the device types the logins for
+// that IP itself declare (credentialEntry.DeviceType), in the file's order:
+// what the owner says the device at an address is (classifyNode). A range's
+// type is left out: it tells which logins to try in it, not what each of
+// its devices is.
+func credentialsDeclaredByIP() map[string][]string {
+	credentialsMu.Lock()
+	entries, err := credentialsLoad()
+	credentialsMu.Unlock()
+	if err != nil {
+		return nil
+	}
+	byIP := map[string][]string{}
+	for _, e := range entries {
+		if e.DeviceType == "" || e.Target.Kind != "ip" {
+			continue
+		}
+		if ip := parseIPv4(e.Target.Value); ip != "" && !slices.Contains(byIP[ip], e.DeviceType) {
+			byIP[ip] = append(byIP[ip], e.DeviceType)
+		}
+	}
+	return byIP
+}
+
 // ─── The vault password ───────────────────────────────────────────────────────
 
 // credentialsVaultHash is the bcrypt hash of the Credentials password, ""

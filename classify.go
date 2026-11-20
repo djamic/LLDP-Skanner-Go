@@ -24,10 +24,51 @@ type nodeEvidence struct {
 	Category string
 	// LLDPCaps are the LLDP capabilities its LLDP rows enable (graphLLDPCaps)
 	LLDPCaps uint8
+
+	// What the controllers and the Credentials window tell of it
+	// (classifyFacts; with ClassifySettings.ControllerKindWins only):
+	// Managed is the kind (modules.Kind*) a controller manages its MAC as
+	// (UniFi, vCenter, Kerio); ManagedIP the kind of the device a
+	// controller knows by its IP only (a PBX's phone, by the address its
+	// extension registered from); Declared the device types (credentialTypes
+	// ids) the logins for its IP itself declare.
+	Managed, ManagedIP string
+	Declared           []string
 }
 
-// nodeEvidence gathers the evidence of a node with label info.
-func (g *DJGraph) nodeEvidence(node, info string) nodeEvidence {
+// classifyFacts is what the controllers' inventories and the Credentials
+// window tell of the nodes, read once for a GetGraphData.
+type classifyFacts struct {
+	byMAC    map[string]string   // canonical MAC → the kind a controller manages it as
+	byIP     map[string]string   // IP → the kind of a device a controller knows by IP only
+	declared map[string][]string // IP → the device types its own logins declare
+}
+
+// currentClassifyFacts reads the facts the rules use: none unless
+// rules.ControllerKindWins.
+func currentClassifyFacts(rules ClassifySettings) classifyFacts {
+	if !rules.ControllerKindWins {
+		return classifyFacts{}
+	}
+	f := classifyFacts{byMAC: map[string]string{}, byIP: map[string]string{}, declared: credentialsDeclaredByIP()}
+	inventoryMu.Lock()
+	for mac, v := range managedByMAC {
+		if v.Kind != "" {
+			f.byMAC[mac] = v.Kind
+		}
+	}
+	for ip, v := range managedByIP {
+		if v.Kind != "" {
+			f.byIP[ip] = v.Kind
+		}
+	}
+	inventoryMu.Unlock()
+	return f
+}
+
+// nodeEvidence gathers the evidence of a node with label info, facts
+// what the controllers and Credentials tell.
+func (g *DJGraph) nodeEvidence(node, info string, facts classifyFacts) nodeEvidence {
 	ev := nodeEvidence{
 		ID:     node,
 		Info:   info,
@@ -43,7 +84,58 @@ func (g *DJGraph) nodeEvidence(node, info string) nodeEvidence {
 			ev.Category = categorizeVendor(vendor)
 		}
 	}
+	if mac := canonicalMAC(node); mac != "" {
+		ev.Managed = facts.byMAC[mac]
+	}
+	ip := parseIPv4(node)
+	if ip == "" {
+		ip = graphLabelIP(info)
+	}
+	if ip != "" {
+		ev.ManagedIP, ev.Declared = facts.byIP[ip], facts.declared[ip]
+	}
 	return ev
+}
+
+// managedKindGroups are the groups of the kinds a controller manages a
+// device as (ManagedView.Kind, modules.Kind*). A switch a controller
+// manages is no polled one (those are polled devices first): an unpolled
+// switch, as an LLDP bridge is.
+var managedKindGroups = map[string]string{
+	modules.KindAccessPoint: "access_point",
+	modules.KindSwitch:      "lldp_switch",
+	modules.KindGateway:     "router",
+	modules.KindHypervisor:  "hypervisor",
+	modules.KindPhone:       "phone",
+}
+
+// declaredTypeGroups are the groups of the device types a login for an IP
+// declares (credentialTypes ids) that name a kind of device. The others
+// tell none (declaredTypeNoGroup): vcenter, unifi-controller,
+// kerio-operator and linux name the software, not the device (a Linux VM
+// stays a VM); router and fortigate a role the gateways' configuration
+// gives (graphRouters), and a gateway's address is on more nodes than its
+// own (a VRRP or HA MAC); any.
+var declaredTypeGroups = map[string]string{
+	"esxi":   "hypervisor",
+	"switch": "lldp_switch", "switch-hpe": "lldp_switch", "switch-aruba": "lldp_switch", "switch-eltex": "lldp_switch",
+	"switch-snr": "lldp_switch", "switch-huawei": "lldp_switch", "switch-pixietech": "lldp_switch",
+	"bmc": "bmc", "ilo": "bmc", "idrac": "bmc",
+	"voip-grandstream": "phone", "voip-yealink": "phone",
+}
+
+var declaredTypeNoGroup = []string{"vcenter", "unifi-controller", "kerio-operator", "linux", "router", "fortigate", "any"}
+
+// toldGroup is the group the owner or a controller tells for a node: the
+// first declared type that names a kind of device, else the kind a
+// controller manages its MAC as; "" when they tell none.
+func toldGroup(ev nodeEvidence) string {
+	for _, t := range ev.Declared {
+		if g := declaredTypeGroups[t]; g != "" {
+			return g
+		}
+	}
+	return managedKindGroups[ev.Managed]
 }
 
 // classifyNode is a node's group (groups.go deviceGroups), the first that
@@ -53,27 +145,50 @@ func (g *DJGraph) nodeEvidence(node, info string) nodeEvidence {
 //  2. a controller's access point: access_point
 //  3. a polled device: by its own name only (graphNameGroup), server, router
 //     or switch, even with an empty label
-//  4. an HTTP-confirmed ESXi host, whatever tag its label has ([ENDPOINT],
+//  4. with rules.ControllerKindWins, what the owner or a controller tells
+//     (toldGroup): the device type the Credentials logins for its IP
+//     declare, else the kind a controller manages its MAC as (a UniFi
+//     access point or switch, a vCenter host, a Kerio phone), above its
+//     tags and its OUI
+//  5. an HTTP-confirmed ESXi host, whatever tag its label has ([ENDPOINT],
 //     [LLDP-EP], [WiFi], [BMC]): hypervisor
-//  5. [WiFi], a randomised MAC: wifi_random
-//  6. a phone of the voip engine (Yealink, Grandstream, ...): phone
-//  7. [LLDP-EP] or [ENDPOINT]: its MAC's OUI category when that tells a
+//  6. [WiFi], a randomised MAC: wifi_random
+//  7. a phone of the voip engine (Yealink, Grandstream, ...): phone
+//  8. [LLDP-EP] or [ENDPOINT]: its MAC's OUI category when that tells a
 //     kind (a smartphone maker's, mobile: with rules.MobileGroup mobile,
 //     else phone, as before); else, with rules.LLDPCaps, its LLDP
 //     capabilities: a wireless access point is an access_point, a bridge
 //     or router (no phone, the rule of lldpDiscoverable) an unpolled
 //     switch, lldp_switch; else endpoint
-//  8. [MINIHUB] (fdbPorts: a trunk or big port no polled switch is behind;
+//  9. [MINIHUB] (fdbPorts: a trunk or big port no polled switch is behind;
 //     its node is a hub- node too): minihub
-//  9. [APHUB] (lldpPortPlans: access points behind an unmanaged switch;
+//  10. [APHUB] (lldpPortPlans: access points behind an unmanaged switch;
 //     a hub- node too): ap_hub
-//  10. [HUB] or a hub- node: hub
-//  11. [BMC] or a bmc- node: bmc
-//  12. [HYPERVISOR] or a hyp- node: hypervisor
-//  13. [VM] or a vm- node: vm
-//  14. else by its name and label (graphNameGroup)
+//  11. [HUB] or a hub- node: hub
+//  12. [BMC] or a bmc- node: bmc
+//  13. [HYPERVISOR] or a hyp- node: hypervisor
+//  14. [VM] or a vm- node: vm
+//  15. else by its name and label (graphNameGroup)
+//
+// With rules.ControllerKindWins, last, a device a controller knows by the
+// node's IP only is a weaker fact (an address is no identity): a PBX's
+// phone there makes an endpoint or unknown node a phone (managedGroup), as
+// /api/graph did alone before.
 func classifyNode(ev nodeEvidence, rules ClassifySettings) string {
+	group := classifyOwn(ev, rules)
+	if rules.ControllerKindWins {
+		group = managedGroup(group, ev.ManagedIP)
+	}
+	return group
+}
+
+// classifyOwn is classifyNode but the weaker fact of the node's IP.
+func classifyOwn(ev nodeEvidence, rules ClassifySettings) string {
 	node, info := ev.ID, ev.Info
+	told := ""
+	if rules.ControllerKindWins {
+		told = toldGroup(ev)
+	}
 	switch {
 	case ev.Router:
 		return "router"
@@ -81,6 +196,8 @@ func classifyNode(ev nodeEvidence, rules ClassifySettings) string {
 		return "access_point"
 	case ev.Polled:
 		return graphNameGroup(node, info, true)
+	case told != "":
+		return told
 	case ev.ESXi:
 		return "hypervisor"
 	case strings.Contains(info, "[WiFi]"):
@@ -161,8 +278,9 @@ func graphNameGroup(node, info string, polled bool) string {
 }
 
 // managedGroup is the group of a node of group a controller's inventory
-// tells the kind of (addManaged, at /api/graph time): a PBX's phone is a
-// phone when nothing else told what it is.
+// tells the kind of (addManaged, at /api/graph time; classifyNode, for the
+// kind of a device known by the node's IP only): a PBX's phone is a phone
+// when nothing else told what it is.
 func managedGroup(group, kind string) string {
 	if kind == modules.KindPhone && (group == "endpoint" || group == "unknown") {
 		return "phone"

@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -311,5 +314,136 @@ func TestLLDPHubs(t *testing.T) {
 	}
 	if len(v.kinds) != 0 || v.groups[hub(1)] != "" || v.groups[hub(2)] != "" {
 		t.Errorf("lldpHubs off: hubs %v", v.kinds)
+	}
+}
+
+// TestControllerKinds: with rules.ControllerKindWins, what a Credentials
+// login for the node's IP declares, else the kind a controller manages its
+// MAC as, comes after the gateways, the controller's access points and the
+// polled devices, above the tags and the OUI; a controller's device known
+// by the node's IP only makes an endpoint a phone. Off, none counts.
+func TestControllerKinds(t *testing.T) {
+	on := ClassifySettings{ControllerKindWins: true, MobileGroup: true}
+	off := ClassifySettings{MobileGroup: true}
+	for _, c := range []struct {
+		ev        nodeEvidence
+		want, off string
+	}{
+		{nodeEvidence{ID: "10.0.0.1", Router: true, Declared: []string{"linux"}, Managed: "phone"}, "router", "router"},
+		{nodeEvidence{ID: "10.0.0.7", Polled: true, Declared: []string{"esxi"}, Managed: "access_point"}, "switch", "switch"},
+		// a vCenter host's VMkernel NIC: a VMware OUI
+		{nodeEvidence{ID: "00:50:56:6a:00:01", Info: "[VM] 🐧 Linux", Category: "vm", Managed: "hypervisor"}, "hypervisor", "vm"},
+		// a UniFi access point's locally administered MAC
+		{nodeEvidence{ID: "72:a7:41:00:00:01", Info: "[WiFi]", Managed: "access_point"}, "access_point", "wifi_random"},
+		{nodeEvidence{ID: "f0:9f:c2:00:00:02", Info: "[LLDP-EP] Ubiquiti", Category: "access_point", Managed: "switch"}, "lldp_switch", "access_point"},
+		{nodeEvidence{ID: "f0:9f:c2:00:00:03", Info: "[ENDPOINT] Ubiquiti", Category: "access_point", Managed: "gateway"}, "router", "access_point"},
+		{nodeEvidence{ID: "c0:51:7e:00:00:02", Info: "[ENDPOINT] Hikvision", Category: "camera", Managed: "phone"}, "phone", "camera"},
+		{nodeEvidence{ID: "00:1b:21:00:00:08", Info: "[BMC] iLO", Managed: "kind-of-no-group"}, "bmc", "bmc"},
+		// by the IP only: an endpoint or unknown node only
+		{nodeEvidence{ID: "94:c6:91:3f:f8:ee", Info: "[LLDP-EP] EliteGroup\n10.9.16.40", ManagedIP: "phone"}, "phone", "endpoint"},
+		{nodeEvidence{ID: "c0:51:7e:00:00:03", Info: "[ENDPOINT] Hikvision\n10.9.16.41", Category: "camera", ManagedIP: "phone"}, "camera", "camera"},
+		{nodeEvidence{ID: "3c:22:fb:00:00:04", Info: "[ENDPOINT] Apple\n10.9.16.42", Category: "mobile", ManagedIP: "phone"}, "mobile", "mobile"},
+		// the owner's declaration: the first type that names a kind, above a controller's
+		{nodeEvidence{ID: "00:1b:21:00:00:07", Info: "[ENDPOINT] Intel\n10.9.0.5", Declared: []string{"vcenter", "esxi"}, Managed: "phone"}, "hypervisor", "endpoint"},
+		{nodeEvidence{ID: "00:1b:21:00:00:09", Info: "[ENDPOINT] HPE\n10.9.0.9", Declared: []string{"linux", "ilo"}}, "bmc", "endpoint"},
+		{nodeEvidence{ID: "00:50:56:00:00:0b", Info: "[VM] 🐧 Linux\n10.9.0.12", Category: "vm", Declared: []string{"linux", "router"}}, "vm", "vm"},
+		{nodeEvidence{ID: "00:1b:21:00:00:0a", Info: "[ENDPOINT]\n10.9.0.10", Declared: []string{"any", "kerio-operator"}}, "endpoint", "endpoint"},
+		{nodeEvidence{ID: "e0:d9:e3:00:00:01", Info: "[LLDP-EP] Eltex\n10.9.0.11", Declared: []string{"switch-eltex"}}, "lldp_switch", "endpoint"},
+	} {
+		if got := classifyNode(c.ev, on); got != c.want {
+			t.Errorf("classifyNode(%+v, controllerKindWins) = %q, want %q", c.ev, got, c.want)
+		}
+		if got := classifyNode(c.ev, off); got != c.off {
+			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.off)
+		}
+	}
+
+	// Every Credentials device type names a group or, by its list, none;
+	// every kind of a managed device names a group
+	groups := map[string]bool{}
+	for _, d := range deviceGroups {
+		groups[d.Key] = true
+	}
+	for _, o := range credentialTypes {
+		g, ok := declaredTypeGroups[o.ID]
+		if ok == slices.Contains(declaredTypeNoGroup, o.ID) || ok && !groups[g] {
+			t.Errorf("Credentials device type %q: group %q (in declaredTypeGroups %v, in declaredTypeNoGroup %v)",
+				o.ID, g, ok, slices.Contains(declaredTypeNoGroup, o.ID))
+		}
+	}
+	for kind, g := range managedKindGroups {
+		if !groups[g] {
+			t.Errorf("managed kind %q: group %q is no group", kind, g)
+		}
+	}
+}
+
+// TestControllerKindsGraph: GetGraphData, the graph data of the reports,
+// the analyzer and Telegram, reads the controllers' inventories and the
+// Credentials logins for an IP (not those for a range) when the rule is
+// on, and neither when it is off.
+func TestControllerKindsGraph(t *testing.T) {
+	resetState(t)
+	dir := t.TempDir()
+	before := secretsDir
+	secretsDir = dir
+	t.Cleanup(func() { secretsDir = before })
+	creds := `{"entries": [
+		{"id": "a", "target": {"kind": "ip", "value": "10.9.0.5"}, "protocol": "https", "username": "root", "deviceType": "esxi"},
+		{"id": "b", "target": {"kind": "cidr", "value": "10.9.1.0/24"}, "protocol": "https", "username": "admin", "deviceType": "voip-yealink"},
+		{"id": "c", "target": {"kind": "ip", "value": "10.9.0.6"}, "protocol": "ssh", "username": "x", "deviceType": "any"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "credentials.json"), []byte(creds), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inventoryMu.Lock()
+	inventories = map[string]inventoryRecord{
+		"vcenter|10.9.0.2": {Module: "vcenter", IP: "10.9.0.2", Time: time.Now(), Inventory: modules.Inventory{Devices: []modules.ManagedDevice{
+			{MAC: "00:50:56:6a:00:01", Name: "esx-1", Kind: "hypervisor"}}}},
+		"keriooperator|10.9.16.97": {Module: "keriooperator", IP: "10.9.16.97", Time: time.Now(), Inventory: modules.Inventory{Devices: []modules.ManagedDevice{
+			{IP: "10.9.16.40", Name: "305", Kind: "phone"}, {IP: "10.9.16.41", Name: "306", Kind: "phone"},
+			{MAC: "C0:51:7E:00:00:09", Name: "307", Kind: "phone"}}}},
+		"unificontroller|10.9.97.5": {Module: "unificontroller", IP: "10.9.97.5", Time: time.Now(), Inventory: modules.Inventory{Devices: []modules.ManagedDevice{
+			{MAC: "f0:9f:c2:00:00:05", Name: "USW", Kind: "switch"}}}},
+	}
+	inventoryIndex()
+	inventoryMu.Unlock()
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+
+	g := NewDJGraph()
+	nodes := []struct{ id, info, on, off string }{
+		{"00:50:56:6a:00:01", "[VM] 🐧 Linux", "hypervisor", "vm"},
+		{"00:1b:21:00:00:40", "[ENDPOINT] Intel\n10.9.16.40", "phone", "endpoint"},
+		{"c0:51:7e:00:00:41", "[ENDPOINT] Hikvision\n10.9.16.41", "camera", "camera"},
+		{"c0:51:7e:00:00:09", "[ENDPOINT] Hikvision", "phone", "camera"},
+		{"f0:9f:c2:00:00:05", "[LLDP-EP] Ubiquiti", "lldp_switch", "access_point"},
+		{"00:1b:21:00:00:05", "[ENDPOINT] Intel\n10.9.0.5", "hypervisor", "endpoint"},
+		{"00:1b:21:00:01:07", "[ENDPOINT] Intel\n10.9.1.7", "endpoint", "endpoint"},
+		{"00:1b:21:00:00:06", "[ENDPOINT] Intel\n10.9.0.6", "endpoint", "endpoint"},
+	}
+	for _, n := range nodes {
+		g.AddNode(n.id)
+		g.SwitchInfo[n.id] = n.info
+	}
+	for _, kindWins := range []bool{true, false} {
+		currentSettingsMutex.Lock()
+		currentSettings.Classify.ControllerKindWins = kindWins
+		currentSettingsMutex.Unlock()
+		got := map[string]GraphNode{}
+		for _, n := range g.GetGraphData().Nodes {
+			got[n.ID] = n
+		}
+		for _, n := range nodes {
+			want := n.off
+			if kindWins {
+				want = n.on
+			}
+			if got[n.id].Group != want || got[n.id].NodeType != want || g.determineDeviceGroup(n.id, n.info) != want {
+				t.Errorf("controllerKindWins %v: %s group %q type %q, want %q", kindWins, n.id, got[n.id].Group, got[n.id].NodeType, want)
+			}
+		}
 	}
 }
