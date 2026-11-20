@@ -862,8 +862,8 @@ func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 				Type:        "shadow_it",
 				Severity:    "high",
 				Device:      device.IP,
-				Description: fmt.Sprintf("Port %d has %d MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.", p.Port, len(p.MACs)),
-				Value:       fmt.Sprintf("%d MACs on single port", len(p.MACs)),
+				Description: fmt.Sprintf("Port %d has %d MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.", p.Port, len(p.MACs)+len(p.LLDP)),
+				Value:       fmt.Sprintf("%d MACs on single port", len(p.MACs)+len(p.LLDP)),
 				nodeID:      ix.hubNode(device, p.Port),
 			})
 		}

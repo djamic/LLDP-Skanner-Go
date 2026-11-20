@@ -23,6 +23,9 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"lldp_scanner/modules/kit"
+	"lldp_scanner/modules/voip"
 )
 
 var (
@@ -965,6 +968,108 @@ func lldpKnownMACs(data *DeviceData) map[string]bool {
 	return knownMACs
 }
 
+// lldpPortPlan is what a port of a switch with several LLDP neighbors gets
+// (lldpPortPlans).
+type lldpPortPlan struct {
+	Kind    fdbPortKind       // fdbHub, fdbAPHub, or fdbDirect for a phone's daisy chain
+	Targets []string          // the neighbors' node ids, sorted
+	APs     int               // how many of them are access points
+	Ports   map[string]string // a neighbor's own port (lldpRemotePortName)
+	Phone   string            // the daisy chain's phone, the other neighbor behind it
+}
+
+// lldpPortPlans are the ports of a switch (by ifIndex, the LLDP local port)
+// where several distinct LLDP neighbors are seen, with the Classification
+// choice lldpHubs (none without it). Neighbors on one port that are no
+// switch are behind an unmanaged switch that passes LLDP on (UniFi access
+// points, Windows' own LLDP driver): drawn straight from the port, the
+// switch is never seen. A port where a polled switch or router, or an
+// unpolled switch (a bridge or router by its LLDP capabilities whose vendor
+// makes no access points), is a neighbor gets no plan: the others are that
+// switch's. An access point its controller links to another device (the
+// pass-through port of a UAP-AC-Mesh-Pro, a mesh link, a UniFi switch) is
+// behind that device, not on the port's segment: it is no member and is
+// drawn as before. A port with an HTTP-confirmed ESXi host (a neighbor or
+// an FDB MAC) gets no plan either: it is never a Shadow-IT hub (the ESXi
+// exemption). Of the other ports with at least two members, one where
+// most are access points is an AP hub (a Shadow-IT hub with the choice
+// apHubAlert): the few others are Wi-Fi clients whose LLDP (Windows sends
+// it on Wi-Fi too) the access points pass on. One with a phone and one
+// device that is no access point is a daisy chain (the device on the
+// phone's PC port), and any other a Shadow-IT hub.
+func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldpPortPlan {
+	rules := currentClassify()
+	if !rules.LLDPHubs {
+		return nil
+	}
+	rows := make(map[int]map[string]LLDPNeighbor)
+	for _, n := range data.Neighbors {
+		if target, _, ok := graphLLDPNeighborTarget(data, n); ok {
+			if rows[n.LocalPortNum] == nil {
+				rows[n.LocalPortNum] = make(map[string]LLDPNeighbor)
+			}
+			rows[n.LocalPortNum][target] = n
+		}
+	}
+	ownMAC, selfID := graphChassisKey(data.ChassisID), graphDeviceNodeID(data)
+	esxiOn := make(map[int]bool)
+	for _, e := range data.MACTable {
+		if graphIsConfirmedESXi(canonicalMAC(e.MACAddress)) {
+			esxiOn[collectFDBIfIndex(data, e.PortNumber)] = true
+		}
+	}
+	plans := make(map[int]*lldpPortPlan)
+	for port, targets := range rows {
+		if len(targets) < 2 || esxiOn[port] || slices.ContainsFunc(slices.Collect(maps.Keys(targets)), graphIsConfirmedESXi) {
+			continue
+		}
+		plan := &lldpPortPlan{Ports: make(map[string]string)}
+		aps, switchBehind := 0, false
+		var phones, others []string
+		for target, n := range targets {
+			caps := n.RemSysCapEnabled
+			isAP := caps&lldpCapWLANAP != 0 || categorizeVendor(lookupVendor(target)) == "access_point"
+			_, polled := switchMACs[target]
+			routerOnly := caps&lldpCapRouter != 0 && caps&lldpCapBridge == 0
+			if polled || routerOnly || (lldpDiscoverable(caps) && !isAP) {
+				switchBehind = true
+				break
+			}
+			if v := managedViewOf(target); isAP && v != nil && v.Uplink != nil {
+				if up := canonicalMAC(v.Uplink.MAC); up != "" && up != ownMAC && switchMACs[up] != selfID {
+					continue
+				}
+			}
+			_, phone := voip.Detect(voipEvidence(target, n, ""))
+			switch {
+			case isAP:
+				aps++
+			case phone || caps&lldpCapPhone != 0:
+				phones = append(phones, target)
+			default:
+				others = append(others, target)
+			}
+			plan.Targets = append(plan.Targets, target)
+			plan.Ports[target] = lldpRemotePortName(n)
+		}
+		if switchBehind || len(plan.Targets) < 2 {
+			continue
+		}
+		slices.Sort(plan.Targets)
+		plan.APs = aps
+		switch {
+		case aps > len(plan.Targets)-aps && !rules.APHubAlert:
+			plan.Kind = fdbAPHub
+		case len(plan.Targets) == 2 && len(phones) == 1 && len(others) == 1:
+			plan.Kind, plan.Phone = fdbDirect, phones[0]
+		default:
+			plan.Kind = fdbHub
+		}
+		plans[port] = plan
+	}
+	return plans
+}
+
 // buildGraphEdges builds graph edges using ChassisID as the primary key
 // switchMACs maps the own MACs of the polled switches to their node ids
 // (buildSwitchOwnMACs), so switch MACs get no endpoint nodes
@@ -1003,6 +1108,10 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 			rowsTo[target]++
 		}
 	}
+	// Ports with several neighbors: their hubs (the FDB loop draws them), and
+	// the devices behind a phone, linked once every node is there
+	plans := lldpPortPlans(data, switchMACs)
+	var behindPhones [][3]string // phone, device, label
 	for _, neighbor := range data.Neighbors {
 		// Determine Target ID - prefer MAC address for uniqueness; skip
 		// garbage targets and NULL0 ports (before the node is made, so no
@@ -1025,6 +1134,13 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 		}
 
 		remotePort := lldpRemotePortName(neighbor)
+
+		if plan := plans[neighbor.LocalPortNum]; plan != nil && targetID != plan.Phone && slices.Contains(plan.Targets, targetID) {
+			if plan.Kind == fdbDirect {
+				behindPhones = append(behindPhones, [3]string{plan.Phone, targetID, "|" + normalizePortName(remotePort)})
+			}
+			continue
+		}
 
 		// Get VLAN info for local port (PortVLANs is dot1d bridge-port indexed)
 		vlanStr := getPortVLANLabel(data.PortVLANs, collectBridgePort(data, neighbor.LocalPortNum))
@@ -1078,21 +1194,45 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 		}
 	}
 
+	for _, l := range behindPhones {
+		if added, _ := graph.AddEdge(l[0], l[1], strings.TrimSuffix(l[2], "|")); added {
+			logDebug("       [NEW EDGE] Added device behind a phone: %s -> %s", l[0], l[1])
+		}
+	}
+
 	// Process MAC Address Table - create endpoint nodes, with the per-port
 	// rule the Shadow-IT alerts, metrics and reports share (fdbPorts).
 	// Ports come in ascending order, so when a MAC is seen on two ports the
 	// node is created (first creator wins) by the same port on every build.
 	for _, p := range fdbPorts(data, switchMACs) {
 		portName := getFDBPortName(data, p.Port)
-		if p.Kind == fdbHub || p.Kind == fdbMiniHub {
+		if p.Kind == fdbHub || p.Kind == fdbMiniHub || p.Kind == fdbAPHub {
 			// Non-VM hub: create aggregated hub node; every member gets a
-			// node (a hub has at most 20 MACs, a mini hub 500). A mini hub
-			// is a hub- node too, so the hypervisor detection and the
-			// views take it as one; its tag makes its group (minihub)
+			// node (a hub has at most 20 MACs, a mini hub 500), and so do
+			// the LLDP neighbors behind it. A mini hub and an AP hub are
+			// hub- nodes too, so the hypervisor detection and the views
+			// take them as one; their tags make their groups. With the
+			// Classification choice wifiClientsCountOnly the access points'
+			// clients are counted, not drawn: an AP hub's MACs, and the
+			// randomised MACs of a hub with access points
 			nodeID := fmt.Sprintf("hub-%s-p%d", srcID, p.Port)
-			nodeLabel := fmt.Sprintf("[HUB] Unmanaged\n%d devices", len(p.MACs))
-			if p.Kind == fdbMiniHub {
+			nodeLabel := fmt.Sprintf("[HUB] Unmanaged\n%d devices", len(p.MACs)+len(p.LLDP))
+			macs := p.MACs
+			countOnly := currentClassify().WiFiClientsCountOnly
+			switch {
+			case p.Kind == fdbMiniHub:
 				nodeLabel = fmt.Sprintf("[MINIHUB] Mini hub\n%d devices", len(p.MACs))
+			case p.Kind == fdbAPHub:
+				parts := []string{kit.Plural(p.APs, "access point")}
+				if others := len(p.LLDP) - p.APs; others > 0 {
+					parts = append(parts, kit.Plural(others, "other device"))
+				}
+				nodeLabel = "[APHUB] AP hub\n" + strings.Join(append(parts, kit.Plural(len(p.MACs), "client")), ", ")
+				if countOnly {
+					macs = nil
+				}
+			case p.APs > 0 && countOnly:
+				macs = slices.DeleteFunc(slices.Clone(macs), isRandomMAC)
 			}
 			edgeLabel := fmt.Sprintf("%s|Hub", normalizePortName(portName))
 
@@ -1102,7 +1242,16 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 			}
 			graph.AddEdge(srcID, nodeID, edgeLabel)
 
-			for _, mac := range p.MACs {
+			if plan := plans[collectFDBIfIndex(data, p.Port)]; plan != nil {
+				for _, target := range p.LLDP {
+					label := ""
+					if port := plan.Ports[target]; port != "" {
+						label = "|" + normalizePortName(port)
+					}
+					graph.AddEdge(nodeID, target, label)
+				}
+			}
+			for _, mac := range macs {
 				graphAddFDBEndpoint(graph, data, macToIP, nodeID, mac, "")
 			}
 			continue
@@ -1281,6 +1430,7 @@ const (
 	fdbVMPort                      // most MACs are virtual NICs: a hypervisor host
 	fdbESXiPort                    // a hub candidate with an HTTP-confirmed ESXi host
 	fdbMiniHub                     // a trunk or big port no polled switch is behind: its devices, no Shadow IT
+	fdbAPHub                       // access points behind an unmanaged switch (LLDP): no Shadow IT
 )
 
 // fdbHubMax is the most MACs a hub has: a port with more (like a VLAN
@@ -1297,6 +1447,11 @@ const (
 type fdbPort struct {
 	Port int
 	MACs []string // canonical, after the rule's filters
+	// LLDP are the node ids of the port's LLDP neighbors a hub or AP hub
+	// of several neighbors (lldpPortPlans) has, besides its MACs; APs of
+	// them are access points
+	LLDP []string
+	APs  int
 	Kind fdbPortKind
 	// Candidate: at least 2 MACs on a port that has no accepted LLDP
 	// neighbor and is no trunk or uplink, so a hub unless it is a VM or
@@ -1328,6 +1483,7 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 	// so switch links where BridgePort != IfIndex (Huawei dot1dBasePortIfIndex)
 	// are skipped too without dropping cascaded hubs, VMs or daisy-chained PCs.
 	knownMACs := lldpKnownMACs(data)
+	plans := lldpPortPlans(data, switchMACs)
 	lldpPorts := make(map[int]bool)
 	lldpSwitchPorts := make(map[int]bool)
 	for _, n := range data.Neighbors {
@@ -1397,12 +1553,40 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 		portMACs[macEntry.PortNumber] = append(portMACs[macEntry.PortNumber], normMAC)
 	}
 
+	// The ports with FDB MACs, and the hub ports of several LLDP neighbors
+	// (lldpPortPlans) where no MAC is left
+	ports := slices.Collect(maps.Keys(portMACs))
+	for ifIdx, plan := range plans {
+		if plan.Kind != fdbDirect {
+			ports = append(ports, collectBridgePort(data, ifIdx))
+		}
+	}
+	slices.Sort(ports)
+	ports = slices.Compact(ports)
+
 	var out []fdbPort
-	for _, portNum := range slices.Sorted(maps.Keys(portMACs)) {
+	planned := make(map[int]int) // a plan's ifIndex → its port in out
+	for _, portNum := range ports {
 		macs := portMACs[portNum]
+		ifIdx := collectFDBIfIndex(data, portNum)
+		// A port with several LLDP neighbors: a hub or AP hub of them and of
+		// its MACs (one per ifIndex), or a phone's daisy chain, which LLDP
+		// draws
+		if plan := plans[ifIdx]; plan != nil {
+			if plan.Kind == fdbDirect {
+				continue
+			}
+			if i, ok := planned[ifIdx]; ok {
+				out[i].MACs = append(out[i].MACs, macs...)
+				continue
+			}
+			planned[ifIdx] = len(out)
+			out = append(out, fdbPort{Port: portNum, MACs: macs, LLDP: plan.Targets, APs: plan.APs, Kind: plan.Kind, Candidate: plan.Kind == fdbHub})
+			continue
+		}
+
 		// Skip if a 1:1 / unmapped port already has LLDP neighbors, or if its
 		// mapped ifIndex is a polled-switch / router LLDP link (Huawei VRP)
-		ifIdx := collectFDBIfIndex(data, portNum)
 		if (ifIdx == portNum && lldpPorts[portNum]) || lldpSwitchPorts[ifIdx] {
 			continue
 		}

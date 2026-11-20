@@ -26,6 +26,7 @@ const treeGroupIcons = {
     'router': '🌐',
     'hub': '🔌',
     'minihub': '🔗',
+    'ap_hub': '📡',
     'endpoint': '💻',
     'access_point': '📡',
     'vm': '🖥️',
@@ -46,6 +47,7 @@ const treeGroupRanks = {
     'router': 0,
     'hub': 1,
     'minihub': 1,
+    'ap_hub': 1,
     'hypervisor': 1,
 };
 // END groups.go
@@ -192,7 +194,7 @@ function treeNodeName(node) {
     const id = String(node.id);
     const lines = String(node.sysName || node.label || '').split('\n').map(s => s.trim()).filter(Boolean);
     const first = lines[0] || '';
-    if (first.startsWith('[HUB]') || first.startsWith('[MINIHUB]') || first.startsWith('[HYPERVISOR]')) {
+    if (first.startsWith('[HUB]') || first.startsWith('[MINIHUB]') || first.startsWith('[APHUB]') || first.startsWith('[HYPERVISOR]')) {
         const text = first.replace(treeTagPattern, '');
         if (text) return text;
     }

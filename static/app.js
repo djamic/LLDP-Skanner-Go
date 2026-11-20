@@ -29,6 +29,7 @@ const groupColors = {
     'router': '#E24A4A',
     'hub': '#FF9800',
     'minihub': '#FFC107',
+    'ap_hub': '#4DB6AC',
     'endpoint': '#8BC34A',
     'access_point': '#00BCD4',
     'vm': '#9C27B0',
@@ -53,6 +54,7 @@ const uiGroupIconSizes = {
     'router': 44,
     'hub': 40,
     'minihub': 40,
+    'ap_hub': 40,
     'access_point': 40,
     'hypervisor': 44,
     'server': 44,
@@ -63,6 +65,7 @@ const uiTypeNames = {
     'router': '🌐 Router',
     'hub': '🔌 Hub',
     'minihub': '🔗 Mini hub',
+    'ap_hub': '📡 AP hub',
     'endpoint': '💻 Endpoint',
     'access_point': '📡 Wi-Fi AP',
     'vm': '🖥️ VM',
@@ -83,6 +86,7 @@ const groupIcons = {
     'router': '🌐',
     'hub': '🔌',
     'minihub': '🔗',
+    'ap_hub': '📡',
     'endpoint': '💻',
     'access_point': '📡',
     'vm': '🖥️',
@@ -103,6 +107,7 @@ const uiExportGroups = [
     { id: 'router', label: '🌐 Router', checked: false },
     { id: 'hub', label: '⚠️ Hub (Shadow IT)', checked: true },
     { id: 'minihub', label: '🔗 Mini hub', checked: false },
+    { id: 'ap_hub', label: '📡 AP hub', checked: false },
     { id: 'endpoint', label: '💻 Endpoint', checked: false },
     { id: 'access_point', label: '📡 Wi-Fi AP', checked: false },
     { id: 'vm', label: '🖥️ VM', checked: false },
@@ -407,6 +412,13 @@ const topoIconSymbolsMarkup = `
             <rect x="7.7" y="19.5" width="3.6" height="3.6" rx="0.8" fill="currentColor"/>
             <rect x="14.2" y="19.5" width="3.6" height="3.6" rx="0.8" fill="currentColor"/>
             <rect x="20.7" y="19.5" width="3.6" height="3.6" rx="0.8" fill="currentColor"/>
+        </symbol>
+        <symbol id="topo-icon-ap_hub" viewBox="0 0 32 32">
+            <rect x="3" y="13" width="26" height="13" rx="3" fill="#0f2137" stroke="currentColor" stroke-width="2.2"/>
+            <rect x="6.5" y="19" width="3.6" height="4" rx="0.8" fill="currentColor"/>
+            <rect x="12.5" y="19" width="3.6" height="4" rx="0.8" fill="currentColor"/>
+            <rect x="18.5" y="19" width="3.6" height="4" rx="0.8" fill="currentColor"/>
+            <path d="M10 9.5Q16 4.5 22 9.5M12.8 12Q16 9.4 19.2 12" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round"/>
         </symbol>
         <symbol id="topo-icon-phone" viewBox="0 0 32 32">
             <rect x="4.5" y="5.5" width="23" height="21" rx="3.5" fill="#0f2137" stroke="currentColor" stroke-width="2.2"/>
@@ -1432,7 +1444,7 @@ function uiParseNodeInfo(node) {
             if (!out.detail) out.detail = words.slice(0, typeLen).join(' ');
             if (!out.vendor) out.vendor = words.slice(typeLen).join(' ');
             if (typeLen === 2 && !brand) brand = words[0];
-        } else if (line.startsWith('[HYPERVISOR]') || line.startsWith('[HUB]') || line.startsWith('[MINIHUB]')) {
+        } else if (line.startsWith('[HYPERVISOR]') || line.startsWith('[HUB]') || line.startsWith('[MINIHUB]') || line.startsWith('[APHUB]')) {
             const text = line.slice(line.indexOf(']') + 1).trim();
             if (!out.detail) out.detail = text;
             if (line.startsWith('[HYPERVISOR]') && !typeText) typeText = text;
@@ -1738,7 +1750,7 @@ uiOnNodeClick('infoNeighbors', id => highlightNodeFromPanel(id), true);
 
 // The classification choices (settings.go ClassifySettings): the settings
 // modal has a checkbox settingsClassify-<choice> for each.
-const uiClassifyChoices = ['lldpCaps'];
+const uiClassifyChoices = ['lldpCaps', 'lldpHubs', 'apHubAlert', 'wifiClientsCountOnly'];
 
 // Open settings modal
 function openSettings() {

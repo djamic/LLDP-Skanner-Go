@@ -1,6 +1,232 @@
 ## 7. Shadow IT Tarmoqlar (batafsil)
 
 ### Shadow IT #1: [HUB] Unmanaged
+4 devices
+
+```mermaid
+graph LR
+  hub_4caea3275faa_p1(("[HUB] Unmanaged<br>4 devices"))
+  4caea3275faa["D - 1<br>172.20.230.3"]
+  4caea3275faa-- "GE1/0/1" -->hub_4caea3275faa_p1
+  style 4caea3275faa fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e2694ca5da["[LLDP-EP]<br>172.16.4.83"]
+  hub_4caea3275faa_p1-->00e2694ca5da
+  style 00e2694ca5da fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e2694ca73d["[LLDP-EP]"]
+  hub_4caea3275faa_p1-->00e2694ca73d
+  style 00e2694ca73d fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e2694ca808["[LLDP-EP]<br>172.16.6.8"]
+  hub_4caea3275faa_p1-->00e2694ca808
+  style 00e2694ca808 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  60cf847140b1["[LLDP-EP] ASUSTek COMPUTER INC.<br>DESKTOP-S4N13U3"]
+  hub_4caea3275faa_p1-->60cf847140b1
+  style 60cf847140b1 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3275faa_p1 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 4 ta qurilma
+
+### Shadow IT #2: [HUB] Unmanaged
+8 devices
+
+```mermaid
+graph LR
+  hub_4caea3275faa_p16(("[HUB] Unmanaged<br>8 devices"))
+  4caea3275faa["D - 1<br>172.20.230.3"]
+  4caea3275faa-- "GE1/0/16" -->hub_4caea3275faa_p16
+  style 4caea3275faa fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00cfe05b06e1["[LLDP-EP] Intel<br>DESKTOP-0SUPTE2"]
+  hub_4caea3275faa_p16-->00cfe05b06e1
+  style 00cfe05b06e1 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  581122d56ac6["[LLDP-EP] ASUSTek COMPUTER INC.<br>172.16.6.18"]
+  hub_4caea3275faa_p16-->581122d56ac6
+  style 581122d56ac6 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  84699354fd43["[LLDP-EP] HP<br>UMIDA-PC"]
+  hub_4caea3275faa_p16-->84699354fd43
+  style 84699354fd43 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  e0d55ef6f1bd["[LLDP-EP] Gigabyte<br>172.16.4.161"]
+  hub_4caea3275faa_p16-->e0d55ef6f1bd
+  style e0d55ef6f1bd fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f476["[LLDP-EP] EliteGroup<br>DESKTOP-LTMNSD5"]
+  hub_4caea3275faa_p16-->f44d30c7f476
+  style f44d30c7f476 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f661["[LLDP-EP] EliteGroup<br>172.16.4.20"]
+  hub_4caea3275faa_p16-->f44d30c7f661
+  style f44d30c7f661 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f9ba["[LLDP-EP] EliteGroup<br>MAMUR"]
+  hub_4caea3275faa_p16-->f44d30c7f9ba
+  style f44d30c7f9ba fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f8f082d87440["[ENDPOINT] SNR"]
+  hub_4caea3275faa_p16-->f8f082d87440
+  style f8f082d87440 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3275faa_p16 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 8 ta qurilma
+
+### Shadow IT #3: [HUB] Unmanaged
+6 devices
+
+```mermaid
+graph LR
+  hub_4caea3275faa_p23(("[HUB] Unmanaged<br>6 devices"))
+  4caea3275faa["D - 1<br>172.20.230.3"]
+  4caea3275faa-- "GE1/0/23" -->hub_4caea3275faa_p23
+  style 4caea3275faa fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00cfe05b06d8["[LLDP-EP] Intel<br>172.16.4.102"]
+  hub_4caea3275faa_p23-->00cfe05b06d8
+  style 00cfe05b06d8 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e00aef0353["[LLDP-EP] DIBA, INC.<br>172.16.4.187"]
+  hub_4caea3275faa_p23-->00e00aef0353
+  style 00e00aef0353 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04c7fc5c1["[LLDP-EP] Realtek<br>172.16.4.101"]
+  hub_4caea3275faa_p23-->00e04c7fc5c1
+  style 00e04c7fc5c1 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e269537e55["[LLDP-EP]<br>DESKTOP-IJ188KB"]
+  hub_4caea3275faa_p23-->00e269537e55
+  style 00e269537e55 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  18c04d5ee095["[LLDP-EP] Gigabyte<br>172.16.4.112"]
+  hub_4caea3275faa_p23-->18c04d5ee095
+  style 18c04d5ee095 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  94c6913b29a1["[LLDP-EP] EliteGroup<br>172.16.4.107"]
+  hub_4caea3275faa_p23-->94c6913b29a1
+  style 94c6913b29a1 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3275faa_p23 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 6 ta qurilma
+
+### Shadow IT #4: [HUB] Unmanaged
+2 devices
+
+```mermaid
+graph LR
+  hub_4caea3275faa_p31(("[HUB] Unmanaged<br>2 devices"))
+  4caea3275faa["D - 1<br>172.20.230.3"]
+  4caea3275faa-- "GE1/0/31" -->hub_4caea3275faa_p31
+  style 4caea3275faa fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e04c363757["[LLDP-EP] Realtek<br>KOMPUTER"]
+  hub_4caea3275faa_p31-->00e04c363757
+  style 00e04c363757 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  902e16d43d60["[LLDP-EP] LCFC<br>172.16.4.147"]
+  hub_4caea3275faa_p31-->902e16d43d60
+  style 902e16d43d60 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3275faa_p31 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 2 ta qurilma
+
+### Shadow IT #5: [HUB] Unmanaged
+5 devices
+
+```mermaid
+graph LR
+  hub_4caea3275faa_p32(("[HUB] Unmanaged<br>5 devices"))
+  4caea3275faa["D - 1<br>172.20.230.3"]
+  4caea3275faa-- "GE1/0/32" -->hub_4caea3275faa_p32
+  style 4caea3275faa fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e26953ed92["[LLDP-EP]<br>172.16.6.145"]
+  hub_4caea3275faa_p32-->00e26953ed92
+  style 00e26953ed92 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e26953ef84["[LLDP-EP]<br>172.16.6.212"]
+  hub_4caea3275faa_p32-->00e26953ef84
+  style 00e26953ef84 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e269551152["[LLDP-EP]<br>172.16.4.123"]
+  hub_4caea3275faa_p32-->00e269551152
+  style 00e269551152 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  48f3170760fd["[LLDP-EP]<br>172.16.6.1"]
+  hub_4caea3275faa_p32-->48f3170760fd
+  style 48f3170760fd fill:#8BC34A,stroke:#6B9F30,color:#fff
+  acf4662ab12a["[LLDP-EP] HP Inc.<br>WIN-ET82IM9O0TT"]
+  hub_4caea3275faa_p32-->acf4662ab12a
+  style acf4662ab12a fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3275faa_p32 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 5 ta qurilma
+
+### Shadow IT #6: [HUB] Unmanaged
+2 devices
+
+```mermaid
+graph LR
+  hub_4caea3275faa_p33(("[HUB] Unmanaged<br>2 devices"))
+  4caea3275faa["D - 1<br>172.20.230.3"]
+  4caea3275faa-- "GE1/0/33" -->hub_4caea3275faa_p33
+  style 4caea3275faa fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  48f3170755e9["[LLDP-EP]<br>172.16.5.141"]
+  hub_4caea3275faa_p33-->48f3170755e9
+  style 48f3170755e9 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08974["[LLDP-EP] Wistron<br>172.16.5.209"]
+  hub_4caea3275faa_p33-->98eecbe08974
+  style 98eecbe08974 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3275faa_p33 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 2 ta qurilma
+
+### Shadow IT #7: [HUB] Unmanaged
+6 devices
+
+```mermaid
+graph LR
+  hub_4caea3275faa_p34(("[HUB] Unmanaged<br>6 devices"))
+  4caea3275faa["D - 1<br>172.20.230.3"]
+  4caea3275faa-- "GE1/0/34" -->hub_4caea3275faa_p34
+  style 4caea3275faa fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  004e01c0a6b7["[LLDP-EP] Dell<br>172.16.4.120"]
+  hub_4caea3275faa_p34-->004e01c0a6b7
+  style 004e01c0a6b7 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  04d59067b5a0["[ENDPOINT] Fortinet, Inc.<br>172.16.5.14"]
+  hub_4caea3275faa_p34-->04d59067b5a0
+  style 04d59067b5a0 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  4c4bf9540095["[LLDP-EP]<br>DESKTOP-43B20Q8"]
+  hub_4caea3275faa_p34-->4c4bf9540095
+  style 4c4bf9540095 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  84c8a01f53b2["[ENDPOINT] Hui Zhou Gaoshengda Technology Co.,LTD<br>172.16.6.98"]
+  hub_4caea3275faa_p34-->84c8a01f53b2
+  style 84c8a01f53b2 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  b02628ff59a1["[ENDPOINT] Broadcom Limited<br>172.16.4.248"]
+  hub_4caea3275faa_p34-->b02628ff59a1
+  style b02628ff59a1 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bc24116ce497["[VM] 🪟 Windows Proxmox<br>172.16.4.254"]
+  hub_4caea3275faa_p34-->bc24116ce497
+  style bc24116ce497 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3275faa_p34 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 6 ta qurilma
+
+### Shadow IT #8: [HUB] Unmanaged
+5 devices
+
+```mermaid
+graph LR
+  hub_4caea3275faa_p35(("[HUB] Unmanaged<br>5 devices"))
+  4caea3275faa["D - 1<br>172.20.230.3"]
+  4caea3275faa-- "GE1/0/35" -->hub_4caea3275faa_p35
+  style 4caea3275faa fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00d861b4bf5a["[ENDPOINT] MSI<br>172.16.4.172"]
+  hub_4caea3275faa_p35-->00d861b4bf5a
+  style 00d861b4bf5a fill:#8BC34A,stroke:#6B9F30,color:#fff
+  84699355501a["[LLDP-EP] HP<br>PHOENIX"]
+  hub_4caea3275faa_p35-->84699355501a
+  style 84699355501a fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bc2411c67cc5["[VM] 💻 KVM/Proxmox VM Proxmox<br>172.16.7.236"]
+  hub_4caea3275faa_p35-->bc2411c67cc5
+  style bc2411c67cc5 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bceca036098f["[LLDP-EP] Compal<br>172.16.6.216"]
+  hub_4caea3275faa_p35-->bceca036098f
+  style bceca036098f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  e865d47fabb9["[ENDPOINT] Tenda Technology Co.,Ltd.Dongguan branch<br>172.16.5.31"]
+  hub_4caea3275faa_p35-->e865d47fabb9
+  style e865d47fabb9 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3275faa_p35 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 5 ta qurilma
+
+### Shadow IT #9: [HUB] Unmanaged
 7 devices
 
 ```mermaid
@@ -35,7 +261,30 @@ graph LR
 
 **Ulanganlar:** 7 ta qurilma
 
-### Shadow IT #2: [HUB] Unmanaged
+### Shadow IT #10: [HUB] Unmanaged
+3 devices
+
+```mermaid
+graph LR
+  hub_4caea327768a_p9(("[HUB] Unmanaged<br>3 devices"))
+  4caea327768a["F-9<br>172.20.240.12"]
+  4caea327768a-- "GE1/0/9" -->hub_4caea327768a_p9
+  style 4caea327768a fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  48f317077bbd["[ENDPOINT]<br>172.16.32.134"]
+  hub_4caea327768a_p9-->48f317077bbd
+  style 48f317077bbd fill:#8BC34A,stroke:#6B9F30,color:#fff
+  64c901f5a32b["[LLDP-EP] Inventec<br>RUSTAM-HP"]
+  hub_4caea327768a_p9-->64c901f5a32b
+  style 64c901f5a32b fill:#8BC34A,stroke:#6B9F30,color:#fff
+  704d7b3f5741["[LLDP-EP] ASUSTek COMPUTER INC.<br>RUSTAM-LAPTOP-A"]
+  hub_4caea327768a_p9-->704d7b3f5741
+  style 704d7b3f5741 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea327768a_p9 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 3 ta qurilma
+
+### Shadow IT #11: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -55,7 +304,152 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #3: [HUB] Unmanaged
+### Shadow IT #12: [HUB] Unmanaged
+3 devices
+
+```mermaid
+graph LR
+  hub_4caea32784ca_p16(("[HUB] Unmanaged<br>3 devices"))
+  4caea32784ca["HPE<br>172.20.230.2"]
+  4caea32784ca-- "GE1/0/16" -->hub_4caea32784ca_p16
+  style 4caea32784ca fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e04cf16eb7["[LLDP-EP] Realtek<br>172.16.14.17"]
+  hub_4caea32784ca_p16-->00e04cf16eb7
+  style 00e04cf16eb7 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  50d4f7662bd1["[ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD.<br>172.16.15.166"]
+  hub_4caea32784ca_p16-->50d4f7662bd1
+  style 50d4f7662bd1 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  a036bc266ee9["[LLDP-EP] ASUSTek COMPUTER INC.<br>DESKTOP-NCB9RSV"]
+  hub_4caea32784ca_p16-->a036bc266ee9
+  style a036bc266ee9 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea32784ca_p16 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 3 ta qurilma
+
+### Shadow IT #13: [HUB] Unmanaged
+4 devices
+
+```mermaid
+graph LR
+  hub_4caea32784ca_p18(("[HUB] Unmanaged<br>4 devices"))
+  4caea32784ca["HPE<br>172.20.230.2"]
+  4caea32784ca-- "GE1/0/18" -->hub_4caea32784ca_p18
+  style 4caea32784ca fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e04cf0e0b5["[LLDP-EP] Realtek<br>172.16.12.152"]
+  hub_4caea32784ca_p18-->00e04cf0e0b5
+  style 00e04cf0e0b5 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e0f4["[LLDP-EP] Realtek<br>172.16.13.250"]
+  hub_4caea32784ca_p18-->00e04cf0e0f4
+  style 00e04cf0e0f4 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e191["[LLDP-EP] Realtek<br>172.16.15.187"]
+  hub_4caea32784ca_p18-->00e04cf0e191
+  style 00e04cf0e191 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  50d4f7662efd["[ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD.<br>172.16.13.38"]
+  hub_4caea32784ca_p18-->50d4f7662efd
+  style 50d4f7662efd fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea32784ca_p18 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 4 ta qurilma
+
+### Shadow IT #14: [HUB] Unmanaged
+13 devices
+
+```mermaid
+graph LR
+  hub_4caea3278b8a_p6(("[HUB] Unmanaged<br>13 devices"))
+  4caea3278b8a["HPE<br>172.20.230.82"]
+  4caea3278b8a-- "GE1/0/6" -->hub_4caea3278b8a_p6
+  style 4caea3278b8a fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  508d5cab45bc["[LLDP-EP]<br>172.16.17.22"]
+  hub_4caea3278b8a_p6-->508d5cab45bc
+  style 508d5cab45bc fill:#8BC34A,stroke:#6B9F30,color:#fff
+  508d5cab50c1["[LLDP-EP]<br>172.16.16.47"]
+  hub_4caea3278b8a_p6-->508d5cab50c1
+  style 508d5cab50c1 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f6f7["[LLDP-EP] EliteGroup<br>DESKTOP-14EAK3P"]
+  hub_4caea3278b8a_p6-->f44d30c7f6f7
+  style f44d30c7f6f7 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f4b520077bb6["[ENDPOINT] Biostar Microtech international corp.<br>172.16.17.116"]
+  hub_4caea3278b8a_p6-->f4b520077bb6
+  style f4b520077bb6 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f4b5201e88f2["[LLDP-EP] Biostar Microtech international corp.<br>172.16.17.171"]
+  hub_4caea3278b8a_p6-->f4b5201e88f2
+  style f4b5201e88f2 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f4b5201f4d58["[ENDPOINT] Biostar Microtech international corp.<br>172.16.19.135"]
+  hub_4caea3278b8a_p6-->f4b5201f4d58
+  style f4b5201f4d58 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f4b5201f5155["[LLDP-EP] Biostar Microtech international corp.<br>172.16.16.138"]
+  hub_4caea3278b8a_p6-->f4b5201f5155
+  style f4b5201f5155 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f4b5201f5215["[LLDP-EP] Biostar Microtech international corp.<br>172.16.18.60"]
+  hub_4caea3278b8a_p6-->f4b5201f5215
+  style f4b5201f5215 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f4b5201f53a2["[ENDPOINT] Biostar Microtech international corp.<br>172.16.17.16"]
+  hub_4caea3278b8a_p6-->f4b5201f53a2
+  style f4b5201f53a2 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f8f0827975a5["[ENDPOINT] SNR"]
+  hub_4caea3278b8a_p6-->f8f0827975a5
+  style f8f0827975a5 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f8f082797d97["[ENDPOINT] SNR"]
+  hub_4caea3278b8a_p6-->f8f082797d97
+  style f8f082797d97 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f8f08279807f["[ENDPOINT] SNR"]
+  hub_4caea3278b8a_p6-->f8f08279807f
+  style f8f08279807f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f8f082798981["[ENDPOINT] SNR"]
+  hub_4caea3278b8a_p6-->f8f082798981
+  style f8f082798981 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3278b8a_p6 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 13 ta qurilma
+
+### Shadow IT #15: [HUB] Unmanaged
+2 devices
+
+```mermaid
+graph LR
+  hub_4caea38db379_p23(("[HUB] Unmanaged<br>2 devices"))
+  4caea38db379["HPE<br>172.20.230.43"]
+  4caea38db379-- "GE1/0/23" -->hub_4caea38db379_p23
+  style 4caea38db379 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  98eecbe08989["[LLDP-EP] Wistron<br>172.16.10.3"]
+  hub_4caea38db379_p23-->98eecbe08989
+  style 98eecbe08989 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08bd9["[LLDP-EP] Wistron<br>HOME-PC"]
+  hub_4caea38db379_p23-->98eecbe08bd9
+  style 98eecbe08bd9 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea38db379_p23 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 2 ta qurilma
+
+### Shadow IT #16: [HUB] Unmanaged
+3 devices
+
+```mermaid
+graph LR
+  hub_4caea38db379_p43(("[HUB] Unmanaged<br>3 devices"))
+  4caea38db379["HPE<br>172.20.230.43"]
+  4caea38db379-- "GE1/0/43" -->hub_4caea38db379_p43
+  style 4caea38db379 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  042d3423d4d2["[LLDP-EP]<br>172.16.11.159"]
+  hub_4caea38db379_p43-->042d3423d4d2
+  style 042d3423d4d2 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  80beafc8a56b["[ENDPOINT] Hikvision<br>172.16.9.61"]
+  hub_4caea38db379_p43-->80beafc8a56b
+  style 80beafc8a56b fill:#E91E63,stroke:#C2185B,color:#fff
+  e4a8df9ded04["[LLDP-EP] Compal<br>WIN-TPB94LL8O7N"]
+  hub_4caea38db379_p43-->e4a8df9ded04
+  style e4a8df9ded04 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea38db379_p43 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 3 ta qurilma
+
+### Shadow IT #17: [HUB] Unmanaged
 3 devices
 
 ```mermaid
@@ -78,7 +472,36 @@ graph LR
 
 **Ulanganlar:** 3 ta qurilma
 
-### Shadow IT #4: [HUB] Unmanaged
+### Shadow IT #18: [HUB] Unmanaged
+5 devices
+
+```mermaid
+graph LR
+  hub_4caea38de091_p39(("[HUB] Unmanaged<br>5 devices"))
+  4caea38de091["HPE<br>172.20.253.10"]
+  4caea38de091-- "GE1/0/39" -->hub_4caea38de091_p39
+  style 4caea38de091 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e04c50dcba["[LLDP-EP] Realtek<br>WIN-VV0PNA5VTMR"]
+  hub_4caea38de091_p39-->00e04c50dcba
+  style 00e04c50dcba fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e070c19405["[LLDP-EP] DH TECHNOLOGY<br>172.20.19.72"]
+  hub_4caea38de091_p39-->00e070c19405
+  style 00e070c19405 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  94c6913ff83a["[LLDP-EP] EliteGroup<br>172.20.14.127"]
+  hub_4caea38de091_p39-->94c6913ff83a
+  style 94c6913ff83a fill:#8BC34A,stroke:#6B9F30,color:#fff
+  9c53221a9c21["[ENDPOINT] TP-Link Systems Inc<br>172.20.14.111"]
+  hub_4caea38de091_p39-->9c53221a9c21
+  style 9c53221a9c21 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  c8418a220e38["[LLDP-EP] Samsung Electronics.,LTD<br>USER-PC"]
+  hub_4caea38de091_p39-->c8418a220e38
+  style c8418a220e38 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea38de091_p39 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 5 ta qurilma
+
+### Shadow IT #19: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -98,7 +521,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #5: [HUB] Unmanaged
+### Shadow IT #20: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -118,7 +541,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #6: [HUB] Unmanaged
+### Shadow IT #21: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -138,7 +561,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #7: [HUB] Unmanaged
+### Shadow IT #22: [HUB] Unmanaged
 5 devices
 
 ```mermaid
@@ -167,7 +590,7 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #8: [HUB] Unmanaged
+### Shadow IT #23: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -205,7 +628,27 @@ graph LR
 
 **Ulanganlar:** 8 ta qurilma
 
-### Shadow IT #9: [HUB] Unmanaged
+### Shadow IT #24: [HUB] Unmanaged
+2 devices
+
+```mermaid
+graph LR
+  hub_4caea3a201ac_p8(("[HUB] Unmanaged<br>2 devices"))
+  4caea3a201ac["TTJ-3&4<br>172.20.230.23"]
+  4caea3a201ac-- "GE1/0/8" -->hub_4caea3a201ac_p8
+  style 4caea3a201ac fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e269537bd1["[LLDP-EP]<br>172.16.32.194"]
+  hub_4caea3a201ac_p8-->00e269537bd1
+  style 00e269537bd1 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  345a608220fd["[LLDP-EP] Micro-Star INTL CO., LTD.<br>DESKTOP-YAMORI"]
+  hub_4caea3a201ac_p8-->345a608220fd
+  style 345a608220fd fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a201ac_p8 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 2 ta qurilma
+
+### Shadow IT #25: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -225,7 +668,83 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #10: [HUB] Unmanaged
+### Shadow IT #26: [HUB] Unmanaged
+4 devices
+
+```mermaid
+graph LR
+  hub_4caea3a206ec_p21(("[HUB] Unmanaged<br>4 devices"))
+  4caea3a206ec["A-332<br>172.20.230.8"]
+  4caea3a206ec-- "GE1/0/21" -->hub_4caea3a206ec_p21
+  style 4caea3a206ec fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e04cf16c7a["[LLDP-EP] Realtek<br>172.16.20.182"]
+  hub_4caea3a206ec_p21-->00e04cf16c7a
+  style 00e04cf16c7a fill:#8BC34A,stroke:#6B9F30,color:#fff
+  48f3170756c8["[LLDP-EP]<br>172.16.23.163"]
+  hub_4caea3a206ec_p21-->48f3170756c8
+  style 48f3170756c8 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  9c53221aae78["[ENDPOINT] TP-Link Systems Inc<br>172.16.23.161"]
+  hub_4caea3a206ec_p21-->9c53221aae78
+  style 9c53221aae78 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  c0c9e3b7589d["[ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD.<br>172.16.21.167"]
+  hub_4caea3a206ec_p21-->c0c9e3b7589d
+  style c0c9e3b7589d fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a206ec_p21 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 4 ta qurilma
+
+### Shadow IT #27: [HUB] Unmanaged
+12 devices
+
+```mermaid
+graph LR
+  hub_4caea3a209ec_p45(("[HUB] Unmanaged<br>12 devices"))
+  4caea3a209ec["C 424/a<br>172.20.230.4"]
+  4caea3a209ec-- "GE1/0/45" -->hub_4caea3a209ec_p45
+  style 4caea3a209ec fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  004e35cb3c1a["[LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP"]
+  hub_4caea3a209ec_p45-->004e35cb3c1a
+  style 004e35cb3c1a fill:#8BC34A,stroke:#6B9F30,color:#fff
+  004e35cb44a2["[LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP"]
+  hub_4caea3a209ec_p45-->004e35cb44a2
+  style 004e35cb44a2 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  004e35cb4c12["[LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP"]
+  hub_4caea3a209ec_p45-->004e35cb4c12
+  style 004e35cb4c12 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e125["[LLDP-EP] Realtek<br>172.16.19.24"]
+  hub_4caea3a209ec_p45-->00e04cf0e125
+  style 00e04cf0e125 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf17080["[LLDP-EP] Realtek<br>172.16.19.121"]
+  hub_4caea3a209ec_p45-->00e04cf17080
+  style 00e04cf17080 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  345a607d0c1e["[LLDP-EP] Micro-Star INTL CO., LTD.<br>MUSLIMBEK"]
+  hub_4caea3a209ec_p45-->345a607d0c1e
+  style 345a607d0c1e fill:#8BC34A,stroke:#6B9F30,color:#fff
+  64c901f4d565["[LLDP-EP] Inventec<br>172.16.17.196"]
+  hub_4caea3a209ec_p45-->64c901f4d565
+  style 64c901f4d565 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  74bfc0dc21ff["[ENDPOINT] CANON INC.<br>172.16.19.151"]
+  hub_4caea3a209ec_p45-->74bfc0dc21ff
+  style 74bfc0dc21ff fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f4bc["[LLDP-EP] EliteGroup<br>MANAVIYAT"]
+  hub_4caea3a209ec_p45-->f44d30c7f4bc
+  style f44d30c7f4bc fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f6a0["[LLDP-EP] EliteGroup<br>ADMIN"]
+  hub_4caea3a209ec_p45-->f44d30c7f6a0
+  style f44d30c7f6a0 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f97f["[LLDP-EP] EliteGroup<br>172.16.16.46"]
+  hub_4caea3a209ec_p45-->f44d30c7f97f
+  style f44d30c7f97f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7fb9f["[LLDP-EP] EliteGroup<br>172.16.18.218"]
+  hub_4caea3a209ec_p45-->f44d30c7fb9f
+  style f44d30c7fb9f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a209ec_p45 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 12 ta qurilma
+
+### Shadow IT #28: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -245,7 +764,200 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #11: [HUB] Unmanaged
+### Shadow IT #29: [HUB] Unmanaged
+4 devices
+
+```mermaid
+graph LR
+  hub_4caea3a212ec_p37(("[HUB] Unmanaged<br>4 devices"))
+  4caea3a212ec["A RRT Kalidor<br>172.20.230.42"]
+  4caea3a212ec-- "GE1/0/37" -->hub_4caea3a212ec_p37
+  style 4caea3a212ec fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  28c5c818ebc8["[ENDPOINT] HP Inc.<br>172.16.25.7"]
+  hub_4caea3a212ec_p37-->28c5c818ebc8
+  style 28c5c818ebc8 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe089ea["[LLDP-EP] Wistron<br>WIN-OBHRCJOVNO0"]
+  hub_4caea3a212ec_p37-->98eecbe089ea
+  style 98eecbe089ea fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08c07["[LLDP-EP] Wistron<br>172.16.27.156"]
+  hub_4caea3a212ec_p37-->98eecbe08c07
+  style 98eecbe08c07 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f5f6["[LLDP-EP] EliteGroup<br>172.16.24.68"]
+  hub_4caea3a212ec_p37-->f44d30c7f5f6
+  style f44d30c7f5f6 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a212ec_p37 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 4 ta qurilma
+
+### Shadow IT #30: [HUB] Unmanaged
+5 devices
+
+```mermaid
+graph LR
+  hub_4caea3a2134c_p37(("[HUB] Unmanaged<br>5 devices"))
+  4caea3a2134c["HPE<br>172.20.230.41"]
+  4caea3a2134c-- "GE1/0/37" -->hub_4caea3a2134c_p37
+  style 4caea3a2134c fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e04c7c8766["[LLDP-EP] Realtek<br>172.16.19.230"]
+  hub_4caea3a2134c_p37-->00e04c7c8766
+  style 00e04c7c8766 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  5c60ba65fe5f["[LLDP-EP] HP Inc.<br>WIN-7O9L6O4NMS5"]
+  hub_4caea3a2134c_p37-->5c60ba65fe5f
+  style 5c60ba65fe5f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe089c4["[LLDP-EP] Wistron<br>172.16.17.227"]
+  hub_4caea3a2134c_p37-->98eecbe089c4
+  style 98eecbe089c4 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08aaa["[LLDP-EP] Wistron<br>172.16.17.173"]
+  hub_4caea3a2134c_p37-->98eecbe08aaa
+  style 98eecbe08aaa fill:#8BC34A,stroke:#6B9F30,color:#fff
+  c04a00f571e9["[ENDPOINT] TP-LINK TECHNOLOGIES CO.,LTD.<br>172.16.19.161"]
+  hub_4caea3a2134c_p37-->c04a00f571e9
+  style c04a00f571e9 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a2134c_p37 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 5 ta qurilma
+
+### Shadow IT #31: [HUB] Unmanaged
+19 devices
+
+```mermaid
+graph LR
+  hub_4caea3a215ec_p1(("[HUB] Unmanaged<br>19 devices"))
+  4caea3a215ec["D 1-2<br>172.20.230.48"]
+  4caea3a215ec-- "GE1/0/1" -->hub_4caea3a215ec_p1
+  style 4caea3a215ec fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00238155bcd0["[LLDP-EP] Lengda<br>DESKTOP-1OT35GQ"]
+  hub_4caea3a215ec_p1-->00238155bcd0
+  style 00238155bcd0 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00238155bcdc["[LLDP-EP] Lengda<br>DESKTOP-KQC5GE0"]
+  hub_4caea3a215ec_p1-->00238155bcdc
+  style 00238155bcdc fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00238155bcec["[LLDP-EP] Lengda<br>DESKTOP-9H5C4R7"]
+  hub_4caea3a215ec_p1-->00238155bcec
+  style 00238155bcec fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04c701c0c["[LLDP-EP] Realtek<br>172.16.4.182"]
+  hub_4caea3a215ec_p1-->00e04c701c0c
+  style 00e04c701c0c fill:#8BC34A,stroke:#6B9F30,color:#fff
+  10bbf363f638["[LLDP-EP] HUNAN FN-LINK TECHNOLOGY LIMITED<br>WIN-M19JTQAQGG4"]
+  hub_4caea3a215ec_p1-->10bbf363f638
+  style 10bbf363f638 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  28c5c85f54fe["[LLDP-EP] HP Inc.<br>WIN-2J0LU3AK4N6"]
+  hub_4caea3a215ec_p1-->28c5c85f54fe
+  style 28c5c85f54fe fill:#8BC34A,stroke:#6B9F30,color:#fff
+  4c4bf953d863["[LLDP-EP]<br>DESKTOP-74A8Q2C"]
+  hub_4caea3a215ec_p1-->4c4bf953d863
+  style 4c4bf953d863 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  d0ad08f08a88["[LLDP-EP] HP Inc.<br>DESKTOP-20ENET9"]
+  hub_4caea3a215ec_p1-->d0ad08f08a88
+  style d0ad08f08a88 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  d461370381dd["[LLDP-EP]<br>172.16.4.255"]
+  hub_4caea3a215ec_p1-->d461370381dd
+  style d461370381dd fill:#8BC34A,stroke:#6B9F30,color:#fff
+  d461370381e0["[LLDP-EP]<br>172.16.4.212"]
+  hub_4caea3a215ec_p1-->d461370381e0
+  style d461370381e0 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  d46137038254["[LLDP-EP]<br>172.16.6.122"]
+  hub_4caea3a215ec_p1-->d46137038254
+  style d46137038254 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  d4613703826c["[LLDP-EP]<br>172.16.6.78"]
+  hub_4caea3a215ec_p1-->d4613703826c
+  style d4613703826c fill:#8BC34A,stroke:#6B9F30,color:#fff
+  d4613703826d["[LLDP-EP]<br>172.16.5.193"]
+  hub_4caea3a215ec_p1-->d4613703826d
+  style d4613703826d fill:#8BC34A,stroke:#6B9F30,color:#fff
+  e073e7c3cd44["[LLDP-EP] HP Inc.<br>DESKTOP-VGINIPN"]
+  hub_4caea3a215ec_p1-->e073e7c3cd44
+  style e073e7c3cd44 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  e073e7c3ce13["[LLDP-EP] HP Inc.<br>DESKTOP-IMLRFQR"]
+  hub_4caea3a215ec_p1-->e073e7c3ce13
+  style e073e7c3ce13 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  e073e7c3ce15["[ENDPOINT] HP Inc.<br>172.16.6.233"]
+  hub_4caea3a215ec_p1-->e073e7c3ce15
+  style e073e7c3ce15 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  e073e7c3ce8c["[LLDP-EP] HP Inc.<br>DESKTOP-CBVJO96"]
+  hub_4caea3a215ec_p1-->e073e7c3ce8c
+  style e073e7c3ce8c fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f8f082d87880["[ENDPOINT] SNR"]
+  hub_4caea3a215ec_p1-->f8f082d87880
+  style f8f082d87880 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f8f082d87d1c["[ENDPOINT] SNR"]
+  hub_4caea3a215ec_p1-->f8f082d87d1c
+  style f8f082d87d1c fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a215ec_p1 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 19 ta qurilma
+
+### Shadow IT #32: [HUB] Unmanaged
+7 devices
+
+```mermaid
+graph LR
+  hub_4caea3a215ec_p17(("[HUB] Unmanaged<br>7 devices"))
+  4caea3a215ec["D 1-2<br>172.20.230.48"]
+  4caea3a215ec-- "GE1/0/17" -->hub_4caea3a215ec_p17
+  style 4caea3a215ec fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e269537c3b["[LLDP-EP]<br>172.16.4.46"]
+  hub_4caea3a215ec_p17-->00e269537c3b
+  style 00e269537c3b fill:#8BC34A,stroke:#6B9F30,color:#fff
+  48f317075809["[LLDP-EP]<br>172.16.5.19"]
+  hub_4caea3a215ec_p17-->48f317075809
+  style 48f317075809 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  48f317075886["[LLDP-EP]<br>172.16.7.157"]
+  hub_4caea3a215ec_p17-->48f317075886
+  style 48f317075886 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  48f31707600d["[LLDP-EP]<br>172.16.6.253"]
+  hub_4caea3a215ec_p17-->48f31707600d
+  style 48f31707600d fill:#8BC34A,stroke:#6B9F30,color:#fff
+  48f31707601b["[LLDP-EP]<br>172.16.5.21"]
+  hub_4caea3a215ec_p17-->48f31707601b
+  style 48f31707601b fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08984["[LLDP-EP] Wistron<br>172.16.4.41"]
+  hub_4caea3a215ec_p17-->98eecbe08984
+  style 98eecbe08984 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bceca036091f["[LLDP-EP] Compal<br>CYBER07"]
+  hub_4caea3a215ec_p17-->bceca036091f
+  style bceca036091f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a215ec_p17 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 7 ta qurilma
+
+### Shadow IT #33: [HUB] Unmanaged
+6 devices
+
+```mermaid
+graph LR
+  hub_4caea3a215ec_p18(("[HUB] Unmanaged<br>6 devices"))
+  4caea3a215ec["D 1-2<br>172.20.230.48"]
+  4caea3a215ec-- "GE1/0/18" -->hub_4caea3a215ec_p18
+  style 4caea3a215ec fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e2695375db["[LLDP-EP]<br>DESKTOP-UL2ARCO"]
+  hub_4caea3a215ec_p18-->00e2695375db
+  style 00e2695375db fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e26953ef8f["[LLDP-EP]<br>172.16.4.114"]
+  hub_4caea3a215ec_p18-->00e26953ef8f
+  style 00e26953ef8f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  2cf05dd091ae["[LLDP-EP] Micro-Star INTL CO., LTD.<br>172.16.4.103"]
+  hub_4caea3a215ec_p18-->2cf05dd091ae
+  style 2cf05dd091ae fill:#8BC34A,stroke:#6B9F30,color:#fff
+  2cf05dd092a5["[LLDP-EP] Micro-Star INTL CO., LTD.<br>172.16.4.135"]
+  hub_4caea3a215ec_p18-->2cf05dd092a5
+  style 2cf05dd092a5 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98254af34e93["[ENDPOINT] TP-Link Systems Inc<br>172.16.6.250"]
+  hub_4caea3a215ec_p18-->98254af34e93
+  style 98254af34e93 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f881["[LLDP-EP] EliteGroup<br>172.16.4.92"]
+  hub_4caea3a215ec_p18-->f44d30c7f881
+  style f44d30c7f881 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a215ec_p18 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 6 ta qurilma
+
+### Shadow IT #34: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -277,7 +989,94 @@ graph LR
 
 **Ulanganlar:** 6 ta qurilma
 
-### Shadow IT #12: [HUB] Unmanaged
+### Shadow IT #35: [HUB] Unmanaged
+2 devices
+
+```mermaid
+graph LR
+  hub_4caea3a215ec_p40(("[HUB] Unmanaged<br>2 devices"))
+  4caea3a215ec["D 1-2<br>172.20.230.48"]
+  4caea3a215ec-- "GE1/0/40" -->hub_4caea3a215ec_p40
+  style 4caea3a215ec fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  98eecbe08a97["[LLDP-EP] Wistron<br>DESKTOP-MP93NU3"]
+  hub_4caea3a215ec_p40-->98eecbe08a97
+  style 98eecbe08a97 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08bd7["[LLDP-EP] Wistron<br>172.16.4.141"]
+  hub_4caea3a215ec_p40-->98eecbe08bd7
+  style 98eecbe08bd7 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a215ec_p40 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 2 ta qurilma
+
+### Shadow IT #36: [HUB] Unmanaged
+11 devices
+
+```mermaid
+graph LR
+  hub_4caea3a215ec_p42(("[HUB] Unmanaged<br>11 devices"))
+  4caea3a215ec["D 1-2<br>172.20.230.48"]
+  4caea3a215ec-- "GE1/0/42" -->hub_4caea3a215ec_p42
+  style 4caea3a215ec fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e01b6800f7["[LLDP-EP] SPHERE COMMUNICATIONS, INC.<br>172.16.4.216"]
+  hub_4caea3a215ec_p42-->00e01b6800f7
+  style 00e01b6800f7 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  5c60ba5ef980["[ENDPOINT] HP Inc.<br>172.16.4.244"]
+  hub_4caea3a215ec_p42-->5c60ba5ef980
+  style 5c60ba5ef980 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08981["[LLDP-EP] Wistron<br>172.16.4.155"]
+  hub_4caea3a215ec_p42-->98eecbe08981
+  style 98eecbe08981 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe089fb["[LLDP-EP] Wistron<br>ACER"]
+  hub_4caea3a215ec_p42-->98eecbe089fb
+  style 98eecbe089fb fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08b4e["[LLDP-EP] Wistron<br>HOME-PC"]
+  hub_4caea3a215ec_p42-->98eecbe08b4e
+  style 98eecbe08b4e fill:#8BC34A,stroke:#6B9F30,color:#fff
+  98eecbe08b67["[LLDP-EP] Wistron<br>HOME-PC"]
+  hub_4caea3a215ec_p42-->98eecbe08b67
+  style 98eecbe08b67 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bceca03609b9["[LLDP-EP] Compal<br>DESKTOP-MNLI2IK"]
+  hub_4caea3a215ec_p42-->bceca03609b9
+  style bceca03609b9 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bceca03609ce["[LLDP-EP] Compal<br>USER"]
+  hub_4caea3a215ec_p42-->bceca03609ce
+  style bceca03609ce fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bceca0360a10["[LLDP-EP] Compal<br>ADMIN"]
+  hub_4caea3a215ec_p42-->bceca0360a10
+  style bceca0360a10 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bceca0360a73["[LLDP-EP] Compal<br>WIN-DOVBGH61MT2"]
+  hub_4caea3a215ec_p42-->bceca0360a73
+  style bceca0360a73 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  bceca0360b6c["[LLDP-EP] Compal<br>WIN-DOVBGH61MT2"]
+  hub_4caea3a215ec_p42-->bceca0360b6c
+  style bceca0360b6c fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a215ec_p42 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 11 ta qurilma
+
+### Shadow IT #37: [HUB] Unmanaged
+2 devices
+
+```mermaid
+graph LR
+  hub_4caea3a2182c_p4(("[HUB] Unmanaged<br>2 devices"))
+  4caea3a2182c["B-318/3<br>172.20.230.1"]
+  4caea3a2182c-- "GE1/0/4" -->hub_4caea3a2182c_p4
+  style 4caea3a2182c fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e269537c54["[LLDP-EP]<br>172.16.1.68"]
+  hub_4caea3a2182c_p4-->00e269537c54
+  style 00e269537c54 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  48f317075663["[LLDP-EP]<br>172.16.1.253"]
+  hub_4caea3a2182c_p4-->48f317075663
+  style 48f317075663 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_4caea3a2182c_p4 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 2 ta qurilma
+
+### Shadow IT #38: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -315,7 +1114,7 @@ graph LR
 
 **Ulanganlar:** 8 ta qurilma
 
-### Shadow IT #13: [HUB] Unmanaged
+### Shadow IT #39: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -353,7 +1152,7 @@ graph LR
 
 **Ulanganlar:** 8 ta qurilma
 
-### Shadow IT #14: [HUB] Unmanaged
+### Shadow IT #40: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -385,7 +1184,7 @@ graph LR
 
 **Ulanganlar:** 6 ta qurilma
 
-### Shadow IT #15: [HUB] Unmanaged
+### Shadow IT #41: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -405,7 +1204,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #16: [HUB] Unmanaged
+### Shadow IT #42: [HUB] Unmanaged
 3 devices
 
 ```mermaid
@@ -428,7 +1227,7 @@ graph LR
 
 **Ulanganlar:** 3 ta qurilma
 
-### Shadow IT #17: [HUB] Unmanaged
+### Shadow IT #43: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -466,7 +1265,7 @@ graph LR
 
 **Ulanganlar:** 8 ta qurilma
 
-### Shadow IT #18: [HUB] Unmanaged
+### Shadow IT #44: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -498,7 +1297,7 @@ graph LR
 
 **Ulanganlar:** 6 ta qurilma
 
-### Shadow IT #19: [HUB] Unmanaged
+### Shadow IT #45: [HUB] Unmanaged
 5 devices
 
 ```mermaid
@@ -527,7 +1326,69 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #20: [HUB] Unmanaged
+### Shadow IT #46: [HUB] Unmanaged
+16 devices
+
+```mermaid
+graph LR
+  hub_f8f0827c2ca1_p2(("[HUB] Unmanaged<br>16 devices"))
+  f8f0827c2ca1["E202-24<br>172.20.230.29"]
+  f8f0827c2ca1-- "Eth1/0/2" -->hub_f8f0827c2ca1_p2
+  style f8f0827c2ca1 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e04cf0de14["[LLDP-EP] Realtek<br>172.17.3.168"]
+  hub_f8f0827c2ca1_p2-->00e04cf0de14
+  style 00e04cf0de14 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0deca["[LLDP-EP] Realtek<br>172.17.3.170"]
+  hub_f8f0827c2ca1_p2-->00e04cf0deca
+  style 00e04cf0deca fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e063["[LLDP-EP] Realtek<br>172.16.15.98"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e063
+  style 00e04cf0e063 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e0b4["[LLDP-EP] Realtek<br>172.17.3.177"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e0b4
+  style 00e04cf0e0b4 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e0b8["[LLDP-EP] Realtek<br>172.16.12.125"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e0b8
+  style 00e04cf0e0b8 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e0c7["[LLDP-EP] Realtek<br>172.17.3.145"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e0c7
+  style 00e04cf0e0c7 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e0f0["[LLDP-EP] Realtek<br>172.16.13.55"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e0f0
+  style 00e04cf0e0f0 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e120["[LLDP-EP] Realtek<br>172.16.12.141"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e120
+  style 00e04cf0e120 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e12d["[LLDP-EP] Realtek<br>172.16.12.126"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e12d
+  style 00e04cf0e12d fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e12f["[LLDP-EP] Realtek<br>172.17.3.149"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e12f
+  style 00e04cf0e12f fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e130["[LLDP-EP] Realtek<br>172.17.3.140"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e130
+  style 00e04cf0e130 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e15a["[LLDP-EP] Realtek<br>172.17.3.172"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e15a
+  style 00e04cf0e15a fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e161["[LLDP-EP] Realtek<br>172.17.3.143"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e161
+  style 00e04cf0e161 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e17c["[LLDP-EP] Realtek<br>172.17.3.153"]
+  hub_f8f0827c2ca1_p2-->00e04cf0e17c
+  style 00e04cf0e17c fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf17226["[LLDP-EP] Realtek<br>172.17.3.158"]
+  hub_f8f0827c2ca1_p2-->00e04cf17226
+  style 00e04cf17226 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f8f0827ad94e["[ENDPOINT] SNR<br>172.20.230.30"]
+  hub_f8f0827c2ca1_p2-->f8f0827ad94e
+  style f8f0827ad94e fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_f8f0827c2ca1_p2 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 16 ta qurilma
+
+### Shadow IT #47: [HUB] Unmanaged
 2 devices
 
 ```mermaid
@@ -547,7 +1408,7 @@ graph LR
 
 **Ulanganlar:** 2 ta qurilma
 
-### Shadow IT #21: [HUB] Unmanaged
+### Shadow IT #48: [HUB] Unmanaged
 3 devices
 
 ```mermaid
@@ -570,7 +1431,30 @@ graph LR
 
 **Ulanganlar:** 3 ta qurilma
 
-### Shadow IT #22: [HUB] Unmanaged
+### Shadow IT #49: [HUB] Unmanaged
+3 devices
+
+```mermaid
+graph LR
+  hub_f8f0827c2cc7_p6(("[HUB] Unmanaged<br>3 devices"))
+  f8f0827c2cc7["E-209<br>172.20.230.33"]
+  f8f0827c2cc7-- "Eth1/0/6" -->hub_f8f0827c2cc7_p6
+  style f8f0827c2cc7 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  00e04cf0c5c9["[LLDP-EP] Realtek<br>172.16.14.112"]
+  hub_f8f0827c2cc7_p6-->00e04cf0c5c9
+  style 00e04cf0c5c9 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  00e04cf0e212["[LLDP-EP] Realtek<br>172.16.13.209"]
+  hub_f8f0827c2cc7_p6-->00e04cf0e212
+  style 00e04cf0e212 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  344b504ebb98["[ENDPOINT] zte corporation"]
+  hub_f8f0827c2cc7_p6-->344b504ebb98
+  style 344b504ebb98 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_f8f0827c2cc7_p6 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 3 ta qurilma
+
+### Shadow IT #50: [HUB] Unmanaged
 4 devices
 
 ```mermaid
@@ -596,7 +1480,7 @@ graph LR
 
 **Ulanganlar:** 4 ta qurilma
 
-### Shadow IT #23: [HUB] Unmanaged
+### Shadow IT #51: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -628,7 +1512,7 @@ graph LR
 
 **Ulanganlar:** 6 ta qurilma
 
-### Shadow IT #24: [HUB] Unmanaged
+### Shadow IT #52: [HUB] Unmanaged
 7 devices
 
 ```mermaid
@@ -663,7 +1547,33 @@ graph LR
 
 **Ulanganlar:** 7 ta qurilma
 
-### Shadow IT #25: [HUB] Unmanaged
+### Shadow IT #53: [HUB] Unmanaged
+4 devices
+
+```mermaid
+graph LR
+  hub_f8f0827cfa26_p20(("[HUB] Unmanaged<br>4 devices"))
+  f8f0827cfa26["F-7(1)<br>172.20.240.6"]
+  f8f0827cfa26-- "Eth1/0/20" -->hub_f8f0827cfa26_p20
+  style f8f0827cfa26 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  3cab7213f67a["[ENDPOINT] Nanjing Qinheng Microelectronics Co., Ltd.<br>172.16.32.128"]
+  hub_f8f0827cfa26_p20-->3cab7213f67a
+  style 3cab7213f67a fill:#8BC34A,stroke:#6B9F30,color:#fff
+  48f317075758["[LLDP-EP]<br>172.16.33.50"]
+  hub_f8f0827cfa26_p20-->48f317075758
+  style 48f317075758 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  80e82cf59cdd["[LLDP-EP] Hewlett Packard<br>172.16.35.42"]
+  hub_f8f0827cfa26_p20-->80e82cf59cdd
+  style 80e82cf59cdd fill:#8BC34A,stroke:#6B9F30,color:#fff
+  80e82cf59d1d["[LLDP-EP] Hewlett Packard<br>172.16.32.47"]
+  hub_f8f0827cfa26_p20-->80e82cf59d1d
+  style 80e82cf59d1d fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_f8f0827cfa26_p20 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 4 ta qurilma
+
+### Shadow IT #54: [HUB] Unmanaged
 5 devices
 
 ```mermaid
@@ -692,7 +1602,27 @@ graph LR
 
 **Ulanganlar:** 5 ta qurilma
 
-### Shadow IT #26: [HUB] Unmanaged
+### Shadow IT #55: [HUB] Unmanaged
+2 devices
+
+```mermaid
+graph LR
+  hub_f8f0827cfa72_p13(("[HUB] Unmanaged<br>2 devices"))
+  f8f0827cfa72["F-6(1)<br>172.20.240.8"]
+  f8f0827cfa72-- "Eth1/0/13" -->hub_f8f0827cfa72_p13
+  style f8f0827cfa72 fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  98eecbe08b5e["[LLDP-EP] Wistron<br>DESKTOP-S40ML8F"]
+  hub_f8f0827cfa72_p13-->98eecbe08b5e
+  style 98eecbe08b5e fill:#8BC34A,stroke:#6B9F30,color:#fff
+  f44d30c7f426["[LLDP-EP] EliteGroup<br>172.16.34.236"]
+  hub_f8f0827cfa72_p13-->f44d30c7f426
+  style f44d30c7f426 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_f8f0827cfa72_p13 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 2 ta qurilma
+
+### Shadow IT #56: [HUB] Unmanaged
 9 devices
 
 ```mermaid
@@ -733,7 +1663,7 @@ graph LR
 
 **Ulanganlar:** 9 ta qurilma
 
-### Shadow IT #27: [HUB] Unmanaged
+### Shadow IT #57: [HUB] Unmanaged
 8 devices
 
 ```mermaid
@@ -771,7 +1701,7 @@ graph LR
 
 **Ulanganlar:** 8 ta qurilma
 
-### Shadow IT #28: [HUB] Unmanaged
+### Shadow IT #58: [HUB] Unmanaged
 7 devices
 
 ```mermaid
@@ -806,7 +1736,30 @@ graph LR
 
 **Ulanganlar:** 7 ta qurilma
 
-### Shadow IT #29: [HUB] Unmanaged
+### Shadow IT #59: [HUB] Unmanaged
+3 devices
+
+```mermaid
+graph LR
+  hub_f8f0827cfb0e_p3(("[HUB] Unmanaged<br>3 devices"))
+  f8f0827cfb0e["F-6(2)<br>172.20.240.9"]
+  f8f0827cfb0e-- "Eth1/0/3" -->hub_f8f0827cfb0e_p3
+  style f8f0827cfb0e fill:#4A90E2,stroke:#2A6FC2,color:#fff
+  48f317075918["[LLDP-EP]<br>172.16.34.87"]
+  hub_f8f0827cfb0e_p3-->48f317075918
+  style 48f317075918 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  80e82cf59843["[LLDP-EP] Hewlett Packard<br>172.16.34.126"]
+  hub_f8f0827cfb0e_p3-->80e82cf59843
+  style 80e82cf59843 fill:#8BC34A,stroke:#6B9F30,color:#fff
+  b07b2510323c["[LLDP-EP] Dell Inc.<br>DESKTOP-NO2APF4"]
+  hub_f8f0827cfb0e_p3-->b07b2510323c
+  style b07b2510323c fill:#8BC34A,stroke:#6B9F30,color:#fff
+  style hub_f8f0827cfb0e_p3 fill:#FF9800,stroke:#E68A00,color:#fff
+```
+
+**Ulanganlar:** 3 ta qurilma
+
+### Shadow IT #60: [HUB] Unmanaged
 4 devices
 
 ```mermaid
@@ -832,7 +1785,7 @@ graph LR
 
 **Ulanganlar:** 4 ta qurilma
 
-### Shadow IT #30: [HUB] Unmanaged
+### Shadow IT #61: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -864,7 +1817,7 @@ graph LR
 
 **Ulanganlar:** 6 ta qurilma
 
-### Shadow IT #31: [HUB] Unmanaged
+### Shadow IT #62: [HUB] Unmanaged
 6 devices
 
 ```mermaid
@@ -896,7 +1849,7 @@ graph LR
 
 **Ulanganlar:** 6 ta qurilma
 
-### Shadow IT #32: [HUB] Unmanaged
+### Shadow IT #63: [HUB] Unmanaged
 3 devices
 
 ```mermaid

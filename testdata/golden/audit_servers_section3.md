@@ -209,6 +209,7 @@ graph TD
   LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_15_19_78>" [LLDP-EP] Ubiquiti Inc<br>UAP-AC-LR<br>UAP-AC-LR, 5.43.46.12754<br>172.15.19.78"]
   LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_43_12741br172_15_19_74>" [LLDP-EP] Ubiquiti Inc<br>UAP-AC-LR<br>UAP-AC-LR, 5.43.43.12741<br>172.15.19.74"]
   LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_16_12_134>" [LLDP-EP] Ubiquiti Inc<br>UAP-AC-LR<br>UAP-AC-LR, 5.43.46.12754<br>172.16.12.134"]
+  ENDPOINT_CANON_INC_br172_16_19_151["[ENDPOINT] CANON INC.<br>172.16.19.151"]
   WiFibr172_15_11_140brDNS_pc_11_140>" [WiFi]<br>172.15.11.140<br>[DNS] pc-11-140"]
   WiFibr172_15_52_184>" [WiFi]<br>172.15.52.184"]
   LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_114>" [LLDP-EP] Ubiquiti<br>Sportzal<br>UAP-AC-Mesh-Pro, 6.8.2.15592<br>172.15.121.114"]
@@ -314,6 +315,8 @@ graph TD
   LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_116>" [LLDP-EP] Ubiquiti<br>Sportzal<br>UAP-AC-Mesh-Pro, 6.8.2.15592<br>172.15.121.116"]
   WiFibr172_15_34_185brDNS_pc_34_185>" [WiFi]<br>172.15.34.185<br>[DNS] pc-34-185"]
   WiFi_63>" [WiFi]"]
+  VM_Windows_Proxmoxbr172_16_4_254["[VM] 🪟 Windows Proxmox<br>172.16.4.254"]
+  VM_KVMProxmox_VM_Proxmoxbr172_16_7_236["[VM] 💻 KVM/Proxmox VM Proxmox<br>172.16.7.236"]
   HPbr172_20_254_223["HP<br>172.20.254.223"]
   WiFi_64>" [WiFi]"]
   WiFi_65>" [WiFi]"]
@@ -411,15 +414,10 @@ graph TD
   HYPERVISOR_VMware_ESXibr3_VMs_on_ge1035brVMs_172_20_1_253_172_20_1_219_172_20_11_130["[HYPERVISOR] VMware ESXi<br>3 VMs on ge1/0/35<br>VMs: 172.20.1.253, 172.20.1.219, 172.20.11.130"]
   HYPERVISOR_VMware_ESXibr2_VMs_on_ge105brVMs_172_20_224_1_172_20_224_2["[HYPERVISOR] VMware ESXi<br>2 VMs on ge1/0/5<br>VMs: 172.20.224.1, 172.20.224.2"]
   HPbr172_20_254_247-- "GE1/0/4 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6LRbrU6_LR_6_7_57_15670br172_15_1_73
-  A_Mobilbr172_20_230_50-- "TGE1/0/52 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA1qavat118brU6_LR_6_7_57_15670br172_15_1_12
-  A_Mobilbr172_20_230_50-- "TGE1/0/52 [V1500] 1G ↔ eth0" -->LLDP_EP_Ubiquiti_IncbrA117brU7_LR_8_0_76_16823br172_15_1_28
-  A_Mobilbr172_20_230_50-- "TGE1/0/52 [V1500] 1G ↔ eth0" -->LLDP_EP_Ubiquiti_IncbrA119brU7_LR_8_0_76_16823br172_15_1_15
   D_1br172_20_230_3-- "TGE1/0/52 [T] 1G ↔ TGE1/0/49" -->HPEbr172_20_253_10
   D_1br172_20_230_3-- "TGE1/0/51 [T] 1G ↔ TGE1/0/52" -->D_1_2br172_20_230_48
   HPEbr172_20_230_36-- "GE1/0/47 [V1616] ↔ " -->WiFibr172_16_16_223brDNS_nas01
   HPEbr172_20_230_36-- "GE1/0/10 [V1616] ↔ " -->WiFibr172_16_19_161
-  HPEbr172_20_230_36-- "GE1/0/2 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrC44brU6_Pro_6_8_2_15592br172_15_1_58
-  HPEbr172_20_230_36-- "GE1/0/2 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrC54brU6_Pro_6_8_2_15592br172_15_1_62
   HPEbr172_20_254_10-- "GE1/0/48 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_254_202
   HPEbr172_20_254_10-- "ge1/0/4" -->HYPERVISOR_VMware_ESXibr5_VMs_on_ge104brVMs_10_10_10_25_10_10_10_24_10_10_10_31_10_10_10_31_10_10_10_66
   HPEbr172_20_254_10-- "ge1/0/5" -->HYPERVISOR_VMware_ESXibr3_VMs_on_ge105brVMs_10_10_10_30_10_10_10_23_10_10_10_22
@@ -444,25 +442,13 @@ graph TD
   HPEbr172_20_254_199-- "ge1/0/31" -->HYPERVISOR_VMware_ESXibr4_VMs_on_ge1031brVMs_172_20_0_5_172_20_9_199_172_20_224_49_195_158_2_222
   HPEbr172_20_254_199-- "ge1/0/32" -->HYPERVISOR_VMware_ESXibr2_VMs_on_ge1032brVMs_172_20_9_121_195_158_2_214
   A_3_Etajbr172_20_230_46-- "GE1/0/48 [T] 1G ↔ GE1/0/45" -->HPEbr172_20_253_10
-  A_3_Etajbr172_20_230_46-- "GE1/0/7 [V1624] 100M ↔ " -->BMC_Fujitsu_iRMCbr172_16_25_231
   A_3_Etajbr172_20_230_46-- "TGE1/0/50 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA32brU6_Pro_6_8_2_15592br172_15_1_19
   A_3_Etajbr172_20_230_46-- "TGE1/0/49 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA31brU6_Pro_6_8_2_15592br172_15_1_18
   A_3_Etajbr172_20_230_46-- "GE1/0/47 [T] 1G ↔ Eth1/0/25" -->br172_20_230_47
-  HPEbr172_20_230_82-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrC42brU6_Pro_6_8_2_15592br172_15_1_56
-  HPEbr172_20_230_82-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrC43brU6_Pro_6_8_2_15592br172_15_1_57
-  HPEbr172_20_230_82-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrC52brU6_Pro_6_8_2_15592br172_15_1_60
-  HPEbr172_20_230_82-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrC32brU6_Pro_6_8_2_15592br172_15_1_54
   HPEbr172_20_253_11-- "TGE1/0/49 [T] 10G ↔ TGE1/0/49" -->br172_20_254_203
-  HPEbr172_20_253_11-- "GE1/0/48 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrAkirishbrU6_LR_6_7_57_15670br172_15_1_87
-  HPEbr172_20_253_11-- "GE1/0/48 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrtuitbrU6_LR_5_60_8_12971br172_15_10_113
-  HPEbr172_20_253_11-- "GE1/0/48 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA219brUAP_AC_Mesh_Pro_6_8_2_15592br172_15_1_26
   HPEbr172_20_253_11-- "TGE1/0/51 [T] 1G ↔ GE1/0/28" -->HPbr172_20_254_204
-  HPEbr172_20_253_11-- "GE1/0/48 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA2etajbrU6_Pro_6_8_2_15592br172_15_1_17
-  HPEbr172_20_253_11-- "GE1/0/48 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_75
-  HPEbr172_20_253_11-- "GE1/0/48 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_83
   HPEbr172_20_253_11-- "GE1/0/25 [T] 1G ↔ GE1/0/28" -->HPbr172_20_254_223
   HPEbr172_20_253_11-- "GE1/0/26 [T] 1G ↔ gi1/0/4" -->Jamicbr172_20_254_226
-  HPEbr172_20_253_11-- "GE1/0/48 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA1qavat112brU6_Pro_6_8_2_15592br172_15_1_16
   HPEbr172_20_253_10-- "GE1/0/47 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_253_11
   br172_20_230_76-- "GE1/0/38 [V160] ↔ " -->BMC_BMC_Micro_Star_INTL_CO_LTD_br172_16_1_153brDNS_mgmt_bmc_01
   br172_20_230_76-- "GE1/0/48 [MAC-REF] ↔ " -->br172_20_230_77
@@ -480,22 +466,7 @@ graph TD
   B_3181br172_20_230_13-- "GE1/0/46 [T] 1G ↔ B318" -->B_423br172_20_230_15
   B_3181br172_20_230_13-- "GE1/0/43 [T] 1G ↔ B-318/1" -->HPEbr172_20_230_39
   B_3181br172_20_230_13-- "GE1/0/45 [T] 1G ↔ GE1/0/48" -->HPEbr172_20_230_14
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_223_56
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_223_55
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_10_116
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6_LRbrU6_LR_5_60_8_12971br172_15_10_103
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ br0" -->LLDP_EP_UbiquitibrUBNTbrLEDE_Reboot_17_01_6_Linux_4_4_153_0_Thu_Aug_30_121054_2018_mipsbr172_15_13_81
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_79
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_77
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_76
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_80
-  B_3181br172_20_230_13-- "GE1/0/44 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_84
   HPEbr172_20_230_241-- "TGE1/0/49 [T] 10G ↔ Eth1/0/26" -->SNR_S2995G_24FXbr172_20_230_254
-  HPEbr172_20_230_6-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_Ubiquiti_IncbrQabulSalohiddinakabrU7_LR_8_0_76_16823br172_15_101_0
-  HPEbr172_20_230_6-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_78
-  HPEbr172_20_230_6-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_85
-  HPEbr172_20_230_6-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_89
-  HPEbr172_20_230_6-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_81
   TTJ_34br172_20_230_23-- "TGE1/0/49 [T] 1G ↔ Eth1/0/23" -->F_4_glavniybr172_20_240_3
   MEDIA_MARKAZbr172_20_230_37-- "TGE1/0/49 [T] 1G ↔ Eth1/0/22" -->SNR_S2995G_24FXbr172_20_230_254
   A_332br172_20_230_8-- "GE1/0/26 [T] 1G ↔ GE1/0/20" -->A_Mobilbr172_20_230_50
@@ -505,23 +476,13 @@ graph TD
   A_332br172_20_230_8-- "GE1/0/46 [V1500] ↔ " -->ENDPOINT_Ubiquitibr172_15_10_14
   br172_20_254_203-- "GE1/0/15 [V26] ↔ " -->VM_Windows_VMwarebr195_158_2_218
   br172_20_254_203-- "GE1/0/31 [V26] ↔ " -->VM_VMware_VM_VMwarebr195_158_2_211
-  C_424abr172_20_230_4-- "GE1/0/45 [V1616] 1G ↔ eth0" -->LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_214
-  C_424abr172_20_230_4-- "GE1/0/45 [V1616] 1G ↔ eth0" -->LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_251
-  C_424abr172_20_230_4-- "GE1/0/45 [V1616] 1G ↔ eth0" -->LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_203
   C_424abr172_20_230_4-- "TGE1/0/49 [T] 1G ↔ TGE1/0/52" -->HPEbr172_20_253_11
   C_424abr172_20_230_4-- "GE1/0/46 [T] 1G ↔ GE1/0/45" -->HPEbr172_20_230_41
   C_424abr172_20_230_4-- "GE1/0/47 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrC51brU6_Pro_6_8_2_15592br172_15_166_142
   C_424abr172_20_230_4-- "GE1/0/48 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrC41brU6_Pro_6_8_2_15592br172_15_1_55
   HPEbr172_20_230_35-- "GE1/0/47 [T] 1G ↔ GE1/0/48" -->HPEbr172_20_230_36
   HPEbr172_20_230_35-- "GE1/0/48 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_230_41
-  A_RRT_Kalidorbr172_20_230_42-- "GE1/0/31 [V1500] 1G ↔ eth0" -->LLDP_EP_Ubiquiti_IncbrA115brU7_LR_8_0_76_16823br172_15_1_14
-  A_RRT_Kalidorbr172_20_230_42-- "GE1/0/31 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA109brU6_Pro_6_8_2_15592br172_15_1_11
-  A_RRT_Kalidorbr172_20_230_42-- "GE1/0/31 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrA109brU6_Pro_6_8_2_15592br172_15_1_10
   HPEbr172_20_230_41-- "GE1/0/43 [T] 1G ↔ GE1/0/48" -->HPEbr172_20_230_82
-  D_1_2br172_20_230_48-- "TGE1/0/51 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrDXindmarkazbrU6_Pro_6_8_2_15592br172_15_1_65
-  D_1_2br172_20_230_48-- "TGE1/0/51 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrD13brU6_Pro_6_8_2_15592br172_15_1_63
-  D_1_2br172_20_230_48-- "TGE1/0/51 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrDmalakaoshirishbrU6_Pro_6_8_2_15592br172_15_80_6
-  D_1_2br172_20_230_48-- "TGE1/0/51 [V1500] 1G ↔ eth0" -->LLDP_EP_UbiquitibrDyotoqxonabrU6_Pro_6_8_2_15592br172_15_1_66
   B_3183br172_20_230_1-- "GE1/0/47 [T] 1G ↔ B-318/3" -->B_3181br172_20_230_13
   HPEbr172_20_230_5-- "GE1/0/47 [T] 1G ↔ GE1/0/48" -->HPEbr172_20_230_43
   HPEbr172_20_230_5-- "TGE1/0/49 [T] 1G ↔ TGE1/0/51" -->HPEbr172_20_253_10
@@ -557,21 +518,7 @@ graph TD
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/23 [MAC-REF] ↔ " -->Huawe
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/9 [T] 1G ↔ GE1/0/28" -->HPbr172_20_254_247
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/1 [T] 1G ↔ GE1/0/25" -->HPEbr172_20_254_202
-  SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_114
-  SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzal4brU6_Pro_6_8_2_15592br172_15_1_71
-  SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzal3brU6_Pro_6_8_2_15592br172_15_1_70
-  SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_115
-  SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_116
-  SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzal1brU6_Pro_6_8_2_15592br172_15_1_68
-  SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/24 [T] 1G ↔ eth0" -->LLDP_EP_UbiquitibrSportzal2brU6_Pro_6_2_49_14111br172_15_1_69
   SNR_S2995G_24FXbr172_20_230_254-- "Eth1/0/25 [T] 1G ↔ Eth1/0/28" -->F_4_glavniybr172_20_240_3
-  A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_247_203
-  A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_UbiquitibrpodvolxonabrU6_LR_6_7_57_15670br172_15_1_67
-  A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_UbiquitibrApodvol3brU6_Pro_6_8_2_15592br172_15_1_23
-  A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_UbiquitibrApodvol4brU6_Pro_6_8_2_15592br172_15_1_24
-  A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_UbiquitibrApodvol5brU6_Pro_6_8_2_15592br172_15_1_25
-  A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_UbiquitibrApodvol1brU6_Pro_6_8_2_15592br172_15_1_22
-  A_padval_SNRbr172_20_230_51-- "Eth1/0/25 [V1500] 100M ↔ eth0" -->LLDP_EP_UbiquitibrApodvol2brU6_Pro_6_8_2_15592br172_15_1_20
   A_padval_SNRbr172_20_230_51-- "Eth1/0/28 1G ↔ Eth1/0/10" -->SNR_S2995G_24FXbr172_20_230_254
   HYPERVISOR_VMware_ESXibr5_VMs_on_ge104brVMs_10_10_10_25_10_10_10_24_10_10_10_31_10_10_10_31_10_10_10_66-- "vNIC" -->VM_Linux_VMwarebr10_10_10_25brDNS_pc_10_25
   HYPERVISOR_VMware_ESXibr5_VMs_on_ge104brVMs_10_10_10_25_10_10_10_24_10_10_10_31_10_10_10_31_10_10_10_66-- "vNIC" -->VM_VMware_VM_VMwarebr10_10_10_24
@@ -842,6 +789,7 @@ graph TD
   style LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_15_19_78 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_43_12741br172_15_19_74 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_Ubiquiti_IncbrUAP_AC_LRbrUAP_AC_LR_5_43_46_12754br172_16_12_134 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style ENDPOINT_CANON_INC_br172_16_19_151 fill:#795548,stroke:#5D4037,color:#fff
   style WiFibr172_15_11_140brDNS_pc_11_140 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_15_52_184 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_114 fill:#00BCD4,stroke:#0097A7,color:#fff
@@ -947,6 +895,8 @@ graph TD
   style LLDP_EP_UbiquitibrSportzalbrUAP_AC_Mesh_Pro_6_8_2_15592br172_15_121_116 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_15_34_185brDNS_pc_34_185 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFi_63 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style VM_Windows_Proxmoxbr172_16_4_254 fill:#9C27B0,stroke:#7B1FA2,color:#fff
+  style VM_KVMProxmox_VM_Proxmoxbr172_16_7_236 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style HPbr172_20_254_223 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style WiFi_64 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFi_65 fill:#00BCD4,stroke:#0097A7,color:#fff

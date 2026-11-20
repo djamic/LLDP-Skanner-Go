@@ -14,18 +14,7 @@ func graphRecordVoIPNeighbor(graph *DJGraph, targetID string, neighbor LLDPNeigh
 	if graph == nil || targetID == "" || graph.graphSwitches[targetID] || graph.graphRouters[targetID] {
 		return
 	}
-	ev := voip.Evidence{
-		MAC:            targetID,
-		Vendor:         getMACVendor(targetID),
-		SysName:        neighbor.RemSysName,
-		SysDesc:        neighbor.RemSysDesc,
-		PortDesc:       cleanSNMPValue(neighbor.RemPortDesc),
-		Capabilities:   neighbor.RemSysCapEnabled,
-		ChassisSubtype: neighbor.RemChassisIdSubtype,
-		ChassisID:      neighbor.RemChassisId,
-		MgmtIP:         cmp.Or(neighbor.RemMgmtIP, arpIP),
-	}
-	if prof, ok := voip.Detect(ev); ok {
+	if prof, ok := voip.Detect(voipEvidence(targetID, neighbor, arpIP)); ok {
 		if graph.graphVoIP == nil {
 			graph.graphVoIP = make(map[string]voip.Profile)
 		}
@@ -38,6 +27,22 @@ func graphRecordVoIPNeighbor(graph *DJGraph, targetID string, neighbor LLDPNeigh
 			prof.PCBridge = prof.PCBridge || prev.PCBridge
 		}
 		graph.graphVoIP[targetID] = prof
+	}
+}
+
+// voipEvidence is what the VoIP detector reads of an LLDP neighbor with node
+// id targetID and ARP address arpIP.
+func voipEvidence(targetID string, neighbor LLDPNeighbor, arpIP string) voip.Evidence {
+	return voip.Evidence{
+		MAC:            targetID,
+		Vendor:         getMACVendor(targetID),
+		SysName:        neighbor.RemSysName,
+		SysDesc:        neighbor.RemSysDesc,
+		PortDesc:       cleanSNMPValue(neighbor.RemPortDesc),
+		Capabilities:   neighbor.RemSysCapEnabled,
+		ChassisSubtype: neighbor.RemChassisIdSubtype,
+		ChassisID:      neighbor.RemChassisId,
+		MgmtIP:         cmp.Or(neighbor.RemMgmtIP, arpIP),
 	}
 }
 

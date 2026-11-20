@@ -28,11 +28,22 @@ type ClassifySettings struct {
 	// when its vendor tells no kind: a wireless access point is an access
 	// point, a bridge or router (no phone) an unpolled switch (lldp_switch).
 	LLDPCaps bool `json:"lldpCaps"`
+	// LLDPHubs draws a port with several LLDP neighbors (no polled switch
+	// or router, no unpolled switch among them: an unmanaged switch that
+	// passes LLDP on) behind a hub node (lldpPortPlans): a Shadow-IT hub,
+	// an AP hub when they are all access points, or, for a phone and one
+	// device, the device behind the phone (its PC port).
+	LLDPHubs bool `json:"lldpHubs"`
+	// APHubAlert makes an AP hub a Shadow-IT hub (an alert) too.
+	APHubAlert bool `json:"apHubAlert"`
+	// WiFiClientsCountOnly counts the FDB MACs behind an AP hub (its access
+	// points' clients) in its label instead of drawing them.
+	WiFiClientsCountOnly bool `json:"wifiClientsCountOnly"`
 }
 
 // DefaultClassifySettings are the recommended classification choices.
 func DefaultClassifySettings() ClassifySettings {
-	return ClassifySettings{LLDPCaps: true}
+	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true}
 }
 
 // SavedData holds all persistent data

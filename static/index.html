@@ -153,6 +153,8 @@
                             onchange="applyFilters()"><span class="fc-dot" style="background:#FF9800"></span><span>Hub</span><span class="fc-cnt" id="fc-hub">0</span></label>
                     <label class="filter-cb" title="Mini hub: the devices behind a trunk or big port no polled switch is behind (no Shadow IT)"><input type="checkbox" data-group="minihub" checked
                             onchange="applyFilters()"><span class="fc-dot" style="background:#FFC107"></span><span>MiniHub</span><span class="fc-cnt" id="fc-minihub">0</span></label>
+                    <label class="filter-cb" title="AP hub: access points behind an unmanaged (PoE) switch that LLDP shows (no Shadow IT unless Settings say so)"><input type="checkbox" data-group="ap_hub" checked
+                            onchange="applyFilters()"><span class="fc-dot" style="background:#4DB6AC"></span><span>AP hub</span><span class="fc-cnt" id="fc-ap_hub">0</span></label>
                     <label class="filter-cb"><input type="checkbox" data-group="endpoint" checked
                             onchange="applyFilters()"><span class="fc-dot" style="background:#8BC34A"></span><span>Endpoint</span><span class="fc-cnt" id="fc-endpoint">0</span></label>
                     <label class="filter-cb"><input type="checkbox" data-group="access_point" checked
@@ -361,6 +363,18 @@
                     <label class="checkbox-label" title="Off: such a neighbor is an endpoint, as before">
                         <input type="checkbox" id="settingsClassify-lldpCaps">
                         <span>LLDP capabilities: an unpolled LLDP neighbor that is a bridge or router is an unpolled switch, one with the access point bit an access point (when its vendor tells no kind)</span>
+                    </label>
+                    <label class="checkbox-label" title="Off: each LLDP neighbor is linked straight to the port, as before">
+                        <input type="checkbox" id="settingsClassify-lldpHubs">
+                        <span>LLDP hubs: a port with several LLDP neighbors (no switch among them) gets a hub (Shadow IT), an AP hub when they are all access points, or the device behind the phone for a phone and one device</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="settingsClassify-apHubAlert">
+                        <span>AP hub alert: an AP hub is a Shadow-IT hub too (an alert)</span>
+                    </label>
+                    <label class="checkbox-label" title="Off: they are drawn under the AP hub">
+                        <input type="checkbox" id="settingsClassify-wifiClientsCountOnly">
+                        <span>Wi-Fi clients count only: the MACs behind an AP hub (its access points' clients) are counted in its label, not drawn</span>
                     </label>
                 </div>
             </div>

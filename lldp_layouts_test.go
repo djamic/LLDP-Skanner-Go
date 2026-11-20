@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"lldp_scanner/modules"
 )
 
 // Tests of the LLDP and FDB shapes of 2026-10-22 (snmpbulkwalk of the live
@@ -211,11 +213,26 @@ func pollPixies(t *testing.T) {
 // and 58:94:80:01:01:27, linked to each other (.40 port 25 to .44 port 27),
 // .44 to the SNR switch 172.20.230.254 (port 28) and both to their access
 // points (their uplink ports hold every FDB MAC and have an LLDP neighbor,
-// so the FDB adds no node).
+// so the FDB adds no node). .40 port 1 shows two UAP-AC-Mesh-Pro
+// "Sportzal"; the UniFi controller has one on .40 and the other on the
+// first one's pass-through port, so they get no AP hub (lldpPortPlans).
 func TestGoldenPixieGraph(t *testing.T) {
 	base := buildFixtureGraph(t)
 	baseReport, _ := analyzeFixture(t, base)
 	before := pixieGraphRecord(base)
+	inventoryMu.Lock()
+	inventories = map[string]inventoryRecord{"unificontroller|10.9.60.5": {Module: "unificontroller", IP: "10.9.60.5", Time: time.Now(),
+		Inventory: modules.Inventory{Devices: []modules.ManagedDevice{
+			{MAC: "78:45:58:73:0f:69", Name: "Sportzal", Kind: "access_point", Uplink: &modules.ManagedUplink{MAC: pixieAMAC}},
+			{MAC: "ac:8b:a9:70:a9:66", Name: "Sportzal", Kind: "access_point", Uplink: &modules.ManagedUplink{MAC: "ac:8b:a9:70:a3:6b", LocalPort: "1"}},
+		}}}}
+	inventoryIndex()
+	inventoryMu.Unlock()
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
 	pollPixies(t)
 	graph := buildGraphFromSnapshot(snapshotCollectedData())
 	report, _ := analyzeFixture(t, graph)

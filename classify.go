@@ -64,11 +64,13 @@ func (g *DJGraph) nodeEvidence(node, info string) nodeEvidence {
 //     endpoint
 //  8. [MINIHUB] (fdbPorts: a trunk or big port no polled switch is behind;
 //     its node is a hub- node too): minihub
-//  9. [HUB] or a hub- node: hub
-//  10. [BMC] or a bmc- node: bmc
-//  11. [HYPERVISOR] or a hyp- node: hypervisor
-//  12. [VM] or a vm- node: vm
-//  13. else by its name and label (graphNameGroup)
+//  9. [APHUB] (lldpPortPlans: access points behind an unmanaged switch;
+//     a hub- node too): ap_hub
+//  10. [HUB] or a hub- node: hub
+//  11. [BMC] or a bmc- node: bmc
+//  12. [HYPERVISOR] or a hyp- node: hypervisor
+//  13. [VM] or a vm- node: vm
+//  14. else by its name and label (graphNameGroup)
 func classifyNode(ev nodeEvidence, rules ClassifySettings) string {
 	node, info := ev.ID, ev.Info
 	switch {
@@ -99,6 +101,8 @@ func classifyNode(ev nodeEvidence, rules ClassifySettings) string {
 		return "endpoint"
 	case strings.Contains(info, "[MINIHUB]"):
 		return "minihub"
+	case strings.Contains(info, "[APHUB]"):
+		return "ap_hub"
 	case strings.Contains(info, "[HUB]") || strings.HasPrefix(node, "hub-"):
 		return "hub"
 	case strings.Contains(info, "[BMC]") || strings.HasPrefix(node, "bmc-"):

@@ -63,6 +63,12 @@ var deviceGroups = []groupDef{
 	{Key: "minihub", Name: "Mini hub", Emoji: "🔗", Color: "#FFC107", IconSize: 40, TreeRank: 1,
 		Filter: "MiniHub", FilterTitle: "Mini hub: the devices behind a trunk or big port no polled switch is behind (no Shadow IT)",
 		Stroke: "#FFA000", Dot: "🟡", Section: "Mini hub (trunk yoki ko'p MAC'li port)", SectionNo: 15, Shape: "circle"},
+	// Access points behind an unmanaged (PoE) switch, seen by LLDP
+	// (lldpPortPlans): no Shadow IT unless Settings make it one
+	{Key: "ap_hub", Name: "AP hub", Emoji: "📡", Color: "#4DB6AC", IconSize: 40, TreeRank: 1,
+		Filter: "AP hub", FilterTitle: "AP hub: access points behind an unmanaged (PoE) switch that LLDP shows (no Shadow IT unless Settings say so)",
+		Via:    "an AP hub",
+		Stroke: "#00897B", Dot: "🟩", Section: "AP hub (boshqarilmaydigan switch ortidagi AP'lar)", SectionNo: 17, Shape: "circle"},
 	{Key: "endpoint", Name: "Endpoint", Emoji: "💻", Color: "#8BC34A", TreeRank: 2,
 		Filter: "Endpoint",
 		Stroke: "#6B9F30", Dot: "🟢", Section: "Endpoint qurilmalar", SectionNo: 2},

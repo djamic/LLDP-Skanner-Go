@@ -398,7 +398,7 @@ def mermaid_to_graphviz(mermaid_code):
             dot_lines.append(f'    "{parent}" -> "{child}";')
     # Build legend from unique colors used
     group_label_map = {
-        '#4A90E2': 'Switch', '#64B5F6': 'Unpolled switch', '#E24A4A': 'Router', '#FF9800': 'Hub', '#FFC107': 'Mini hub',
+        '#4A90E2': 'Switch', '#64B5F6': 'Unpolled switch', '#E24A4A': 'Router', '#FF9800': 'Hub', '#FFC107': 'Mini hub', '#4DB6AC': 'AP hub',
         '#8BC34A': 'Endpoint', '#00BCD4': 'Wi-Fi AP / Random MAC',
         '#9C27B0': 'VM', '#26C6DA': 'Hypervisor', '#FF6F00': 'BMC/iLO',
         '#E91E63': 'Camera', '#3F51B5': 'Phone', '#607D8B': 'IoT',
