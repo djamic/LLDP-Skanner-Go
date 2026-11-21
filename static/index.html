@@ -386,6 +386,10 @@
                         <input type="checkbox" id="settingsClassify-controllerKindWins">
                         <span>Controller kind wins: what a controller manages a device as (UniFi access point or switch, vCenter host, Kerio phone) or a Credentials login for its IP declares it to be is its type, above its tags and its OUI</span>
                     </label>
+                    <label class="checkbox-label" title="Off: by the words of its name, as before (a switch named 'Server-room switch' is a server)">
+                        <input type="checkbox" id="settingsClassify-polledByMIB">
+                        <span>Polled devices by their agent: a polled device is a switch, unless it bridges nothing (no BRIDGE-MIB port, no FDB) and its sysDescr names a host's OS (Linux, Windows, FreeBSD: a server; VMware ESXi: a hypervisor); its name plays no part</span>
+                    </label>
                 </div>
             </div>
             <div class="modal-footer">

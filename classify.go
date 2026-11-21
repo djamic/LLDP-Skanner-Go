@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 
 	"lldp_scanner/modules"
@@ -13,11 +14,12 @@ type nodeEvidence struct {
 	ID   string // the node id: a MAC, an IP, a hub-/hyp- id or a name
 	Info string // its label (SysName): tags ([LLDP-EP], [HUB], ...), names, IPs
 
-	Router bool // a configured gateway's router node (graphRouters)
-	AP     bool // an access point a controller manages (graphManaged)
-	Polled bool // a polled device (graphSwitches)
-	ESXi   bool // an HTTP-confirmed ESXi host, and no switch
-	VoIP   bool // a phone the voip engine identified (graphVoIP)
+	Router bool        // a configured gateway's router node (graphRouters)
+	AP     bool        // an access point a controller manages (graphManaged)
+	Polled bool        // a polled device (graphSwitches)
+	Own    polledFacts // what a polled device's agent shows (graphPolled)
+	ESXi   bool        // an HTTP-confirmed ESXi host, and no switch
+	VoIP   bool        // a phone the voip engine identified (graphVoIP)
 
 	// Category is the OUI category (categorizeVendor) of the id's vendor
 	// when the id is a MAC of a known vendor, else "".
@@ -75,6 +77,7 @@ func (g *DJGraph) nodeEvidence(node, info string, facts classifyFacts) nodeEvide
 		Router: g.graphRouters[node],
 		AP:     g.graphManaged[node],
 		Polled: g.graphSwitches[node],
+		Own:    g.graphPolled[node],
 	}
 	ev.ESXi = graphIsConfirmedESXi(node) && !graphIsSwitchNode(g, node)
 	_, ev.VoIP = g.graphVoIP[node]
@@ -143,8 +146,10 @@ func toldGroup(ev nodeEvidence) string {
 //
 //  1. a configured gateway's node: router
 //  2. a controller's access point: access_point
-//  3. a polled device: by its own name only (graphNameGroup), server, router
-//     or switch, even with an empty label
+//  3. a polled device: with rules.PolledByMIB by what its agent shows
+//     (polledGroup: a switch, a server or an ESXi host), else by its own
+//     name only (graphNameGroup), server, router or switch, even with an
+//     empty label
 //  4. with rules.ControllerKindWins, what the owner or a controller tells
 //     (toldGroup): the device type the Credentials logins for its IP
 //     declare, else the kind a controller manages its MAC as (a UniFi
@@ -194,6 +199,8 @@ func classifyOwn(ev nodeEvidence, rules ClassifySettings) string {
 		return "router"
 	case ev.AP:
 		return "access_point"
+	case ev.Polled && rules.PolledByMIB:
+		return polledGroup(ev.Own)
 	case ev.Polled:
 		return graphNameGroup(node, info, true)
 	case told != "":
@@ -239,6 +246,30 @@ func classifyOwn(ev nodeEvidence, rules ClassifySettings) string {
 	}
 	return graphNameGroup(node, info, false)
 }
+
+// polledGroup is the group of a polled device by what its agent shows, not
+// by its name ("Server-room switch" is a switch): it passed the switch
+// qualification (a BRIDGE-MIB port or an LLDP-MIB chassis id), so it is a
+// switch, unless it bridges nothing (no BRIDGE-MIB port, no FDB) and its
+// sysDescr names a host's OS: an LLDP agent on a server (lldpd, Windows'
+// own) is a server, and on an ESXi host a hypervisor.
+func polledGroup(own polledFacts) string {
+	if own.Bridge {
+		return "switch"
+	}
+	switch d := own.SysDescr; {
+	case strings.HasPrefix(d, "VMware ESXi"):
+		return "hypervisor"
+	case strings.Contains(d, "Software: Windows"), slices.ContainsFunc(serverOSPrefixes, func(p string) bool { return strings.HasPrefix(d, p) }):
+		return "server"
+	}
+	return "switch"
+}
+
+// serverOSPrefixes start the sysDescr of a host's SNMP agent: net-snmp's
+// "<kernel> <hostname> <release> ..." (Windows' says "Hardware: ...
+// Software: Windows ...").
+var serverOSPrefixes = []string{"Linux ", "FreeBSD ", "OpenBSD ", "NetBSD ", "SunOS "}
 
 // graphNameGroup is the group of an untagged node from its name and label:
 // server, switch or router, else switch when it has a label or is a polled

@@ -168,9 +168,23 @@ func TestReportDeviceVendorRules(t *testing.T) {
 		{"FortiGate-60F", "Fortinet"}, {"fortinet-fw", "Fortinet"},
 		{"SNR HP", "SNR"}, // first rule wins
 		{"Huawe", ""}, {"B-318/1", ""}, {"", ""},
+		// whole words only
+		{"dhcp-relay-1", ""}, {"Aruba-6300", "Aruba"}, {"PiXiETECH-24", "PiXiETECH"},
 	} {
 		if got := reportDeviceVendor(&DeviceData{SysName: c.sysName}); got != c.want {
 			t.Errorf("reportDeviceVendor(sysName %q) = %q, want %q", c.sysName, got, c.want)
+		}
+	}
+	// the sysDescr when the sysName names none
+	for _, c := range []struct{ sysName, sysDescr, want string }{
+		{"Switch", "PiXiETECH(tm) PXT-S2790G-24FX Software, Version 2.2.0F", "PiXiETECH"},
+		{"6300", "Aruba JL659A 6300M 48SR5 CL6 PoE 4SFP56 Swch FL.10.10", "Aruba"},
+		{"A Mobil", "HPE Comware Platform Software", "HPE"},
+		{"SNR-S2985G-24TC", "HPE Comware Platform Software", "SNR"},
+		{"B-318/1", "dhcp relay agent", ""},
+	} {
+		if got := reportDeviceVendor(&DeviceData{SysName: c.sysName, SysDescr: c.sysDescr}); got != c.want {
+			t.Errorf("reportDeviceVendor(%q, %q) = %q, want %q", c.sysName, c.sysDescr, got, c.want)
 		}
 	}
 	d := &DeviceData{SysName: "HUAWEI", ChassisID: "00:0c:29:71:00:05"}

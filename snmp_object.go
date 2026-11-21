@@ -102,6 +102,12 @@ type DeviceData struct {
 	BridgePortIfIndex map[int]int `json:"bridgePortIfIndex,omitempty"`
 	// VRRPInfo holds VRRP router instances when the switch answers VRRP-MIB.
 	VRRPInfo *VRRPData `json:"vrrpInfo,omitempty"`
+	// SysDescr is the agent's sysDescr ("HPE Comware Platform Software...",
+	// "Linux host 5.15.0..."), its first line; "" when it gave none
+	SysDescr string `json:"sysDescr,omitempty"`
+	// BridgePorts is BRIDGE-MIB dot1dBaseNumPorts, the ports the agent's
+	// bridge has: 0 when it has no BRIDGE-MIB (or the count was never read)
+	BridgePorts int `json:"bridgePorts,omitempty"`
 
 	// Walks that failed in the poll that produced this data (not saved).
 	failedWalks    []string
@@ -327,6 +333,20 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 		ports, _ := s.collectBaseNumPorts(ip)
 		mu.Lock()
 		data.polledMIBs.BridgePorts = ports
+		data.BridgePorts = ports
+		mu.Unlock()
+	}()
+
+	// The sysDescr, what the device is (classifyNode: a polled device that
+	// bridges nothing and names a server OS is a server). Optional like the
+	// port count: when it gives none, storeCollectedDevice keeps the stored
+	// one (keepPreviousSysName).
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		descr := s.collectSysText(ip, oidSysDescr)
+		mu.Lock()
+		data.SysDescr = descr
 		mu.Unlock()
 	}()
 

@@ -39,8 +39,10 @@ type DJGraph struct {
 	// graphManaged holds the nodes of the access points a controller
 	// manages that no switch showed (addManagedAPNodes): such a node is an
 	// access point. graphLLDPCaps holds the LLDP capabilities a node's
-	// LLDP rows enable (lldpRemSysCapEnabled, the rows' union).
+	// LLDP rows enable (lldpRemSysCapEnabled, the rows' union). graphPolled
+	// holds what a polled device's own agent shows of what it is.
 	graphSwitches map[string]bool
+	graphPolled   map[string]polledFacts
 	graphRouters  map[string]bool
 	graphSysText  map[string]string
 	graphManaged  map[string]bool

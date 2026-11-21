@@ -606,8 +606,18 @@ func keepPreviousChassisID(data, prev *DeviceData) {
 // caller had none and the sysName read gave none, CollectData) and the
 // stored data of the same IP has one.
 func keepPreviousSysName(data, prev *DeviceData) {
-	if prev != nil && prev != data && data.SysName == "" {
+	if prev == nil || prev == data {
+		return
+	}
+	if data.SysName == "" {
 		data.SysName = prev.SysName
+	}
+	// The sysDescr and the BRIDGE-MIB port count are optional reads too
+	if data.SysDescr == "" {
+		data.SysDescr = prev.SysDescr
+	}
+	if data.BridgePorts == 0 {
+		data.BridgePorts = prev.BridgePorts
 	}
 }
 
@@ -3142,8 +3152,19 @@ func graphAddSwitchNode(graph *DJGraph, d *DeviceData) string {
 		graph.graphSwitches = make(map[string]bool)
 	}
 	graph.graphSwitches[id] = true
-	graphAddSysText(graph, id, d.SysName)
+	if graph.graphPolled == nil {
+		graph.graphPolled = make(map[string]polledFacts)
+	}
+	graph.graphPolled[id] = polledFacts{Bridge: d.BridgePorts > 0 || len(d.MACTable) > 0, SysDescr: d.SysDescr}
+	graphAddSysText(graph, id, d.SysName, d.SysDescr)
 	return id
+}
+
+// polledFacts is what a polled device's own agent shows of what it is
+// (classifyNode, ClassifySettings.PolledByMIB).
+type polledFacts struct {
+	Bridge   bool   // BRIDGE-MIB ports, or an FDB: it bridges
+	SysDescr string // its sysDescr
 }
 
 // graphAddSysText records sysName/sysDescr text for a node (each distinct
@@ -3177,8 +3198,9 @@ func graphAddLLDPCaps(graph *DJGraph, id string, caps uint8) {
 }
 
 // graphSwitchSysMarkers are sysName/sysDescr words of switches (HPE/H3C
-// Comware, Huawei VRP, Cisco IOS, SNR).
-var graphSwitchSysMarkers = []string{"Comware", "HUAWEI", "Cisco", "SNR"}
+// Comware, Huawei VRP, Cisco IOS, SNR, Aruba AOS-S and AOS-CX, PiXiETECH,
+// FortiSwitch).
+var graphSwitchSysMarkers = []string{"Comware", "HUAWEI", "Cisco", "SNR", "Aruba", "PiXiETECH", "FortiSwitch"}
 
 // graphIsSwitchNode reports whether a node is a switch: a polled device, or
 // an LLDP neighbor whose sysName/sysDescr names a switch platform. Vendor

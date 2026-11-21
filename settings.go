@@ -52,11 +52,16 @@ type ClassifySettings struct {
 	// its group, as before, and the reports, the analyzer and Telegram do
 	// not see it.
 	ControllerKindWins bool `json:"controllerKindWins"`
+	// PolledByMIB groups a polled device by what its agent shows, not by
+	// its name (polledGroup): a switch, unless it bridges nothing and its
+	// sysDescr names a host's OS (a server, an ESXi host). Off, by the
+	// words of its name, as before ("Server-room switch" is a server).
+	PolledByMIB bool `json:"polledByMIB"`
 }
 
 // DefaultClassifySettings are the recommended classification choices.
 func DefaultClassifySettings() ClassifySettings {
-	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true, MobileGroup: true, ControllerKindWins: true}
+	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true, MobileGroup: true, ControllerKindWins: true, PolledByMIB: true}
 }
 
 // SavedData holds all persistent data
