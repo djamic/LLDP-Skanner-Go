@@ -99,6 +99,16 @@ type host struct {
 // connected tells whether the vCenter talks to the host.
 func (h host) connected() bool { return h.state == modules.StateOnline || h.state == "MAINTENANCE" }
 
+// managedState is the host's state as the scanner reads it
+// (modules.State*): ONLINE, MAINTENANCE (it answers), else OFFLINE (the
+// vCenter does not reach it, or it is powered off or in standby).
+func (h host) managedState() string {
+	if h.connected() {
+		return h.state
+	}
+	return modules.StateOffline
+}
+
 var hostStates = map[string]string{"disconnected": "DISCONNECTED", "notResponding": "NOT_RESPONDING"}
 
 // hostState is a host's state from its connection, power and maintenance.
@@ -290,9 +300,12 @@ func enableSNMPAll(ctx context.Context, c *vsphere.Client, community string) (mo
 // Inventory gives the scanner the vCenter's hosts (modules.Inventorier):
 // a managed device per MAC of each host (its VMkernel NICs', the first
 // with an IP first, then its physical NICs'), named as vCenter does, of
-// kind "hypervisor"; the one with the first MAC lists the host's virtual
-// machines as clients of kind "vm", one per virtual NIC, so the graph and
-// the tree name them. A host whose configuration vCenter does not have
+// kind "hypervisor", in the state the scanner reads (OFFLINE when the
+// vCenter does not reach it); the one with the first MAC lists the host's
+// virtual machines as clients of kind "vm", one per virtual NIC, so the
+// graph and the tree name them. A physical NIC's uplink is the switch port
+// CDP or LLDP tells the host of (vsphere.NicLinks), with the switch's MAC
+// when its id is one. A host whose configuration vCenter does not have
 // (disconnected) has no MAC, and is left out.
 func (Module) Inventory(ctx context.Context, req modules.Request) (modules.Inventory, error) {
 	var inv modules.Inventory
@@ -337,9 +350,18 @@ func (Module) Inventory(ctx context.Context, req modules.Request) (modules.Inven
 				clients = append(clients, cl)
 			}
 		}
+		uplinks := map[string]*modules.ManagedUplink{} // physical NIC MAC → its switch port
+		if h.connected() {
+			links := vsphere.NicLinks(ctx, c, h.Managers.Network, h.PNICs)
+			for _, n := range h.PNICs {
+				if l, ok := links[n.Device]; ok && (l.SwitchMAC != "" || l.Port != "") {
+					uplinks[strings.ToLower(strings.TrimSpace(n.Mac))] = &modules.ManagedUplink{MAC: l.SwitchMAC, Port: l.Port, LocalPort: n.Device}
+				}
+			}
+		}
 		for i, mac := range macs {
-			d := modules.ManagedDevice{MAC: mac, Name: h.Name, Model: h.Server, IP: h.ManagementIP(), State: h.state,
-				Firmware: h.Product, Kind: modules.KindHypervisor}
+			d := modules.ManagedDevice{MAC: mac, Name: h.Name, Model: h.Server, IP: h.ManagementIP(), State: h.managedState(),
+				Firmware: h.Product, Kind: modules.KindHypervisor, Uplink: uplinks[mac]}
 			if i == 0 {
 				d.Clients = clients
 			}

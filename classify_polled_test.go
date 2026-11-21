@@ -2,7 +2,11 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
+
+	"lldp_scanner/modules"
 )
 
 // TestPolledGroup: with rules.PolledByMIB a polled device is grouped by
@@ -140,6 +144,48 @@ func TestVoIPExcludedNotPhone(t *testing.T) {
 	for _, n := range g.GetGraphData().Nodes {
 		if n.Group != want[n.ID] {
 			t.Errorf("%s: group %q, want %q", n.ID, n.Group, want[n.ID])
+		}
+	}
+}
+
+// TestVCenterVMkernelNIC: a VMkernel NIC a vCenter lists as its host's (a
+// VMware OUI) is the host on its port, not a VM: its VMs hang below it, it
+// is tagged and grouped a hypervisor, and no hyp- node stands in. Off
+// (controllerKindWins), it is one of the VMs of a hyp- node, as before.
+func TestVCenterVMkernelNIC(t *testing.T) {
+	resetState(t)
+	const vmk, vm1, vm2 = "00:50:56:6a:00:0a", "00:0c:29:74:04:02", "00:0c:29:74:04:03"
+	sw := &DeviceData{IP: "10.0.74.2", SysName: "sw-74", ChassisID: "4c:ae:a3:74:00:02",
+		Interfaces: gigabitPorts(4, nil), MACTable: macEntries(4, vmk, vm1, vm2)}
+	reportSetDevices(sw)
+	inventoryMu.Lock()
+	inventories = map[string]inventoryRecord{"vcenter|10.9.0.2": {Module: "vcenter", IP: "10.9.0.2", Time: time.Now(),
+		Inventory: modules.Inventory{Devices: []modules.ManagedDevice{{MAC: vmk, Name: "esx-74", Kind: "hypervisor"}}}}}
+	inventoryIndex()
+	inventoryMu.Unlock()
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+	hyp := "hyp-4c:ae:a3:74:00:02-ge1_0_4"
+	for _, kindWins := range []bool{true, false} {
+		currentSettingsMutex.Lock()
+		currentSettings.Classify.ControllerKindWins = kindWins
+		currentSettingsMutex.Unlock()
+		g := reportBuildGraph()
+		groups := map[string]string{}
+		for _, n := range g.GetGraphData().Nodes {
+			groups[n.ID] = n.Group
+		}
+		if kindWins {
+			if g.Nodes[hyp] || len(g.Edges[vmk]) != 2 || !strings.HasPrefix(g.SwitchInfo[vmk], graphESXiTag) || groups[vmk] != "hypervisor" {
+				t.Errorf("on: hyp- node %v, links of the VMkernel NIC %v, its label %q, group %q; want its 2 VMs below it", g.Nodes[hyp], g.Edges[vmk], g.SwitchInfo[vmk], groups[vmk])
+			}
+			continue
+		}
+		if !g.Nodes[hyp] || len(g.Edges[hyp]) != 3 || !strings.Contains(g.SwitchInfo[vmk], "[VM]") {
+			t.Errorf("off: hyp- node %v with links %v, the VMkernel NIC's label %q; want the hyp- node of 3 VMs", g.Nodes[hyp], g.Edges[hyp], g.SwitchInfo[vmk])
 		}
 	}
 }

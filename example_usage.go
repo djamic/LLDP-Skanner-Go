@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"lldp_scanner/modules"
 	"lldp_scanner/modules/kit"
 	"lldp_scanner/modules/voip"
 )
@@ -1663,6 +1664,19 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 
 // graphIsConfirmedESXi reports whether id is the MAC of an ESXi host
 // confirmed by the HTTP probe.
+// graphVCenterHostNIC reports whether id is a NIC a vCenter lists as an
+// ESXi host's (with ClassifySettings.ControllerKindWins): a VMkernel NIC
+// (a VMware OUI) is then the host, not one of its VMs. An HTTP-confirmed
+// ESXi NIC of a VMware OUI alone stays a VM (a nested ESXi): without the
+// vCenter the two look alike.
+func graphVCenterHostNIC(id string) bool {
+	if !currentClassify().ControllerKindWins {
+		return false
+	}
+	v := managedViewOf(id)
+	return v != nil && v.Kind == modules.KindHypervisor
+}
+
 func graphIsConfirmedESXi(id string) bool {
 	_, ok := ConfirmedESXiMACs.Load(normalizeMAC(id))
 	return ok
@@ -1690,7 +1704,8 @@ func graphIsBMC(mac string, names ...string) (bool, string) {
 
 // graphFDBEndpointLabel is the label of a MAC learned from the FDB (direct
 // port, VM port or hub member): "[VM] <os>" for a virtual NIC (checked before
-// the random-MAC rule), else "[BMC] <type>" (DNS name checked too), "[WiFi]"
+// the random-MAC rule) that is no vCenter host's VMkernel NIC
+// (graphVCenterHostNIC: graphESXiTag), else "[BMC] <type>" (DNS name checked too), "[WiFi]"
 // for a random MAC or "[ENDPOINT]"; then the vendor, the IP and the DNS name.
 func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceData) string {
 	ip := macToIP[mac]
@@ -1699,7 +1714,9 @@ func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceDa
 		hostname, _ = cachedHostname(ip) // looked up before the build
 	}
 	info := "[ENDPOINT]"
-	if isHypervisorMAC(mac) {
+	if isHypervisorMAC(mac) && graphVCenterHostNIC(mac) {
+		info = graphESXiTag // a vCenter host's VMkernel NIC: no VM
+	} else if isHypervisorMAC(mac) {
 		info = fmt.Sprintf("[VM] %s", detectOSFromMAC(mac, macToIP, data))
 	} else if bmcDetected, bmcType := graphIsBMC(mac, hostname); bmcDetected {
 		info = fmt.Sprintf("[BMC] %s", bmcType)
@@ -3687,9 +3704,14 @@ func detectHypervisors(graph *DJGraph) {
 		targets := graph.Edges[src]
 		for _, tgt := range slices.Sorted(maps.Keys(targets)) {
 			// Check if tgt MAC is a VM OUI (a gateway's router node is no
-			// VM), or a confirmed ESXi host NIC on a switch port
+			// VM; a confirmed ESXi one is a nested ESXi, a VM), or an ESXi
+			// host NIC on a switch port: a confirmed one, or one a vCenter
+			// lists as its host's (graphVCenterHostNIC; a VMkernel NIC has
+			// a VM OUI and is the host, no VM)
 			_, isVM := hypervisorTypeOf(tgt)
-			isHost := !isVM && !strings.HasPrefix(src, "hub-") && graphIsConfirmedESXi(tgt) && !graphIsSwitchNode(graph, tgt)
+			vcHost := graphVCenterHostNIC(tgt)
+			isVM = isVM && !vcHost
+			isHost := !isVM && !strings.HasPrefix(src, "hub-") && (graphIsConfirmedESXi(tgt) || vcHost) && !graphIsSwitchNode(graph, tgt)
 			if (!isVM && !isHost) || graph.graphRouters[tgt] {
 				continue
 			}

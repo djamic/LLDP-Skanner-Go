@@ -328,6 +328,30 @@ func TestInventory(t *testing.T) {
 	if got := inv.Devices[0].Clients; !slices.Equal(got, wantVMs) {
 		t.Errorf("VMs of esx-a\n got %+v\nwant %+v", got, wantVMs)
 	}
+	// a physical NIC's uplink: the switch port its LLDP tells (vmnic0's);
+	// a VMkernel NIC has none
+	uplinks := map[string]string{}
+	for _, d := range inv.Devices {
+		if d.Uplink != nil {
+			uplinks[d.MAC] = d.Uplink.MAC + " " + d.Uplink.Port + " " + d.Uplink.LocalPort
+		}
+	}
+	for mac, up := range uplinks {
+		if strings.HasPrefix(mac, "00:50:56") || up != "4c:ae:a3:00:00:02 GigabitEthernet1/0/26 vmnic0" {
+			t.Errorf("uplink of %s: %q", mac, up)
+		}
+	}
+	if len(uplinks) == 0 {
+		t.Error("no physical NIC has the uplink its LLDP tells")
+	}
+	for _, c := range []struct{ state, want string }{
+		{modules.StateOnline, modules.StateOnline}, {"MAINTENANCE", "MAINTENANCE"},
+		{"NOT_RESPONDING", modules.StateOffline}, {"DISCONNECTED", modules.StateOffline}, {"OFF", modules.StateOffline}, {"STANDBY", modules.StateOffline},
+	} {
+		if got := (host{state: c.state}).managedState(); got != c.want {
+			t.Errorf("managedState of a %s host = %q, want %q", c.state, got, c.want)
+		}
+	}
 	if _, err := (Module{}).Inventory(context.Background(), modules.Request{IP: "10.9.0.7", Login: modules.Login{Username: "root", Password: "x"}}); !errors.Is(err, modules.ErrLoginRejected) {
 		t.Errorf("a wrong login: %v", err)
 	}

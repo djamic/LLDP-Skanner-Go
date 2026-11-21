@@ -221,11 +221,30 @@ func LicenseName(ctx context.Context, c *Client) string {
 	return strings.Join(names, ", ")
 }
 
+// NicLink is what CDP or LLDP tells a host of the switch port of one of its
+// physical NICs.
+type NicLink struct {
+	Switch string // "CDP: <device id> (<address>)", "LLDP: <system name> (<chassis id>)"
+	Port   string // the switch's port id
+	// SwitchMAC is the switch's MAC when its id is one (an LLDP chassis id,
+	// a CDP device id), canonical: the scanner finds the switch by it
+	SwitchMAC string
+}
+
 // NicHints asks a host (its network system) what CDP or LLDP tells of the
 // switch port of each physical NIC: device → [switch, port]. A host that
 // does not listen to the switch's protocol tells nothing.
 func NicHints(ctx context.Context, c *Client, networkSystem string, nics []PhysicalNic) map[string][2]string {
 	out := map[string][2]string{}
+	for dev, l := range NicLinks(ctx, c, networkSystem, nics) {
+		out[dev] = [2]string{l.Switch, l.Port}
+	}
+	return out
+}
+
+// NicLinks is NicHints with the switch's MAC: device → its link.
+func NicLinks(ctx context.Context, c *Client, networkSystem string, nics []PhysicalNic) map[string]NicLink {
+	out := map[string]NicLink{}
 	if networkSystem == "" || len(nics) == 0 {
 		return out
 	}
@@ -248,7 +267,7 @@ func NicHints(ctx context.Context, c *Client, networkSystem string, nics []Physi
 			if h.CDP.Address != "" {
 				sw += " (" + h.CDP.Address + ")"
 			}
-			out[h.Device] = [2]string{"CDP: " + sw, h.CDP.PortID}
+			out[h.Device] = NicLink{Switch: "CDP: " + sw, Port: h.CDP.PortID, SwitchMAC: kit.NormMAC(h.CDP.DevID)}
 		case h.LLDP != nil && (h.LLDP.ChassisID != "" || h.LLDP.PortID != ""):
 			sw := h.LLDP.ChassisID
 			for _, prm := range h.LLDP.Parameter {
@@ -256,7 +275,7 @@ func NicHints(ctx context.Context, c *Client, networkSystem string, nics []Physi
 					sw = strings.TrimSpace(prm.Value) + " (" + h.LLDP.ChassisID + ")"
 				}
 			}
-			out[h.Device] = [2]string{"LLDP: " + sw, h.LLDP.PortID}
+			out[h.Device] = NicLink{Switch: "LLDP: " + sw, Port: h.LLDP.PortID, SwitchMAC: kit.NormMAC(h.LLDP.ChassisID)}
 		}
 	}
 	return out
