@@ -20,6 +20,9 @@ type nodeEvidence struct {
 	Own    polledFacts // what a polled device's agent shows (graphPolled)
 	ESXi   bool        // an HTTP-confirmed ESXi host, and no switch
 	VoIP   bool        // a phone the voip engine identified (graphVoIP)
+	// NotPhone: the voip engine excludes it (a VoIP maker's non-phone
+	// product, graphNotPhone), so its OUI's "phone" tells nothing
+	NotPhone bool
 
 	// Category is the OUI category (categorizeVendor) of the id's vendor
 	// when the id is a MAC of a known vendor, else "".
@@ -81,6 +84,7 @@ func (g *DJGraph) nodeEvidence(node, info string, facts classifyFacts) nodeEvide
 	}
 	ev.ESXi = graphIsConfirmedESXi(node) && !graphIsSwitchNode(g, node)
 	_, ev.VoIP = g.graphVoIP[node]
+	ev.NotPhone = g.graphNotPhone[node]
 	ev.LLDPCaps = g.graphLLDPCaps[node]
 	if len(node) >= 8 && (strings.Contains(node, ":") || strings.Contains(node, "-")) {
 		if vendor := lookupVendor(node); vendor != "Unknown" {
@@ -161,7 +165,8 @@ func toldGroup(ev nodeEvidence) string {
 //  7. a phone of the voip engine (Yealink, Grandstream, ...): phone
 //  8. [LLDP-EP] or [ENDPOINT]: its MAC's OUI category when that tells a
 //     kind (a smartphone maker's, mobile: with rules.MobileGroup mobile,
-//     else phone, as before); else, with rules.LLDPCaps, its LLDP
+//     else phone, as before; a VoIP maker's, phone, unless the voip engine
+//     excludes the device); else, with rules.LLDPCaps, its LLDP
 //     capabilities: a wireless access point is an access_point, a bridge
 //     or router (no phone, the rule of lldpDiscoverable) an unpolled
 //     switch, lldp_switch; else endpoint
@@ -214,6 +219,10 @@ func classifyOwn(ev nodeEvidence, rules ClassifySettings) string {
 	case strings.Contains(info, "[LLDP-EP]") || strings.Contains(info, "[ENDPOINT]"):
 		switch ev.Category {
 		case "", "endpoint", "network":
+		case "phone":
+			if !ev.NotPhone {
+				return "phone"
+			}
 		case "mobile":
 			if !rules.MobileGroup {
 				return "phone"

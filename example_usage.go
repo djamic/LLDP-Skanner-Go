@@ -1050,11 +1050,12 @@ func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldp
 					continue
 				}
 			}
-			_, phone := voip.Detect(voipEvidence(target, n, ""))
+			ev := voipEvidence(target, n, "")
+			_, phone := voip.Detect(ev)
 			switch {
 			case isAP:
 				aps++
-			case phone || caps&lldpCapPhone != 0:
+			case phone || caps&lldpCapPhone != 0 && !voip.Excluded(ev):
 				phones = append(phones, target)
 			default:
 				others = append(others, target)

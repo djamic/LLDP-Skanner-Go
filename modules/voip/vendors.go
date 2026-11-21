@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	avayaERSRe        = regexp.MustCompile(`(?i)\bERS[- ]?\d{3,4}`)
 	avayaModelRe      = regexp.MustCompile(`(?i)\b(AVX[A-Z0-9]{4,}|J1[235678]9|96[01245]1G?|96[02345]8G?|B1[789]9)\b`)
 	panasonicModelRe  = regexp.MustCompile(`(?i)\b(KX-(?:HDV|UT|NT|TGP|TPA)\d{2,4}[A-Z0-9]*)\b`)
 	ciscoPhoneModelRe = regexp.MustCompile(`(?i)\b(CP-\d{4}[A-Z0-9]*)\b`)
@@ -15,15 +16,19 @@ var (
 )
 
 func init() {
-	// Avaya IP phones (e.g. AVXC28D65, J100/9600 series)
+	// Avaya IP phones (e.g. AVXC28D65, J100/9600 series). Avaya makes
+	// switches (ERS) and PBXs too: no dedicated VoIP vendor, a phone by its
+	// model or the telephone capability.
 	RegisterRule(Rule{
-		ID:               "avaya",
-		Brand:            "Avaya",
-		Priority:         90,
-		DedicatedVendors: []string{"avaya"},
+		ID:       "avaya",
+		Brand:    "Avaya",
+		Priority: 90,
 		Exclude: func(ev Evidence) bool {
-			low := strings.ToLower(ev.SysDesc + " " + ev.SysName)
-			return strings.Contains(low, "ethernet routing switch") || strings.Contains(low, "ers-")
+			if !kit.HasWord(ev.Vendor, "avaya") && !kit.HasWord(ev.SysDesc, "avaya") {
+				return false
+			}
+			text := ev.SysDesc + " " + ev.SysName
+			return strings.Contains(strings.ToLower(text), "ethernet routing switch") || avayaERSRe.MatchString(text)
 		},
 		Match: func(ev Evidence) (string, string, bool) {
 			isVendor := kit.HasWord(ev.Vendor, "avaya") || kit.HasWord(ev.SysDesc, "avaya")
@@ -32,7 +37,8 @@ func init() {
 			if m := avayaModelRe.FindStringSubmatch(combined); len(m) > 1 {
 				model = strings.ToUpper(m[1])
 			}
-			if !isVendor && !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(ev.SysName)), "AVX") {
+			avx := strings.HasPrefix(strings.ToUpper(strings.TrimSpace(ev.SysName)), "AVX")
+			if !avx && !(isVendor && (model != "" || ev.Capabilities&CapPhone != 0)) {
 				return "", "", false
 			}
 			if model == "" {
@@ -117,26 +123,31 @@ func init() {
 		},
 	})
 
-	// Additional dedicated enterprise VoIP vendors for plug-and-play OUI & LLDP support
+	// Additional enterprise VoIP vendors for plug-and-play OUI & LLDP
+	// support. Mitel (PBX controllers) and AudioCodes (gateways, SBCs) make
+	// more than phones: no dedicated VoIP vendors, a phone with the
+	// telephone capability only.
 	for _, v := range []struct {
 		id, brand string
 		words     []string
+		dedicated bool
 	}{
-		{"poly", "Poly", []string{"polycom"}},
-		{"snom", "Snom", []string{"snom"}},
-		{"mitel", "Mitel", []string{"mitel", "aastra"}},
-		{"gigaset", "Gigaset", []string{"gigaset"}},
-		{"audiocodes", "AudioCodes", []string{"audiocodes"}},
-		{"akuvox", "Akuvox", []string{"akuvox"}},
-		{"flyingvoice", "Flyingvoice", []string{"flyingvoice"}},
+		{"poly", "Poly", []string{"polycom"}, true},
+		{"snom", "Snom", []string{"snom"}, true},
+		{"mitel", "Mitel", []string{"mitel", "aastra"}, false},
+		{"gigaset", "Gigaset", []string{"gigaset"}, true},
+		{"audiocodes", "AudioCodes", []string{"audiocodes"}, false},
+		{"akuvox", "Akuvox", []string{"akuvox"}, true},
+		{"flyingvoice", "Flyingvoice", []string{"flyingvoice"}, true},
 	} {
-		v := v
-		RegisterRule(Rule{
-			ID:               v.id,
-			Brand:            v.brand,
-			Priority:         80,
-			DedicatedVendors: v.words,
+		r := Rule{
+			ID:       v.id,
+			Brand:    v.brand,
+			Priority: 80,
 			Match: func(ev Evidence) (string, string, bool) {
+				if !v.dedicated && ev.Capabilities&CapPhone == 0 {
+					return "", "", false
+				}
 				matched := false
 				for _, w := range v.words {
 					if kit.HasWord(ev.Vendor, w) || kit.HasWord(ev.SysDesc, w) || kit.HasWord(ev.SysName, w) {
@@ -149,6 +160,10 @@ func init() {
 				}
 				return strings.TrimSpace(ev.SysName), firstLine(ev.SysDesc), true
 			},
-		})
+		}
+		if v.dedicated {
+			r.DedicatedVendors = v.words
+		}
+		RegisterRule(r)
 	}
 }

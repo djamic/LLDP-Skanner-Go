@@ -41,8 +41,11 @@ type DJGraph struct {
 	// access point. graphLLDPCaps holds the LLDP capabilities a node's
 	// LLDP rows enable (lldpRemSysCapEnabled, the rows' union). graphPolled
 	// holds what a polled device's own agent shows of what it is.
+	// graphNotPhone holds the LLDP neighbors the voip engine excludes (a
+	// VoIP maker's non-phone product).
 	graphSwitches map[string]bool
 	graphPolled   map[string]polledFacts
+	graphNotPhone map[string]bool
 	graphRouters  map[string]bool
 	graphSysText  map[string]string
 	graphManaged  map[string]bool

@@ -303,8 +303,8 @@ func TestGrandstreamAndYealinkHTTPModules(t *testing.T) {
 	gsHost, _, _ := net.SplitHostPort(gsSrv.Listener.Addr().String())
 
 	gs := GrandstreamModule{BaseURL: gsSrv.URL}
-	if !gs.CheckWebUI(context.Background(), gsHost) {
-		t.Fatal("GrandstreamModule.CheckWebUI = false, want true")
+	if !gs.Probe(context.Background(), gsHost) {
+		t.Fatal("GrandstreamModule.Probe = false, want true")
 	}
 	if _, err := gs.Run(context.Background(), modules.Request{IP: gsHost, Action: "detect", Login: modules.Login{Username: "admin", Password: "wrong"}}); !errors.Is(err, modules.ErrLoginRejected) {
 		t.Fatalf("wrong password err = %v, want ErrLoginRejected", err)
@@ -331,10 +331,86 @@ func TestGrandstreamAndYealinkHTTPModules(t *testing.T) {
 	ylHost, _, _ := net.SplitHostPort(ylSrv.Listener.Addr().String())
 
 	yl := YealinkModule{BaseURL: ylSrv.URL}
-	if !yl.CheckWebUI(context.Background(), ylHost) {
-		t.Fatal("YealinkModule.CheckWebUI = false, want true")
+	if !yl.Probe(context.Background(), ylHost) {
+		t.Fatal("YealinkModule.Probe = false, want true")
 	}
 	if _, err := yl.Run(context.Background(), modules.Request{IP: ylHost, Action: "detect", Login: modules.Login{Username: "admin", Password: "ylpass"}}); err != nil {
 		t.Fatalf("Yealink Run err = %v", err)
+	}
+}
+
+// TestPhoneLoginAnswers: a Grandstream answer that is no JSON is no login
+// (no error used to count as a login that worked), and a Yealink login
+// answered with a redirect is a refused one (followed, the login page
+// counted as a login that worked).
+func TestPhoneLoginAnswers(t *testing.T) {
+	gsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<html><body>Login</body></html>`))
+	}))
+	defer gsSrv.Close()
+	_, err := GrandstreamModule{BaseURL: gsSrv.URL}.Run(context.Background(), modules.Request{IP: "192.0.2.5", Action: "detect", Login: modules.Login{Username: "admin", Password: "x"}})
+	if err == nil || errors.Is(err, modules.ErrLoginRejected) || !strings.Contains(err.Error(), "not JSON") {
+		t.Errorf("a Grandstream answer that is no JSON: %v, want an error that is no refused login", err)
+	}
+
+	ylSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/servlet":
+			http.Redirect(w, r, "/login.html", http.StatusFound)
+		case "/login.html":
+			w.Write([]byte(`<html><form>username password</form></html>`))
+		}
+	}))
+	defer ylSrv.Close()
+	_, err = YealinkModule{BaseURL: ylSrv.URL}.Run(context.Background(), modules.Request{IP: "192.0.2.6", Action: "detect", Login: modules.Login{Username: "admin", Password: "x"}})
+	if !errors.Is(err, modules.ErrLoginRejected) {
+		t.Errorf("a Yealink login answered with a redirect: %v, want ErrLoginRejected", err)
+	}
+	if got := phoneBase("https", "2001:db8::5"); got != "https://[2001:db8::5]:443" {
+		t.Errorf("phoneBase of an IPv6 address = %q", got)
+	}
+}
+
+// TestVoIPExclusions: a rule's Exclude vetoes its own vendor's rule only;
+// Grandstream's PBXs, door systems and cameras are no phones, by LLDP or
+// by the OUI; makers of more than phones (Avaya, Mitel, AudioCodes) are no
+// dedicated VoIP vendors.
+func TestVoIPExclusions(t *testing.T) {
+	gs := "Grandstream Networks, Inc."
+	for _, c := range []struct {
+		name     string
+		ev       Evidence
+		phone    bool
+		excluded bool
+	}{
+		// "Users-" holds "ers-": Avaya's switch exclusion is Avaya's own
+		{"a phone named Users-...", Evidence{SysName: "Users-phone", Capabilities: CapPhone | CapBridge}, true, false},
+		{"Avaya ERS switch", Evidence{Vendor: "Avaya Inc", SysDesc: "Ethernet Routing Switch 4850GTS-PWR+", Capabilities: CapBridge}, false, true},
+		{"Avaya ERS-4826", Evidence{Vendor: "Avaya Inc", SysName: "ERS-4826", Capabilities: CapPhone}, false, true},
+		{"Avaya J179", Evidence{Vendor: "Avaya Inc", SysName: "J179", SysDesc: "Avaya IP Phone J179", Capabilities: CapPhone | CapBridge}, true, false},
+		{"Avaya OUI, no model", Evidence{Vendor: "Avaya Inc", SysName: "ipoffice-1"}, false, false},
+		{"Avaya OUI only", Evidence{Vendor: "Avaya Inc"}, false, false},
+		{"Grandstream UCM6304", Evidence{Vendor: gs, SysName: "UCM6304", SysDesc: "UCM6304 1.0.21.9", Capabilities: CapBridge}, false, true},
+		{"Grandstream GDS3710", Evidence{Vendor: gs, SysName: "GDS3710_c0:74:ad:00:00:21", Capabilities: CapPhone}, false, true},
+		{"Grandstream GSC3610 camera", Evidence{Vendor: gs, SysDesc: "GSC3610 1.0.1.12"}, false, true},
+		{"Grandstream FDB-only", Evidence{Vendor: gs}, true, false},
+		{"Mitel OUI, no phone bit", Evidence{Vendor: "Mitel Networks Corporation", SysName: "MiVoice-MX-ONE"}, false, false},
+		{"Mitel phone", Evidence{Vendor: "Mitel Networks Corporation", SysName: "6867i", Capabilities: CapPhone}, true, false},
+		{"AudioCodes SBC", Evidence{Vendor: "AudioCodes Ltd", SysName: "M800C"}, false, false},
+	} {
+		if _, ok := Detect(c.ev); ok != c.phone {
+			t.Errorf("%s: Detect = %v, want %v", c.name, ok, c.phone)
+		}
+		if got := Excluded(c.ev); got != c.excluded {
+			t.Errorf("%s: Excluded = %v, want %v", c.name, got, c.excluded)
+		}
+	}
+	for vendor, want := range map[string]bool{
+		"Avaya Inc": false, "Mitel Networks Corporation": false, "AudioCodes Ltd": false,
+		gs: true, "Yealink(Xiamen) Network Technology Co.,Ltd.": true, "Polycom": true, "Snom Technology GmbH": true,
+	} {
+		if got := IsDedicatedVoIPVendor(vendor); got != want {
+			t.Errorf("IsDedicatedVoIPVendor(%q) = %v, want %v", vendor, got, want)
+		}
 	}
 }

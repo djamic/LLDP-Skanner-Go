@@ -11,10 +11,12 @@ import (
 //   - SysName: "GRP2613_c0:74:ad:00:00:11", "GXP1625_c0:74:ad:00:00:12"
 //   - SysDesc: "GRP2613 1.0.7.33", "GXP1625 1.0.7.8", "GRP2614 1.0.9.99"
 //   - PortDesc: "eth0"
-//   - Non-phone exclusions: GWN76xx access points, GWN78xx switches, GWN70xx routers
+//   - Non-phone exclusions: GWN76xx access points, GWN78xx switches, GWN70xx
+//     routers, UCM IP PBXs (UCM6302, UCM6304A), GDS door systems (GDS3710),
+//     GSC36xx cameras
 var (
 	grandstreamPhoneRe   = regexp.MustCompile(`(?i)\b(GXP\d{4}[A-Z0-9]*|GRP\d{4}[A-Z0-9]*|GXV\d{4}[A-Z0-9]*|DP7\d{2}[A-Z0-9]*|WP8\d{2}[A-Z0-9]*|GAC\d{4}[A-Z0-9]*|GHP\d{3}[A-Z0-9]*|HT8\d{2}[A-Z0-9]*|GXW\d{4}[A-Z0-9]*)\b`)
-	grandstreamExcludeRe = regexp.MustCompile(`(?i)\bGWN(?:70|76|77|78)\d{2}[A-Z0-9]*\b`)
+	grandstreamExcludeRe = regexp.MustCompile(`(?i)\b(?:GWN(?:70|76|77|78)\d{2}|UCM\d{3,4}|GDS\d{4}|GSC36\d{2})[A-Z0-9]*\b`)
 	grandstreamVerRe     = regexp.MustCompile(`\b(\d+\.\d+\.\d+\.\d+)\b`)
 )
 
@@ -25,7 +27,9 @@ func init() {
 		Priority:         100,
 		DedicatedVendors: []string{"grandstream"},
 		Exclude: func(ev Evidence) bool {
-			return grandstreamExcludeRe.MatchString(ev.SysName) || grandstreamExcludeRe.MatchString(ev.SysDesc)
+			// the model before the "_<MAC>" of a sysName too ("GDS3710_c0:74:ad:...")
+			model, _, _ := strings.Cut(ev.SysName, "_")
+			return grandstreamExcludeRe.MatchString(model) || grandstreamExcludeRe.MatchString(ev.SysName) || grandstreamExcludeRe.MatchString(ev.SysDesc)
 		},
 		Match: matchGrandstream,
 	})

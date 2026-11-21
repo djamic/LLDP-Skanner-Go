@@ -14,7 +14,16 @@ func graphRecordVoIPNeighbor(graph *DJGraph, targetID string, neighbor LLDPNeigh
 	if graph == nil || targetID == "" || graph.graphSwitches[targetID] || graph.graphRouters[targetID] {
 		return
 	}
-	if prof, ok := voip.Detect(voipEvidence(targetID, neighbor, arpIP)); ok {
+	ev := voipEvidence(targetID, neighbor, arpIP)
+	if voip.Excluded(ev) {
+		// a VoIP maker's non-phone product (a Grandstream UCM or GDS): its
+		// OUI makes it no phone either (classifyNode)
+		if graph.graphNotPhone == nil {
+			graph.graphNotPhone = make(map[string]bool)
+		}
+		graph.graphNotPhone[targetID] = true
+	}
+	if prof, ok := voip.Detect(ev); ok {
 		if graph.graphVoIP == nil {
 			graph.graphVoIP = make(map[string]voip.Profile)
 		}

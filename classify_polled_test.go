@@ -115,3 +115,31 @@ func TestSwitchSysMarkers(t *testing.T) {
 		t.Error("an ESXi host is a switch node")
 	}
 }
+
+// TestVoIPExcludedNotPhone: a Grandstream PBX or door system its LLDP
+// names is no phone, though its OUI is a VoIP maker's; a Grandstream phone
+// and a Grandstream MAC no LLDP names stay phones.
+func TestVoIPExcludedNotPhone(t *testing.T) {
+	resetState(t)
+	g := NewDJGraph()
+	for _, n := range []struct {
+		mac, sysName, sysDesc string
+		caps                  uint8
+	}{
+		{"c0:74:ad:00:00:31", "UCM6304", "UCM6304 1.0.21.9", 0x20},
+		{"c0:74:ad:00:00:32", "GDS3710_c0:74:ad:00:00:32", "GDS3710 1.0.11.8", 0x04},
+		{"c0:74:ad:00:00:33", "GXP1625_c0:74:ad:00:00:33", "GXP1625 1.0.7.8", 0x24},
+	} {
+		g.AddNode(n.mac)
+		g.SwitchInfo[n.mac] = "[LLDP-EP] Grandstream Networks, Inc."
+		graphRecordVoIPNeighbor(g, n.mac, LLDPNeighbor{RemSysName: n.sysName, RemSysDesc: n.sysDesc, RemSysCapEnabled: n.caps}, "")
+	}
+	g.AddNode("c0:74:ad:00:00:34")
+	g.SwitchInfo["c0:74:ad:00:00:34"] = "[ENDPOINT] Grandstream Networks, Inc."
+	want := map[string]string{"c0:74:ad:00:00:31": "endpoint", "c0:74:ad:00:00:32": "endpoint", "c0:74:ad:00:00:33": "phone", "c0:74:ad:00:00:34": "phone"}
+	for _, n := range g.GetGraphData().Nodes {
+		if n.Group != want[n.ID] {
+			t.Errorf("%s: group %q, want %q", n.ID, n.Group, want[n.ID])
+		}
+	}
+}

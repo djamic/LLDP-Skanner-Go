@@ -58,8 +58,10 @@ type Profile struct {
 //     "grandstream", "fanvil"). Multi-product makers (Panasonic, Cisco, Huawei)
 //     must leave DedicatedVendors empty and match via Match using LLDP model
 //     prefixes or CapPhone.
-//   - Exclude matches non-phone products of a VoIP vendor (for example,
-//     Grandstream GWN76xx Wi-Fi APs or GWN78xx switches).
+//   - Exclude matches non-phone products of the rule's own vendor (for
+//     example, Grandstream GWN76xx Wi-Fi APs, GWN78xx switches, UCM PBXs or
+//     GDS door systems): the rule does not match them, and no fallback makes
+//     them phones. It vetoes that vendor's rule only, never another's.
 //   - Match inspects Evidence and returns (model, firmware, true) when the
 //     endpoint is an IP phone of this brand.
 type Rule struct {
@@ -146,9 +148,11 @@ func Detect(ev Evidence) (Profile, bool) {
 	snapshot := slices.Clone(rules)
 	rulesMu.RUnlock()
 
+	excluded := false
 	for _, r := range snapshot {
 		if r.Exclude != nil && r.Exclude(ev) {
-			return Profile{}, false
+			excluded = true // this vendor's non-phone product: its rule does not match
+			continue
 		}
 		if r.Match != nil {
 			if model, fw, ok := r.Match(ev); ok {
@@ -156,14 +160,12 @@ func Detect(ev Evidence) (Profile, bool) {
 			}
 		}
 	}
+	if excluded {
+		return Profile{}, false
+	}
 
 	// Fallback 1: Dedicated VoIP OUI vendor (e.g. FDB-only Yealink/Grandstream node)
 	if brand, ok := BrandForDedicatedVendor(ev.Vendor); ok {
-		for _, r := range snapshot {
-			if r.Brand == brand && r.Exclude != nil && r.Exclude(ev) {
-				return Profile{}, false
-			}
-		}
 		return buildProfile(ev, brand, "", "", "oui:"+strings.ToLower(brand)), true
 	}
 
@@ -182,6 +184,16 @@ func Detect(ev Evidence) (Profile, bool) {
 	}
 
 	return Profile{}, false
+}
+
+// Excluded reports whether ev is a non-phone product of a VoIP vendor by a
+// rule's Exclude (a Grandstream UCM PBX, GDS door system, GWN access point
+// or switch; an Avaya Ethernet Routing Switch): the scanner then does not
+// take the vendor's OUI for a phone either.
+func Excluded(ev Evidence) bool {
+	rulesMu.RLock()
+	defer rulesMu.RUnlock()
+	return slices.ContainsFunc(rules, func(r Rule) bool { return r.Exclude != nil && r.Exclude(ev) })
 }
 
 func buildProfile(ev Evidence, brand, model, firmware, source string) Profile {

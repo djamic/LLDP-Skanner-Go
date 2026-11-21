@@ -3,8 +3,10 @@ package voip
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +20,12 @@ func init() {
 	modules.Register(GrandstreamModule{})
 	modules.Register(YealinkModule{})
 }
+
+// The phones' modules recognize their devices without a login.
+var (
+	_ modules.Prober = GrandstreamModule{}
+	_ modules.Prober = YealinkModule{}
+)
 
 // GrandstreamModule probes and inspects Grandstream GXP/GRP IP phones over HTTP/HTTPS.
 type GrandstreamModule struct {
@@ -35,8 +43,9 @@ func (GrandstreamModule) Actions() []modules.Action {
 	}
 }
 
-// CheckWebUI recognizes Grandstream's embedded web server without logging in.
-func (m GrandstreamModule) CheckWebUI(ctx context.Context, ip string) bool {
+// Probe recognizes Grandstream's embedded web server without logging in
+// (modules.Prober: the scanner offers the module for a device it answers).
+func (m GrandstreamModule) Probe(ctx context.Context, ip string) bool {
 	hdr, body, status, err := fetchRoot(ctx, m.BaseURL, ip)
 	if err != nil || status == 0 {
 		return false
@@ -58,6 +67,7 @@ func (m GrandstreamModule) Run(ctx context.Context, req modules.Request) (module
 	if err != nil {
 		return modules.Result{}, err
 	}
+	defer client.CloseIdleConnections()
 
 	var res modules.Result
 	res.AddFact("Vendor", "Grandstream")
@@ -75,28 +85,29 @@ func (m GrandstreamModule) Run(ctx context.Context, req modules.Request) (module
 			Sid string `json:"sid"`
 		} `json:"body"`
 	}
-	if json.Unmarshal(resp, &loginAns) == nil {
-		if strings.EqualFold(loginAns.Response, "error") || loginAns.Body.Sid == "" {
-			return res, fmt.Errorf("%w: Grandstream web login refused", modules.ErrLoginRejected)
+	// An answer that is no JSON is no login: an older firmware without
+	// the CGI API, or another web server (it used to count as a login that
+	// worked)
+	if err := json.Unmarshal(resp, &loginAns); err != nil {
+		return res, fmt.Errorf("no Grandstream CGI API answer from %s/cgi-bin/dologin (%d bytes, not JSON): the login is not known to work", base, len(resp))
+	}
+	if strings.EqualFold(loginAns.Response, "error") || loginAns.Body.Sid == "" {
+		return res, fmt.Errorf("%w: Grandstream web login refused", modules.ErrLoginRejected)
+	}
+	sid := url.QueryEscape(loginAns.Body.Sid)
+	if statusBytes, err := getBody(ctx, client, base+"/cgi-bin/api-get_phone_status?passcode=&sid="+sid); err == nil {
+		var st struct {
+			Body map[string]any `json:"body"`
 		}
-		sid := url.QueryEscape(loginAns.Body.Sid)
-		if statusBytes, err := getBody(ctx, client, base+"/cgi-bin/api-get_phone_status?passcode=&sid="+sid); err == nil {
-			var st struct {
-				Body map[string]any `json:"body"`
-			}
-			if json.Unmarshal(statusBytes, &st) == nil {
-				for _, k := range []string{"product_model", "prog_version", "boot_version", "mac", "ip", "system-time"} {
-					if v, ok := st.Body[k]; ok && fmt.Sprint(v) != "" {
-						res.AddFact(k, fmt.Sprint(v))
-					}
+		if json.Unmarshal(statusBytes, &st) == nil {
+			for _, k := range []string{"product_model", "prog_version", "boot_version", "mac", "ip", "system-time"} {
+				if v, ok := st.Body[k]; ok && fmt.Sprint(v) != "" {
+					res.AddFact(k, fmt.Sprint(v))
 				}
 			}
 		}
-		res.Summary = fmt.Sprintf("Grandstream phone at %s authenticated via CGI API", req.IP)
-		return res, nil
 	}
-
-	res.Summary = fmt.Sprintf("Grandstream web interface reachable at %s", base)
+	res.Summary = fmt.Sprintf("Grandstream phone at %s authenticated via CGI API", req.IP)
 	return res, nil
 }
 
@@ -116,8 +127,9 @@ func (YealinkModule) Actions() []modules.Action {
 	}
 }
 
-// CheckWebUI recognizes Yealink's web interface without logging in.
-func (m YealinkModule) CheckWebUI(ctx context.Context, ip string) bool {
+// Probe recognizes Yealink's web interface without logging in
+// (modules.Prober).
+func (m YealinkModule) Probe(ctx context.Context, ip string) bool {
 	hdr, body, status, err := fetchRoot(ctx, m.BaseURL, ip)
 	if err != nil || status == 0 {
 		return false
@@ -140,13 +152,22 @@ func (m YealinkModule) Run(ctx context.Context, req modules.Request) (modules.Re
 	if err != nil {
 		return modules.Result{}, err
 	}
+	defer client.CloseIdleConnections()
 
 	var res modules.Result
 	res.AddFact("Vendor", "Yealink")
 	res.AddFact("Web UI", base)
 
+	// The login is an AJAX call: it answers, it does not redirect. A
+	// redirect (back to the login page) is a refused login; followed, its
+	// page had none of the words below and counted as one that worked.
+	noRedirect := *client
+	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	form := url.Values{"username": {req.Login.Username}, "pwd": {req.Login.Password}}
-	body, err := postForm(ctx, client, base+"/servlet?m=mod_listener&p=login&q=login", form)
+	body, err := postForm(ctx, &noRedirect, base+"/servlet?m=mod_listener&p=login&q=login", form)
+	if errors.Is(err, errRedirected) {
+		return res, fmt.Errorf("%w: Yealink web login refused (%v)", modules.ErrLoginRejected, err)
+	}
 	if err != nil {
 		return res, err
 	}
@@ -159,13 +180,22 @@ func (m YealinkModule) Run(ctx context.Context, req modules.Request) (modules.Re
 	return res, nil
 }
 
+// phoneBase is the web UI address of a phone at ip by scheme (an IPv6
+// address in brackets).
+func phoneBase(scheme, ip string) string {
+	port := map[string]string{"https": "443", "http": "80"}[scheme]
+	return scheme + "://" + net.JoinHostPort(ip, port)
+}
+
+// newPhoneHTTPClient is the client of one Run (its caller closes its idle
+// connections) and the web UI address that answered.
 func newPhoneHTTPClient(ctx context.Context, override, ip string) (*http.Client, string, error) {
 	client := kit.NewHTTPClient(kit.HTTPOptions{Timeout: 4 * time.Second, Cookies: true})
 	if override != "" {
 		return client, strings.TrimRight(override, "/"), nil
 	}
 	for _, scheme := range []string{"https", "http"} {
-		base := scheme + "://" + ip
+		base := phoneBase(scheme, ip)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/", nil)
 		if err != nil {
 			continue
@@ -177,12 +207,15 @@ func newPhoneHTTPClient(ctx context.Context, override, ip string) (*http.Client,
 			return client, base, nil
 		}
 	}
+	client.CloseIdleConnections()
 	return nil, "", fmt.Errorf("unreachable HTTP/HTTPS web interface on %s", ip)
 }
 
+// fetchRoot reads the web UI's root page (http, then https), with no
+// connection kept.
 func fetchRoot(ctx context.Context, override, ip string) (http.Header, string, int, error) {
-	client := kit.NewHTTPClient(kit.HTTPOptions{Timeout: 2 * time.Second})
-	candidates := []string{"http://" + ip + "/", "https://" + ip + "/"}
+	client := kit.NewHTTPClient(kit.HTTPOptions{Timeout: 2 * time.Second, NoKeepAlives: true})
+	candidates := []string{phoneBase("http", ip) + "/", phoneBase("https", ip) + "/"}
 	if override != "" {
 		candidates = []string{strings.TrimRight(override, "/") + "/"}
 	}
@@ -232,5 +265,12 @@ func postForm(ctx context.Context, client *http.Client, target string, form url.
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return nil, modules.ErrLoginRejected
 	}
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return nil, fmt.Errorf("%w: HTTP %d to %q", errRedirected, resp.StatusCode, resp.Header.Get("Location"))
+	}
 	return io.ReadAll(io.LimitReader(resp.Body, 16384))
 }
+
+// errRedirected is a POST answered with a redirect (a client that does not
+// follow redirects).
+var errRedirected = errors.New("redirected")
