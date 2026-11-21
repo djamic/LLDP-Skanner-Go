@@ -181,52 +181,69 @@ func isStatusPage(ctx context.Context, hc *http.Client, u string) bool {
 	return ok && code == http.StatusOK && strings.TrimSpace(status.Meta.ServerVersion) != ""
 }
 
-// refusesWithoutKey tells whether the API's /info at base refuses a
-// request with no key as the application does: 401 (or 403) with its own
-// error JSON, of the Integration API
-// ({"statusCode":401,"statusName":"UNAUTHORIZED","code":"api.authentication.missing-credentials",...})
-// or of the application's older API ({"meta":{"rc":"error","msg":"api.err.LoginRequired"}}).
-// A web server that refuses every path, also with JSON, says neither.
-func refusesWithoutKey(ctx context.Context, hc *http.Client, base string) bool {
-	var refusal struct {
-		StatusCode int    `json:"statusCode"`
-		StatusName string `json:"statusName"`
-		Code       string `json:"code"`
+// infoRefusal is the answer of the API's /info at a base to a request with
+// no key, read once for both of Probe's checks of that base
+// (refusesWithoutKey, unifiOSConsole): its HTTP status, and its JSON
+// object (ok false when it sent none).
+type infoRefusal struct {
+	status int
+	ok     bool
+	body   struct {
+		StatusCode int             `json:"statusCode"`
+		StatusName string          `json:"statusName"`
+		Code       json.RawMessage `json:"code"`
 		Meta       struct {
 			Msg string `json:"msg"`
 		} `json:"meta"`
+		Error struct {
+			Code int `json:"code"`
+		} `json:"error"`
 	}
-	code, ok := probeGet(ctx, hc, base+"/info", &refusal)
-	if !ok || (code != http.StatusUnauthorized && code != http.StatusForbidden) {
+}
+
+// probeInfo asks base's /info with no key.
+func probeInfo(ctx context.Context, hc *http.Client, base string) infoRefusal {
+	var r infoRefusal
+	r.status, r.ok = probeGet(ctx, hc, base+"/info", &r.body)
+	return r
+}
+
+// refused tells whether the answer is a 401 or a 403 with a JSON object.
+func (r infoRefusal) refused() bool {
+	return r.ok && (r.status == http.StatusUnauthorized || r.status == http.StatusForbidden)
+}
+
+// refusesWithoutKey tells whether the API's /info refuses a request with
+// no key as the application does: 401 (or 403) with its own error JSON, of
+// the Integration API
+// ({"statusCode":401,"statusName":"UNAUTHORIZED","code":"api.authentication.missing-credentials",...})
+// or of the application's older API ({"meta":{"rc":"error","msg":"api.err.LoginRequired"}}).
+// A web server that refuses every path, also with JSON, says neither.
+func (r infoRefusal) refusesWithoutKey() bool {
+	if !r.refused() {
 		return false
 	}
-	return (refusal.StatusCode == code && refusal.StatusName != "") ||
-		strings.HasPrefix(refusal.Code, "api.") ||
-		strings.HasPrefix(refusal.Meta.Msg, "api.err.")
+	var code string
+	json.Unmarshal(r.body.Code, &code)
+	return (r.body.StatusCode == r.status && r.body.StatusName != "") ||
+		strings.HasPrefix(code, "api.") ||
+		strings.HasPrefix(r.body.Meta.Msg, "api.err.")
 }
 
 // integrationPath is where a UniFi OS console serves the application's
 // Integration API.
 const integrationPath = "/proxy/network/integration/v1"
 
-// unifiOSConsole tells whether base is the application behind a UniFi OS
-// console (UDM, Cloud Key, UniFi OS Server): the console's own page, titled
-// "UniFi OS", and its gateway refusing the API with no key as
+// unifiOSConsole tells whether base, whose /info answered info, is the
+// application behind a UniFi OS console (UDM, Cloud Key, UniFi OS Server):
+// the console's own page, titled "UniFi OS", and its gateway refusing the
+// API with no key as
 // {"error":{"code":401,"message":"Unauthorized"}} (172.15.1.2 does, and
 // has no status page that answers with no login). Both must hold: another
 // web server may refuse in the same words.
-func unifiOSConsole(ctx context.Context, hc *http.Client, base string) bool {
+func unifiOSConsole(ctx context.Context, hc *http.Client, base string, info infoRefusal) bool {
 	root, ok := strings.CutSuffix(base, integrationPath)
-	if !ok {
-		return false
-	}
-	var refusal struct {
-		Error struct {
-			Code int `json:"code"`
-		} `json:"error"`
-	}
-	code, ok := probeGet(ctx, hc, base+"/info", &refusal)
-	if !ok || (code != http.StatusUnauthorized && code != http.StatusForbidden) || refusal.Error.Code != code {
+	if !ok || !info.refused() || info.body.Error.Code != info.status {
 		return false
 	}
 	return probeTitle(ctx, hc, root+"/") == "UniFi OS"

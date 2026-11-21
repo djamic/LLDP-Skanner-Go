@@ -68,7 +68,8 @@ func loginsOf(req modules.Request) []modules.Login {
 // Probe tells, with no key, whether a UniFi Network application answers at
 // ip: its status page, its API refusing a request with no key in its own
 // error JSON, or a UniFi OS console's page and gateway refusal
-// (unifiOSConsole). The checks run at once, for probeTimeout at most.
+// (unifiOSConsole; the API's /info is asked once per address). The checks
+// run at once, for probeTimeout at most.
 func (Module) Probe(ctx context.Context, ip string) bool {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
@@ -79,8 +80,10 @@ func (Module) Probe(ctx context.Context, ip string) bool {
 		checks = append(checks, func() bool { return isStatusPage(ctx, hc, u) })
 	}
 	for _, base := range apiBases(ip) {
-		checks = append(checks, func() bool { return refusesWithoutKey(ctx, hc, base) },
-			func() bool { return unifiOSConsole(ctx, hc, base) })
+		checks = append(checks, func() bool {
+			info := probeInfo(ctx, hc, base) // once for both checks
+			return info.refusesWithoutKey() || unifiOSConsole(ctx, hc, base, info)
+		})
 	}
 	found := make(chan bool, len(checks))
 	for _, check := range checks {
@@ -134,9 +137,23 @@ func (d device) label() string { return kit.FirstOf(d.Name, d.MacAddress, d.ID) 
 
 func (d device) mac() string { return strings.ToLower(strings.TrimSpace(d.MacAddress)) }
 
-// kind is "access_point" for a device with the access point feature,
-// "switch" for one that only switches, else "".
+// gatewayModels start the model names of UniFi's gateways (the Dream
+// Machines and Routers, the Next-Gen and Security Gateways, the Cloud
+// Gateways, the Express, the Fortress: "UDM Pro", "UDMPRO", "UCG Ultra",
+// "UX"; no access point's or switch's starts so). A gateway's features are
+// a switch's or an access point's ("switching", "accessPoint"), so without
+// the older API's device type its kind used to flip to switch or access
+// point.
+var gatewayModels = []string{"UDM", "UDR", "UDW", "UXG", "USG", "UCG", "UX", "EFG"}
+
+// kind is "gateway" for a gateway's model, "access_point" for a device with
+// the access point feature, "switch" for one that only switches, else "":
+// the same with the older API or without it (classicKinds agrees).
 func (d device) kind() string {
+	model := strings.ToUpper(strings.TrimSpace(d.Model))
+	if slices.ContainsFunc(gatewayModels, func(p string) bool { return strings.HasPrefix(model, p) }) {
+		return modules.KindGateway
+	}
 	var names []string
 	if json.Unmarshal(d.Features, &names) != nil {
 		var features map[string]json.RawMessage
@@ -152,6 +169,20 @@ func (d device) kind() string {
 		return modules.KindSwitch
 	}
 	return ""
+}
+
+// managedState is a device's state as the scanner reads it
+// (modules.State*): OFFLINE also when the application lost it
+// (CONNECTION_INTERRUPTED, DISCONNECTED) or it has no uplink (ISOLATED);
+// the others as the application says them ("PENDING_ADOPTION", "ADOPTING",
+// "UPDATING"), upper case.
+func managedState(state string) string {
+	switch s := strings.ToUpper(strings.TrimSpace(state)); s {
+	case "CONNECTION_INTERRUPTED", "DISCONNECTED", "ISOLATED":
+		return modules.StateOffline
+	default:
+		return s
+	}
 }
 
 func (d device) uplinkID() string {
@@ -338,7 +369,7 @@ func siteDevices(devs []device, clients []clientInfo, stations map[string]statio
 		slices.SortFunc(cls, func(a, b modules.ManagedClient) int {
 			return cmp.Or(cmp.Compare(strings.ToLower(kit.FirstOf(a.Name, a.MAC)), strings.ToLower(kit.FirstOf(b.Name, b.MAC))), cmp.Compare(a.MAC, b.MAC))
 		})
-		md := modules.ManagedDevice{MAC: mac, Name: d.label(), Model: d.Model, IP: d.IPAddress, State: d.State,
+		md := modules.ManagedDevice{MAC: mac, Name: d.label(), Model: d.Model, IP: d.IPAddress, State: managedState(d.State),
 			Firmware: d.FirmwareVersion, Kind: kindOf[mac], Clients: cls}
 		if cd, ok := details[mac]; ok {
 			md.Uplink = cd.uplink()
