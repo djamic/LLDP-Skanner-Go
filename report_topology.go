@@ -23,8 +23,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"lldp_scanner/modules/kit"
 )
 
 // ============================================================
@@ -374,40 +372,15 @@ type DeviceSummary struct {
 	MACs     int    `json:"macs"`
 }
 
-// reportSysNameVendors names the vendor of a polled device from keywords in
-// its sysName, then its sysDescr, for chassis MACs without an OUI vendor:
-// whole words (kit.HasWord: "hp" is no part of "dhcp"). The first match
-// wins.
-var reportSysNameVendors = []struct {
-	keywords []string
-	vendor   string
-}{
-	{[]string{"snr"}, "SNR"},
-	{[]string{"mikrotik"}, "MikroTik"},
-	{[]string{"cisco"}, "Cisco"},
-	{[]string{"aruba"}, "Aruba"},
-	{[]string{"hpe", "hp"}, "HPE"},
-	{[]string{"ubiquiti", "ubnt"}, "Ubiquiti"},
-	{[]string{"huawei"}, "Huawei"},
-	{[]string{"fortinet", "fortigate", "fortiswitch"}, "Fortinet"},
-	{[]string{"pixietech"}, "PiXiETECH"},
-}
-
 // reportDeviceVendor is the vendor of a polled device in every report and
 // export: the OUI vendor of its chassis MAC, else the vendor its sysName
-// names, else the one its sysDescr names, else "" (unknown).
+// names, else the one its sysDescr names (sysTextVendor), else ""
+// (unknown).
 func reportDeviceVendor(d *DeviceData) string {
 	if vendor := getMACVendor(d.ChassisID); vendor != "" {
 		return vendor
 	}
-	for _, text := range []string{d.SysName, d.SysDescr} {
-		for _, rule := range reportSysNameVendors {
-			if slices.ContainsFunc(rule.keywords, func(w string) bool { return kit.HasWord(text, w) }) {
-				return rule.vendor
-			}
-		}
-	}
-	return ""
+	return sysTextVendor(d.SysName, d.SysDescr)
 }
 
 func registerReportRoutes() {

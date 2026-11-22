@@ -481,7 +481,7 @@ func (g *DJGraph) GenerateZabbixTemplate(node string) []map[string]string {
 		return templates
 	}
 
-	if strings.Contains(g.graphSysText[node], "SNR") {
+	if sysTextVendor(g.graphSysText[node]) == "SNR" {
 		templates = []map[string]string{
 			{"name": "Template SNR Broadcast-Multicast-Unicast"},
 			{"name": "Template SNR CPU Usage"},

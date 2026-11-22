@@ -3326,20 +3326,11 @@ func graphAddLLDPCaps(graph *DJGraph, id string, caps uint8) {
 	graph.graphLLDPCaps[id] |= caps
 }
 
-// graphSwitchSysMarkers are sysName/sysDescr words of switches (HPE/H3C
-// Comware, Huawei VRP, Cisco IOS, SNR, Aruba AOS-S and AOS-CX, PiXiETECH,
-// FortiSwitch).
-var graphSwitchSysMarkers = []string{"Comware", "HUAWEI", "Cisco", "SNR", "Aruba", "PiXiETECH", "FortiSwitch"}
-
 // graphIsSwitchNode reports whether a node is a switch: a polled device, or
-// an LLDP neighbor whose sysName/sysDescr names a switch platform. Vendor
-// text in labels plays no part.
+// an LLDP neighbor whose sysName/sysDescr names a switch platform
+// (sysTextSwitchOS). Vendor text in labels plays no part.
 func graphIsSwitchNode(graph *DJGraph, id string) bool {
-	if graph.graphSwitches[id] {
-		return true
-	}
-	sys := graph.graphSysText[id]
-	return slices.ContainsFunc(graphSwitchSysMarkers, func(m string) bool { return strings.Contains(sys, m) })
+	return graph.graphSwitches[id] || sysTextSwitchOS(graph.graphSysText[id])
 }
 
 // buildSwitchOwnMACs maps every own MAC of the polled switches to the node
