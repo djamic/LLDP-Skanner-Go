@@ -1760,7 +1760,7 @@ uiOnNodeClick('infoNeighbors', id => highlightNodeFromPanel(id), true);
 
 // The classification choices (settings.go ClassifySettings): the settings
 // modal has a checkbox settingsClassify-<choice> for each.
-const uiClassifyChoices = ['lldpCaps', 'lldpHubs', 'apHubAlert', 'wifiClientsCountOnly', 'mobileGroup', 'controllerKindWins', 'polledByMIB'];
+const uiClassifyChoices = ['lldpCaps', 'lldpHubs', 'apHubAlert', 'wifiClientsCountOnly', 'mobileGroup', 'controllerKindWins', 'polledByMIB', 'hubHysteresis'];
 
 // Open settings modal
 function openSettings() {

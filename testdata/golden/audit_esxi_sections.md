@@ -1939,11 +1939,11 @@ graph LR
 
 **Virtual mashinalar:** 0 ta
 
-### Hypervisor #6: [HYPERVISOR] VMware ESXi — [BMC] Fujitsu iRMC — 172.16.25.231
+### Hypervisor #6: [HYPERVISOR] VMware ESXi — [BMC] Fujitsu iRMC — 172.16.25.231 — [DNS] esx01-irmc
 
 ```mermaid
 graph LR
-  901b0ef84446{{"[HYPERVISOR] VMware ESXi<br>[BMC] Fujitsu iRMC<br>172.16.25.231"}}
+  901b0ef84446{{"[HYPERVISOR] VMware ESXi<br>[BMC] Fujitsu iRMC<br>172.16.25.231<br>[DNS] esx01-irmc"}}
   4caea3278b2a["A 3 Etaj<br>172.20.230.46"]
   4caea3278b2a-- "GE1/0/7 [V1624] 100M" -->901b0ef84446
   style 4caea3278b2a fill:#4A90E2,stroke:#2A6FC2,color:#fff

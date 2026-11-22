@@ -175,9 +175,10 @@ func toldGroup(ev nodeEvidence) string {
 //  10. [APHUB] (lldpPortPlans: access points behind an unmanaged switch;
 //     a hub- node too): ap_hub
 //  11. [HUB] or a hub- node: hub
-//  12. [BMC] or a bmc- node: bmc
+//  12. [BMC]: bmc (no id prefix: the graph makes no bmc- node, and an LLDP
+//     name may start so)
 //  13. [HYPERVISOR] or a hyp- node: hypervisor
-//  14. [VM] or a vm- node: vm
+//  14. [VM]: vm (no id prefix either: "vm-backup" may be an LLDP name)
 //  15. else by its name and label (graphNameGroup)
 //
 // With rules.ControllerKindWins, last, a device a controller knows by the
@@ -246,11 +247,11 @@ func classifyOwn(ev nodeEvidence, rules ClassifySettings) string {
 		return "ap_hub"
 	case strings.Contains(info, "[HUB]") || strings.HasPrefix(node, "hub-"):
 		return "hub"
-	case strings.Contains(info, "[BMC]") || strings.HasPrefix(node, "bmc-"):
+	case strings.Contains(info, "[BMC]"):
 		return "bmc"
 	case strings.Contains(info, "[HYPERVISOR]") || strings.HasPrefix(node, "hyp-"):
 		return "hypervisor"
-	case strings.Contains(info, "[VM]") || strings.HasPrefix(node, "vm-"):
+	case strings.Contains(info, "[VM]"):
 		return "vm"
 	}
 	return graphNameGroup(node, info, false)

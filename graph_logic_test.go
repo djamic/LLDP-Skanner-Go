@@ -670,7 +670,8 @@ func graphCheckFDBEndpoints(t *testing.T, g *DJGraph) {
 	if g.Nodes["hub-"+src+"-p10"] {
 		t.Errorf("port with a confirmed ESXi host became a hub")
 	}
-	if got := g.SwitchInfo["00:1b:21:05:0c:01"]; got != "[BMC] Fujitsu iRMC\n172.16.25.231" {
+	// no LLDP name: its DNS name is its label's
+	if got := g.SwitchInfo["00:1b:21:05:0c:01"]; got != "[BMC] Fujitsu iRMC\n172.16.25.231\n[DNS] esx01-irmc" {
 		t.Errorf("LLDP endpoint with a BMC DNS name = %q", got)
 	}
 }

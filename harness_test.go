@@ -201,6 +201,9 @@ func resetState(t *testing.T) {
 	gatewayNoticesMu.Unlock()
 	inventoryAPsChanged = func() {} // no graph build behind a test's back
 	classifySettingsChanged = func() {}
+	fdbBigMu.Lock()
+	fdbBigVerdicts = map[string]fdbBigVerdict{}
+	fdbBigMu.Unlock()
 	currentSettingsMutex.Lock()
 	currentSettings.Classify = DefaultClassifySettings() // not a saved file's choices
 	currentSettingsMutex.Unlock()

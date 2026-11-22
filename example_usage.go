@@ -1337,6 +1337,19 @@ func graphAddLLDPEndpoint(graph *DJGraph, targetID, displayName string, neighbor
 		info = fmt.Sprintf("%s\n%s", info, descLines[0])
 	}
 
+	// Its DNS name, as an FDB endpoint's (graphFDBEndpointLabel), when its
+	// LLDP gives it no name: then the label and the tree name it. A name
+	// its LLDP gives stays the label: the device's own (an access point's
+	// "Sportzal3"), where DNS often has a generic one ("static-172-20-7-72")
+	if dnsName != "" && (displayName == "" || displayName == targetID) {
+		// its IP before the name, as an FDB endpoint's label has them (the
+		// enrich step adds no second one)
+		if !slices.Contains(strings.Split(info, "\n"), ip) {
+			info = fmt.Sprintf("%s\n%s", info, ip)
+		}
+		info = fmt.Sprintf("%s\n[DNS] %s", info, dnsName)
+	}
+
 	graph.SwitchInfo[targetID] = info
 
 	logDebug("       [NEW NODE] Created LLDP Endpoint node: %s", targetID)
@@ -1614,8 +1627,10 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 		}
 
 		// A port with more than 20 MACs is no hub either (D 1-2 port 51 has
-		// 58 MACs), like a trunk the VLAN data missed
-		if len(macs) > fdbHubMax && !isTrunkPort {
+		// 58 MACs), like a trunk the VLAN data missed; with hubHysteresis
+		// the verdict changes only when two polls in a row say so
+		// (fdbBigPort: the count of a Wi-Fi port swings around 20)
+		if !isTrunkPort && fdbBigPort(data, portNum, len(macs)) {
 			isTrunkPort = true
 			logDebug("       [BIG] Port %d on %s has %d MACs — no hub", portNum, data.IP, len(macs))
 		}
@@ -1662,8 +1677,53 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 }
 
 
-// graphIsConfirmedESXi reports whether id is the MAC of an ESXi host
-// confirmed by the HTTP probe.
+// fdbBigVerdict is the big-port verdict of one switch port
+// (fdbBigPort): the verdict, the poll that gave it, and a verdict the last
+// poll gave that differs from it.
+type fdbBigVerdict struct {
+	big, pending, hasPending bool
+	poll                     time.Time
+}
+
+var (
+	fdbBigMu       sync.Mutex
+	fdbBigVerdicts = map[string]fdbBigVerdict{} // "switch IP|port" → its verdict
+)
+
+// fdbBigPort reports whether a non-trunk port with n MACs is a big port
+// (more than fdbHubMax: a mini hub, no Shadow-IT hub). With
+// ClassifySettings.HubHysteresis the verdict changes only when two polls in
+// a row give the new one: a port whose count swings around 20 (Wi-Fi
+// clients come and go) kept flipping between hub and mini hub, and its
+// Shadow-IT alert with it. A poll is data.Timestamp, so the graph build,
+// the analyzer and the reports, which read the same poll, get the same
+// verdict; data without a poll time (tests) gets the count's verdict.
+func fdbBigPort(data *DeviceData, port, n int) bool {
+	big := n > fdbHubMax
+	if !currentClassify().HubHysteresis || data.Timestamp.IsZero() {
+		return big
+	}
+	key := fmt.Sprintf("%s|%d", data.IP, port)
+	fdbBigMu.Lock()
+	defer fdbBigMu.Unlock()
+	v, known := fdbBigVerdicts[key]
+	switch {
+	case !known:
+		v = fdbBigVerdict{big: big}
+	case !data.Timestamp.After(v.poll):
+		return v.big // this poll (or an older one) has its verdict
+	case big == v.big:
+		v.hasPending = false
+	case v.hasPending && v.pending == big:
+		v.big, v.hasPending = big, false // the second poll in a row
+	default:
+		v.pending, v.hasPending = big, true
+	}
+	v.poll = data.Timestamp
+	fdbBigVerdicts[key] = v
+	return v.big
+}
+
 // graphVCenterHostNIC reports whether id is a NIC a vCenter lists as an
 // ESXi host's (with ClassifySettings.ControllerKindWins): a VMkernel NIC
 // (a VMware OUI) is then the host, not one of its VMs. An HTTP-confirmed
@@ -1677,6 +1737,8 @@ func graphVCenterHostNIC(id string) bool {
 	return v != nil && v.Kind == modules.KindHypervisor
 }
 
+// graphIsConfirmedESXi reports whether id is the MAC of an ESXi host
+// confirmed by the HTTP probe.
 func graphIsConfirmedESXi(id string) bool {
 	_, ok := ConfirmedESXiMACs.Load(normalizeMAC(id))
 	return ok

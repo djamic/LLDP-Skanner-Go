@@ -57,11 +57,16 @@ type ClassifySettings struct {
 	// sysDescr names a host's OS (a server, an ESXi host). Off, by the
 	// words of its name, as before ("Server-room switch" is a server).
 	PolledByMIB bool `json:"polledByMIB"`
+	// HubHysteresis changes a port's hub or mini hub verdict (more than 20
+	// MACs) only when two polls in a row give the new one (fdbBigPort), so
+	// a port whose count swings around 20 does not flip, nor its Shadow-IT
+	// alert. Off, each poll decides, as before.
+	HubHysteresis bool `json:"hubHysteresis"`
 }
 
 // DefaultClassifySettings are the recommended classification choices.
 func DefaultClassifySettings() ClassifySettings {
-	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true, MobileGroup: true, ControllerKindWins: true, PolledByMIB: true}
+	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true, MobileGroup: true, ControllerKindWins: true, PolledByMIB: true, HubHysteresis: true}
 }
 
 // SavedData holds all persistent data

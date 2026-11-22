@@ -19,7 +19,7 @@
     {"id": "56:8b:ca:d3:33:cd", "before": {"group": "wifi_random", "sysName": "[WiFi]\n172.16.16.223\n[DNS] nas01"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\n[WiFi]\n172.16.16.223\n[DNS] nas01"}},
     {"id": "5c:62:8b:b8:b3:11", "before": {"group": "endpoint", "sysName": "[ENDPOINT] TP-Link Systems Inc\n172.16.0.121"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\n[ENDPOINT] TP-Link Systems Inc\n172.16.0.121"}},
     {"id": "5c:ed:8c:ba:a4:7c", "before": {"group": "bmc", "sysName": "[BMC] HPE iLO HPE\n172.20.6.139\n[DNS] ILOCZJ33411C3"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\n[BMC] HPE iLO HPE\n172.20.6.139\n[DNS] ILOCZJ33411C3"}},
-    {"id": "90:1b:0e:f8:44:46", "before": {"group": "bmc", "sysName": "[BMC] Fujitsu iRMC\n172.16.25.231"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\n[BMC] Fujitsu iRMC\n172.16.25.231"}},
+    {"id": "90:1b:0e:f8:44:46", "before": {"group": "bmc", "sysName": "[BMC] Fujitsu iRMC\n172.16.25.231\n[DNS] esx01-irmc"}, "after": {"group": "hypervisor", "sysName": "[HYPERVISOR] VMware ESXi\n[BMC] Fujitsu iRMC\n172.16.25.231\n[DNS] esx01-irmc"}},
     {"id": "hub-4c:ae:a3:27:85:ea-p11", "before": {"group": "hub", "sysName": "[HUB] Unmanaged\n7 devices"}},
     {"id": "hub-4c:ae:a3:27:8b:2a-p7", "before": {"group": "hub", "sysName": "[HUB] Unmanaged\n4 devices"}},
     {"id": "hub-4c:ae:a3:a2:18:2c-p7", "before": {"group": "hub", "sysName": "[HUB] Unmanaged\n3 devices"}}

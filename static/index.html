@@ -390,6 +390,10 @@
                         <input type="checkbox" id="settingsClassify-polledByMIB">
                         <span>Polled devices by their agent: a polled device is a switch, unless it bridges nothing (no BRIDGE-MIB port, no FDB) and its sysDescr names a host's OS (Linux, Windows, FreeBSD: a server; VMware ESXi: a hypervisor); its name plays no part</span>
                     </label>
+                    <label class="checkbox-label" title="Off: each poll decides, as before">
+                        <input type="checkbox" id="settingsClassify-hubHysteresis">
+                        <span>Hub hysteresis: a port turns from a hub into a mini hub (more than 20 MACs) or back only when two polls in a row say so, so its Shadow-IT alert does not flip</span>
+                    </label>
                 </div>
             </div>
             <div class="modal-footer">

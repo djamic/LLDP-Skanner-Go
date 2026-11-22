@@ -189,3 +189,60 @@ func TestVCenterVMkernelNIC(t *testing.T) {
 		}
 	}
 }
+
+// TestHubHysteresis: with hubHysteresis a port turns from a hub into a mini
+// hub (more than 20 MACs) or back only when two polls in a row say so; the
+// same poll read again (the analyzer, the reports) keeps its verdict. Off,
+// or with no poll time, each count decides.
+func TestHubHysteresis(t *testing.T) {
+	resetState(t)
+	t0 := time.Date(2026, 11, 22, 9, 0, 0, 0, time.UTC)
+	poll := func(i, n int) *DeviceData {
+		d := &DeviceData{IP: "10.0.80.2", ChassisID: "4c:ae:a3:80:00:02", Interfaces: gigabitPorts(5, nil)}
+		if i >= 0 {
+			d.Timestamp = t0.Add(time.Duration(i) * time.Minute)
+		}
+		for m := range n {
+			d.MACTable = append(d.MACTable, MACEntry{PortNumber: 5, MACAddress: fmt.Sprintf("00:1b:21:80:00:%02x", m+1)})
+		}
+		return d
+	}
+	kind := func(d *DeviceData) string {
+		for _, p := range fdbPorts(d, buildSwitchOwnMACs(map[string]*DeviceData{d.IP: d})) {
+			if p.Port == 5 {
+				return map[fdbPortKind]string{fdbHub: "hub", fdbMiniHub: "minihub"}[p.Kind]
+			}
+		}
+		return "none"
+	}
+	steps := []struct {
+		poll, macs int
+		want       string
+	}{
+		{0, 19, "hub"},
+		{1, 25, "hub"},     // one poll says mini hub
+		{1, 25, "hub"},     // the same poll again
+		{2, 26, "minihub"}, // two in a row
+		{3, 18, "minihub"},
+		{4, 25, "minihub"}, // back: no two in a row yet
+		{5, 18, "minihub"},
+		{6, 17, "hub"},
+	}
+	for _, s := range steps {
+		if got := kind(poll(s.poll, s.macs)); got != s.want {
+			t.Errorf("poll %d, %d MACs: %s, want %s", s.poll, s.macs, got, s.want)
+		}
+	}
+	if got := kind(poll(-1, 25)); got != "minihub" {
+		t.Errorf("no poll time, 25 MACs: %s, want minihub", got)
+	}
+	currentSettingsMutex.Lock()
+	currentSettings.Classify.HubHysteresis = false
+	currentSettingsMutex.Unlock()
+	if got := kind(poll(7, 25)); got != "minihub" {
+		t.Errorf("off, 25 MACs after a hub: %s, want minihub", got)
+	}
+	if got := kind(poll(8, 18)); got != "hub" {
+		t.Errorf("off, 18 MACs: %s, want hub", got)
+	}
+}

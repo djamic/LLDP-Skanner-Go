@@ -71,7 +71,7 @@ graph TD
   VM_Windows_VMwarebr10_10_10_26["[VM] 🪟 Windows VMware<br>10.10.10.26"]
   ENDPOINT_HP_Arubabr172_15_81_158>" [ENDPOINT] HP Aruba<br>172.15.81.158"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_214>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.16.17.214"]
-  LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_136_35>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.15.136.35"]
+  LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_136_35brDNS_pc_136_35>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.15.136.35<br>[DNS] pc-136-35"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_37_128>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.16.37.128"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_251>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.16.17.251"]
   LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_247_203>" [LLDP-EP] HP Aruba<br>ArubaOS (MODEL: 207), Version Aruba IAP<br>172.15.247.203"]
@@ -278,7 +278,7 @@ graph TD
   br172_20_230_253br172_20_7_227["<br>172.20.230.253<br>172.20.7.227"]
   WiFibr172_15_60_212>" [WiFi]<br>172.15.60.212"]
   WiFi_52>" [WiFi]"]
-  BMC_Fujitsu_iRMCbr172_16_25_231["[BMC] Fujitsu iRMC<br>172.16.25.231"]
+  BMC_Fujitsu_iRMCbr172_16_25_231brDNS_esx01_irmc["[BMC] Fujitsu iRMC<br>172.16.25.231<br>[DNS] esx01-irmc"]
   WiFi_53>" [WiFi]"]
   WiFibr172_15_10_247>" [WiFi]<br>172.15.10.247"]
   LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_79>" [LLDP-EP] Ubiquiti<br>U6Pro<br>U6-Pro, 6.8.2.15592<br>172.15.1.79"]
@@ -452,7 +452,7 @@ graph TD
   HPEbr172_20_253_10-- "GE1/0/47 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_253_11
   br172_20_230_76-- "GE1/0/38 [V160] ↔ " -->BMC_BMC_Micro_Star_INTL_CO_LTD_br172_16_1_153brDNS_mgmt_bmc_01
   br172_20_230_76-- "GE1/0/48 [MAC-REF] ↔ " -->br172_20_230_77
-  HPEbr172_20_254_202-- "GE1/0/19 [V1500] 1G ↔ eth0" -->LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_136_35
+  HPEbr172_20_254_202-- "GE1/0/19 [V1500] 1G ↔ eth0" -->LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_136_35brDNS_pc_136_35
   HPEbr172_20_254_202-- "TGE1/0/49 [T] 10G ↔ TGE1/0/50" -->br172_20_254_203
   HPEbr172_20_254_202-- "GE1/0/11 ↔ " -->BMC_HPE_iLO_HPEbr172_20_6_139brDNS_ILOCZJ33411C3
   HPEbr172_20_254_202-- "ge1/0/26" -->HYPERVISOR_VMware_ESXibr13_VMs_on_ge1026brVMs_172_20_7_72_172_20_18_209_172_20_7_58_172_20_19_209_172_20_17_47_172_20_14_78_172_20_19_122_172_20_14_120_172_20_16_67_172_20_11_187_172_20_20_218_172_20_7_71_172_20_14_159
@@ -651,7 +651,7 @@ graph TD
   style VM_Windows_VMwarebr10_10_10_26 fill:#9C27B0,stroke:#7B1FA2,color:#fff
   style ENDPOINT_HP_Arubabr172_15_81_158 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_214 fill:#00BCD4,stroke:#0097A7,color:#fff
-  style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_136_35 fill:#00BCD4,stroke:#0097A7,color:#fff
+  style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_136_35brDNS_pc_136_35 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_37_128 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_16_17_251 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_HP_ArubabrArubaOS_MODEL_207_Version_Aruba_IAPbr172_15_247_203 fill:#00BCD4,stroke:#0097A7,color:#fff
@@ -858,7 +858,7 @@ graph TD
   style br172_20_230_253br172_20_7_227 fill:#4A90E2,stroke:#2A6FC2,color:#fff
   style WiFibr172_15_60_212 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFi_52 fill:#00BCD4,stroke:#0097A7,color:#fff
-  style BMC_Fujitsu_iRMCbr172_16_25_231 fill:#FF6F00,stroke:#E65100,color:#fff
+  style BMC_Fujitsu_iRMCbr172_16_25_231brDNS_esx01_irmc fill:#FF6F00,stroke:#E65100,color:#fff
   style WiFi_53 fill:#00BCD4,stroke:#0097A7,color:#fff
   style WiFibr172_15_10_247 fill:#00BCD4,stroke:#0097A7,color:#fff
   style LLDP_EP_UbiquitibrU6ProbrU6_Pro_6_8_2_15592br172_15_1_79 fill:#00BCD4,stroke:#0097A7,color:#fff

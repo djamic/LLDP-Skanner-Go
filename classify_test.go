@@ -36,11 +36,12 @@ func TestClassifyNode(t *testing.T) {
 		{nodeEvidence{ID: "hub-10.0.0.2-p9"}, "hub"},
 		{nodeEvidence{ID: "x", Info: "[HUB] Unmanaged"}, "hub"},
 		{nodeEvidence{ID: "x", Info: "[BMC] iLO\n[HYPERVISOR]"}, "bmc"},
-		{nodeEvidence{ID: "bmc-1"}, "bmc"},
+		{nodeEvidence{ID: "bmc-1"}, "unknown"},                        // no id prefix
+		{nodeEvidence{ID: "vm-backup", Info: "Backup box"}, "switch"}, // an LLDP name
 		{nodeEvidence{ID: "x", Info: "[HYPERVISOR] VMware ESXi\n[VM]"}, "hypervisor"},
 		{nodeEvidence{ID: "hyp-10.0.0.2-ge1_0_2"}, "hypervisor"},
 		{nodeEvidence{ID: "x", Info: "[VM] win-22"}, "vm"},
-		{nodeEvidence{ID: "vm-1"}, "vm"},
+		{nodeEvidence{ID: "vm-1"}, "unknown"},
 		{nodeEvidence{ID: "linux-box"}, "server"},
 		{nodeEvidence{ID: "x", Info: "HPE 5130"}, "switch"},
 		{nodeEvidence{ID: "edge-router"}, "router"},

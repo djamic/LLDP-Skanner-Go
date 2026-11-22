@@ -62,6 +62,7 @@ var deviceGroups = []groupDef{
 	// A trunk or big port no polled switch is behind (fdbPorts): no Shadow IT
 	{Key: "minihub", Name: "Mini hub", Emoji: "🔗", Color: "#FFC107", IconSize: 40, TreeRank: 1,
 		Filter: "MiniHub", FilterTitle: "Mini hub: the devices behind a trunk or big port no polled switch is behind (no Shadow IT)",
+		Via:    "a mini hub",
 		Stroke: "#FFA000", Dot: "🟡", Section: "Mini hub (trunk yoki ko'p MAC'li port)", SectionNo: 15, Shape: "circle"},
 	// Access points behind an unmanaged (PoE) switch, seen by LLDP
 	// (lldpPortPlans): no Shadow IT unless Settings make it one
@@ -95,6 +96,7 @@ var deviceGroups = []groupDef{
 	// An IP phone: the voip engine's, a dedicated VoIP vendor's OUI, a PBX's
 	{Key: "phone", Name: "Phone", Emoji: "📞", Color: "#3F51B5", CanvasColor: "#5C6BC0", TreeRank: 2,
 		Filter: "Phone", FilterTitle: "Phone: an IP phone (VoIP)",
+		Via:    "a phone", // the device behind its PC port (lldpPortPlans)
 		Stroke: "#303F9F", Dot: "🔵", Section: "Telefonlar (VoIP)", SectionNo: 6},
 	// A smartphone or tablet by its maker's OUI (OUI category "mobile",
 	// ClassifySettings.MobileGroup; off, they are phones)
