@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"fmt"
+	"image/color"
 	"os"
 	"regexp"
 	"strings"
@@ -19,6 +20,8 @@ var groupTableFiles = []struct {
 	{"static/tree.js", groupTablesTreeJS},
 	{"static/index.html", groupFilterBarHTML},
 	{"static/history.html", groupTablesHistoryJS},
+	{"instrumens/md2docx_gost_linux.py", groupTablesDocx},
+	{"instrumens/md2docx_gost_cyrillic_linux.py", groupTablesDocx},
 }
 
 // TestGroupTables checks that the UI's tables are deviceGroups' (groups.go),
@@ -162,7 +165,9 @@ func groupTablesAppJS() string {
 	for _, d := range deviceGroups {
 		fmt.Fprintf(&b, "    %s: %s,\n", jsQuote(d.Key), jsQuote(d.Emoji))
 	}
-	b.WriteString("};\nconst uiExportGroups = [\n")
+	b.WriteString("};\nconst uiInfraGroups = [")
+	b.WriteString(strings.Join(infraKeys(), ", "))
+	b.WriteString("];\nconst uiExportGroups = [\n")
 	for _, d := range deviceGroups {
 		emoji := cmp.Or(d.ExportEmoji, d.Emoji)
 		fmt.Fprintf(&b, "    { id: %s, label: %s, checked: %t },\n", jsQuote(d.Key), jsQuote(emoji+" "+d.longName()), d.ExportOn)
@@ -179,13 +184,48 @@ func groupTablesTreeJS() string {
 	for _, d := range deviceGroups {
 		fmt.Fprintf(&b, "    %s: %s,\n", jsQuote(d.Key), jsQuote(d.Emoji))
 	}
-	b.WriteString("};\nconst treeGroupRanks = {\n")
+	b.WriteString("};\nconst treeInfraGroups = [")
+	b.WriteString(strings.Join(infraKeys(), ", "))
+	b.WriteString("];\nconst treeGroupRanks = {\n")
 	for _, d := range deviceGroups {
 		if d.TreeRank != 2 {
 			fmt.Fprintf(&b, "    %s: %d,\n", jsQuote(d.Key), d.TreeRank)
 		}
 	}
 	b.WriteString("};\n")
+	return b.String()
+}
+
+// infraKeys are the infrastructure groups' keys, quoted for JavaScript.
+func infraKeys() []string {
+	var keys []string
+	for _, d := range deviceGroups {
+		if d.Infra {
+			keys = append(keys, jsQuote(d.Key))
+		}
+	}
+	return keys
+}
+
+// groupTablesDocx is the DOCX converters' legend names of the report
+// colours (md2docx group_label_map): each colour once, named by its groups'
+// long names (a colour two groups share: both).
+func groupTablesDocx() string {
+	var colours []string
+	names := map[string][]string{}
+	for _, d := range deviceGroups {
+		if d.Stroke == "" {
+			continue
+		}
+		if _, ok := names[d.Color]; !ok {
+			colours = append(colours, d.Color)
+		}
+		names[d.Color] = append(names[d.Color], d.longName())
+	}
+	var b strings.Builder
+	for _, c := range colours {
+		fmt.Fprintf(&b, "%s: %s,\n", jsQuote(c), jsQuote(strings.Join(names[c], " / ")))
+	}
 	return b.String()
 }
 
@@ -224,4 +264,20 @@ func groupFilterBarHTML() string {
 		}
 	}
 	return b.String()
+}
+
+// TestGroupProperties: the infrastructure groups, and the report's styles
+// and image colours of a group, from deviceGroups.
+func TestGroupProperties(t *testing.T) {
+	for g, want := range map[string]bool{"switch": true, "router": true, "lldp_switch": false, "hub": false, "server": false, "": false} {
+		if groupInfra(g) != want {
+			t.Errorf("groupInfra(%q) = %v, want %v", g, !want, want)
+		}
+	}
+	if got := reportGroupStyle("n1", "switch"); got != "  style n1 fill:#4A90E2,stroke:#2A6FC2,color:#fff\n" {
+		t.Errorf("switch style %q", got)
+	}
+	if fill, stroke := reportGroupRGBA("router"); fill != (color.RGBA{0xE2, 0x4A, 0x4A, 255}) || stroke != (color.RGBA{0xC2, 0x30, 0x30, 255}) {
+		t.Errorf("router colours %v %v", fill, stroke)
+	}
 }

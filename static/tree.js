@@ -42,6 +42,7 @@ const treeGroupIcons = {
     'server': '🖲️',
     'unknown': '❓',
 };
+const treeInfraGroups = ['switch', 'router'];
 const treeGroupRanks = {
     'switch': 0,
     'lldp_switch': 1,
@@ -413,7 +414,7 @@ function treeSpanning(data) {
 // traffic of its ports. The history of any other device is the history
 // of the port it hangs on (treeUpstreamPort).
 function treeIsInfra(info) {
-    return !!info && (info.group === 'switch' || info.group === 'router');
+    return !!info && treeInfraGroups.includes(info.group);
 }
 
 // treeUpstreamPort tells where a device hangs on the network, from the

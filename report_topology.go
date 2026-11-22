@@ -72,7 +72,7 @@ func GenerateTopologySVG(graph *DJGraph) string {
 	nodeSet := make(map[string]bool)
 
 	for _, n := range data.Nodes {
-		if n.Group == "switch" || n.Group == "router" {
+		if groupInfra(n.Group) {
 			label := n.SysName
 			if label == "" {
 				label = n.ID
@@ -149,9 +149,9 @@ func GenerateTopologySVG(graph *DJGraph) string {
 	// Nodes
 	for _, nd := range nodes {
 		r := 6.0
-		fillColor := "#4A90E2"
+		fillColor := reportGroupColors["switch"][0]
 		if nd.Type == "router" {
-			fillColor = "#E24A4A"
+			fillColor = reportGroupColors["router"][0]
 			r = 8.0
 		}
 		sb.WriteString(fmt.Sprintf(`<circle cx="%.1f" cy="%.1f" r="%.0f" fill="%s" stroke="#fff" stroke-width="1.5"/>`,
@@ -199,7 +199,7 @@ func GenerateTopologyPNG(graph *DJGraph) string {
 	var nodes []pngNode
 	nodeSet := make(map[string]bool)
 	for _, n := range data.Nodes {
-		if n.Group == "switch" || n.Group == "router" {
+		if groupInfra(n.Group) {
 			label := n.SysName
 			if label == "" {
 				label = n.ID
@@ -268,11 +268,9 @@ func GenerateTopologyPNG(graph *DJGraph) string {
 	// Draw nodes: bigger, brighter colors
 	for _, nd := range nodes {
 		r := 10
-		nodeColor := color.RGBA{41, 128, 215, 255} // switch blue
-		outlineColor := color.RGBA{25, 90, 160, 255}
+		nodeColor, outlineColor := reportGroupRGBA("switch")
 		if nd.Type == "router" {
-			nodeColor = color.RGBA{220, 60, 60, 255} // router red
-			outlineColor = color.RGBA{160, 40, 40, 255}
+			nodeColor, outlineColor = reportGroupRGBA("router")
 			r = 12
 		}
 		drawCircle(img, int(nd.X), int(nd.Y), r, nodeColor)
@@ -447,7 +445,7 @@ func reportSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		summary.TotalEdges = len(data.Links)
 
 		for _, n := range data.Nodes {
-			if n.Group == "switch" || n.Group == "router" {
+			if groupInfra(n.Group) {
 				summary.TotalSwitches++
 			}
 		}
@@ -859,7 +857,7 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 				} else {
 					sb.WriteString(fmt.Sprintf("  %s-->%s\n", srcSafe, hub.SafeID))
 				}
-				sb.WriteString(fmt.Sprintf("  style %s fill:#4A90E2,stroke:#2A6FC2,color:#fff\n", srcSafe))
+				sb.WriteString(reportGroupStyle(srcSafe, "switch"))
 				parentCount++
 			}
 		}
@@ -931,7 +929,7 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 		}
 
 		// Style hub orange
-		sb.WriteString(fmt.Sprintf("  style %s fill:#FF9800,stroke:#E68A00,color:#fff\n", hub.SafeID))
+		sb.WriteString(reportGroupStyle(hub.SafeID, "hub"))
 
 		md.WriteString("```mermaid\n")
 		md.WriteString(sb.String())
@@ -1082,7 +1080,7 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 				} else {
 					sb.WriteString(fmt.Sprintf("  %s-->%s\n", srcSafe, hyp.SafeID))
 				}
-				sb.WriteString(fmt.Sprintf("  style %s fill:#4A90E2,stroke:#2A6FC2,color:#fff\n", srcSafe))
+				sb.WriteString(reportGroupStyle(srcSafe, "switch"))
 			}
 		}
 
@@ -1105,16 +1103,16 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 				sb.WriteString(fmt.Sprintf("  %s[\"%s\"]\n", tgtSafe, tgtLabel))
 				sb.WriteString(fmt.Sprintf("  %s-->%s\n", hyp.SafeID, tgtSafe))
 				if child.Group == "hypervisor" {
-					sb.WriteString(fmt.Sprintf("  style %s fill:#26C6DA,stroke:#0097A7,color:#fff\n", tgtSafe))
+					sb.WriteString(reportGroupStyle(tgtSafe, "hypervisor"))
 				} else {
-					sb.WriteString(fmt.Sprintf("  style %s fill:#9C27B0,stroke:#7B1FA2,color:#fff\n", tgtSafe))
+					sb.WriteString(reportGroupStyle(tgtSafe, "vm"))
 				}
 				vmCount++
 			}
 		}
 
 		// Style hypervisor cyan
-		sb.WriteString(fmt.Sprintf("  style %s fill:#26C6DA,stroke:#0097A7,color:#fff\n", hyp.SafeID))
+		sb.WriteString(reportGroupStyle(hyp.SafeID, "hypervisor"))
 
 		md.WriteString("```mermaid\n")
 		md.WriteString(sb.String())

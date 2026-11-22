@@ -471,7 +471,7 @@ func (na *NetworkAnalyzer) analyzePaths() []OptimizationSuggestion {
 
 	for _, nodeID := range slices.Sorted(maps.Keys(depths)) {
 		nodeInfo := ix.nodes[nodeID]
-		if depths[nodeID] <= 3 || (nodeInfo.NodeType != "switch" && nodeInfo.NodeType != "router") {
+		if depths[nodeID] <= 3 || !groupInfra(nodeInfo.NodeType) {
 			continue // Threshold = 3 hops
 		}
 		suggestions = append(suggestions, OptimizationSuggestion{
@@ -527,7 +527,7 @@ func topologyCore(nodes map[string]GraphNode, devices map[string]*DeviceData) st
 			})
 		}
 		for _, id := range ids {
-			if n := nodes[id]; (n.NodeType == "switch" || n.NodeType == "router") && hasGatewayLine(n) {
+			if n := nodes[id]; groupInfra(n.NodeType) && hasGatewayLine(n) {
 				return id
 			}
 		}

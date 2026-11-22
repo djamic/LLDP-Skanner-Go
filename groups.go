@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"slices"
 )
 
@@ -34,6 +35,11 @@ type groupDef struct {
 	ExportOn    bool   // checked in the export popup
 	Via         string // the history page's "behind a hub"; "" = the key
 
+	// Infra: a node with ports that devices hang on, a polled device's or a
+	// configured gateway's: the tree's parents, the topology diagrams', the
+	// "switches" counts, no IP lookup of a managed device (groupInfra)
+	Infra bool
+
 	Stroke    string // the report diagrams' stroke; "" = not in the reports
 	Dot       string // the report legend's colour emoji
 	Section   string // the report's table title, numbered 4.<SectionNo>
@@ -43,7 +49,7 @@ type groupDef struct {
 
 // deviceGroups in the filter bar's order (and the export popup's).
 var deviceGroups = []groupDef{
-	{Key: "switch", Name: "Switch", Emoji: "🔀", Color: "#4A90E2", IconSize: 44, TreeRank: 0,
+	{Key: "switch", Name: "Switch", Emoji: "🔀", Color: "#4A90E2", IconSize: 44, TreeRank: 0, Infra: true,
 		Filter: "Switch", ExportOn: true,
 		Stroke: "#2A6FC2", Dot: "🔵"},
 	// An LLDP neighbor that is a bridge or router by its LLDP capabilities
@@ -52,7 +58,7 @@ var deviceGroups = []groupDef{
 	{Key: "lldp_switch", Name: "Unpolled switch", Emoji: "🔀", Color: "#64B5F6", IconSize: 40, TreeRank: 1,
 		Filter: "Unpolled", FilterTitle: "Unpolled switch: an LLDP neighbor that is a bridge or router by its LLDP capabilities, never polled (no IP to poll, or no answer)",
 		Stroke: "#1E88E5", Dot: "🔹", Section: "Poll qilinmagan switch'lar (LLDP)", SectionNo: 16},
-	{Key: "router", Name: "Router", Emoji: "🌐", Color: "#E24A4A", IconSize: 44, TreeRank: 0,
+	{Key: "router", Name: "Router", Emoji: "🌐", Color: "#E24A4A", IconSize: 44, TreeRank: 0, Infra: true,
 		Filter: "Router",
 		Stroke: "#C23030", Dot: "🔴", Section: "Routerlar", SectionNo: 11, Shape: "hexagon"},
 	{Key: "hub", Name: "Hub", Emoji: "🔌", Color: "#FF9800", IconSize: 40, TreeRank: 1,
@@ -131,6 +137,40 @@ func (d groupDef) longName() string {
 		return d.LongName
 	}
 	return d.Name
+}
+
+// groupInfra reports whether group is an infrastructure group (Infra: a
+// switch or a router).
+func groupInfra(group string) bool { return groupInfras[group] }
+
+var groupInfras = func() map[string]bool {
+	infra := make(map[string]bool)
+	for _, d := range deviceGroups {
+		if d.Infra {
+			infra[d.Key] = true
+		}
+	}
+	return infra
+}()
+
+// reportGroupStyle is the Mermaid style of a node of group, its fill and
+// stroke (reportGroupColors).
+func reportGroupStyle(id, group string) string {
+	c := reportGroupColors[group]
+	return fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", id, c[0], c[1])
+}
+
+// reportGroupRGBA is a group's fill and stroke as image colours (the PNG).
+func reportGroupRGBA(group string) (fill, stroke color.RGBA) {
+	c := reportGroupColors[group]
+	return hexRGBA(c[0]), hexRGBA(c[1])
+}
+
+// hexRGBA is "#RRGGBB" as an opaque colour (black when it is no such text).
+func hexRGBA(hex string) color.RGBA {
+	var r, g, b uint8
+	fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	return color.RGBA{r, g, b, 255}
 }
 
 // reportGroupColors are the fill and stroke colours of each group in the
