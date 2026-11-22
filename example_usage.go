@@ -1233,7 +1233,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 			// Classification choice wifiClientsCountOnly the access points'
 			// clients are counted, not drawn: an AP hub's MACs, and the
 			// randomised MACs of a hub with access points
-			nodeID := fmt.Sprintf("hub-%s-p%d", srcID, p.Port)
+			nodeID := hubNodeID(srcID, p.Port)
 			tag := nodeTag{Tag: tagHub, Detail: "Unmanaged"}
 			count := fmt.Sprintf("%d devices", len(p.MACs)+len(p.LLDP))
 			macs := p.MACs
@@ -1261,6 +1261,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 				graph.AddNode(nodeID)
 				graph.SwitchInfo[nodeID] = tag.line() + "\n" + count
 				graphSetTags(graph, nodeID, tag)
+				graphSetSynthetic(graph, nodeID, syntheticNode{Kind: syntheticHub, Switch: srcID, BridgePort: p.Port})
 			}
 			graph.AddEdge(srcID, nodeID, edgeLabel)
 
@@ -3799,14 +3800,15 @@ func detectHypervisors(graph *DJGraph) {
 			_, isVM := hypervisorTypeOf(tgt)
 			vcHost := graphVCenterHostNIC(tgt)
 			isVM = isVM && !vcHost
-			isHost := !isVM && !strings.HasPrefix(src, "hub-") && (graphIsConfirmedESXi(tgt) || vcHost) && !graphIsSwitchNode(graph, tgt)
+			fromHub := graphSyntheticKind(graph, src) == syntheticHub
+			isHost := !isVM && !fromHub && (graphIsConfirmedESXi(tgt) || vcHost) && !graphIsSwitchNode(graph, tgt)
 			if (!isVM && !isHost) || graph.graphRouters[tgt] {
 				continue
 			}
 			// Port from the edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26"); a
 			// hub member's edge has no label, so the hub's uplink port is used
 			port := graphEdgePort(targets[tgt])
-			if port == "" && strings.HasPrefix(src, "hub-") {
+			if port == "" && fromHub {
 				port = graphHubUplinkPort(graph, src)
 			}
 			if port == "" {
@@ -3858,8 +3860,7 @@ func detectHypervisors(graph *DJGraph) {
 			hypervisorType := graphDominantHypervisorType(vmMACs)
 
 			// Build unique hypervisor node ID
-			safePort := strings.NewReplacer("/", "_", " ", "_", ":", "_").Replace(port)
-			hypID := fmt.Sprintf("hyp-%s-%s", switchID, safePort)
+			hypID := hypNodeID(switchID, port)
 
 			// Skip if already exists
 			if _, exists := graph.Nodes[hypID]; exists {
@@ -3871,6 +3872,7 @@ func detectHypervisors(graph *DJGraph) {
 			hypTag := nodeTag{Tag: tagHypervisor, Detail: hypervisorType}
 			graph.SwitchInfo[hypID] = fmt.Sprintf("%s\n%d VMs on %s", hypTag.line(), len(vmMACs), port)
 			graphSetTags(graph, hypID, hypTag)
+			graphSetSynthetic(graph, hypID, syntheticNode{Kind: syntheticHyp, Switch: switchID, Port: port})
 
 			// Replace switch→VM edges with switch→hypervisor→VM (the VM
 			// nodes exist: AddEdge only links existing nodes)
@@ -3882,7 +3884,7 @@ func detectHypervisors(graph *DJGraph) {
 			// Add switch→hypervisor edge (unlabelled from a hub, like the
 			// hub's other members)
 			parentLabel := port
-			if strings.HasPrefix(switchID, "hub-") {
+			if graphSyntheticKind(graph, switchID) == syntheticHub {
 				parentLabel = ""
 			}
 			graph.AddEdge(switchID, hypID, parentLabel)
@@ -3897,7 +3899,7 @@ func detectHypervisors(graph *DJGraph) {
 	// devices of this build and LLDP neighbors whose sysName/sysDescr names
 	// a switch (graphIsSwitchNode; vendor words in labels do not count).
 	for _, nodeID := range slices.Sorted(maps.Keys(graph.Nodes)) {
-		if strings.HasPrefix(nodeID, "hyp-") || strings.HasPrefix(nodeID, "hub-") {
+		if graphSyntheticKind(graph, nodeID) != "" {
 			continue
 		}
 		if graphIsSwitchNode(graph, nodeID) || graph.graphRouters[nodeID] {

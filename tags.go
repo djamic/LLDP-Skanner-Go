@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -85,4 +86,57 @@ func nodeHasTag(n GraphNode, tag string) bool {
 	return slices.ContainsFunc(strings.Split(n.SysName, "\n"), func(l string) bool {
 		return l == "["+tag+"]" || strings.HasPrefix(l, "["+tag+"] ")
 	})
+}
+
+// syntheticNode is what the graph build tells of a node it makes for what
+// no device shows: a hub (the devices of an unmanaged switch's port,
+// fdbPorts: a hub, mini hub or AP hub) or a hypervisor (the VMs of a port,
+// detectHypervisors). Readers ask it (DJGraph.graphSynthetic,
+// GraphNode.Synthetic), not the node id's form.
+type syntheticNode struct {
+	Kind   string `json:"kind"`   // syntheticHub or syntheticHyp
+	Switch string `json:"switch"` // the node it hangs on: a switch's (a hyp-: a switch's or a hub's)
+	// BridgePort is a hub's FDB port (dot1dBasePort), Port a hypervisor's
+	// port key ("GE1/0/18")
+	BridgePort int    `json:"bridgePort,omitempty"`
+	Port       string `json:"port,omitempty"`
+}
+
+// The kinds of synthetic nodes.
+const (
+	syntheticHub = "hub"
+	syntheticHyp = "hyp"
+)
+
+// hubNodeID is the id of the hub node of a switch node's FDB port.
+func hubNodeID(switchID string, bridgePort int) string {
+	return fmt.Sprintf("hub-%s-p%d", switchID, bridgePort)
+}
+
+// hypNodeID is the id of the hypervisor node of a port of a switch or hub
+// node (port: its key, "/", " " and ":" as "_").
+func hypNodeID(switchID, port string) string {
+	return "hyp-" + switchID + "-" + strings.NewReplacer("/", "_", " ", "_", ":", "_").Replace(port)
+}
+
+// graphSetSynthetic records what the build tells of a synthetic node.
+func graphSetSynthetic(graph *DJGraph, id string, s syntheticNode) {
+	if graph.graphSynthetic == nil {
+		graph.graphSynthetic = make(map[string]syntheticNode)
+	}
+	graph.graphSynthetic[id] = s
+}
+
+// graphSyntheticKind is the kind of a synthetic node, "" for a device's.
+func graphSyntheticKind(graph *DJGraph, id string) string {
+	return graph.graphSynthetic[id].Kind
+}
+
+// nodeSyntheticKind is the kind of a graph data node that is synthetic, ""
+// for a device's.
+func nodeSyntheticKind(n GraphNode) string {
+	if n.Synthetic == nil {
+		return ""
+	}
+	return n.Synthetic.Kind
 }

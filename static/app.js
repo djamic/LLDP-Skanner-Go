@@ -2207,7 +2207,8 @@ function loadExperimentResults() {
 // backend's own test, graphIsESXiHostNIC, as the data was made: also a host
 // confirmed after the build) among the MACs of its port: its members, and
 // the VMs detectHypervisors moved below a hyp- member. Each entry carries its switch and port from the switch->hub link
-// ('<port>|Hub'), else from the id 'hub-<switch>-p<bridge port>'. Sorted by
+// ('<port>|Hub'), else from what the build tells of it (node.synthetic: its
+// switch and bridge port). Sorted by
 // switch and port, so the list does not depend on the backend's map order.
 function uiShadowITEntries(data) {
     const byId = new Map(data.nodes.map(n => [n.id, n]));
@@ -2222,7 +2223,7 @@ function uiShadowITEntries(data) {
             if (t === hub.id && (l.targetLabel === 'Hub' || /\|Hub$/.test(l.label || ''))) uplink = l;
             else if (s === hub.id || t === hub.id) members.push(byId.get(s === hub.id ? t : s));
         });
-        const hyps = new Set(members.filter(m => m && String(m.id).startsWith('hyp-')).map(m => m.id));
+        const hyps = new Set(members.filter(m => m && m.synthetic && m.synthetic.kind === 'hyp').map(m => m.id));
         if (hyps.size) {
             data.links.forEach(l => {
                 const [s, t] = linkEnds(l);
@@ -2231,9 +2232,9 @@ function uiShadowITEntries(data) {
         }
         if (members.some(m => m && m.esxi)) return;
 
-        const idMatch = /^hub-(.+)-p(\d+)$/.exec(hub.id);
-        const switchId = uplink ? (uplink.source.id || uplink.source) : (idMatch ? idMatch[1] : '');
-        const port = uplink ? uiPortKey(uiLinkPorts(uplink, switchId).own) : (idMatch ? `bridge port ${idMatch[2]}` : '');
+        const syn = hub.synthetic || {};
+        const switchId = uplink ? (uplink.source.id || uplink.source) : (syn.switch || '');
+        const port = uplink ? uiPortKey(uiLinkPorts(uplink, switchId).own) : (syn.bridgePort ? `bridge port ${syn.bridgePort}` : '');
         const sw = byId.get(switchId);
         let switchName = switchId || 'Unknown';
         if (sw) {

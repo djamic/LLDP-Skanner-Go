@@ -104,6 +104,10 @@ function node(id, group, sysName, extra) {
   const n = { id, label: sysName ? `${hostname || sysName}\n${id}` : id, group, type: group };
   if (sysName) n.sysName = sysName;
   if (labelTags(sysName).length) n.tags = labelTags(sysName);
+  // a hand-made hub or hyp- node, as the graph build makes them (node.synthetic)
+  const hub = /^hub-(.+)-p(\d+)$/.exec(id), hyp = /^hyp-(.+)-([^-]+)$/.exec(id);
+  if (hub) n.synthetic = { kind: 'hub', switch: hub[1], bridgePort: Number(hub[2]) };
+  else if (hyp) n.synthetic = { kind: 'hyp', switch: hyp[1], port: hyp[2] };
   if (/^\d+\.\d+\.\d+\.\d+$/.test(id)) n.ip = id;
   return Object.assign(n, extra || {}, { unreachable: !!(extra && extra.unreachable) });
 }

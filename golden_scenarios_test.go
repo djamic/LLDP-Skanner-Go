@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -37,6 +39,28 @@ func addInfoNode(g *DJGraph, id, info string) {
 	if info != "" {
 		setLabel(g, id, info) // with its tags, as the build's writers
 	}
+	if syn, ok := syntheticOfTestID(id); ok {
+		graphSetSynthetic(g, id, syn) // a hand-made hub or hyp- node, as the build makes them
+	}
+}
+
+// syntheticOfTestID is what the build would tell of a test's hand-made
+// node with a hub ("hub-<switch>-p<port>") or hypervisor
+// ("hyp-<switch>-<port>") id.
+func syntheticOfTestID(id string) (syntheticNode, bool) {
+	if rest, ok := strings.CutPrefix(id, "hub-"); ok {
+		if i := strings.LastIndex(rest, "-p"); i > 0 {
+			if port, err := strconv.Atoi(rest[i+2:]); err == nil {
+				return syntheticNode{Kind: syntheticHub, Switch: rest[:i], BridgePort: port}, true
+			}
+		}
+	}
+	if rest, ok := strings.CutPrefix(id, "hyp-"); ok {
+		if i := strings.LastIndex(rest, "-"); i > 0 {
+			return syntheticNode{Kind: syntheticHyp, Switch: rest[:i], Port: rest[i+1:]}, true
+		}
+	}
+	return syntheticNode{}, false
 }
 
 // TestGoldenScenarioTables pins small rule tables: determineDeviceGroup for

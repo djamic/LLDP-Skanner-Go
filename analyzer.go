@@ -91,10 +91,10 @@ func (ix *analyzerIndex) switchNode(ip string) string {
 }
 
 // hubNode returns the hub node the graph draws for a port of switch d
-// ("hub-<switch node>-p<port>"), or the switch node when there is none.
+// (hubNodeID), or the switch node when there is none.
 func (ix *analyzerIndex) hubNode(d *DeviceData, port int) string {
 	for _, id := range analyzerSwitchIDs(d) {
-		hub := fmt.Sprintf("hub-%s-p%d", id, port)
+		hub := hubNodeID(id, port)
 		if _, ok := ix.nodes[hub]; ok {
 			return hub
 		}

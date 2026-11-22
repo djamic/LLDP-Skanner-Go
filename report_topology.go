@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -777,7 +776,7 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 	data := reportGraphData(graph)
 	members := make(map[string][]string) // hub id -> member node ids
 	for _, link := range data.Links {
-		if strings.HasPrefix(link.Source, "hub-") {
+		if graphSyntheticKind(graph, link.Source) == syntheticHub {
 			members[link.Source] = append(members[link.Source], link.Target)
 		}
 	}
@@ -891,10 +890,10 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 			sb.WriteString(fmt.Sprintf("  %s-->%s\n", parentSafe, tgtSafe))
 			// Color children by group
 			switch {
-			case strings.HasPrefix(tgtID, "hyp-"), parentSafe != hub.SafeID:
+			case graphSyntheticKind(graph, tgtID) == syntheticHyp, parentSafe != hub.SafeID:
 				// the hyp- node and its VMs, as in the hypervisor diagrams
 				colors := reportGroupColors[tgtGroup]
-				if strings.HasPrefix(tgtID, "hyp-") {
+				if graphSyntheticKind(graph, tgtID) == syntheticHyp {
 					colors = reportGroupColors["hypervisor"]
 				}
 				if colors[0] == "" {
@@ -908,7 +907,7 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 				colors := reportGroupColors["endpoint"]
 				sb.WriteString(fmt.Sprintf("  style %s fill:%s,stroke:%s,color:#fff\n", tgtSafe, colors[0], colors[1]))
 			}
-			if !strings.HasPrefix(tgtID, "hyp-") {
+			if graphSyntheticKind(graph, tgtID) != syntheticHyp {
 				childCount++
 			}
 		}
@@ -918,7 +917,7 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 			}
 			// hub → child
 			drawChild(hub.SafeID, link.Target)
-			if strings.HasPrefix(link.Target, "hyp-") {
+			if graphSyntheticKind(graph, link.Target) == syntheticHyp {
 				// hyp- → VM
 				for _, vmLink := range data.Links {
 					if vmLink.Source == link.Target {
@@ -947,7 +946,8 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 // host was confirmed after the graph was built (Q14). For a hub whose switch
 // is not in collectedData, only its member nodes can be checked.
 func reportHubIsShadowIT(g *DJGraph, hubID string, members []string) bool {
-	if switchID, port, ok := reportParseHubID(hubID); ok {
+	if hub := g.graphSynthetic[hubID]; hub.Kind == syntheticHub {
+		switchID, port := hub.Switch, hub.BridgePort
 		collectedDataMutex.RLock()
 		defer collectedDataMutex.RUnlock()
 		for _, ip := range sortedDeviceIPs(collectedData) {
@@ -964,21 +964,6 @@ func reportHubIsShadowIT(g *DJGraph, hubID string, members []string) bool {
 		}
 	}
 	return !slices.ContainsFunc(members, graphIsESXiHostNIC)
-}
-
-// reportParseHubID splits a hub node id, "hub-<switch node>-p<FDB port>" as
-// buildGraphEdges builds it, into the switch node and the port number.
-func reportParseHubID(id string) (switchID string, port int, ok bool) {
-	rest, isHub := strings.CutPrefix(id, "hub-")
-	i := strings.LastIndex(rest, "-p")
-	if !isHub || i < 0 {
-		return "", 0, false
-	}
-	port, err := strconv.Atoi(rest[i+2:])
-	if err != nil {
-		return "", 0, false
-	}
-	return rest[:i], port, true
 }
 
 // reportDeviceNode returns the graph node a polled device is drawn as: its
@@ -1133,7 +1118,7 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts map[string][]string, covered map[string]bool) {
 	hypOnPort := map[string][]string{} // switch node + "|" + port → hyp- nodes
 	for _, l := range data.Links {
-		if strings.HasPrefix(l.Target, "hyp-") {
+		if nodeSyntheticKind(nodes[l.Target]) == syntheticHyp {
 			if port := reportEdgePort(l.Label); port != "" {
 				key := l.Source + "|" + port
 				hypOnPort[key] = append(hypOnPort[key], l.Target)
@@ -1144,7 +1129,7 @@ func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts ma
 	covered = map[string]bool{}
 	for _, l := range data.Links {
 		n := nodes[l.Target]
-		if n.Group != "hypervisor" || strings.HasPrefix(n.ID, "hyp-") {
+		if n.Group != "hypervisor" || nodeSyntheticKind(n) == syntheticHyp {
 			continue
 		}
 		if l.Label == "vNIC" {

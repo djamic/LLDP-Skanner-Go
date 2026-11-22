@@ -33,13 +33,14 @@ func TestClassifyNode(t *testing.T) {
 		{nodeEvidence{ID: "00:1b:21:00:00:02", Info: "[ENDPOINT]", Category: "endpoint"}, "endpoint"},
 		{nodeEvidence{ID: "00:1b:21:00:00:03", Info: "[ENDPOINT]\n[HUB]"}, "endpoint"},
 		{nodeEvidence{ID: "hub-10.0.0.2-p8", Info: "[MINIHUB] 30 MACs\n[HUB]"}, "minihub"},
-		{nodeEvidence{ID: "hub-10.0.0.2-p9"}, "hub"},
+		{nodeEvidence{ID: "hub-10.0.0.2-p9", Info: "[HUB] Unmanaged\n2 devices"}, "hub"},
+		{nodeEvidence{ID: "hub-reception"}, "unknown"}, // an id is no tag
 		{nodeEvidence{ID: "x", Info: "[HUB] Unmanaged"}, "hub"},
 		{nodeEvidence{ID: "x", Info: "[BMC] iLO\n[HYPERVISOR]"}, "bmc"},
 		{nodeEvidence{ID: "bmc-1"}, "unknown"},                        // no id prefix
 		{nodeEvidence{ID: "vm-backup", Info: "Backup box"}, "switch"}, // an LLDP name
 		{nodeEvidence{ID: "x", Info: "[HYPERVISOR] VMware ESXi\n[VM]"}, "hypervisor"},
-		{nodeEvidence{ID: "hyp-10.0.0.2-ge1_0_2"}, "hypervisor"},
+		{nodeEvidence{ID: "hyp-10.0.0.2-ge1_0_2", Info: "[HYPERVISOR] VMware ESXi\n2 VMs on ge1/0/2"}, "hypervisor"},
 		{nodeEvidence{ID: "x", Info: "[VM] win-22"}, "vm"},
 		{nodeEvidence{ID: "vm-1"}, "unknown"},
 		{nodeEvidence{ID: "linux-box"}, "server"},

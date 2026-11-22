@@ -28,7 +28,8 @@ type goldenNode struct {
 	Unreachable bool   `json:"unreachable,omitempty"`
 	// Tags as /api/graph sends them: the UI reads them (tree_probe.js
 	// takes this golden for the fixture's graph data)
-	Tags []nodeTag `json:"tags,omitempty"`
+	Tags      []nodeTag      `json:"tags,omitempty"`
+	Synthetic *syntheticNode `json:"synthetic,omitempty"`
 }
 
 type goldenLink struct {
@@ -77,7 +78,7 @@ func graphRecord(g *DJGraph) graphGolden {
 		}
 		rec.Nodes = append(rec.Nodes, goldenNode{
 			ID: n.ID, Group: n.Group, Type: n.NodeType, Label: n.Label,
-			SysName: n.SysName, Hostname: n.Hostname, IP: n.IP, Unreachable: n.Unreachable, Tags: n.Tags,
+			SysName: n.SysName, Hostname: n.Hostname, IP: n.IP, Unreachable: n.Unreachable, Tags: n.Tags, Synthetic: n.Synthetic,
 		})
 	}
 	for _, l := range data.Links {

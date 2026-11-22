@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -258,22 +259,41 @@ func TestReportShadowSectionSkipsESXiPorts(t *testing.T) {
 	}
 }
 
-func TestReportParseHubID(t *testing.T) {
-	for _, c := range []struct {
-		id, switchID string
-		port         int
-		ok           bool
-	}{
-		{"hub-4c:ae:a3:72:00:02-p3", "4c:ae:a3:72:00:02", 3, true},
-		{"hub-10.0.72.9-p12", "10.0.72.9", 12, true},
-		{"hub-sw-pod-p7", "sw-pod", 7, true},
-		{"hub-x", "", 0, false},
-		{"hub-sw-pX", "", 0, false},
-		{"hyp-4c:ae:a3:72:00:02-ge1_0_3", "", 0, false},
-	} {
-		switchID, port, ok := reportParseHubID(c.id)
-		if switchID != c.switchID || port != c.port || ok != c.ok {
-			t.Errorf("reportParseHubID(%q) = %q, %d, %v; want %q, %d, %v", c.id, switchID, port, ok, c.switchID, c.port, c.ok)
+// TestSyntheticNodeIDs (D4): the hub and hypervisor node ids, and what the
+// build tells of such a node (graphSynthetic, GraphNode.Synthetic): a
+// reader asks that, not the id's form.
+func TestSyntheticNodeIDs(t *testing.T) {
+	if got := hubNodeID("4c:ae:a3:72:00:02", 3); got != "hub-4c:ae:a3:72:00:02-p3" {
+		t.Errorf("hubNodeID = %q", got)
+	}
+	if got := hypNodeID("4c:ae:a3:72:00:02", "GE1/0/3 x:y"); got != "hyp-4c:ae:a3:72:00:02-GE1_0_3_x_y" {
+		t.Errorf("hypNodeID = %q", got)
+	}
+	resetState(t)
+	var macs []MACEntry
+	macs = append(macs, macEntries(3, "00:1b:21:73:03:01", "00:1b:21:73:03:02")...)
+	macs = append(macs, macEntries(4, "00:0c:29:73:04:01", "00:0c:29:73:04:02", "00:0c:29:73:04:03")...)
+	sw := &DeviceData{IP: "10.0.73.2", SysName: "sw-73", ChassisID: "4c:ae:a3:73:00:02", Interfaces: gigabitPorts(8, nil), MACTable: macs}
+	reportSetDevices(sw)
+	g := reportBuildGraph()
+	want := map[string]syntheticNode{
+		"hub-4c:ae:a3:73:00:02-p3":      {Kind: syntheticHub, Switch: "4c:ae:a3:73:00:02", BridgePort: 3},
+		"hyp-4c:ae:a3:73:00:02-ge1_0_4": {Kind: syntheticHyp, Switch: "4c:ae:a3:73:00:02", Port: "ge1/0/4"},
+	}
+	if !maps.Equal(g.graphSynthetic, want) {
+		t.Errorf("synthetic nodes %+v, want %+v", g.graphSynthetic, want)
+	}
+	for _, n := range g.GetGraphData().Nodes {
+		if w, ok := want[n.ID]; ok != (n.Synthetic != nil) || ok && *n.Synthetic != w {
+			t.Errorf("%s: graph data synthetic %+v, want %+v", n.ID, n.Synthetic, w)
+		}
+	}
+	// An LLDP name that starts as a hub's id is no hub
+	g.AddNode("hub-reception")
+	setLabel(g, "hub-reception", "[LLDP-EP] Intel\nhub-reception")
+	for _, n := range g.GetGraphData().Nodes {
+		if n.ID == "hub-reception" && (n.Group != "endpoint" || n.Synthetic != nil) {
+			t.Errorf("an LLDP endpoint named hub-reception: group %q, synthetic %+v", n.Group, n.Synthetic)
 		}
 	}
 }

@@ -447,7 +447,7 @@ function treePortDevices(sp, device, port) {
     const ids = [];
     if (!port) return ids;
     sp.infos.forEach((info, id) => {
-        if (treeIsInfra(info) || id.startsWith('hub-') || id.startsWith('hyp-')) return;
+        if (treeIsInfra(info) || (info && info.node.synthetic)) return;
         const at = treeUpstreamPort(sp, id);
         if (at && at.device === device && at.port === port) ids.push(id);
     });

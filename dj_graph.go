@@ -47,13 +47,15 @@ type DJGraph struct {
 	graphPolled   map[string]polledFacts
 	graphNotPhone map[string]bool
 	// graphTags holds each node's tags (tags.go), its label's tag lines in
-	// their order
-	graphTags     map[string][]nodeTag
-	graphRouters  map[string]bool
-	graphSysText  map[string]string
-	graphManaged  map[string]bool
-	graphVoIP     map[string]voip.Profile
-	graphLLDPCaps map[string]uint8
+	// their order; graphSynthetic the nodes the build makes for what no
+	// device shows (hubs, hypervisors)
+	graphTags      map[string][]nodeTag
+	graphSynthetic map[string]syntheticNode
+	graphRouters   map[string]bool
+	graphSysText   map[string]string
+	graphManaged   map[string]bool
+	graphVoIP      map[string]voip.Profile
+	graphLLDPCaps  map[string]uint8
 }
 
 // NewDJGraph creates a new graph instance
@@ -311,6 +313,8 @@ type GraphNode struct {
 	// ESXi: the node is an ESXi host's NIC now (graphIsESXiHostNIC, when the
 	// data is made): the UI's Shadow-IT exemption, the alerts' rule
 	ESXi bool `json:"esxi,omitempty"`
+	// Synthetic: the build made the node (a hub, a hypervisor), and where
+	Synthetic *syntheticNode `json:"synthetic,omitempty"`
 }
 
 // GraphLink represents a link in D3.js format
@@ -382,6 +386,10 @@ func (g *DJGraph) GetGraphData() GraphData {
 			ESXi:     graphIsESXiHostNIC(node),
 			SysName:  info,
 			Hostname: hostname,
+		}
+
+		if syn, ok := g.graphSynthetic[node]; ok {
+			graphNode.Synthetic = &syn
 		}
 
 		// Phase 8: Check if node is unreachable
