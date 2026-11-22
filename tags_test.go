@@ -1,6 +1,11 @@
 package main
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -165,4 +170,62 @@ func (g *DJGraph) determineDeviceGroup(node, info string) string {
 func setLabel(g *DJGraph, id, info string) {
 	g.SwitchInfo[id] = info
 	graphSetTags(g, id, labelEvidence(nodeEvidence{Info: info}).Tags...)
+}
+
+// TestNoTagParsing keeps the labels' tag lines display only (labelTokens):
+// no string literal of the Go code but tags.go's builds a "[<tag>]" (a
+// reader would parse a label with it: the tags are DJGraph.graphTags and
+// GraphNode.Tags), and the UI's code has no quoted "[<tag>]" (it reads
+// node.tags).
+func TestNoTagParsing(t *testing.T) {
+	var marks []string
+	for _, tag := range labelTags {
+		marks = append(marks, "["+tag+"]")
+	}
+	has := func(s string) string {
+		for _, m := range marks {
+			if strings.Contains(s, m) {
+				return m
+			}
+		}
+		return ""
+	}
+	fset := token.NewFileSet()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	more, _ := filepath.Glob("modules/*/*.go")
+	for _, path := range append(files, more...) {
+		if strings.HasSuffix(path, "_test.go") || path == "tags.go" {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				if m := has(lit.Value); m != "" {
+					t.Errorf("%s: the string %s has the tag %s: tags.go writes the tag lines, the readers take the tags", fset.Position(lit.Pos()), lit.Value, m)
+				}
+			}
+			return true
+		})
+	}
+	quoted := regexp.MustCompile("['\"`]\\[(" + strings.Join(labelTags, "|") + ")\\]")
+	for _, path := range []string{"static/app.js", "static/tree.js", "static/history.html", "static/index.html"} {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(src), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "//") {
+				continue // a comment may name a label line
+			}
+			if m := quoted.FindString(line); m != "" {
+				t.Errorf("%s:%d: %s: the UI reads node.tags, not the label's tag lines", path, i+1, m)
+			}
+		}
+	}
 }

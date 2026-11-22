@@ -8,8 +8,10 @@ import (
 	"testing"
 )
 
-// labelTokens are the label markers the graph build writes and the UI or the
-// reports parse back by substring.
+// labelTokens are the label markers the graph build writes: display text
+// only. Neither the Go code nor the UI parses a label's tag lines back (the
+// tags are DJGraph.graphTags and GraphNode.Tags, TestNoTagParsing); this
+// contract counts where they show.
 var labelTokens = []string{
 	"[ENDPOINT]", "[LLDP-EP]", "[HUB]", "[MINIHUB]", "[APHUB]", "[WiFi]", "[BMC]", "[VM]", "[HYPERVISOR]",
 	"[DNS]", "[MAC-REF]", "[T]", "VMs:", "vNIC", "|Hub", "Unmanaged", "VMware ESXi", "Server\n",
