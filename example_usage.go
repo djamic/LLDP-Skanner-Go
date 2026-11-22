@@ -505,6 +505,12 @@ func loadStartupData(savedHosts map[string]*DeviceData) {
 	// (covers gateway + all discovered switches)
 	startMacIPService()
 
+	// The controllers' last inventories: the first graph draws their access
+	// points and reads their kinds and uplinks (lldpPortPlans, a vCenter
+	// host's VMkernel NIC). They were loaded by the web server, which starts
+	// alongside the first build, so that build could miss them.
+	inventoryLoad()
+
 	// Collect the ARP tables of the gateways first (also done by MacIPService)
 	if len(gatewayList()) > 0 {
 		fmt.Printf("🔍 Collecting ARP tables from gateways %s...\n", gatewayListText())

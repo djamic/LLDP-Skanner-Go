@@ -80,22 +80,28 @@ type ClientView struct {
 	Device string `json:"device"` // "A 1 qavat 118", the gateway's name
 }
 
-// inventoryAPsChanged runs when a read changed the access points the
-// graph build draws (addManagedAPNodes): it builds the graph again, so they
-// show at once (a variable for tests).
+// inventoryAPsChanged runs when a read changed what of the inventories the
+// graph build reads (inventoryAPs): it builds the graph again, so it shows
+// at once (a variable for tests).
 var inventoryAPsChanged = func() { go rebuildGraph() }
 
-// inventoryAPs is what of managedByMAC the graph build draws: each access
-// point with its IP, state and uplink (inventoryMu held).
+// inventoryAPs is what of managedByMAC the graph build reads (inventoryMu
+// held): each access point with its IP, state and uplink (addManagedAPNodes
+// draws them, lldpPortPlans reads their uplinks), and each hypervisor's
+// MAC (a vCenter host's VMkernel NIC is no VM, graphVCenterHostNIC). The
+// kinds GetGraphData reads (classifyFacts) need no build.
 func inventoryAPs() string {
 	var lines []string
 	for mac, v := range managedByMAC {
-		if v.Kind == modules.KindAccessPoint {
+		switch v.Kind {
+		case modules.KindAccessPoint:
 			line := strings.Join([]string{mac, v.Name, v.IP, v.State}, "|")
 			if v.Uplink != nil {
 				line += fmt.Sprintf("|%+v", *v.Uplink)
 			}
 			lines = append(lines, line)
+		case modules.KindHypervisor:
+			lines = append(lines, mac+"|"+v.Kind)
 		}
 	}
 	slices.Sort(lines)
@@ -711,10 +717,10 @@ func inventoryRound() {
 	inventoryResolveNames()
 }
 
-// startModuleInventory loads the kept inventories and reads them again
-// every inventoryInterval, the first time soon after the start.
+// startModuleInventory reads the inventories again every inventoryInterval,
+// the first time soon after the start (loadStartupData loads the kept ones,
+// before the first graph).
 func startModuleInventory() {
-	inventoryLoad()
 	go func() {
 		time.Sleep(30 * time.Second)
 		for {

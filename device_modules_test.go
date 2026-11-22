@@ -266,8 +266,9 @@ func (f *fakeModule) Inventory(_ context.Context, req modules.Request) (modules.
 // fails.
 func TestModuleInventory(t *testing.T) {
 	moduleTestSetup(t)
+	before := inventoryFile
 	inventoryFile = filepath.Join(t.TempDir(), "modules_inventory.json")
-	defer func() { inventoryFile = "modules_inventory.json" }()
+	defer func() { inventoryFile = before }()
 	inventoryMu.Lock()
 	inventories, managedByMAC, inventoryNotices = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]string{}
 	inventoryMu.Unlock()
@@ -634,5 +635,44 @@ func TestManagedPhones(t *testing.T) {
 		if name != w.name || n.Group != w.group {
 			t.Errorf("%s: managed %q group %q, want %q %q", n.ID, name, n.Group, w.name, w.group)
 		}
+	}
+}
+
+// TestInventoryBeforeFirstGraph (D2): the kept inventories are loaded with
+// the start's other data, before the first graph (it draws the access
+// points and reads the vCenter hosts' NICs); and a read that changes the
+// hosts a vCenter lists builds the graph again, as one that changes the
+// access points does.
+func TestInventoryBeforeFirstGraph(t *testing.T) {
+	resetState(t)
+	before := inventoryFile
+	inventoryFile = filepath.Join(t.TempDir(), "modules_inventory.json")
+	t.Cleanup(func() {
+		inventoryFile = before
+		inventoryMu.Lock()
+		inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+	recs := `[{"module": "vcenter", "ip": "10.9.0.2", "time": "2026-11-22T10:00:00Z", "inventory": {"devices": [{"mac": "00:50:56:6a:00:0a", "name": "esx-1", "kind": "hypervisor"}]}}]`
+	if err := os.WriteFile(inventoryFile, []byte(recs), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inventoryMu.Lock()
+	inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+	inventoryMu.Unlock()
+	captureStdoutQuiet(func() { loadStartupData(nil) })
+	if v := managedViewOf("00:50:56:6a:00:0a"); v == nil || v.Kind != "hypervisor" {
+		t.Fatalf("after loadStartupData: %+v, want the kept vCenter host", v)
+	}
+
+	inventoryMu.Lock()
+	hosts := inventoryAPs()
+	inventories["vcenter|10.9.0.2"] = inventoryRecord{Module: "vcenter", IP: "10.9.0.2", Time: time.Now(), Inventory: modules.Inventory{Devices: []modules.ManagedDevice{
+		{MAC: "00:50:56:6a:00:0a", Name: "esx-1", Kind: "hypervisor"}, {MAC: "00:50:56:6a:00:0b", Name: "esx-2", Kind: "hypervisor"}}}}
+	inventoryIndex()
+	changed := inventoryAPs() != hosts
+	inventoryMu.Unlock()
+	if !changed {
+		t.Error("a new vCenter host is no change of what the graph build reads")
 	}
 }

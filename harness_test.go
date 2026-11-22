@@ -148,6 +148,7 @@ func installSeams(dir string) {
 	macIPCacheFile = guardMacIPCacheFile
 	esxiConfirmedFile = guardESXiConfirmedFile
 	esxiConfirmationsChanged = func() {} // no graph build behind a test's back
+	inventoryFile = filepath.Join(dir, "modules_inventory.json")
 	globalCaptureManager = &CaptureManager{paramDir: guardCapturesDir}
 	setGatewayIPs([]string{fixedGatewayIP})
 	ignoredIssuesMutex.Lock()
