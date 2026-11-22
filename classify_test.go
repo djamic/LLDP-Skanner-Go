@@ -48,7 +48,7 @@ func TestClassifyNode(t *testing.T) {
 		{nodeEvidence{ID: "x", Info: "something"}, "switch"},
 		{nodeEvidence{ID: "x"}, "unknown"},
 	} {
-		if got := classifyNode(c.ev, ClassifySettings{}); got != c.want {
+		if got := classifyNode(labelEvidence(c.ev), ClassifySettings{}); got != c.want {
 			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.want)
 		}
 	}
@@ -71,10 +71,10 @@ func TestClassifyNode(t *testing.T) {
 		{nodeEvidence{ID: "c0:74:ad:00:00:02", Info: "[LLDP-EP]", VoIP: true, LLDPCaps: 0x24}, "phone", "phone"},
 		{nodeEvidence{ID: "10.0.0.6", Polled: true, LLDPCaps: 0x38}, "switch", "switch"},
 	} {
-		if got := classifyNode(c.ev, lldp); got != c.want {
+		if got := classifyNode(labelEvidence(c.ev), lldp); got != c.want {
 			t.Errorf("classifyNode(%+v, lldpCaps) = %q, want %q", c.ev, got, c.want)
 		}
-		if got := classifyNode(c.ev, ClassifySettings{}); got != c.off {
+		if got := classifyNode(labelEvidence(c.ev), ClassifySettings{}); got != c.off {
 			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.off)
 		}
 	}
@@ -92,10 +92,10 @@ func TestClassifyNode(t *testing.T) {
 		{nodeEvidence{ID: "3c:22:fb:00:00:02", Info: "[LLDP-EP]", VoIP: true, Category: "mobile"}, "phone", "phone"},
 		{nodeEvidence{ID: "3c:22:fb:00:00:03", Info: "[WiFi]", Category: "mobile"}, "wifi_random", "wifi_random"},
 	} {
-		if got := classifyNode(c.ev, mobile); got != c.want {
+		if got := classifyNode(labelEvidence(c.ev), mobile); got != c.want {
 			t.Errorf("classifyNode(%+v, mobileGroup) = %q, want %q", c.ev, got, c.want)
 		}
-		if got := classifyNode(c.ev, ClassifySettings{}); got != c.off {
+		if got := classifyNode(labelEvidence(c.ev), ClassifySettings{}); got != c.off {
 			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.off)
 		}
 	}
@@ -351,10 +351,10 @@ func TestControllerKinds(t *testing.T) {
 		{nodeEvidence{ID: "00:1b:21:00:00:0a", Info: "[ENDPOINT]\n10.9.0.10", Declared: []string{"any", "kerio-operator"}}, "endpoint", "endpoint"},
 		{nodeEvidence{ID: "e0:d9:e3:00:00:01", Info: "[LLDP-EP] Eltex\n10.9.0.11", Declared: []string{"switch-eltex"}}, "lldp_switch", "endpoint"},
 	} {
-		if got := classifyNode(c.ev, on); got != c.want {
+		if got := classifyNode(labelEvidence(c.ev), on); got != c.want {
 			t.Errorf("classifyNode(%+v, controllerKindWins) = %q, want %q", c.ev, got, c.want)
 		}
-		if got := classifyNode(c.ev, off); got != c.off {
+		if got := classifyNode(labelEvidence(c.ev), off); got != c.off {
 			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.off)
 		}
 	}
@@ -427,7 +427,7 @@ func TestControllerKindsGraph(t *testing.T) {
 	}
 	for _, n := range nodes {
 		g.AddNode(n.id)
-		g.SwitchInfo[n.id] = n.info
+		setLabel(g, n.id, n.info)
 	}
 	for _, kindWins := range []bool{true, false} {
 		currentSettingsMutex.Lock()

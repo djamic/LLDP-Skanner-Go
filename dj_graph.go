@@ -451,13 +451,6 @@ func (g *DJGraph) GetGraphData() GraphData {
 	}
 }
 
-// determineDeviceGroup is the group of a node with label info: classifyNode
-// of its evidence (classify.go), with the current classification choices
-// (GetGraphData reads the facts once for all its nodes).
-func (g *DJGraph) determineDeviceGroup(node, info string) string {
-	rules := currentClassify()
-	return classifyNode(g.nodeEvidence(node, info, currentClassifyFacts(rules)), rules)
-}
 
 // GenerateZabbixTemplate generates template list based on device info
 func (g *DJGraph) GenerateZabbixTemplate(node string) []map[string]string {

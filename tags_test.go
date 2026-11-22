@@ -106,3 +106,33 @@ func TestNodeTagLine(t *testing.T) {
 		t.Error("no tags left a record")
 	}
 }
+
+// labelEvidence is ev with the tags its Info's tag lines show, when it has
+// none: the classification tables write a node's label, as the build did
+// before it recorded tags.
+func labelEvidence(ev nodeEvidence) nodeEvidence {
+	if len(ev.Tags) > 0 {
+		return ev
+	}
+	for _, l := range labelTagLines(ev.Info) {
+		tag, detail, _ := strings.Cut(strings.TrimPrefix(l, "["), "]")
+		ev.Tags = append(ev.Tags, nodeTag{Tag: tag, Detail: strings.TrimSpace(detail)})
+	}
+	return ev
+}
+
+// determineDeviceGroup is the group of a node with label info, with the
+// current classification choices: classifyNode of its evidence, with the
+// tags info's tag lines show when the build recorded none (the scenario
+// tables give labels). GetGraphData classifies the build's nodes.
+func (g *DJGraph) determineDeviceGroup(node, info string) string {
+	rules := currentClassify()
+	return classifyNode(labelEvidence(g.nodeEvidence(node, info, currentClassifyFacts(rules))), rules)
+}
+
+// setLabel gives a node of a test's graph its label and the tags the label's
+// tag lines show, as the build's writers do.
+func setLabel(g *DJGraph, id, info string) {
+	g.SwitchInfo[id] = info
+	graphSetTags(g, id, labelEvidence(nodeEvidence{Info: info}).Tags...)
+}

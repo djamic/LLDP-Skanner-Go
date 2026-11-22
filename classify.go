@@ -11,8 +11,9 @@ import (
 // build knows of it. classifyNode decides, with the owner's choices
 // (ClassifySettings); DJGraph.nodeEvidence gathers.
 type nodeEvidence struct {
-	ID   string // the node id: a MAC, an IP, a hub-/hyp- id or a name
-	Info string // its label (SysName): tags ([LLDP-EP], [HUB], ...), names, IPs
+	ID   string    // the node id: a MAC, an IP, a hub-/hyp- id or a name
+	Info string    // its label (SysName): names, IPs (for graphNameGroup)
+	Tags []nodeTag // its tags (graphTags): what the build tells it is
 
 	Router bool        // a configured gateway's router node (graphRouters)
 	AP     bool        // an access point a controller manages (graphManaged)
@@ -81,6 +82,7 @@ func (g *DJGraph) nodeEvidence(node, info string, facts classifyFacts) nodeEvide
 		AP:     g.graphManaged[node],
 		Polled: g.graphSwitches[node],
 		Own:    g.graphPolled[node],
+		Tags:   g.graphTags[node],
 	}
 	ev.ESXi = graphIsConfirmedESXi(node) && !graphIsSwitchNode(g, node)
 	_, ev.VoIP = g.graphVoIP[node]
@@ -146,7 +148,8 @@ func toldGroup(ev nodeEvidence) string {
 }
 
 // classifyNode is a node's group (groups.go deviceGroups), the first that
-// its evidence gives:
+// its evidence gives (a tag "[X]" below is a tag of the node, ev.Tags, not
+// its label's text):
 //
 //  1. a configured gateway's node: router
 //  2. a controller's access point: access_point
@@ -196,6 +199,9 @@ func classifyNode(ev nodeEvidence, rules ClassifySettings) string {
 // classifyOwn is classifyNode but the weaker fact of the node's IP.
 func classifyOwn(ev nodeEvidence, rules ClassifySettings) string {
 	node, info := ev.ID, ev.Info
+	has := func(tag string) bool {
+		return slices.ContainsFunc(ev.Tags, func(t nodeTag) bool { return t.Tag == tag })
+	}
 	told := ""
 	if rules.ControllerKindWins {
 		told = toldGroup(ev)
@@ -213,11 +219,11 @@ func classifyOwn(ev nodeEvidence, rules ClassifySettings) string {
 		return told
 	case ev.ESXi:
 		return "hypervisor"
-	case strings.Contains(info, "[WiFi]"):
+	case has(tagWiFi):
 		return "wifi_random"
 	case ev.VoIP:
 		return "phone"
-	case strings.Contains(info, "[LLDP-EP]") || strings.Contains(info, "[ENDPOINT]"):
+	case has(tagLLDPEndpoint) || has(tagEndpoint):
 		switch ev.Category {
 		case "", "endpoint", "network":
 		case "phone":
@@ -241,17 +247,17 @@ func classifyOwn(ev nodeEvidence, rules ClassifySettings) string {
 			}
 		}
 		return "endpoint"
-	case strings.Contains(info, "[MINIHUB]"):
+	case has(tagMiniHub):
 		return "minihub"
-	case strings.Contains(info, "[APHUB]"):
+	case has(tagAPHub):
 		return "ap_hub"
-	case strings.Contains(info, "[HUB]") || strings.HasPrefix(node, "hub-"):
+	case has(tagHub) || strings.HasPrefix(node, "hub-"):
 		return "hub"
-	case strings.Contains(info, "[BMC]"):
+	case has(tagBMC):
 		return "bmc"
-	case strings.Contains(info, "[HYPERVISOR]") || strings.HasPrefix(node, "hyp-"):
+	case has(tagHypervisor) || strings.HasPrefix(node, "hyp-"):
 		return "hypervisor"
-	case strings.Contains(info, "[VM]"):
+	case has(tagVM):
 		return "vm"
 	}
 	return graphNameGroup(node, info, false)

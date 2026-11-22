@@ -35,7 +35,7 @@ func viewGraph(g *DJGraph) graphView {
 func addInfoNode(g *DJGraph, id, info string) {
 	g.AddNode(id)
 	if info != "" {
-		g.SwitchInfo[id] = info
+		setLabel(g, id, info) // with its tags, as the build's writers
 	}
 }
 

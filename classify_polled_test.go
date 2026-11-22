@@ -36,10 +36,10 @@ func TestPolledGroup(t *testing.T) {
 		// a configured gateway first
 		{nodeEvidence{ID: "10.0.0.1", Router: true, Polled: true, Own: polledFacts{SysDescr: "FreeBSD pfSense.home.arpa 14.0-CURRENT"}}, "router", "router"},
 	} {
-		if got := classifyNode(c.ev, on); got != c.want {
+		if got := classifyNode(labelEvidence(c.ev), on); got != c.want {
 			t.Errorf("classifyNode(%+v, polledByMIB) = %q, want %q", c.ev, got, c.want)
 		}
-		if got := classifyNode(c.ev, ClassifySettings{}); got != c.off {
+		if got := classifyNode(labelEvidence(c.ev), ClassifySettings{}); got != c.off {
 			t.Errorf("classifyNode(%+v) = %q, want %q", c.ev, got, c.off)
 		}
 	}
@@ -135,11 +135,11 @@ func TestVoIPExcludedNotPhone(t *testing.T) {
 		{"c0:74:ad:00:00:33", "GXP1625_c0:74:ad:00:00:33", "GXP1625 1.0.7.8", 0x24},
 	} {
 		g.AddNode(n.mac)
-		g.SwitchInfo[n.mac] = "[LLDP-EP] Grandstream Networks, Inc."
+		setLabel(g, n.mac, "[LLDP-EP] Grandstream Networks, Inc.")
 		graphRecordVoIPNeighbor(g, n.mac, LLDPNeighbor{RemSysName: n.sysName, RemSysDesc: n.sysDesc, RemSysCapEnabled: n.caps}, "")
 	}
 	g.AddNode("c0:74:ad:00:00:34")
-	g.SwitchInfo["c0:74:ad:00:00:34"] = "[ENDPOINT] Grandstream Networks, Inc."
+	setLabel(g, "c0:74:ad:00:00:34", "[ENDPOINT] Grandstream Networks, Inc.")
 	want := map[string]string{"c0:74:ad:00:00:31": "endpoint", "c0:74:ad:00:00:32": "endpoint", "c0:74:ad:00:00:33": "phone", "c0:74:ad:00:00:34": "phone"}
 	for _, n := range g.GetGraphData().Nodes {
 		if n.Group != want[n.ID] {
