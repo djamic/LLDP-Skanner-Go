@@ -848,6 +848,7 @@ func graphMergeNode(graph *DJGraph, from, into string) {
 	delete(graph.graphSwitches, from)
 	delete(graph.graphSysText, from)
 	delete(graph.graphLLDPCaps, from)
+	delete(graph.graphTags, from)
 }
 
 // addGatewayNodes draws every configured gateway that answered SNMP
@@ -923,6 +924,7 @@ func addGatewayNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMACs
 
 		graph.AddNode(mac)
 		graph.SwitchInfo[mac] = strings.Join(lines, "\n")
+		graphSetTags(graph, mac) // a router node's label has no tag line
 		if graph.graphRouters == nil {
 			graph.graphRouters = make(map[string]bool)
 		}

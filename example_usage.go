@@ -1228,18 +1228,21 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 			// clients are counted, not drawn: an AP hub's MACs, and the
 			// randomised MACs of a hub with access points
 			nodeID := fmt.Sprintf("hub-%s-p%d", srcID, p.Port)
-			nodeLabel := fmt.Sprintf("[HUB] Unmanaged\n%d devices", len(p.MACs)+len(p.LLDP))
+			tag := nodeTag{Tag: tagHub, Detail: "Unmanaged"}
+			count := fmt.Sprintf("%d devices", len(p.MACs)+len(p.LLDP))
 			macs := p.MACs
 			countOnly := currentClassify().WiFiClientsCountOnly
 			switch {
 			case p.Kind == fdbMiniHub:
-				nodeLabel = fmt.Sprintf("[MINIHUB] Mini hub\n%d devices", len(p.MACs))
+				tag = nodeTag{Tag: tagMiniHub, Detail: "Mini hub"}
+				count = fmt.Sprintf("%d devices", len(p.MACs))
 			case p.Kind == fdbAPHub:
 				parts := []string{kit.Plural(p.APs, "access point")}
 				if others := len(p.LLDP) - p.APs; others > 0 {
 					parts = append(parts, kit.Plural(others, "other device"))
 				}
-				nodeLabel = "[APHUB] AP hub\n" + strings.Join(append(parts, kit.Plural(len(p.MACs), "client")), ", ")
+				tag = nodeTag{Tag: tagAPHub, Detail: "AP hub"}
+				count = strings.Join(append(parts, kit.Plural(len(p.MACs), "client")), ", ")
 				if countOnly {
 					macs = nil
 				}
@@ -1250,7 +1253,8 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 
 			if !graph.Nodes[nodeID] {
 				graph.AddNode(nodeID)
-				graph.SwitchInfo[nodeID] = nodeLabel
+				graph.SwitchInfo[nodeID] = tag.line() + "\n" + count
+				graphSetTags(graph, nodeID, tag)
 			}
 			graph.AddEdge(srcID, nodeID, edgeLabel)
 
@@ -1315,14 +1319,12 @@ func graphAddLLDPEndpoint(graph *DJGraph, targetID, displayName string, neighbor
 	}
 
 	// Check BMC/management interface FIRST (LLDP name, DNS name)
+	tag := nodeTag{Tag: tagLLDPEndpoint, Vendor: vendor}
 	if bmcDetected, bmcType := graphIsBMC(targetID, displayName, dnsName); bmcDetected {
-		info = fmt.Sprintf("[BMC] %s", bmcType)
-
-	} else if vendor != "" {
-		info = fmt.Sprintf("[LLDP-EP] %s", vendor)
-	} else {
-		info = "[LLDP-EP]"
+		tag = nodeTag{Tag: tagBMC, Detail: bmcType}
 	}
+	info = tag.line()
+	graphSetTags(graph, targetID, tag)
 
 	// Add display name (hostname/SysName) if available
 	if displayName != "" && displayName != targetID {
@@ -1765,36 +1767,41 @@ func graphIsBMC(mac string, names ...string) (bool, string) {
 }
 
 // graphFDBEndpointLabel is the label of a MAC learned from the FDB (direct
-// port, VM port or hub member): "[VM] <os>" for a virtual NIC (checked before
-// the random-MAC rule) that is no vCenter host's VMkernel NIC
-// (graphVCenterHostNIC: graphESXiTag), else "[BMC] <type>" (DNS name checked too), "[WiFi]"
-// for a random MAC or "[ENDPOINT]"; then the vendor, the IP and the DNS name.
-func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceData) string {
+// port, VM port or hub member), and its tags: "[VM] <os>" for a virtual NIC
+// (checked before the random-MAC rule) that is no vCenter host's VMkernel
+// NIC (graphVCenterHostNIC: graphESXiTag and "[ENDPOINT]"), else "[BMC]
+// <type>" (DNS name checked too), "[WiFi]" for a random MAC or
+// "[ENDPOINT]", each with the vendor; then the IP and the DNS name.
+func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceData) (string, []nodeTag) {
 	ip := macToIP[mac]
 	hostname := ""
 	if ip != "" {
 		hostname, _ = cachedHostname(ip) // looked up before the build
 	}
-	info := "[ENDPOINT]"
+	vendor := getMACVendor(mac)
+	tags := []nodeTag{{Tag: tagEndpoint, Vendor: vendor}}
 	if isHypervisorMAC(mac) && graphVCenterHostNIC(mac) {
-		info = graphESXiTag // a vCenter host's VMkernel NIC: no VM
+		// a vCenter host's VMkernel NIC: no VM, an ESXi host
+		tags = []nodeTag{esxiTag, {Tag: tagEndpoint, Vendor: vendor}}
 	} else if isHypervisorMAC(mac) {
-		info = fmt.Sprintf("[VM] %s", detectOSFromMAC(mac, macToIP, data))
+		tags[0] = nodeTag{Tag: tagVM, Detail: detectOSFromMAC(mac, macToIP, data), Vendor: vendor}
 	} else if bmcDetected, bmcType := graphIsBMC(mac, hostname); bmcDetected {
-		info = fmt.Sprintf("[BMC] %s", bmcType)
+		tags[0] = nodeTag{Tag: tagBMC, Detail: bmcType, Vendor: vendor}
 	} else if isRandomMAC(mac) {
-		info = "[WiFi]"
+		tags[0] = nodeTag{Tag: tagWiFi, Vendor: vendor}
 	}
-	if vendor := getMACVendor(mac); vendor != "" {
-		info = fmt.Sprintf("%s %s", info, vendor)
+	lines := make([]string, len(tags))
+	for i, t := range tags {
+		lines[i] = t.line()
 	}
+	info := strings.Join(lines, "\n")
 	if ip != "" {
 		info = fmt.Sprintf("%s\n%s", info, ip)
 		if hostname != "" {
 			info = fmt.Sprintf("%s\n[DNS] %s", info, hostname)
 		}
 	}
-	return info
+	return info, tags
 }
 
 // graphLabelIP is the first label line that is an IP address, or "".
@@ -1813,7 +1820,9 @@ func graphLabelIP(info string) string {
 func graphAddFDBEndpoint(graph *DJGraph, data *DeviceData, macToIP map[string]string, parent, mac, label string) {
 	if !graph.Nodes[mac] {
 		graph.AddNode(mac)
-		graph.SwitchInfo[mac] = graphFDBEndpointLabel(mac, macToIP, data)
+		info, tags := graphFDBEndpointLabel(mac, macToIP, data)
+		graph.SwitchInfo[mac] = info
+		graphSetTags(graph, mac, tags...)
 		logDebug("       [NEW NODE] Created MAC endpoint node: %s", mac)
 	}
 	if added, _ := graph.AddEdge(parent, mac, label); added {
@@ -3228,6 +3237,7 @@ func graphAddSwitchNode(graph *DJGraph, d *DeviceData) string {
 		info = fmt.Sprintf("%s\n%s", d.SysName, d.IP)
 	}
 	graph.SwitchInfo[id] = info
+	graphSetTags(graph, id) // a polled device's label has no tag line
 	if graph.graphSwitches == nil {
 		graph.graphSwitches = make(map[string]bool)
 	}
@@ -3721,7 +3731,8 @@ func graphHubUplinkPort(graph *DJGraph, hubID string) string {
 }
 
 // graphESXiTag is the label line of an HTTP-confirmed ESXi host.
-const graphESXiTag = "[HYPERVISOR] VMware ESXi"
+// graphESXiTag is esxiTag's label line.
+var graphESXiTag = esxiTag.line()
 
 // graphTagHypervisorHost puts graphESXiTag and the VM count line of one of
 // its ports ("13 VMs on ge1/0/26") at the top of a confirmed ESXi host's
@@ -3740,6 +3751,7 @@ func graphTagHypervisorHost(graph *DJGraph, host, count string) {
 	}
 	lines = slices.Insert(lines, at, count)
 	graph.SwitchInfo[host] = strings.Join(append([]string{graphESXiTag}, lines...), "\n")
+	graphPrependTag(graph, host, esxiTag)
 }
 
 // detectHypervisors scans the graph for switch ports where 2+ VM MACs are seen.
@@ -3842,7 +3854,9 @@ func detectHypervisors(graph *DJGraph) {
 
 			// Add hypervisor node
 			graph.AddNode(hypID)
-			graph.SwitchInfo[hypID] = fmt.Sprintf("[HYPERVISOR] %s\n%d VMs on %s", hypervisorType, len(vmMACs), port)
+			hypTag := nodeTag{Tag: tagHypervisor, Detail: hypervisorType}
+			graph.SwitchInfo[hypID] = fmt.Sprintf("%s\n%d VMs on %s", hypTag.line(), len(vmMACs), port)
+			graphSetTags(graph, hypID, hypTag)
 
 			// Replace switch→VM edges with switch→hypervisor→VM (the VM
 			// nodes exist: AddEdge only links existing nodes)
@@ -3882,11 +3896,12 @@ func detectHypervisors(graph *DJGraph) {
 			}
 			// A confirmed ESXi host is named as one, like the confirmed
 			// hosts with VMs, not by its NIC's vendor
-			tag := fmt.Sprintf("[HYPERVISOR] %s Server", vendor)
+			tag := nodeTag{Tag: tagHypervisor, Detail: vendor + " Server"}
 			if graphIsConfirmedESXi(nodeID) {
-				tag = graphESXiTag
+				tag = esxiTag
 			}
-			graph.SwitchInfo[nodeID] = tag + "\n" + info
+			graph.SwitchInfo[nodeID] = tag.line() + "\n" + info
+			graphPrependTag(graph, nodeID, tag)
 			fmt.Printf("🖥️  Server NIC detected: %s → %s (potential ESXi host)\n", nodeID, vendor)
 		}
 	}

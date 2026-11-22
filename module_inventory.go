@@ -220,6 +220,7 @@ func addManagedAPNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMA
 		graph.AddNode(mac)
 		graph.graphManaged[mac] = true
 		graph.SwitchInfo[mac] = strings.Trim(v.Name+"\n"+v.IP, "\n")
+		graphSetTags(graph, mac)
 		if strings.EqualFold(v.State, modules.StateOffline) {
 			graph.NodeStatus[mac] = "unreachable"
 		}

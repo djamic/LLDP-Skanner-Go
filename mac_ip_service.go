@@ -1535,6 +1535,7 @@ func enrichGraphWithIPs(graph *DJGraph) {
 		if graphIsConfirmedESXi(mac) && !graphIsSwitchNode(graph, mac) {
 			if !strings.Contains(info, "[HYPERVISOR]") {
 				info = graphESXiTag + "\n" + info
+				graphPrependTag(graph, mac, esxiTag)
 				changed = true
 			}
 		}

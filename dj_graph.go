@@ -46,6 +46,9 @@ type DJGraph struct {
 	graphSwitches map[string]bool
 	graphPolled   map[string]polledFacts
 	graphNotPhone map[string]bool
+	// graphTags holds each node's tags (tags.go), its label's tag lines in
+	// their order
+	graphTags     map[string][]nodeTag
 	graphRouters  map[string]bool
 	graphSysText  map[string]string
 	graphManaged  map[string]bool
