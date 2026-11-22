@@ -1,6 +1,9 @@
 package main
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // nodeTag is one tag of a node: the kind of device the graph build tells it
 // is, with what it knows of it. The build records a node's tags
@@ -69,4 +72,17 @@ func graphPrependTag(graph *DJGraph, id string, t nodeTag) {
 // graphHasTag reports whether a node has a tag of kind tag.
 func graphHasTag(graph *DJGraph, id, tag string) bool {
 	return slices.ContainsFunc(graph.graphTags[id], func(t nodeTag) bool { return t.Tag == tag })
+}
+
+// nodeHasTag reports whether a graph data node has a tag of kind tag: one of
+// its Tags. A node with none from a capture written before the nodes had
+// tags (FullCaptureData) tells its tags by its label's tag lines only, and
+// this is the one place that reads them.
+func nodeHasTag(n GraphNode, tag string) bool {
+	if len(n.Tags) > 0 {
+		return slices.ContainsFunc(n.Tags, func(t nodeTag) bool { return t.Tag == tag })
+	}
+	return slices.ContainsFunc(strings.Split(n.SysName, "\n"), func(l string) bool {
+		return l == "["+tag+"]" || strings.HasPrefix(l, "["+tag+"] ")
+	})
 }

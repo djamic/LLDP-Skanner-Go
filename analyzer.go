@@ -532,7 +532,7 @@ func topologyCore(nodes map[string]GraphNode, devices map[string]*DeviceData) st
 			}
 		}
 		for _, id := range ids {
-			if n := nodes[id]; strings.Contains(n.SysName, "[LLDP-EP]") && hasGatewayLine(n) {
+			if n := nodes[id]; nodeHasTag(n, tagLLDPEndpoint) && hasGatewayLine(n) {
 				return id
 			}
 		}

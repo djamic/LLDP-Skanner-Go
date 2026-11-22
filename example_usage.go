@@ -3891,7 +3891,7 @@ func detectHypervisors(graph *DJGraph) {
 		}
 		if isServer, vendor := isServerNIC(nodeID); isServer {
 			info := graph.SwitchInfo[nodeID]
-			if strings.Contains(info, "[HYPERVISOR]") || strings.Contains(info, "[BMC]") {
+			if graphHasTag(graph, nodeID, tagHypervisor) || graphHasTag(graph, nodeID, tagBMC) {
 				continue
 			}
 			// A confirmed ESXi host is named as one, like the confirmed

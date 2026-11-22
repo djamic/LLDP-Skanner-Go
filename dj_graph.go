@@ -304,6 +304,10 @@ type GraphNode struct {
 	VoIP   *voip.Profile `json:"voip,omitempty"`
 	X      float64       `json:"x,omitempty"`
 	Y           float64  `json:"y,omitempty"`
+
+	// Tags are the node's tags (tags.go), its label's tag lines: what the
+	// UI and the analyzer read of what the build tells the node is
+	Tags []nodeTag `json:"tags,omitempty"`
 }
 
 // GraphLink represents a link in D3.js format
@@ -371,6 +375,7 @@ func (g *DJGraph) GetGraphData() GraphData {
 			Label:    label,
 			Group:    group,
 			NodeType: group,
+			Tags:     slices.Clone(g.graphTags[node]),
 			SysName:  info,
 			Hostname: hostname,
 		}

@@ -507,6 +507,11 @@ func TestAnalyzerPathDepthsFromCore(t *testing.T) {
 			Topology:    analyzerPathChain(ids, GraphNode{ID: ids[0], Group: "switch", NodeType: "switch", SysName: "core\n" + fixedGatewayIP}),
 		}, far},
 		{"core as LLDP endpoint", FullCaptureData{
+			Topology: analyzerPathChain(ids, GraphNode{ID: ids[0], Group: "endpoint", NodeType: "endpoint", SysName: "[LLDP-EP] Cisco\ncore-gw\n" + fixedGatewayIP,
+				Tags: []nodeTag{{Tag: tagLLDPEndpoint, Vendor: "Cisco"}}}),
+		}, far},
+		// a capture written before the nodes had tags: its label's tag line
+		{"core as LLDP endpoint, an older capture", FullCaptureData{
 			Topology: analyzerPathChain(ids, GraphNode{ID: ids[0], Group: "endpoint", NodeType: "endpoint", SysName: "[LLDP-EP] Cisco\ncore-gw\n" + fixedGatewayIP}),
 		}, far},
 		{"no core in topology", FullCaptureData{

@@ -1533,7 +1533,7 @@ func enrichGraphWithIPs(graph *DJGraph) {
 		// (polled, or an LLDP neighbor naming a switch platform) is never
 		// relabelled, whatever MAC binding the cache holds
 		if graphIsConfirmedESXi(mac) && !graphIsSwitchNode(graph, mac) {
-			if !strings.Contains(info, "[HYPERVISOR]") {
+			if !graphHasTag(graph, mac, tagHypervisor) {
 				info = graphESXiTag + "\n" + info
 				graphPrependTag(graph, mac, esxiTag)
 				changed = true
