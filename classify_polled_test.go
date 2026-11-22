@@ -246,3 +246,62 @@ func TestHubHysteresis(t *testing.T) {
 		t.Errorf("off, 18 MACs: %s, want hub", got)
 	}
 }
+
+// TestLLDPTargetRoleMatchesClassify (D5): a port's hub plan takes an LLDP
+// neighbor for an access point exactly when classifyNode groups its node
+// an access point, under every choice of lldpCaps and controllerKindWins:
+// by the kind a controller manages it as first (a UniFi switch has a
+// Ubiquiti OUI, an access point with a locally administered MAC may enable
+// the bridge bit only), then its OUI, then its LLDP capabilities.
+func TestLLDPTargetRoleMatchesClassify(t *testing.T) {
+	resetState(t)
+	const (
+		ubiquiti = "f0:9f:c2:84:00:01" // OUI category access_point
+		intel    = "00:1b:21:84:00:02" // OUI category endpoint
+		laa      = "72:a7:41:84:00:03" // no vendor
+	)
+	kinds := map[string]string{} // mac → the kind a controller manages it as
+	set := func(mac, kind string) {
+		inventoryMu.Lock()
+		defer inventoryMu.Unlock()
+		if kind == "" {
+			delete(kinds, mac)
+		} else {
+			kinds[mac] = kind
+		}
+		var devs []modules.ManagedDevice
+		for m, k := range kinds {
+			devs = append(devs, modules.ManagedDevice{MAC: m, Name: m, Kind: k})
+		}
+		inventories = map[string]inventoryRecord{"unificontroller|10.9.97.5": {Module: "unificontroller", IP: "10.9.97.5", Time: time.Now(),
+			Inventory: modules.Inventory{Devices: devs}}}
+		inventoryIndex()
+	}
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+	for _, mac := range []string{ubiquiti, intel, laa} {
+		for _, caps := range []uint8{0, lldpCapWLANAP, lldpCapBridge, lldpCapBridge | lldpCapWLANAP} {
+			for _, kind := range []string{"", modules.KindAccessPoint, modules.KindSwitch} {
+				set(mac, kind)
+				for _, rules := range []ClassifySettings{{}, {LLDPCaps: true}, {ControllerKindWins: true}, {LLDPCaps: true, ControllerKindWins: true}} {
+					isAP, isSwitch, _ := lldpTargetRole(mac, LLDPNeighbor{RemSysCapEnabled: caps}, rules)
+					g := NewDJGraph()
+					g.AddNode(mac)
+					graphSetTags(g, mac, nodeTag{Tag: tagLLDPEndpoint, Vendor: getMACVendor(mac)})
+					graphAddLLDPCaps(g, mac, caps)
+					facts := currentClassifyFacts(rules)
+					group := classifyNode(g.nodeEvidence(mac, g.SwitchInfo[mac], facts), rules)
+					if isAP != (group == "access_point") {
+						t.Errorf("%s caps %#x kind %q %+v: plan AP %v, classifyNode %q", mac, caps, kind, rules, isAP, group)
+					}
+					if group == "lldp_switch" && !isSwitch {
+						t.Errorf("%s caps %#x kind %q %+v: classifyNode %q, the plan sees no switch", mac, caps, kind, rules, group)
+					}
+				}
+			}
+		}
+	}
+}

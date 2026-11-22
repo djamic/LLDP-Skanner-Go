@@ -1044,11 +1044,8 @@ func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldp
 		aps, switchBehind := 0, false
 		var phones, others []string
 		for target, n := range targets {
-			caps := n.RemSysCapEnabled
-			isAP := caps&lldpCapWLANAP != 0 || categorizeVendor(lookupVendor(target)) == "access_point"
-			_, polled := switchMACs[target]
-			routerOnly := caps&lldpCapRouter != 0 && caps&lldpCapBridge == 0
-			if polled || routerOnly || (lldpDiscoverable(caps) && !isAP) {
+			isAP, isSwitch, isPhone := lldpTargetRole(target, n, rules)
+			if _, polled := switchMACs[target]; polled || isSwitch {
 				switchBehind = true
 				break
 			}
@@ -1057,12 +1054,10 @@ func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldp
 					continue
 				}
 			}
-			ev := voipEvidence(target, n, "")
-			_, phone := voip.Detect(ev)
 			switch {
 			case isAP:
 				aps++
-			case phone || caps&lldpCapPhone != 0 && !voip.Excluded(ev):
+			case isPhone:
 				phones = append(phones, target)
 			default:
 				others = append(others, target)
@@ -1685,6 +1680,35 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 	return out
 }
 
+
+// lldpTargetRole is what an LLDP neighbor is to a port's hub plan
+// (lldpPortPlans), by the evidence and the order classifyNode reads: the
+// kind a controller manages it as (with rules.ControllerKindWins), else its
+// OUI category, else its LLDP capabilities (an access point's bit with
+// rules.LLDPCaps). isSwitch says a switch is behind the port (a
+// controller's switch or gateway, a router-only neighbor, a bridge that is
+// no access point: no hub, whatever rules.LLDPCaps draws it as); isPhone a
+// phone (a PBX's, the voip engine's, a telephone bit that is no VoIP
+// maker's other product).
+func lldpTargetRole(target string, n LLDPNeighbor, rules ClassifySettings) (isAP, isSwitch, isPhone bool) {
+	caps := n.RemSysCapEnabled
+	told := ""
+	if rules.ControllerKindWins {
+		if v := managedViewOf(target); v != nil {
+			told = managedKindGroups[v.Kind]
+		}
+	}
+	if told != "" {
+		return told == "access_point", told == "lldp_switch" || told == "router", told == "phone"
+	}
+	isAP = categorizeVendor(lookupVendor(target)) == "access_point" || rules.LLDPCaps && caps&lldpCapWLANAP != 0
+	routerOnly := caps&lldpCapRouter != 0 && caps&lldpCapBridge == 0
+	isSwitch = routerOnly || lldpDiscoverable(caps) && !isAP
+	ev := voipEvidence(target, n, "")
+	_, phone := voip.Detect(ev)
+	isPhone = phone || caps&lldpCapPhone != 0 && !voip.Excluded(ev)
+	return isAP, isSwitch, isPhone
+}
 
 // fdbBigVerdict is the big-port verdict of one switch port
 // (fdbBigPort): the verdict, the poll that gave it, and a verdict the last
