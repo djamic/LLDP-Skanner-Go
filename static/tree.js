@@ -175,17 +175,20 @@ function treeNodeIPs(node) {
     return ips;
 }
 
-// A tag line of a label starts with its tag: '[ENDPOINT] Intel'.
-const treeTagPattern = /^\[[A-Za-z-]+\]\s*/;
+// treeTagText is a tag's text (node.tags, tags.go), as its label line shows
+// it after the tag: the detail and the vendor.
+function treeTagText(t) {
+    return [t.detail, t.vendor].filter(Boolean).join(' ');
+}
 
 // treeNodeName is the name a row shows: the name its controller gives it
 // (node.managed, a UniFi access point's "A 1 qavat 118"; node.client of a
 // virtual machine, its vCenter name), the DNS name,
 // else the first line of sysName (or label) that names the device (an SNMP
-// sysName or an LLDP system name), else the text of its first tag line (the
+// sysName or an LLDP system name), else the text of its first tag (the
 // vendor of '[ENDPOINT] Intel', '[LLDP-EP] SNR' or '[WiFi] Apple', the OS
 // of '[VM] 🐧 Linux VMware', the type of '[BMC] HPE iLO'), else its IP,
-// else its id. A hub or hypervisor is named by its tag line: its other
+// else its id. A hub or hypervisor is named by its first tag: its other
 // lines count devices and VMs ("4 devices", "6 VMs on ge1/0/24", "VMs:
 // ...").
 function treeNodeName(node) {
@@ -193,19 +196,16 @@ function treeNodeName(node) {
     if (node.client && node.client.kind === 'vm' && node.client.name) return String(node.client.name);
     if (node.hostname) return String(node.hostname);
     const id = String(node.id);
-    const lines = String(node.sysName || node.label || '').split('\n').map(s => s.trim()).filter(Boolean);
-    const first = lines[0] || '';
-    if (first.startsWith('[HUB]') || first.startsWith('[MINIHUB]') || first.startsWith('[APHUB]') || first.startsWith('[HYPERVISOR]')) {
-        const text = first.replace(treeTagPattern, '');
+    const tags = node.tags || [];
+    if (tags[0] && ['HUB', 'MINIHUB', 'APHUB', 'HYPERVISOR'].includes(tags[0].tag)) {
+        const text = treeTagText(tags[0]);
         if (text) return text;
     }
+    const lines = String(node.sysName || node.label || '').split('\n').map(s => s.trim()).filter(Boolean);
     const name = lines.find(l => !l.startsWith('[') && !treeIsIPv4(l) && !l.startsWith('VMs:') && l !== id);
     if (name) return name;
-    for (const l of lines) {
-        if (l.startsWith('[DNS]')) continue;
-        const text = l.replace(treeTagPattern, '');
-        if (text !== l && text) return text;
-    }
+    const tagged = tags.map(treeTagText).find(Boolean);
+    if (tagged) return tagged;
     return lines.find(treeIsIPv4) || id;
 }
 

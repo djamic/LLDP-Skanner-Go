@@ -70,11 +70,40 @@ vm.runInContext(treeSrc, pure, { filename: 'tree.js' });
 const T = pure; // top-level function declarations of tree.js
 const treeConst = (name) => vm.runInContext(name, pure);
 
+// labelTags are the tags a synthetic node's label shows (its tag lines), as
+// the graph build records them (tags.go): an [ENDPOINT], [LLDP-EP] or
+// [WiFi] line's text is the vendor; a [VM] line's the OS (an emoji and a
+// word, or "<word> VM") and the vendor; a [BMC] line's the type ('BMC',
+// 'IPMI' or two words) and the vendor; the others' the detail.
+function labelTags(sysName) {
+  const tags = [];
+  const tag = (t, detail, vendor) => Object.assign({ tag: t }, detail ? { detail } : {}, vendor ? { vendor } : {});
+  for (const l of String(sysName || '').split('\n')) {
+    const m = l.match(/^\[(LLDP-EP|ENDPOINT|WiFi|VM|BMC|HYPERVISOR|HUB|MINIHUB|APHUB)\](?: (.*))?$/);
+    if (!m) continue;
+    const text = m[2] || '';
+    if (['LLDP-EP', 'ENDPOINT', 'WiFi'].includes(m[1])) {
+      tags.push(tag(m[1], '', text));
+    } else if (m[1] === 'VM') {
+      const os = text.match(/^([^\x00-\x7F]\S*\s+(?:\S+\s+VM(?=\s|$)|\S+))\s*(.*)$/u);
+      tags.push(os ? tag('VM', os[1], os[2]) : tag('VM', '', text));
+    } else if (m[1] === 'BMC') {
+      const words = text.split(/\s+/).filter(Boolean);
+      const n = (words[0] === 'BMC' || words[0] === 'IPMI') ? 1 : Math.min(2, words.length);
+      tags.push(tag('BMC', words.slice(0, n).join(' '), words.slice(n).join(' ')));
+    } else {
+      tags.push(tag(m[1], text, ''));
+    }
+  }
+  return tags;
+}
+
 // node and link build /api/graph records the way GetGraphData does.
 function node(id, group, sysName, extra) {
   const hostname = extra && extra.hostname;
   const n = { id, label: sysName ? `${hostname || sysName}\n${id}` : id, group, type: group };
   if (sysName) n.sysName = sysName;
+  if (labelTags(sysName).length) n.tags = labelTags(sysName);
   if (/^\d+\.\d+\.\d+\.\d+$/.test(id)) n.ip = id;
   return Object.assign(n, extra || {}, { unreachable: !!(extra && extra.unreachable) });
 }
@@ -323,7 +352,7 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   // named by the controller, its state when not online, its clients as rows
   // below it that are no devices (no count) but are found by the search,
   // and no markup from the server anywhere
-  const managedNode = { id: '70:a7:41:00:00:01', label: '[LLDP-EP] Ubiquiti\nA1qavat118\n10.0.0.12', sysName: '[LLDP-EP] Ubiquiti\nA1qavat118\n10.0.0.12', group: 'access_point',
+  const managedNode = { id: '70:a7:41:00:00:01', label: '[LLDP-EP] Ubiquiti\nA1qavat118\n10.0.0.12', sysName: '[LLDP-EP] Ubiquiti\nA1qavat118\n10.0.0.12', tags: [{ tag: 'LLDP-EP', vendor: 'Ubiquiti' }], group: 'access_point',
     managed: { source: 'UniFi Network controller', controller: '10.0.0.2', name: 'A 1 qavat <118>', model: 'U6 LR', state: 'OFFLINE', firmware: '6.7.57',
       clients: [{ mac: 'de:ad:00:00:00:02', name: '<img src=x onerror=alert(7)>', ip: '10.0.1.7', kind: 'wireless' }, { mac: 'de:ad:00:00:00:01', name: 'DE:AD:00:00:00:01', kind: 'wired' }] } };
   const managedTree = T.treeProject(T.treeSpanning({ nodes: [{ id: 'aa:00:00:00:01:01', label: 'sw\n10.0.0.1', group: 'switch' }, managedNode],
@@ -380,14 +409,14 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   // vCenter with its VMs as a 🖥️ count, a VM node by its vCenter name, a
   // VM with no node as one 🖥️ row below its host whatever number of NICs
   // it has, none for a VM one NIC of which is a node
-  const esx = { id: '48:df:37:00:0a:01', label: '[HYPERVISOR] VMware ESXi\n10.0.0.41', sysName: '[HYPERVISOR] VMware ESXi\n10.0.0.41', group: 'hypervisor',
+  const esx = { id: '48:df:37:00:0a:01', label: '[HYPERVISOR] VMware ESXi\n10.0.0.41', sysName: '[HYPERVISOR] VMware ESXi\n10.0.0.41', tags: [{ tag: 'HYPERVISOR', detail: 'VMware ESXi' }], group: 'hypervisor',
     managed: { source: 'VMware vCenter', controller: '10.0.0.7', name: 'esx-a.lab.local', kind: 'hypervisor', state: 'ONLINE', clients: [
       { mac: '00:50:56:aa:00:01', name: 'Web <App>', ip: '10.0.1.10', kind: 'vm', os: 'Ubuntu Linux (64-bit)', power: 'On', hostname: 'web01' },
       { mac: '00:50:56:aa:00:02', name: 'Web <App>', ip: '10.0.2.10', kind: 'vm', network: 'Backup' },
       { mac: '00:50:56:aa:00:05', name: 'archive', kind: 'vm', os: 'Windows', power: 'Off' },
       { mac: '00:50:56:aa:00:06', name: 'db', kind: 'vm', network: 'VM Network' },
       { mac: '00:50:56:aa:00:07', name: 'db', ip: '10.0.1.20', kind: 'vm', network: 'Backup' }] } };
-  const vmNode = { id: '00:50:56:aa:00:01', label: '[VM] 🐧 Linux VMware\nweb01\n10.0.1.10', sysName: '[VM] 🐧 Linux VMware\nweb01\n10.0.1.10', hostname: 'web01', group: 'vm',
+  const vmNode = { id: '00:50:56:aa:00:01', label: '[VM] 🐧 Linux VMware\nweb01\n10.0.1.10', sysName: '[VM] 🐧 Linux VMware\nweb01\n10.0.1.10', tags: [{ tag: 'VM', detail: '🐧 Linux', vendor: 'VMware' }], hostname: 'web01', group: 'vm',
     client: Object.assign({ device: 'esx-a.lab.local' }, esx.managed.clients[0]) };
   const vmTree = T.treeProject(T.treeSpanning({ nodes: [esx, vmNode], links: [{ source: esx.id, target: vmNode.id, label: 'vNIC' }] }), null, {});
   const vmRow = rows(vmTree).find(r => r.row.id === vmNode.id), esxRow = rows(vmTree).find(r => r.row.id === esx.id);

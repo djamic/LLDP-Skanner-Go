@@ -1419,46 +1419,51 @@ if (typeof ResizeObserver !== 'undefined') {
     }).observe(document.getElementById('terminalBox') || document.body);
 }
 
-// Tag lines whose text after the tag is the vendor (label contract).
-const uiVendorTags = ['[ENDPOINT]', '[LLDP-EP]', '[WiFi]'];
-// "[VM] <os>[ <vendor>]": the OS label is an emoji plus one word or "<word> VM"
-// ('🐧 Linux', '💻 VMware VM'); "[VM] <vendor>" has no OS label.
-const uiVMOSPattern = /^([^\x00-\x7F]\S*\s+(?:\S+\s+VM(?=\s|$)|\S+))\s*(.*)$/u;
+// The tags whose vendor is the device's (node.tags: what the build tells a
+// node is, tags.go).
+const uiVendorTags = ['ENDPOINT', 'LLDP-EP', 'WiFi'];
 
-// uiParseNodeInfo reads the backend label lines for the info panel: vendor,
-// detail (BMC type, VM OS, hypervisor/hub text), the DNS name and the first
-// name line. It reads sysName, the full label: label drops the tag lines when
-// a DNS name exists. IP lines (uiNodeIPs) and "VMs:" lines are not names.
+// uiTagText is a tag's text, as its label line shows it after the tag: the
+// detail (a VM's OS, a BMC's type, a hypervisor's or a hub's text) and the
+// vendor.
+function uiTagText(t) {
+    return [t.detail, t.vendor].filter(Boolean).join(' ');
+}
+
+// uiParseNodeInfo reads what the info panel shows of a node: vendor and
+// detail (BMC type, VM OS, hypervisor/hub text) from its tags (node.tags),
+// the DNS name and the first name line from its label lines (sysName, the
+// full label: label drops the other lines when a DNS name exists). Tag
+// lines, IP lines (uiNodeIPs) and "VMs:" lines are not names.
 function uiParseNodeInfo(node) {
     const out = { vendor: '', detail: '', name: '', hostname: node.hostname || '' };
-    let typeText = '';    // [HYPERVISOR] text, e.g. 'VMware ESXi' or 'HPE ProLiant Server'
+    let typeText = '';    // a hypervisor's text, e.g. 'VMware ESXi' or 'HPE ProLiant Server'
     let brand = '';       // vendor named by a BMC type, e.g. 'Fujitsu' in 'Fujitsu iRMC'
-    let ownTag = false;   // a device tag line ([ENDPOINT], [VM], [BMC], ...) was seen
+    let ownTag = false;   // a device tag ([ENDPOINT], [VM], [BMC], ...) is there
+    (node.tags || []).forEach(t => {
+        if (uiVendorTags.includes(t.tag)) {
+            ownTag = true;
+            if (!out.vendor) out.vendor = t.vendor || '';
+        } else if (t.tag === 'VM') {
+            ownTag = true;
+            if (!out.detail) out.detail = t.detail || '';
+            if (!out.vendor) out.vendor = t.vendor || '';
+        } else if (t.tag === 'BMC') {
+            ownTag = true;
+            // the type is 'BMC', 'IPMI' or '<brand> <product>'
+            const type = t.detail || '';
+            if (!out.detail) out.detail = type;
+            if (!out.vendor) out.vendor = t.vendor || '';
+            if (!brand && type !== 'BMC' && type !== 'IPMI' && type.includes(' ')) brand = type.split(/\s+/)[0];
+        } else {
+            const text = uiTagText(t);
+            if (!out.detail) out.detail = text;
+            if (t.tag === 'HYPERVISOR' && !typeText) typeText = text;
+        }
+    });
     (node.sysName || node.label || '').split('\n').forEach(raw => {
         const line = raw.trim();
-        const tag = uiVendorTags.find(t => line.startsWith(t));
-        if (tag) {
-            ownTag = true;
-            if (!out.vendor) out.vendor = line.slice(tag.length).trim();
-        } else if (line.startsWith('[VM]')) {
-            ownTag = true;
-            const rest = line.slice('[VM]'.length).trim();
-            const m = rest.match(uiVMOSPattern);
-            if (!out.detail && m) out.detail = m[1];
-            if (!out.vendor) out.vendor = m ? m[2] : rest;
-        } else if (line.startsWith('[BMC]')) {
-            ownTag = true;
-            // "[BMC] <type>[ <vendor>]"; the type is 'BMC', 'IPMI' or '<brand> <product>'
-            const words = line.slice('[BMC]'.length).trim().split(/\s+/).filter(Boolean);
-            const typeLen = (words[0] === 'BMC' || words[0] === 'IPMI') ? 1 : Math.min(2, words.length);
-            if (!out.detail) out.detail = words.slice(0, typeLen).join(' ');
-            if (!out.vendor) out.vendor = words.slice(typeLen).join(' ');
-            if (typeLen === 2 && !brand) brand = words[0];
-        } else if (line.startsWith('[HYPERVISOR]') || line.startsWith('[HUB]') || line.startsWith('[MINIHUB]') || line.startsWith('[APHUB]')) {
-            const text = line.slice(line.indexOf(']') + 1).trim();
-            if (!out.detail) out.detail = text;
-            if (line.startsWith('[HYPERVISOR]') && !typeText) typeText = text;
-        } else if (line.startsWith('[DNS]')) {
+        if (line.startsWith('[DNS]')) {
             if (!out.hostname) out.hostname = line.slice('[DNS]'.length).trim();
         } else if (line && !line.startsWith('[') && !uiIsIPv4(line) && !line.startsWith('VMs:')) {
             if (!out.name) out.name = line;
@@ -2195,15 +2200,15 @@ function loadExperimentResults() {
 // Shadow IT Detection (Unmanaged Switches)
 // ============================================================
 
-// uiIsConfirmedESXi: an HTTP-confirmed ESXi host NIC. enrichGraphWithIPs puts
-// the '[HYPERVISOR] VMware ESXi' line into its full label (sysName; label
-// loses it when a DNS name exists), and the graph groups it as hypervisor. A
+// uiIsConfirmedESXi: an HTTP-confirmed ESXi host NIC. enrichGraphWithIPs gives
+// it the ESXi tag (node.tags: HYPERVISOR "VMware ESXi"), and the graph
+// groups it as hypervisor. A
 // synthetic hyp- node (the hypervisor detectHypervisors puts between a port
 // or a hub and its VMs) has that group and label too, but nothing confirmed
 // it, so it never counts: only a real NIC can be confirmed.
 function uiIsConfirmedESXi(node) {
     if (String(node.id).startsWith('hyp-')) return false;
-    return node.group === 'hypervisor' || (node.sysName || '').includes('[HYPERVISOR] VMware ESXi');
+    return node.group === 'hypervisor' || (node.tags || []).some(t => t.tag === 'HYPERVISOR' && t.detail === 'VMware ESXi');
 }
 
 // uiShadowITEntries lists the Shadow-IT modal entries. Q14: one per-port rule

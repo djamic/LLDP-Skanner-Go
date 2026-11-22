@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -107,6 +108,36 @@ func TestNodeTagLine(t *testing.T) {
 	}
 }
 
+// labelVMOS is a [VM] line's OS: an emoji and a word, or "<word> VM"
+// ("🐧 Linux", "💻 VMware VM"), then the vendor (app.js's former rule).
+var labelVMOS = regexp.MustCompile(`^([^\x00-\x7F]\S*\s+(?:\S+\s+VM(?:\s|$)|\S+))\s*(.*)$`)
+
+// labelTag is the tag a label's tag line shows, as the build records it:
+// an [ENDPOINT], [LLDP-EP] or [WiFi] line's text is the vendor; a [VM]
+// line's the OS and the vendor; a [BMC] line's the type ("BMC", "IPMI" or
+// two words) and the vendor; the others' the detail.
+func labelTag(l string) nodeTag {
+	tag, text, _ := strings.Cut(strings.TrimPrefix(l, "["), "]")
+	text = strings.TrimSpace(text)
+	switch tag {
+	case tagEndpoint, tagLLDPEndpoint, tagWiFi:
+		return nodeTag{Tag: tag, Vendor: text}
+	case tagVM:
+		if m := labelVMOS.FindStringSubmatch(text); m != nil {
+			return nodeTag{Tag: tag, Detail: strings.TrimSpace(m[1]), Vendor: m[2]}
+		}
+		return nodeTag{Tag: tag, Vendor: text}
+	case tagBMC:
+		words := strings.Fields(text)
+		n := min(2, len(words))
+		if n > 0 && (words[0] == "BMC" || words[0] == "IPMI") {
+			n = 1
+		}
+		return nodeTag{Tag: tag, Detail: strings.Join(words[:n], " "), Vendor: strings.Join(words[n:], " ")}
+	}
+	return nodeTag{Tag: tag, Detail: text}
+}
+
 // labelEvidence is ev with the tags its Info's tag lines show, when it has
 // none: the classification tables write a node's label, as the build did
 // before it recorded tags.
@@ -115,8 +146,7 @@ func labelEvidence(ev nodeEvidence) nodeEvidence {
 		return ev
 	}
 	for _, l := range labelTagLines(ev.Info) {
-		tag, detail, _ := strings.Cut(strings.TrimPrefix(l, "["), "]")
-		ev.Tags = append(ev.Tags, nodeTag{Tag: tag, Detail: strings.TrimSpace(detail)})
+		ev.Tags = append(ev.Tags, labelTag(l))
 	}
 	return ev
 }
