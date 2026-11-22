@@ -16,10 +16,10 @@
       "nodes_by_group": {"endpoint": 59, "hub": 7, "hypervisor": 3, "minihub": 1, "switch": 2, "vm": 7, "wifi_random": 4}
     },
     "ui": {
-      "kept_by_group": {"endpoint": 9, "hub": 3, "hypervisor": 1, "printer": 1, "server": 1, "switch": 2, "unknown": 1, "vm": 2},
+      "kept_by_group": {"endpoint": 7, "hub": 3, "hypervisor": 3, "printer": 1, "server": 1, "switch": 2, "unknown": 1, "vm": 2},
       "kept_links": 18,
       "links": 18,
-      "nodes_by_group": {"endpoint": 9, "hub": 3, "hypervisor": 1, "printer": 1, "server": 1, "switch": 2, "unknown": 1, "vm": 2}
+      "nodes_by_group": {"endpoint": 7, "hub": 3, "hypervisor": 3, "printer": 1, "server": 1, "switch": 2, "unknown": 1, "vm": 2}
     }
   },
   "connected": [
@@ -102,7 +102,7 @@
       "graph": "ui",
       "ip": "Not available",
       "node": "hub-4c:ae:a3:09:80:01-p8",
-      "peers": ["💻 esx-a", "💻 [ENDPOINT] Intel", "🔀 sw-ui"],
+      "peers": ["🏗️ esx-a", "💻 [ENDPOINT] Intel", "🔀 sw-ui"],
       "port_groups": ["—", "GE1/0/8 (peer)"],
       "sys_name": "2 devices",
       "title": "2 devices",

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"lldp_scanner/modules"
 )
 
 // shadowRuleViews lists one network's Shadow-IT ports as each consumer sees
@@ -222,5 +226,47 @@ func TestShadowITModalHubWithVMs(t *testing.T) {
 	g, hubs = checkShadowRuleViews(t, "rule network", rule)
 	if !g.Nodes["hyp-hub-4c:ae:a3:60:00:60-p13-ge1_0_13"] || !slices.Contains(hubs, "hub-4c:ae:a3:60:00:60-p13 5") {
 		t.Errorf("precondition: the rule network's port 13 is no hub with a hyp- node (hubs %v)", hubs)
+	}
+}
+
+// TestShadowITVCenterHost (D1): a port whose member a vCenter lists as an
+// ESXi host's NIC is exempt from Shadow IT for every consumer, as a port
+// with an HTTP-confirmed host is: the UI modal took that hypervisor member
+// for the exemption, while the alerts, the report and the graph exempted a
+// confirmed host only. Off (controllerKindWins), the vCenter tells nothing,
+// and every consumer lists the hub.
+func TestShadowITVCenterHost(t *testing.T) {
+	resetState(t)
+	const host = "48:df:37:82:03:01"
+	var fdb []MACEntry
+	fdb = append(fdb, macEntries(3, host, "00:1b:21:82:03:02")...)
+	fdb = append(fdb, macEntries(5, "00:1b:21:82:05:01", "00:1b:21:82:05:02")...)
+	devices := []*DeviceData{{IP: "10.0.9.82", SysName: "sw-82", ChassisID: "4c:ae:a3:82:00:82", Interfaces: gigabitPorts(8, nil), MACTable: fdb}}
+	collectedDataMutex.Lock()
+	collectedData = map[string]*DeviceData{devices[0].IP: devices[0]}
+	collectedDataMutex.Unlock()
+	inventoryMu.Lock()
+	inventories = map[string]inventoryRecord{"vcenter|10.9.0.2": {Module: "vcenter", IP: "10.9.0.2", Time: time.Now(),
+		Inventory: modules.Inventory{Devices: []modules.ManagedDevice{{MAC: host, Name: "esx-82", Kind: "hypervisor"}}}}}
+	inventoryIndex()
+	inventoryMu.Unlock()
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+	for _, c := range []struct {
+		kindWins bool
+		want     []string
+	}{
+		{true, []string{"hub-4c:ae:a3:82:00:82-p5 2"}},
+		{false, []string{"hub-4c:ae:a3:82:00:82-p3 2", "hub-4c:ae:a3:82:00:82-p5 2"}},
+	} {
+		currentSettingsMutex.Lock()
+		currentSettings.Classify.ControllerKindWins = c.kindWins
+		currentSettingsMutex.Unlock()
+		if _, hubs := checkShadowRuleViews(t, fmt.Sprintf("vCenter host member, controllerKindWins %v", c.kindWins), devices); !slices.Equal(hubs, c.want) {
+			t.Errorf("controllerKindWins %v: hubs %v, want %v", c.kindWins, hubs, c.want)
+		}
 	}
 }

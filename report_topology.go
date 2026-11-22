@@ -944,8 +944,8 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 
 // reportHubIsShadowIT reports whether the port behind a hub node is a
 // Shadow-IT hub under the per-port rule the alerts use (fdbPorts), applied
-// to the polled switch's FDB with the current ESXi confirmations: a hub
-// whose port carries an HTTP-confirmed ESXi host is left out even when the
+// to the polled switch's FDB with the current ESXi hosts: a hub whose port
+// carries an ESXi host's NIC (graphIsESXiHostNIC) is left out even when the
 // host was confirmed after the graph was built (Q14). For a hub whose switch
 // is not in collectedData, only its member nodes can be checked.
 func reportHubIsShadowIT(g *DJGraph, hubID string, members []string) bool {
@@ -965,7 +965,7 @@ func reportHubIsShadowIT(g *DJGraph, hubID string, members []string) bool {
 			return false
 		}
 	}
-	return !slices.ContainsFunc(members, graphIsConfirmedESXi)
+	return !slices.ContainsFunc(members, graphIsESXiHostNIC)
 }
 
 // reportParseHubID splits a hub node id, "hub-<switch node>-p<FDB port>" as

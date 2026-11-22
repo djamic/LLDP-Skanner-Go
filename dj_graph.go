@@ -308,6 +308,9 @@ type GraphNode struct {
 	// Tags are the node's tags (tags.go), its label's tag lines: what the
 	// UI and the analyzer read of what the build tells the node is
 	Tags []nodeTag `json:"tags,omitempty"`
+	// ESXi: the node is an ESXi host's NIC now (graphIsESXiHostNIC, when the
+	// data is made): the UI's Shadow-IT exemption, the alerts' rule
+	ESXi bool `json:"esxi,omitempty"`
 }
 
 // GraphLink represents a link in D3.js format
@@ -376,6 +379,7 @@ func (g *DJGraph) GetGraphData() GraphData {
 			Group:    group,
 			NodeType: group,
 			Tags:     slices.Clone(g.graphTags[node]),
+			ESXi:     graphIsESXiHostNIC(node),
 			SysName:  info,
 			Hostname: hostname,
 		}

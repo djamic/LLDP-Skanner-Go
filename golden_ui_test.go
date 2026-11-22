@@ -69,6 +69,12 @@ func uiCaseGraph() GraphData {
 
 	addInfoNode(g, "aa:bb:cc:09:86:01", "[LLDP-EP]\n<img src=x onerror=alert(1)> shadow")
 	g.AddEdge(uiSwitch, "aa:bb:cc:09:86:01", "GE1/0/10|eth0")
+	// The ESXi members are HTTP-confirmed hosts, as their tag says (the
+	// build gives the tag to those only): the data marks them (esxi)
+	for _, mac := range []string{"00:1b:21:09:80:81", "00:1b:21:09:80:91"} {
+		ConfirmedESXiMACs.Store(mac, true)
+		defer ConfirmedESXiMACs.Delete(mac)
+	}
 	return g.GetGraphData()
 }
 

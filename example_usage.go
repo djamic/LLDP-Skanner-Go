@@ -1025,13 +1025,13 @@ func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldp
 	ownMAC, selfID := graphChassisKey(data.ChassisID), graphDeviceNodeID(data)
 	esxiOn := make(map[int]bool)
 	for _, e := range data.MACTable {
-		if graphIsConfirmedESXi(canonicalMAC(e.MACAddress)) {
+		if graphIsESXiHostNIC(canonicalMAC(e.MACAddress)) {
 			esxiOn[collectFDBIfIndex(data, e.PortNumber)] = true
 		}
 	}
 	plans := make(map[int]*lldpPortPlan)
 	for port, targets := range rows {
-		if len(targets) < 2 || esxiOn[port] || slices.ContainsFunc(slices.Collect(maps.Keys(targets)), graphIsConfirmedESXi) {
+		if len(targets) < 2 || esxiOn[port] || slices.ContainsFunc(slices.Collect(maps.Keys(targets)), graphIsESXiHostNIC) {
 			continue
 		}
 		plan := &lldpPortPlan{Ports: make(map[string]string)}
@@ -1649,7 +1649,7 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 		switch {
 		case vmPort:
 			port.Kind = fdbVMPort
-		case candidate && graphPortHasConfirmedESXi(macs):
+		case candidate && graphPortHasESXiHost(macs):
 			// a port with an HTTP-confirmed ESXi host is never a Shadow-IT hub
 			port.Kind = fdbESXiPort
 		case candidate:
@@ -1665,7 +1665,7 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 		case len(macs) > fdbMiniHubMax:
 			logDebug("       [UPLINK] Port %d on %s has %d MACs — an uplink toward unpolled switches", portNum, data.IP, len(macs))
 			continue
-		case graphPortHasConfirmedESXi(macs):
+		case graphPortHasESXiHost(macs):
 			// an ESXi host on a trunk port
 			port.Kind = fdbESXiPort
 		default:
@@ -1746,10 +1746,18 @@ func graphIsConfirmedESXi(id string) bool {
 	return ok
 }
 
-// graphPortHasConfirmedESXi reports whether one of a port's MACs is an
-// HTTP-confirmed ESXi host.
-func graphPortHasConfirmedESXi(macs []string) bool {
-	return slices.ContainsFunc(macs, graphIsConfirmedESXi)
+// graphIsESXiHostNIC reports whether id is the NIC of an ESXi host: an
+// HTTP-confirmed one, or one a vCenter lists (graphVCenterHostNIC, with
+// controllerKindWins). It is the one ESXi exemption of the Shadow-IT rule
+// (fdbPorts, lldpPortPlans), of the report's and of the UI's (GraphNode.ESXi).
+func graphIsESXiHostNIC(id string) bool {
+	return graphIsConfirmedESXi(id) || graphVCenterHostNIC(id)
+}
+
+// graphPortHasESXiHost reports whether one of a port's MACs is an ESXi
+// host's NIC (graphIsESXiHostNIC).
+func graphPortHasESXiHost(macs []string) bool {
+	return slices.ContainsFunc(macs, graphIsESXiHostNIC)
 }
 
 // graphIsBMC runs the BMC check with each known name of a device (LLDP

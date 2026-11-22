@@ -2200,22 +2200,12 @@ function loadExperimentResults() {
 // Shadow IT Detection (Unmanaged Switches)
 // ============================================================
 
-// uiIsConfirmedESXi: an HTTP-confirmed ESXi host NIC. enrichGraphWithIPs gives
-// it the ESXi tag (node.tags: HYPERVISOR "VMware ESXi"), and the graph
-// groups it as hypervisor. A
-// synthetic hyp- node (the hypervisor detectHypervisors puts between a port
-// or a hub and its VMs) has that group and label too, but nothing confirmed
-// it, so it never counts: only a real NIC can be confirmed.
-function uiIsConfirmedESXi(node) {
-    if (String(node.id).startsWith('hyp-')) return false;
-    return node.group === 'hypervisor' || (node.tags || []).some(t => t.tag === 'HYPERVISOR' && t.detail === 'VMware ESXi');
-}
-
 // uiShadowITEntries lists the Shadow-IT modal entries. Q14: one per-port rule
 // everywhere, the graph's hub filters plus the ESXi exemption — so the entries
-// are the graph's hubs, minus a hub with a confirmed ESXi host among the MACs
-// of its port: its members, and the VMs detectHypervisors moved below a hyp-
-// member. Each entry carries its switch and port from the switch->hub link
+// are the graph's hubs, minus a hub with an ESXi host's NIC (node.esxi, the
+// backend's own test, graphIsESXiHostNIC, as the data was made: also a host
+// confirmed after the build) among the MACs of its port: its members, and
+// the VMs detectHypervisors moved below a hyp- member. Each entry carries its switch and port from the switch->hub link
 // ('<port>|Hub'), else from the id 'hub-<switch>-p<bridge port>'. Sorted by
 // switch and port, so the list does not depend on the backend's map order.
 function uiShadowITEntries(data) {
@@ -2238,7 +2228,7 @@ function uiShadowITEntries(data) {
                 if (hyps.has(s) && t !== hub.id) members.push(byId.get(t));
             });
         }
-        if (members.some(m => m && uiIsConfirmedESXi(m))) return;
+        if (members.some(m => m && m.esxi)) return;
 
         const idMatch = /^hub-(.+)-p(\d+)$/.exec(hub.id);
         const switchId = uplink ? (uplink.source.id || uplink.source) : (idMatch ? idMatch[1] : '');
