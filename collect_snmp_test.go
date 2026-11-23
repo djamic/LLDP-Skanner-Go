@@ -162,6 +162,32 @@ func TestCollectFDBIndex(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("collectMACTable =\n%v\nwant\n%v", got, want)
 	}
+
+	// Q-BRIDGE-MIB fallback (dot1qTpFdbPort.<fdbId>.<6 MAC octets> = port):
+	// used when dot1dTpFdbPort has no rows (UniFi USW, H3C Comware 7), with
+	// per-(MAC, port) deduplication across VLANs.
+	fakeSNMP.set("10.9.1.30", map[string][]string{
+		oidFDBPort: {".1.3.6.1.2.1.17.4.3.1.2 = No Such Instance currently exists at this OID"},
+		collectQFDBPortOID: {
+			collectQFDBPortOID + ".1.0.187.193.118.44.60 = INTEGER: 6",
+			collectQFDBPortOID + ".100.0.187.193.118.44.60 = INTEGER: 6", // duplicate (MAC, port) in VLAN 100
+			collectQFDBPortOID + ".11.40.197.200.92.17.95 = INTEGER: 24",
+			collectQFDBPortOID + ".1.0.27.33.9.0.2 = INTEGER: 0",   // port 0
+			collectQFDBPortOID + ".1.0.27.33.9.999.1 = INTEGER: 6", // octet > 255
+			collectQFDBPortOID + ".0.27.33.9.0.1 = INTEGER: 6",     // missing fdbId (6 parts instead of 7)
+		},
+	})
+	gotQ, err := obj.collectMACTable("10.9.1.30")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantQ := []MACEntry{
+		{MACAddress: "00:bb:c1:76:2c:3c", PortNumber: 6, VlanID: 1, Status: "learned"},
+		{MACAddress: "28:c5:c8:5c:11:5f", PortNumber: 24, VlanID: 11, Status: "learned"},
+	}
+	if !slices.Equal(gotQ, wantQ) {
+		t.Errorf("collectMACTable (dot1q fallback) =\n%v\nwant\n%v", gotQ, wantQ)
+	}
 }
 
 // TestCollectARPTable checks the ipNetToMediaPhysAddress parsing: the index
@@ -342,8 +368,9 @@ func TestCollectNullInterface(t *testing.T) {
 		"\"NULL0\"":                true,
 		"\"Null0\"":                true,
 		" \"NULL0\" ":              true,
-		"\"InLoopBack0\"":          true,
-		"\"\"":                     true,
+		"\"InLoopBack0\"":                       true,
+		"\" CPU Interface for Slot: 5 Port: 1\"": true,
+		"\"\"":                                  true,
 		"Port 0":                   true,
 		"\"GigabitEthernet0/0/1\"": false,
 		"\"Vlanif1\"":              false,

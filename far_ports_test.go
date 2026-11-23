@@ -38,6 +38,13 @@ func TestLLDPRemotePortName(t *testing.T) {
 		{"FortiGate interfaceAlias, empty description", 1, `"LAN"`, `""`, "FortiGate-600F", "LAN", "LAN"},
 		{"SNR S2985G-24TC local port number", 7, `"28"`, `""`, "", "28", "28"},
 		{"PiXiETECH local id with a description", 7, `"Gig0/27"`, `"GigaEthernet0/27"`, "Switch", "GigaEthernet0/27", "GigaEth0/27"},
+		{"UniFi FASTPATH gigabit port description", 5, `"Port 24"`, `"Slot: 0 Port: 24 Gigabit - Level"`, "USW", "Slot: 0 Port: 24 Gigabit - Level", "Port24"},
+		{"UniFi FASTPATH 10G SFP+ port description", 5, `"Port 26"`, `"Slot: 0 Port: 26 10G - Level"`, "USW", "Slot: 0 Port: 26 10G - Level", "Port26"},
+		{"FASTPATH non-zero slot port description", 5, `"1/5"`, `"Slot: 1 Port: 5 Gigabit - Level"`, "SW", "Slot: 1 Port: 5 Gigabit - Level", "Port1/5"},
+		{"FASTPATH link aggregate description", 5, `"LAG 3"`, `" Link Aggregate 3"`, "USW", "Link Aggregate 3", "LAG3"},
+		{"ProCurve / UniFi hash port description", 5, `"24"`, `"Port #24"`, "SW", "Port #24", "Port24"},
+		{"Huawei AP product-prefixed port description", 5, `"MultiGE0/0/0"`, `"HUAWEI, AP Series, MultiGE0/0/0 Interface"`, "ap-1", "HUAWEI, AP Series, MultiGE0/0/0 Interface", "MultiGE0/0/0"},
+		{"Huawei AC product-prefixed port description", 5, `"XGigabitEthernet0/0/1"`, `"HUAWEI, AC Series, XGigabitEthernet0/0/1 Interface"`, "ac-1", "HUAWEI, AC Series, XGigabitEthernet0/0/1 Interface", "XGE0/0/1"},
 		{"local id that spells a MAC", 7, `"f4-b5-20-19-12-5e"`, `""`, "", "", ""},
 		{"PC: MAC port id as Hex-STRING, empty description", 3, "48 F3 17 07 58 7F", `""`, "", "", ""},
 		{"PC: MAC port id, no description column (was 98EECBE08974)", 3, "98 EE CB E0 89 74", "", "", "", ""},
@@ -216,6 +223,9 @@ func TestFillTargetPort(t *testing.T) {
 		if filled := g.FillTargetPort(c.src, c.dst, c.port); filled != c.filled || g.Edges[c.src][c.dst] != c.label {
 			t.Errorf("FillTargetPort(%s, %s, %q) = %v, label %q; want %v, %q", c.src, c.dst, c.port, filled, g.Edges[c.src][c.dst], c.filled, c.label)
 		}
+	}
+	if !lldpSamePort("Port24", "24") || !lldpSamePort("Port24", "Port24") || lldpSamePort("Port24", "4") {
+		t.Errorf("lldpSamePort UniFi Port24 matching failed")
 	}
 }
 

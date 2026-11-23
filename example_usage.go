@@ -54,9 +54,12 @@ var (
 	globalMACtoIP      = make(map[string]string)
 	globalMACtoIPMutex sync.RWMutex
 
-	// Pre-compiled regex for normalizePortName — compiled ONCE at startup
+	// Pre-compiled regexes for normalizePortName — compiled ONCE at startup
 	// instead of on every call (was major CPU bottleneck with thousands of calls).
 	rePortMACPrefix = regexp.MustCompile(`^([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}[:\-]`)
+	reSlotPortLevel = regexp.MustCompile(`(?i)^Slot:\s*(\d+)\s+Port:\s*(\d+)\b.*-\s*Level$`)
+	reLinkAggregate = regexp.MustCompile(`(?i)^Link\s+Aggregate\s+(\d+)$`)
+	rePortHash      = regexp.MustCompile(`(?i)^Port\s*#\s*(\d+)$`)
 )
 
 // InterfaceTraffic tracks traffic counters for speed calculation
@@ -1460,7 +1463,7 @@ func lldpReverseFarPort(graph *DJGraph, data *DeviceData, srcID, target string, 
 // lldpSamePort reports whether a switch's own port name and the name a
 // neighbor reported for it (both normalizePortName'd) are one port: equal
 // but for case, or a bare port number that ends the name ("28" is
-// "Eth1/0/28", the SNR S2985G-24TC's local port ids).
+// "Eth1/0/28", the SNR S2985G-24TC's local port ids, or "Port28" on UniFi).
 func lldpSamePort(own, reported string) bool {
 	if strings.EqualFold(own, reported) {
 		return true
@@ -1468,7 +1471,7 @@ func lldpSamePort(own, reported string) bool {
 	if reported == "" || strings.Trim(reported, "0123456789") != "" {
 		return false
 	}
-	return strings.HasSuffix(own, "/"+reported)
+	return strings.HasSuffix(own, "/"+reported) || strings.EqualFold(own, "Port"+reported)
 }
 
 // fdbPortKind is what the per-port FDB rule (fdbPorts) makes of the MACs a
@@ -1964,6 +1967,7 @@ func nullInterfaceName(name string) bool {
 	return low == "null0" || low == "null 0" ||
 		strings.HasPrefix(low, "null") ||
 		strings.Contains(low, "inloopback") ||
+		strings.HasPrefix(low, "cpu interface") ||
 		low == "" || low == "port 0"
 }
 
@@ -2037,11 +2041,33 @@ func normalizePortName(name string) string {
 	// 2. Remove MAC address prefix (e.g. "4c:ae:a3:a2:06:2c:GE1/0/43" → "GE1/0/43")
 	name = rePortMACPrefix.ReplaceAllString(name, "")
 
-	// 3. Remove noise suffixes
+	// 3. Remove noise suffixes and vendor product prefixes
 	for _, suffix := range []string{" Interface", " interface", " (SFP)", " (RJ45)"} {
 		name = strings.TrimSuffix(name, suffix)
 	}
 	name = strings.TrimSpace(name)
+	if strings.HasPrefix(name, "HUAWEI,") {
+		if idx := strings.LastIndex(name, ","); idx >= 0 {
+			if tail := strings.TrimSpace(name[idx+1:]); tail != "" {
+				name = tail
+			}
+		}
+	}
+
+	// 3b. Broadcom FASTPATH / UniFi ("Slot: 0 Port: 24 Gigabit - Level" →
+	// "Port24", " Link Aggregate 1" → "LAG1") and "Port #24" → "Port24"
+	if m := reSlotPortLevel.FindStringSubmatch(name); m != nil {
+		if m[1] == "0" {
+			return "Port" + m[2]
+		}
+		return "Port" + m[1] + "/" + m[2]
+	}
+	if m := reLinkAggregate.FindStringSubmatch(name); m != nil {
+		return "LAG" + m[1]
+	}
+	if m := rePortHash.FindStringSubmatch(name); m != nil {
+		return "Port" + m[1]
+	}
 
 	// 4. Apply abbreviations — LONGEST MATCH FIRST (order matters)
 	type abbr struct{ long, short string }

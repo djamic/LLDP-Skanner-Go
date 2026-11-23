@@ -1214,8 +1214,9 @@ func collectLLDPManAddrValue(oid, typ, val string) (key, ip string, ok bool) {
 
 // OIDs of the FDB and ARP walks.
 const (
-	collectFDBPortOID = ".1.3.6.1.2.1.17.4.3.1.2" // dot1dTpFdbPort.<6 MAC octets> = bridge port
-	collectARPPhysOID = ".1.3.6.1.2.1.4.22.1.2"   // ipNetToMediaPhysAddress.<ifIndex>.<4 IP octets> = MAC
+	collectFDBPortOID  = ".1.3.6.1.2.1.17.4.3.1.2"     // dot1dTpFdbPort.<6 MAC octets> = bridge port
+	collectQFDBPortOID = ".1.3.6.1.2.1.17.7.1.2.2.1.2" // dot1qTpFdbPort.<fdbId>.<6 MAC octets> = bridge port
+	collectARPPhysOID  = ".1.3.6.1.2.1.4.22.1.2"       // ipNetToMediaPhysAddress.<ifIndex>.<4 IP octets> = MAC
 )
 
 // collectSNMPValue splits one snmpbulkwalk -On line into the OID, the value
@@ -1300,7 +1301,9 @@ func parseSNMPLine(line string) (oid string, value string, err error) {
 	return oid, strings.TrimSpace(value), nil
 }
 
-// collectMACTable collects MAC address table (FDB) from BRIDGE-MIB. The
+// collectMACTable collects MAC address table (FDB) from BRIDGE-MIB, falling
+// back to Q-BRIDGE-MIB dot1qTpFdbPort when dot1dTpFdbPort has no rows (UniFi
+// USW FASTPATH and H3C Comware 7 agents). The
 // walk is unordered (-Cc): the PiXiETECH switches 172.20.230.40 and .44
 // return their FDB in hash order (148.64.201.42.244.74, then
 // 248.240.130.124.249.203, then 148.64.201.42.244.98...), so net-snmp
@@ -1356,6 +1359,45 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 		result = append(result, entry)
 	}
 
+	// Fallback to Q-BRIDGE-MIB dot1qTpFdbPort.<fdbId>.<6 MAC octets> = port
+	// when dot1dTpFdbPort answered with no rows (e.g. UniFi USW, H3C Comware 7).
+	if len(result) == 0 {
+		if qLines, qErr := s.runSNMPWalkUnordered(ip, collectQFDBPortOID); qErr == nil {
+			type macPort struct {
+				mac  string
+				port int
+			}
+			seen := make(map[macPort]bool)
+			for _, line := range qLines {
+				oid, val, err := parseSNMPLine(line)
+				if err != nil {
+					continue
+				}
+				idx, ok := collectOIDIndex(oid, collectQFDBPortOID)
+				if !ok || len(idx) != 7 || slices.ContainsFunc(idx[1:], func(b int) bool { return b > 255 }) {
+					continue
+				}
+				val = strings.TrimPrefix(val, "INTEGER: ")
+				portNum, _ := strconv.Atoi(val)
+				if portNum <= 0 {
+					continue
+				}
+				macAddr := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
+					idx[1], idx[2], idx[3], idx[4], idx[5], idx[6])
+				key := macPort{mac: macAddr, port: portNum}
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				result = append(result, MACEntry{
+					MACAddress: macAddr,
+					PortNumber: portNum,
+					VlanID:     idx[0],
+					Status:     "learned",
+				})
+			}
+		}
+	}
 
 	return result, nil
 }
