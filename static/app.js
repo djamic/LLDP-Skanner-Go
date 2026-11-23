@@ -129,13 +129,12 @@ const uiExportGroups = [
 ];
 // END groups.go
 
-// uiEscapeHTML makes a value safe inside innerHTML, as text or in a quoted
-// attribute. Labels carry text that remote devices control (LLDP names, SNMP
-// port names), so every server-provided string goes through it.
-const uiHTMLEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-function uiEscapeHTML(value) {
-    return String(value ?? '').replace(/[&<>"']/g, ch => uiHTMLEntities[ch]);
-}
+
+// The helpers app.js shares with the Tree tab are static/tree.js's, which
+// index.html loads after this file (they are called once the page runs):
+// treeEscapeHTML (every server-provided string in innerHTML), treeIsIPv4,
+// treeNodeIPs (a node's own addresses, ips[0] for Connect and History),
+// treeNodeName and treeTagText.
 
 // Other views of the graph data (the Tree tab, static/tree.js) add a
 // callback here; it runs after every /api/graph load and filter change.
@@ -184,32 +183,14 @@ function uiNodeText(d) {
     const m = d.managed;
     if (m && m.name) {
         const state = m.state && String(m.state).toUpperCase() !== 'ONLINE' ? ` · ${m.state}` : '';
-        return [m.name + state, uiNodeIPs(d)[0] || m.ip].filter(Boolean).join('\n');
+        return [m.name + state, treeNodeIPs(d)[0] || m.ip].filter(Boolean).join('\n');
     }
     // a virtual machine by its vCenter name (d.client)
-    if (d.client && d.client.kind === 'vm' && d.client.name) return [d.client.name, uiNodeIPs(d)[0] || d.client.ip].filter(Boolean).join('\n');
+    if (d.client && d.client.kind === 'vm' && d.client.name) return [d.client.name, treeNodeIPs(d)[0] || d.client.ip].filter(Boolean).join('\n');
     return d.hostname || d.sysName || d.label || d.id;
 }
 
-// uiIsIPv4 accepts a dotted quad with octets 0-255.
-function uiIsIPv4(s) {
-    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
-    return !!m && m.slice(1).every(octet => Number(octet) <= 255);
-}
 
-// uiNodeIPs lists the node's own addresses: the id when it is an IP, then
-// every label line that is exactly an IPv4 address, in label order (the
-// SNMP/ARP IP comes first; enrichGraphWithIPs appends the cache IP after it).
-// A "VMs: a, b" line (a hypervisor's guests) or SysDesc text is not the
-// node's address. Connect, History and the info panel all use ips[0].
-function uiNodeIPs(node) {
-    const ips = node.ip ? [node.ip] : [];
-    (node.sysName || node.label || '').split('\n').forEach(line => {
-        const s = line.trim();
-        if (uiIsIPv4(s) && !ips.includes(s)) ips.push(s);
-    });
-    return ips;
-}
 
 // uiRenderNodeLabel (re)builds the tspans of one node label when its text
 // changed, so later IP/DNS/ESXi enrichment shows up on the canvas.
@@ -1079,8 +1060,8 @@ function loadEvents() {
                 return `<div class="event-item ${typeClass}">
                     <span class="event-icon">${icon}</span>
                     <div class="event-content">
-                        <div class="event-msg">${uiEscapeHTML(evt.message)}</div>
-                        <div class="event-time">${uiEscapeHTML(evt.time)}</div>
+                        <div class="event-msg">${treeEscapeHTML(evt.message)}</div>
+                        <div class="event-time">${treeEscapeHTML(evt.time)}</div>
                     </div>
                 </div>`;
             }).join('');
@@ -1162,10 +1143,10 @@ function uiHistoryURL(data, node) {
     const id = String(node.id);
     const at = treeUpstreamPort(sp, id);
     const upInfo = at ? sp.infos.get(at.device) : null;
-    const upIP = upInfo ? uiNodeIPs(upInfo.node)[0] : '';
+    const upIP = upInfo ? treeNodeIPs(upInfo.node)[0] : '';
     const params = new URLSearchParams();
     if (treeIsInfra(sp.infos.get(id))) {
-        const ip = uiNodeIPs(node)[0];
+        const ip = treeNodeIPs(node)[0];
         if (!ip) return '';
         params.set('id', ip);
         if (upIP) {
@@ -1180,7 +1161,7 @@ function uiHistoryURL(data, node) {
         params.set('for', sp.infos.get(id).label);
         params.set('shared', String(treePortDevices(sp, at.device, at.port).length));
         if (at.via.length) params.set('via', at.via.map(v => sp.infos.get(v).group).join(','));
-        const info = uiParseNodeInfo(node), ips = uiNodeIPs(node);
+        const info = uiParseNodeInfo(node), ips = treeNodeIPs(node);
         params.set('type', uiTypeText(node));
         if (info.vendor) params.set('vendor', info.vendor);
         if (ips.length) params.set('ip', ips.join(', '));
@@ -1224,7 +1205,7 @@ function connectToDevice() {
 
     const node = rawData.nodes.find(n => n.id === selectedNodeId);
     if (node) {
-        const ip = uiNodeIPs(node)[0];
+        const ip = treeNodeIPs(node)[0];
 
         if (ip) {
             connectedDeviceIP = ip;
@@ -1424,18 +1405,12 @@ if (typeof ResizeObserver !== 'undefined') {
 // node is, tags.go).
 const uiVendorTags = ['ENDPOINT', 'LLDP-EP', 'WiFi'];
 
-// uiTagText is a tag's text, as its label line shows it after the tag: the
-// detail (a VM's OS, a BMC's type, a hypervisor's or a hub's text) and the
-// vendor.
-function uiTagText(t) {
-    return [t.detail, t.vendor].filter(Boolean).join(' ');
-}
 
 // uiParseNodeInfo reads what the info panel shows of a node: vendor and
 // detail (BMC type, VM OS, hypervisor/hub text) from its tags (node.tags),
 // the DNS name and the first name line from its label lines (sysName, the
 // full label: label drops the other lines when a DNS name exists). Tag
-// lines, IP lines (uiNodeIPs) and "VMs:" lines are not names.
+// lines, IP lines (treeNodeIPs) and "VMs:" lines are not names.
 function uiParseNodeInfo(node) {
     const out = { vendor: '', detail: '', name: '', hostname: node.hostname || '' };
     let typeText = '';    // a hypervisor's text, e.g. 'VMware ESXi' or 'HPE ProLiant Server'
@@ -1457,7 +1432,7 @@ function uiParseNodeInfo(node) {
             if (!out.vendor) out.vendor = t.vendor || '';
             if (!brand && type !== 'BMC' && type !== 'IPMI' && type.includes(' ')) brand = type.split(/\s+/)[0];
         } else {
-            const text = uiTagText(t);
+            const text = treeTagText(t);
             if (!out.detail) out.detail = text;
             if (t.tag === 'HYPERVISOR' && !typeText) typeText = text;
         }
@@ -1466,7 +1441,7 @@ function uiParseNodeInfo(node) {
         const line = raw.trim();
         if (line.startsWith('[DNS]')) {
             if (!out.hostname) out.hostname = line.slice('[DNS]'.length).trim();
-        } else if (line && !line.startsWith('[') && !uiIsIPv4(line) && !line.startsWith('VMs:')) {
+        } else if (line && !line.startsWith('[') && !treeIsIPv4(line) && !line.startsWith('VMs:')) {
             if (!out.name) out.name = line;
         }
     });
@@ -1518,13 +1493,6 @@ function uiTypeText(node) {
     return (uiTypeNames[type] || type) + (info.detail ? ` · ${info.detail}` : '');
 }
 
-// uiNodeName: DNS name, else the first name line, else the node's IP, else its id.
-function uiNodeName(node) {
-    if (node.managed && node.managed.name) return node.managed.name;
-    if (node.client && node.client.kind === 'vm' && node.client.name) return node.client.name;
-    const info = uiParseNodeInfo(node);
-    return info.hostname || info.name || uiNodeIPs(node)[0] || node.id;
-}
 
 function showInfoPanel(node) {
     const panel = document.getElementById('infoPanel');
@@ -1534,7 +1502,7 @@ function showInfoPanel(node) {
     const info = uiParseNodeInfo(node);
     const sysName = (node.managed && node.managed.name) || (node.client && node.client.kind === 'vm' && node.client.name) || info.hostname || info.name;
     // Same address as Connect and History; further IP lines are listed after it
-    const ips = uiNodeIPs(node);
+    const ips = treeNodeIPs(node);
 
     // Get connected devices — grouped by this node's own port on each link
     const portMap = {}; // portKey → [{id, name, group}]
@@ -1656,7 +1624,7 @@ function showInfoPanel(node) {
                 const diff = Math.round((Date.now() - new Date(node.lastSeen).getTime()) / 60000);
                 lastSeenText = diff < 60 ? `${diff} min ago` : `${Math.round(diff/60)}h ago`;
             }
-            statusEl.innerHTML = `<span style="color:#ff4444;font-weight:bold">🔴 UNREACHABLE</span> <span style="color:#888;font-size:11px">Last seen: ${uiEscapeHTML(lastSeenText)}</span>`;
+            statusEl.innerHTML = `<span style="color:#ff4444;font-weight:bold">🔴 UNREACHABLE</span> <span style="color:#888;font-size:11px">Last seen: ${treeEscapeHTML(lastSeenText)}</span>`;
             statusEl.style.display = 'block';
         } else {
             const haBadge = node.haRole === 'active'
@@ -1679,11 +1647,11 @@ function showInfoPanel(node) {
             const peersHTML = peers.map(peer => {
                 const icon = groupIcons[peer.group] || '❓';
                 const shortName = peer.name.length > 28 ? peer.name.substring(0, 26) + '…' : peer.name;
-                return `<div class="info-list-item info-peer-item" data-node-id="${uiEscapeHTML(peer.id)}"
-                    title="${uiEscapeHTML(peer.id)}\nClick to highlight"
+                return `<div class="info-list-item info-peer-item" data-node-id="${treeEscapeHTML(peer.id)}"
+                    title="${treeEscapeHTML(peer.id)}\nClick to highlight"
                     style="cursor:pointer; padding-left:20px; font-size:12px; background:rgba(255,255,255,0.03); margin:2px 0; border-radius:4px; border-left:2px solid rgba(74,144,226,0.3);">
-                    <span>${icon} ${uiEscapeHTML(shortName)}</span>
-                    <span style="color:#6c8ab0;font-size:10px">${uiEscapeHTML(peer.group)}</span>
+                    <span>${icon} ${treeEscapeHTML(shortName)}</span>
+                    <span style="color:#6c8ab0;font-size:10px">${treeEscapeHTML(peer.group)}</span>
                 </div>`;
             }).join('');
             return `
@@ -1691,7 +1659,7 @@ function showInfoPanel(node) {
                     <div style="font-size:11px; font-weight:600; color:#4A90E2; padding:3px 0 2px; 
                         border-bottom:1px solid rgba(74,144,226,0.2); display:flex; 
                         justify-content:space-between; align-items:center;">
-                        <span>🔌 ${uiEscapeHTML(portKey)}</span>
+                        <span>🔌 ${treeEscapeHTML(portKey)}</span>
                         <span style="color:#6c8ab0">${peers.length} device${peers.length>1?'s':''}</span>
                     </div>
                     ${peersHTML}
@@ -2187,8 +2155,8 @@ function loadExperimentResults() {
             }
             listDiv.innerHTML = data.files.map(f => `
             <div style="padding: 6px 10px; border-bottom: 1px solid #1a2a3a; display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #e0e0e0; font-size: 13px;">📄 ${uiEscapeHTML(f.name)}</span>
-                <span style="color: #666; font-size: 11px;">${uiEscapeHTML((f.size / 1024).toFixed(1))} KB · ${uiEscapeHTML(f.modified)}</span>
+                <span style="color: #e0e0e0; font-size: 13px;">📄 ${treeEscapeHTML(f.name)}</span>
+                <span style="color: #666; font-size: 11px;">${treeEscapeHTML((f.size / 1024).toFixed(1))} KB · ${treeEscapeHTML(f.modified)}</span>
             </div>
         `).join('');
         })
@@ -2238,7 +2206,7 @@ function uiShadowITEntries(data) {
         const sw = byId.get(switchId);
         let switchName = switchId || 'Unknown';
         if (sw) {
-            const name = uiNodeName(sw), ip = uiNodeIPs(sw)[0];
+            const name = treeNodeName(sw), ip = treeNodeIPs(sw)[0];
             switchName = ip && ip !== name ? `${name} (${ip})` : name;
         }
         entries.push({ hub, switchName, port });
@@ -2276,16 +2244,16 @@ function showShadowIT() {
 
         for (const [switchName, items] of bySwitch) {
             html += `<div class="shadow-switch-group">
-                <div class="shadow-switch-name">📡 ${uiEscapeHTML(switchName)}</div>`;
+                <div class="shadow-switch-name">📡 ${treeEscapeHTML(switchName)}</div>`;
 
             items.forEach(({ hub: node, port }) => {
                 const label = (node.label || node.id).replace(/\n/g, ' · ');
 
-                html += `<div class="shadow-item" data-node-id="${uiEscapeHTML(node.id)}">
+                html += `<div class="shadow-item" data-node-id="${treeEscapeHTML(node.id)}">
                     <span class="shadow-icon">👻</span>
                     <div class="shadow-info">
-                        <div class="shadow-label">${uiEscapeHTML(label)}</div>
-                        ${port ? `<div class="shadow-port">Port: ${uiEscapeHTML(port)}</div>` : ''}
+                        <div class="shadow-label">${treeEscapeHTML(label)}</div>
+                        ${port ? `<div class="shadow-port">Port: ${treeEscapeHTML(port)}</div>` : ''}
                     </div>
                     <span class="shadow-goto">→</span>
                 </div>`;
@@ -2433,7 +2401,7 @@ async function exportMermaid() {
     } catch (err) {
         console.error('Mermaid render error:', err);
         diagramArea.innerHTML = `<div style="color: #E24A4A; padding: 20px;">
-            ⚠️ Render error: ${uiEscapeHTML(err.message || 'Unknown error')}
+            ⚠️ Render error: ${treeEscapeHTML(err.message || 'Unknown error')}
             <br><br>
             <small style="color: #888;">Raw code is available below.</small>
         </div>`;
@@ -2545,8 +2513,8 @@ function renderEvents(events) {
         return `<div class="event-item ${cls}">
             <span class="event-icon">${icon}</span>
             <div class="event-content">
-                <div class="event-msg">${uiEscapeHTML(msg)}</div>
-                <div class="event-time">${uiEscapeHTML(time)}</div>
+                <div class="event-msg">${treeEscapeHTML(msg)}</div>
+                <div class="event-time">${treeEscapeHTML(time)}</div>
             </div>
         </div>`;
     }).join('');

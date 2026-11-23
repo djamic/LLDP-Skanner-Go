@@ -88,11 +88,7 @@ func (g *DJGraph) nodeEvidence(node, info string, facts classifyFacts) nodeEvide
 	_, ev.VoIP = g.graphVoIP[node]
 	ev.NotPhone = g.graphNotPhone[node]
 	ev.LLDPCaps = g.graphLLDPCaps[node]
-	if len(node) >= 8 && (strings.Contains(node, ":") || strings.Contains(node, "-")) {
-		if vendor := lookupVendor(node); vendor != "Unknown" {
-			ev.Category = categorizeVendor(vendor)
-		}
-	}
+	ev.Category = idCategory(node)
 	if mac := canonicalMAC(node); mac != "" {
 		ev.Managed = facts.byMAC[mac]
 	}
@@ -104,6 +100,17 @@ func (g *DJGraph) nodeEvidence(node, info string, facts classifyFacts) nodeEvide
 		ev.ManagedIP, ev.Declared = facts.byIP[ip], facts.declared[ip]
 	}
 	return ev
+}
+
+// idCategory is the OUI category (categorizeVendor) of a node id's vendor
+// when the id is a MAC of a known vendor, else "".
+func idCategory(id string) string {
+	if len(id) >= 8 && (strings.Contains(id, ":") || strings.Contains(id, "-")) {
+		if vendor := lookupVendor(id); vendor != "Unknown" {
+			return categorizeVendor(vendor)
+		}
+	}
+	return ""
 }
 
 // managedKindGroups are the groups of the kinds a controller manages a

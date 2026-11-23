@@ -1682,31 +1682,33 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 
 
 // lldpTargetRole is what an LLDP neighbor is to a port's hub plan
-// (lldpPortPlans), by the evidence and the order classifyNode reads: the
-// kind a controller manages it as (with rules.ControllerKindWins), else its
-// OUI category, else its LLDP capabilities (an access point's bit with
-// rules.LLDPCaps). isSwitch says a switch is behind the port (a
+// (lldpPortPlans): an access point when classifyNode groups it one (the
+// kind a controller manages it as, its OUI category, its access point bit
+// with rules.LLDPCaps). isSwitch says a switch is behind the port (a
 // controller's switch or gateway, a router-only neighbor, a bridge that is
 // no access point: no hub, whatever rules.LLDPCaps draws it as); isPhone a
 // phone (a PBX's, the voip engine's, a telephone bit that is no VoIP
 // maker's other product).
 func lldpTargetRole(target string, n LLDPNeighbor, rules ClassifySettings) (isAP, isSwitch, isPhone bool) {
 	caps := n.RemSysCapEnabled
+	// An LLDP endpoint's evidence, as its node will have it: classifyNode
+	// tells whether it is an access point
+	ev := nodeEvidence{ID: target, Tags: []nodeTag{{Tag: tagLLDPEndpoint}}, Category: idCategory(target), LLDPCaps: caps}
 	told := ""
 	if rules.ControllerKindWins {
 		if v := managedViewOf(target); v != nil {
-			told = managedKindGroups[v.Kind]
+			ev.Managed, told = v.Kind, managedKindGroups[v.Kind]
 		}
 	}
+	isAP = classifyNode(ev, rules) == "access_point"
 	if told != "" {
-		return told == "access_point", told == "lldp_switch" || told == "router", told == "phone"
+		return isAP, told == "lldp_switch" || told == "router", told == "phone"
 	}
-	isAP = categorizeVendor(lookupVendor(target)) == "access_point" || rules.LLDPCaps && caps&lldpCapWLANAP != 0
 	routerOnly := caps&lldpCapRouter != 0 && caps&lldpCapBridge == 0
 	isSwitch = routerOnly || lldpDiscoverable(caps) && !isAP
-	ev := voipEvidence(target, n, "")
-	_, phone := voip.Detect(ev)
-	isPhone = phone || caps&lldpCapPhone != 0 && !voip.Excluded(ev)
+	vev := voipEvidence(target, n, "")
+	_, phone := voip.Detect(vev)
+	isPhone = phone || caps&lldpCapPhone != 0 && !voip.Excluded(vev)
 	return isAP, isSwitch, isPhone
 }
 
@@ -1846,11 +1848,20 @@ func graphFDBEndpointLabel(mac string, macToIP map[string]string, data *DeviceDa
 // graphLabelIP is the first label line that is an IP address, or "".
 func graphLabelIP(info string) string {
 	for _, line := range strings.Split(info, "\n") {
-		if net.ParseIP(line) != nil {
+		if line = strings.TrimSpace(line); net.ParseIP(line) != nil {
 			return line
 		}
 	}
 	return ""
+}
+
+// nodeIP is a graph data node's IP: its id's when the id is one (n.IP),
+// else the first IP line of its label.
+func nodeIP(n GraphNode) string {
+	if n.IP != "" {
+		return n.IP
+	}
+	return graphLabelIP(n.SysName)
 }
 
 // graphAddFDBEndpoint creates the node of an FDB MAC unless an earlier port
@@ -2018,6 +2029,18 @@ func normalizePortName(name string) string {
 // normalizePortForHypervisor returns a lowercase canonical port key for grouping.
 // It delegates to normalizePortName so there is one source of truth.
 // Example: "GigabitF1/0/26" and "GE1/0/26" both → "ge1/0/26"
+// edgePortKey is the local port an edge label starts with, as a
+// hypervisor port key (normalizePortForHypervisor): "GE1/0/4 [T] ↓1M ↑0M",
+// "ge1/0/4" and "GE1/0/4 [V100]|eth0" all give "ge1/0/4"; "" when there is
+// none. The hypervisor detection keys a port's VMs and hosts by it, and the
+// report finds a host's hyp- node by it.
+func edgePortKey(label string) string {
+	if port := graphEdgePort(label); port != "" {
+		return normalizePortForHypervisor(port)
+	}
+	return ""
+}
+
 func normalizePortForHypervisor(port string) string {
 	return strings.ToLower(normalizePortName(port))
 }
@@ -3822,16 +3845,14 @@ func detectHypervisors(graph *DJGraph) {
 			}
 			// Port from the edge label ("GE1/0/26 [T]|eth0" → "GE1/0/26"); a
 			// hub member's edge has no label, so the hub's uplink port is used
-			port := graphEdgePort(targets[tgt])
-			if port == "" && fromHub {
-				port = graphHubUplinkPort(graph, src)
+			portKey := edgePortKey(targets[tgt])
+			if portKey == "" {
+				port := "port"
+				if up := graphHubUplinkPort(graph, src); fromHub && up != "" {
+					port = up
+				}
+				portKey = normalizePortForHypervisor(port)
 			}
-			if port == "" {
-				port = "port"
-			}
-			// Normalize port name: GigabitEthernet1/0/26 → GE1/0/26
-			// GigabitF1/0/26 → GE1/0/26, Ten-GE1/0/49 → TE1/0/49
-			portKey := normalizePortForHypervisor(port)
 			if isHost {
 				if portHosts[src] == nil {
 					portHosts[src] = map[string][]string{}

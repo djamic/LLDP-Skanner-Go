@@ -66,7 +66,7 @@ func addVoIPProfiles(data *GraphData, graph *DJGraph) {
 		if prof, ok := graph.graphVoIP[n.ID]; ok && n.Group == "phone" {
 			p := prof
 			if p.IP == "" {
-				p.IP = cmp.Or(n.IP, graphLabelIP(n.SysName))
+				p.IP = nodeIP(*n)
 			}
 			n.VoIP = &p
 			continue
@@ -75,7 +75,7 @@ func addVoIPProfiles(data *GraphData, graph *DJGraph) {
 			if brand, ok := voip.BrandForDedicatedVendor(lookupVendor(n.ID)); ok {
 				n.VoIP = &voip.Profile{
 					Brand:  brand,
-					IP:     cmp.Or(n.IP, graphLabelIP(n.SysName)),
+					IP:     nodeIP(*n),
 					Source: "oui:" + strings.ToLower(brand),
 				}
 			}

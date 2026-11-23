@@ -14,7 +14,6 @@ import (
 	"log"
 	"maps"
 	"math"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -1000,7 +999,7 @@ func GenerateHypervisorDiagrams(graph *DJGraph) string {
 		// Hypervisor node (cyan hexagon), with the host's own NIC(s)
 		hypDisplayLabel := strings.ReplaceAll(hyp.Label, "\n", "<br>")
 		for _, nic := range hostNICs[hyp.ID] {
-			if ip := reportNodeIP(nodeByID[nic]); ip != "" {
+			if ip := nodeIP(nodeByID[nic]); ip != "" {
 				hypDisplayLabel += fmt.Sprintf("<br>Host: %s (%s)", nic, ip)
 			} else {
 				hypDisplayLabel += "<br>Host: " + nic
@@ -1092,7 +1091,7 @@ func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts ma
 	hypOnPort := map[string][]string{} // switch node + "|" + port → hyp- nodes
 	for _, l := range data.Links {
 		if nodeSyntheticKind(nodes[l.Target]) == syntheticHyp {
-			if port := reportEdgePort(l.Label); port != "" {
+			if port := edgePortKey(l.Label); port != "" {
 				key := l.Source + "|" + port
 				hypOnPort[key] = append(hypOnPort[key], l.Target)
 			}
@@ -1109,7 +1108,7 @@ func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts ma
 			covered[n.ID] = true
 			continue
 		}
-		for _, hyp := range hypOnPort[l.Source+"|"+reportEdgePort(l.Label)] {
+		for _, hyp := range hypOnPort[l.Source+"|"+edgePortKey(l.Label)] {
 			covered[n.ID] = true
 			hosts[hyp] = append(hosts[hyp], n.ID)
 		}
@@ -1119,32 +1118,6 @@ func reportHypervisorHosts(data GraphData, nodes map[string]GraphNode) (hosts ma
 		hosts[hyp] = slices.Compact(nics)
 	}
 	return hosts, covered
-}
-
-// reportEdgePort returns the local port an edge label starts with, as a
-// hypervisor port key: "GE1/0/4 [T] ↓1M ↑0M", "ge1/0/4" and
-// "GE1/0/4 [V100]|eth0" all give "ge1/0/4"; "" when there is none.
-func reportEdgePort(label string) string {
-	local, _, _ := strings.Cut(label, "|")
-	fields := strings.Fields(local)
-	if len(fields) == 0 {
-		return ""
-	}
-	return strings.ToLower(normalizePortName(fields[0]))
-}
-
-// reportNodeIP returns a node's IP: its id when that is an IP, else the
-// first label line that is an IP address.
-func reportNodeIP(n GraphNode) string {
-	if n.IP != "" {
-		return n.IP
-	}
-	for _, line := range strings.Split(n.SysName, "\n") {
-		if trimmed := strings.TrimSpace(line); net.ParseIP(trimmed) != nil {
-			return trimmed
-		}
-	}
-	return ""
 }
 
 // sanitizeMermaidID creates a safe mermaid node ID
@@ -1354,7 +1327,7 @@ func generateAuditMD(groups []string) string {
 					info = lines[0]
 				}
 
-				ip := reportNodeIP(n)
+				ip := nodeIP(n)
 
 				conn := connectedTo[n.ID]
 				if conn == "" {

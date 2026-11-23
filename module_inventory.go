@@ -173,7 +173,7 @@ func addManaged(data *GraphData) {
 		n := &data.Nodes[i]
 		n.Managed = managedViewOf(n.ID)
 		if n.Managed == nil && !groupInfra(n.Group) {
-			n.Managed = managedViewByIP(cmp.Or(n.IP, graphLabelIP(n.SysName)))
+			n.Managed = managedViewByIP(nodeIP(*n))
 		}
 		if n.Managed != nil {
 			n.Group = managedGroup(n.Group, n.Managed.Kind)
