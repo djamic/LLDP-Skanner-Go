@@ -115,12 +115,12 @@ second copy appears or a copy drifts.
 | What is behind a switch port? | `fdbPorts` + `lldpPortPlans` (`example_usage.go`), the LLDP neighbors per port from `lldpPortTargets` | graph, Shadow-IT alerts, report section 7, experiment metrics, UI modal | `TestShadowITOneRule`, `TestShadowITVCenterHost`, `TestPhonePCs` |
 | Which alert is a Shadow-IT hub, is it ignored? | `shadowITIssueID` (`analyzer.go`), kept on the hub as `syntheticNode.Issue`; `IsIssueIgnored` (`ignored_issues.go`) | alerts, audit report (`reportHubIsShadowIT`), UI modal (`node.ignored`, `GraphNode.Ignored`) | `TestShadowITIgnored` |
 | Which port links a device another switch's FDB learns (a switch, a router node, a managed access point)? | `fdbLinkPorts` (`example_usage.go`): the MACs per port; the port with the fewest wins | `addMACCrossRefEdges`, `gatewayPort`, `managedFDBPort` | `TestFDBLinkPorts` |
-| How is a port named and matched across vendors? | `normalizePortName`, `lldpSamePort` (`example_usage.go`) | link labels, `GetGraphData`, hypervisor keys, traffic refresh, `/api/history` | `TestLLDPRemotePortName`, `TestFillTargetPort`, `TestLLDPReverseFarPort`, `TestGoldenScenarioTables` |
+| How is a port named and matched across vendors? | `lldpRemotePortName`, `normalizePortName`, `lldpSamePort` (`example_usage.go`) | link labels, `GetGraphData`, hypervisor keys, traffic refresh, `/api/history` | `TestLLDPRemotePortName`, `TestFillTargetPort`, `TestLLDPReverseFarPort`, `TestGoldenScenarioTables` |
 | Is a port a NULL0/loopback/CPU port? | `isNullInterface` (the name as it is and normalized) | every LLDP and FDB reader | `TestFDBLinkPorts`, `TestCollectNullInterface` |
 | Where is a switch's FDB read from? | `collectMACTable` (`snmp_object.go`): `dot1dTpFdbPort`, else `dot1qTpFdbPort` deduplicated per `(MAC, port)` | `CollectData` | `TestCollectFDBIndex` |
 | Is a MAC an ESXi host's NIC? | `graphIsESXiHostNIC` | `fdbPorts`, `lldpPortPlans`, report, `GraphNode.ESXi` (UI) | `TestShadowITVCenterHost` |
 | Who made this MAC, what kind is it? | `mac_identity.go` (`ouiRegistry`, `categorizeVendor`, `IdentifyMAC`) | classification, labels, subnet discovery | `TestOUI*`, `golden_predicates` |
-| What does a sysName/sysDescr say? | `sysTextWords` (`systext.go`) | report vendor, switch-platform guard, Zabbix templates | `TestSysTextWords` |
+| What does a sysName/sysDescr say? | `sysTextWords` (`systext.go`) | report vendor, switch-platform guard, Huawei far-port name, Zabbix templates | `TestSysTextWords`, `TestLLDPRemotePortName` |
 | Is a phone a phone? | `modules/voip` (`Detect`, `Excluded`) | classification, LLDP hub plans | `modules/voip` tests |
 | Is a polled device a switch? | `checkSwitch`, `switchMIBs.isSwitch` (`switch_qualify.go`) | every path that adds a device | `switch_qualify_test.go` |
 | How is a health score named and coloured? | `healthTiers`, `healthTierOf`, `GetHealthLabel` (`analyzer.go`) | console, Telegram, analysis and audit reports; UI widget (`uiHealthTiers`, generated) | `TestHealthTiers`, `TestGroupTables` |
@@ -1003,7 +1003,7 @@ use it. Generated — do not edit by hand.
 #### `systext.go`
 
 - **`sysTextWord`** type — sysTextWord is one word of sysTextWords. ← sysTextSwitchOS
-- **`sysTextVendor`** func — sysTextVendor is the vendor the first of texts that names one names (sysTextWords), "" when none does. ← DJGraph.GenerateZabbixTemplate, reportDeviceVendor
+- **`sysTextVendor`** func — sysTextVendor is the vendor the first of texts that names one names (sysTextWords), "" when none does. ← DJGraph.GenerateZabbixTemplate, lldpRemotePortName, reportDeviceVendor
 - **`sysTextSwitchOS`** func — sysTextSwitchOS reports whether text names a switch platform. ← graphIsSwitchNode
 
 #### `tags.go`

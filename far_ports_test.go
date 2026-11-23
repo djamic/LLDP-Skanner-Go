@@ -67,6 +67,22 @@ func TestLLDPRemotePortName(t *testing.T) {
 			t.Errorf("%s: lldpRemotePortName = %q (label %q), want %q (label %q)", c.name, got, normalizePortName(got), c.want, c.wantLabel)
 		}
 	}
+
+	// Huawei VRP switches put the admin's interface description ("UpLink->Core")
+	// in lldpRemPortDesc while lldpRemPortId (subtype 5) holds the port name;
+	// non-Huawei switches (HPE) keep lldpRemPortDesc.
+	for _, c := range []struct {
+		n         LLDPNeighbor
+		wantLabel string
+	}{
+		{LLDPNeighbor{RemPortIdSubtype: 5, RemPortId: `"XGigabitEthernet0/0/1"`, RemPortDesc: `"UpLink->Core"`, RemSysName: "L4Acc4_5", RemSysDesc: "Huawei Switch S5735-L48P4X-A"}, "XGE0/0/1"},
+		{LLDPNeighbor{RemPortIdSubtype: 5, RemPortId: `"GigabitEthernet1/0/47"`, RemPortDesc: `"B-318/3"`, RemSysName: "B-318/1", RemSysDesc: "HPE Comware Platform Software"}, "B-318/3"},
+		{LLDPNeighbor{RemPortIdSubtype: 3, RemPortId: "48 EA 62 3C BE 2B", RemPortDesc: `"eth0"`, RemSysName: "ap", RemSysDesc: "Huawei AP"}, "eth0"},
+	} {
+		if got := normalizePortName(lldpRemotePortName(c.n)); got != c.wantLabel {
+			t.Errorf("Huawei/HPE RemSysDesc (%q): label = %q, want %q", c.n.RemSysDesc, got, c.wantLabel)
+		}
+	}
 }
 
 // TestFixtureFarPorts runs the far-port rule on every accepted LLDP

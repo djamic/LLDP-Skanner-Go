@@ -1393,9 +1393,17 @@ func graphAddLLDPEndpoint(graph *DJGraph, targetID, displayName string, neighbor
 // or blanks has no text: the SNR switches (f8:f0:82) send an empty one as
 // `""`, so 172.20.230.51 sees 172.20.230.254 with lldpRemPortDesc `""` and
 // lldpRemPortId "Ethernet1/0/10", and the far port used to stay empty. A
-// description or port id that is the neighbor's sysName names no port.
+// description or port id that is the neighbor's sysName names no port. On
+// Huawei VRP agents, lldpRemPortDesc carries the admin's interface
+// description ("UpLink->Core") while lldpRemPortId (subtype 5,
+// interfaceName) holds the interface name ("XGigabitEthernet0/0/1").
 func lldpRemotePortName(neighbor LLDPNeighbor) string {
 	sysName := strings.TrimSpace(neighbor.RemSysName)
+	if neighbor.RemPortIdSubtype == 5 && sysTextVendor(neighbor.RemSysDesc) == "Huawei" {
+		if id := lldpPortIDName(neighbor); id != "" && id != sysName {
+			return id
+		}
+	}
 	if desc := cleanSNMPValue(neighbor.RemPortDesc); desc != "" && desc != sysName {
 		return desc
 	}
