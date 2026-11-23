@@ -63,7 +63,9 @@ secrets/
 results/
 captures/
 export/
-docs/
+# docs/ is local notes, apart from the README screenshots
+docs/*
+!docs/screenshots/
 .claude/
 *.docx
 *.bak*
