@@ -364,18 +364,18 @@ func TestCollectBridgePortIfIndex(t *testing.T) {
 // quoted "NULL0" is still the discard interface.
 func TestCollectNullInterface(t *testing.T) {
 	for name, want := range map[string]bool{
-		"NULL0":                    true,
-		"\"NULL0\"":                true,
-		"\"Null0\"":                true,
-		" \"NULL0\" ":              true,
-		"\"InLoopBack0\"":                       true,
+		"NULL0":                                  true,
+		"\"NULL0\"":                              true,
+		"\"Null0\"":                              true,
+		" \"NULL0\" ":                            true,
+		"\"InLoopBack0\"":                        true,
 		"\" CPU Interface for Slot: 5 Port: 1\"": true,
-		"\"\"":                                  true,
-		"Port 0":                   true,
-		"\"GigabitEthernet0/0/1\"": false,
-		"\"Vlanif1\"":              false,
-		"GigabitEthernet1/0/1":     false,
-		"Port 7":                   false,
+		"\"\"":                                   true,
+		"Port 0":                                 true,
+		"\"GigabitEthernet0/0/1\"":               false,
+		"\"Vlanif1\"":                            false,
+		"GigabitEthernet1/0/1":                   false,
+		"Port 7":                                 false,
 	} {
 		if got := isNullInterface(name); got != want {
 			t.Errorf("isNullInterface(%q) = %v, want %v", name, got, want)
