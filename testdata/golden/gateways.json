@@ -24,8 +24,8 @@
       "edges_added": ["4c:ae:a3:8d:ee:c9 -> 00:0c:29:98:7b:c2 : \"TGE1/0/52 [MAC-REF]|eth0\"", "4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e6:08 : \"TGE1/0/52 [T] 10G|LAN\""],
       "edges_removed": ["4c:ae:a3:a2:09:8c -> 68:cc:ae:96:e5:e8 : \"TGE1/0/52 [T] 10G|LAN\""],
       "nodes_added": ["00:0c:29:98:7b:c2", "68:cc:ae:96:e6:08"],
-      "nodes_after": 1344,
-      "nodes_before": 1343,
+      "nodes_after": 1345,
+      "nodes_before": 1344,
       "nodes_removed": ["68:cc:ae:96:e5:e8"]
     },
     "health": {

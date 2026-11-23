@@ -4,10 +4,10 @@
   ],
   "all_filter": {
     "fixture": {
-      "kept_by_group": {"access_point": 124, "ap_hub": 10, "bmc": 4, "camera": 57, "endpoint": 774, "hub": 66, "hypervisor": 14, "minihub": 6, "mobile": 1, "phone": 18, "printer": 1, "switch": 75, "vm": 69, "wifi_random": 124},
-      "kept_links": 1340,
-      "links": 1340,
-      "nodes_by_group": {"access_point": 124, "ap_hub": 10, "bmc": 4, "camera": 57, "endpoint": 774, "hub": 66, "hypervisor": 14, "minihub": 6, "mobile": 1, "phone": 18, "printer": 1, "switch": 75, "vm": 69, "wifi_random": 124}
+      "kept_by_group": {"access_point": 124, "ap_hub": 10, "bmc": 4, "camera": 57, "endpoint": 775, "hub": 66, "hypervisor": 14, "minihub": 6, "mobile": 1, "phone": 18, "printer": 1, "switch": 75, "vm": 69, "wifi_random": 124},
+      "kept_links": 1341,
+      "links": 1341,
+      "nodes_by_group": {"access_point": 124, "ap_hub": 10, "bmc": 4, "camera": 57, "endpoint": 775, "hub": 66, "hypervisor": 14, "minihub": 6, "mobile": 1, "phone": 18, "printer": 1, "switch": 75, "vm": 69, "wifi_random": 124}
     },
     "rule": {
       "kept_by_group": {"endpoint": 59, "hub": 7, "hypervisor": 3, "minihub": 1, "switch": 2, "vm": 7, "wifi_random": 4},
@@ -28,7 +28,7 @@
       "kept": 38,
       "neighbors": 37,
       "node": "4c:ae:a3:27:6d:8a",
-      "nodes": 1343
+      "nodes": 1344
     },
     {
       "graph": "ui",

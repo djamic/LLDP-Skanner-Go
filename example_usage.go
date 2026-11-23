@@ -995,6 +995,23 @@ type lldpPortPlan struct {
 	Phone   string            // the daisy chain's phone, the other neighbor behind it
 }
 
+// lldpPortTargets are a switch's accepted LLDP neighbors
+// (graphLLDPNeighborTarget) by local port (ifIndex) and node id: the hub
+// plans of ports with several (lldpPortPlans) and the phones' PC ports
+// (fdbPorts, phonePCs) read them.
+func lldpPortTargets(data *DeviceData) map[int]map[string]LLDPNeighbor {
+	rows := make(map[int]map[string]LLDPNeighbor)
+	for _, n := range data.Neighbors {
+		if target, _, ok := graphLLDPNeighborTarget(data, n); ok {
+			if rows[n.LocalPortNum] == nil {
+				rows[n.LocalPortNum] = make(map[string]LLDPNeighbor)
+			}
+			rows[n.LocalPortNum][target] = n
+		}
+	}
+	return rows
+}
+
 // lldpPortPlans are the ports of a switch (by ifIndex, the LLDP local port)
 // where several distinct LLDP neighbors are seen, with the Classification
 // choice lldpHubs (none without it). Neighbors on one port that are no
@@ -1019,15 +1036,7 @@ func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldp
 	if !rules.LLDPHubs {
 		return nil
 	}
-	rows := make(map[int]map[string]LLDPNeighbor)
-	for _, n := range data.Neighbors {
-		if target, _, ok := graphLLDPNeighborTarget(data, n); ok {
-			if rows[n.LocalPortNum] == nil {
-				rows[n.LocalPortNum] = make(map[string]LLDPNeighbor)
-			}
-			rows[n.LocalPortNum][target] = n
-		}
-	}
+	rows := lldpPortTargets(data)
 	ownMAC, selfID := graphChassisKey(data.ChassisID), graphDeviceNodeID(data)
 	esxiOn := make(map[int]bool)
 	for _, e := range data.MACTable {
@@ -1256,7 +1265,11 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 				graph.AddNode(nodeID)
 				graph.SwitchInfo[nodeID] = tag.line() + "\n" + count
 				graphSetTags(graph, nodeID, tag)
-				graphSetSynthetic(graph, nodeID, syntheticNode{Kind: syntheticHub, Switch: srcID, BridgePort: p.Port})
+				hub := syntheticNode{Kind: syntheticHub, Switch: srcID, BridgePort: p.Port}
+				if p.Kind == fdbHub {
+					hub.Issue = shadowITIssueID(data.IP, p.Port)
+				}
+				graphSetSynthetic(graph, nodeID, hub)
 			}
 			graph.AddEdge(srcID, nodeID, edgeLabel)
 
@@ -1271,6 +1284,15 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 			}
 			for _, mac := range macs {
 				graphAddFDBEndpoint(graph, data, macToIP, nodeID, mac, "")
+			}
+			continue
+		}
+
+		// The device on an IP phone's PC port (phonePCs) is linked from the
+		// phone, as the device of a daisy chain LLDP shows is
+		if p.Phone != "" {
+			for _, mac := range p.MACs {
+				graphAddFDBEndpoint(graph, data, macToIP, p.Phone, mac, "")
 			}
 			continue
 		}
@@ -1482,6 +1504,10 @@ type fdbPort struct {
 	LLDP []string
 	APs  int
 	Kind fdbPortKind
+	// Phone is the IP phone a direct port's one device is behind (the
+	// Classification choice phonePCs): it is linked from the phone, not
+	// the switch
+	Phone string
 	// Candidate: at least 2 MACs on a port that has no accepted LLDP
 	// neighbor and is no trunk or uplink, so a hub unless it is a VM or
 	// ESXi port (the experiment's shadow_it_raw counts these)
@@ -1497,7 +1523,8 @@ type fdbPort struct {
 // neighbors, the own MACs of the switch and of the other polled switches
 // (switchMACs, buildSwitchOwnMACs: chassis MACs and ARP aliases) and
 // isInvalidID ones. A port with an accepted LLDP neighbor or a NULL0 name
-// gets nothing. A VM-majority port is direct (also on a trunk or with more
+// gets nothing, but for the one device on a port whose only LLDP neighbor
+// is an IP phone (lldpTargetRole), which is behind the phone (phonePCs). A VM-majority port is direct (also on a trunk or with more
 // than 20 MACs, unless another switch's MAC is learned there). At most 3
 // MACs are direct on any other port. A port with more where another polled
 // switch's MAC is learned is an uplink to it (Netdisco's and FortiNAC's
@@ -1521,6 +1548,21 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 			isRouterOnly := n.RemSysCapEnabled&lldpCapRouter != 0 && n.RemSysCapEnabled&lldpCapBridge == 0
 			if _, polled := switchMACs[target]; polled || isRouterOnly {
 				lldpSwitchPorts[n.LocalPortNum] = true
+			}
+		}
+	}
+	// The ports whose only LLDP neighbor is an IP phone (phonePCs): a device
+	// learned there is on the phone's PC port
+	phoneOn := make(map[int]string) // ifIndex → the phone's node id
+	if rules := currentClassify(); rules.PhonePCs {
+		for port, targets := range lldpPortTargets(data) {
+			if len(targets) != 1 || lldpSwitchPorts[port] {
+				continue
+			}
+			for target, n := range targets {
+				if _, _, isPhone := lldpTargetRole(target, n, rules); isPhone {
+					phoneOn[port] = target
+				}
 			}
 		}
 	}
@@ -1611,6 +1653,13 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 			}
 			planned[ifIdx] = len(out)
 			out = append(out, fdbPort{Port: portNum, MACs: macs, LLDP: plan.Targets, APs: plan.APs, Kind: plan.Kind, Candidate: plan.Kind == fdbHub})
+			continue
+		}
+
+		// The one device of a port whose only LLDP neighbor is an IP phone:
+		// behind the phone (phonePCs)
+		if phone := phoneOn[ifIdx]; phone != "" && len(macs) == 1 {
+			out = append(out, fdbPort{Port: portNum, MACs: macs, Kind: fdbDirect, Phone: phone})
 			continue
 		}
 
@@ -1902,8 +1951,15 @@ func getFDBPortName(data *DeviceData, bridgePort int) string {
 
 // isNullInterface returns true if the interface name is NULL0 or similar
 // virtual discard interface that should be excluded from the topology graph.
-// IfDescr is stored quoted ("\"NULL0\""), so quotes are ignored (F61).
+// IfDescr is stored quoted ("\"NULL0\""), so quotes are ignored (F61). The
+// name is checked as it is and as normalizePortName gives it (a MAC prefix
+// dropped, "<mac>:NULL0"), so every caller has the same answer.
 func isNullInterface(name string) bool {
+	return nullInterfaceName(name) || nullInterfaceName(normalizePortName(name))
+}
+
+// nullInterfaceName is isNullInterface for one form of the name.
+func nullInterfaceName(name string) bool {
 	low := strings.ToLower(strings.Trim(name, "\" \t"))
 	return low == "null0" || low == "null 0" ||
 		strings.HasPrefix(low, "null") ||
@@ -2938,12 +2994,8 @@ func refreshGraphEdgeLabels() {
 		}
 		for tgtNode, label := range targets {
 			// Label format: "GE1/0/5 [V1612] 1G ↓5M ↑3M|GE1/0/1"
-			parts := strings.SplitN(label, "|", 2)
-			srcPart := parts[0]
-			dstPart := ""
-			if len(parts) > 1 {
-				dstPart = parts[1]
-			}
+			// (a label with an empty far side keeps its "|": "GE1/0/5 [V10]|")
+			srcPart, dstPart, hasFar := strings.Cut(label, "|")
 
 			// Strip existing traffic info (↓...↑...)
 			trafficIdx := strings.Index(srcPart, "↓")
@@ -2971,8 +3023,8 @@ func refreshGraphEdgeLabels() {
 			}
 
 			// Reconstruct label in the clone
-			if dstPart != "" {
-				newEdges[srcNode][tgtNode] = fmt.Sprintf("%s|%s", srcPart, dstPart)
+			if hasFar {
+				newEdges[srcNode][tgtNode] = srcPart + "|" + dstPart
 			} else {
 				newEdges[srcNode][tgtNode] = srcPart
 			}
@@ -3429,6 +3481,47 @@ func switchARPAliases(devices map[string]*DeviceData, chassis map[string]string)
 	return aliases
 }
 
+// fdbLinkPorts is a polled switch's FDB as the link rules read it: the
+// usable MACs learned on each bridge port, NULL0 ports (isNullInterface)
+// left out, and, when polled (buildSwitchOwnMACs) is given, the ports whose
+// LLDP neighbor is a polled switch: LLDP draws that link. A switch learned
+// in another switch's FDB (addMACCrossRefEdges), a router node (gatewayPort)
+// and a managed access point (managedFDBPort) are linked from one of these
+// ports, the one with the fewest MACs (then the first switch in IP order,
+// then the lower port). gatewayPort and managedFDBPort give no polled: the
+// port LLDP names a polled gateway on is its own port, and a port toward
+// another switch learns that switch too (gatewayPort's one-device test) or
+// more MACs than the device's own.
+func fdbLinkPorts(d *DeviceData, polled map[string]string) map[int]map[string]bool {
+	lldpSwitchPorts := make(map[int]bool) // by ifIndex, the LLDP local port
+	for _, n := range d.Neighbors {
+		if target, _, ok := graphLLDPNeighborTarget(d, n); ok {
+			if _, isPolled := polled[target]; isPolled {
+				lldpSwitchPorts[n.LocalPortNum] = true
+			}
+		}
+	}
+	ports := make(map[int]map[string]bool)
+	skip := make(map[int]bool) // looked up once per port
+	for _, e := range d.MACTable {
+		port := e.PortNumber
+		out, seen := skip[port]
+		if !seen {
+			out = isNullInterface(getFDBPortName(d, port)) || lldpSwitchPorts[collectFDBIfIndex(d, port)]
+			skip[port] = out
+		}
+		mac := usableMAC(e.MACAddress)
+		if out || mac == "" {
+			continue
+		}
+		if ports[port] == nil {
+			ports[port] = make(map[string]bool)
+		}
+		ports[port][mac] = true
+	}
+	return ports
+}
+
 // addMACCrossRefEdges links the switches that LLDP does not link (LLDP off,
 // or no LLDP between them) through the FDBs: a switch whose own MAC
 // (buildSwitchOwnMACs: its chassis MAC or an ARP alias) another switch learned
@@ -3466,46 +3559,18 @@ func addMACCrossRefEdges(graph *DJGraph, allDevices map[string]*DeviceData, swit
 		srcDevice := allDevices[srcIP]
 		srcID := graphDeviceNodeID(srcDevice)
 
-		// The ports (ifIndex) whose LLDP neighbor is a polled switch
-		lldpSwitchPorts := make(map[int]bool)
-		for _, n := range srcDevice.Neighbors {
-			if target, _, ok := graphLLDPNeighborTarget(srcDevice, n); ok {
-				if _, polled := switchMACs[target]; polled {
-					lldpSwitchPorts[n.LocalPortNum] = true
-				}
-			}
-		}
-
-		// The MACs and the other switches learned on each port. NULL0
-		// interfaces (virtual discard ports, also when only the normalized
-		// name tells) are no connection.
-		portMACs := make(map[int]map[string]bool)
+		// The MACs learned on each port (no NULL0 port, no port LLDP names
+		// a polled switch on), and the other switches learned there
+		portMACs := fdbLinkPorts(srcDevice, switchMACs)
 		portSwitches := make(map[int]map[string]bool)
-		nullPorts := make(map[int]bool)
-		for _, macEntry := range srcDevice.MACTable {
-			port := macEntry.PortNumber
-			null, seen := nullPorts[port]
-			if !seen {
-				name := getFDBPortName(srcDevice, port)
-				null = isNullInterface(name) || isNullInterface(normalizePortName(name))
-				nullPorts[port] = null
-			}
-			if null || lldpSwitchPorts[collectFDBIfIndex(srcDevice, port)] {
-				continue // no connection, or LLDP names the switch on this port
-			}
-			mac := usableMAC(macEntry.MACAddress)
-			if mac == "" {
-				continue
-			}
-			if portMACs[port] == nil {
-				portMACs[port] = make(map[string]bool)
-			}
-			portMACs[port][mac] = true
-			if targetID, isSwitch := switchMACs[mac]; isSwitch && targetID != srcID {
-				if portSwitches[port] == nil {
-					portSwitches[port] = make(map[string]bool)
+		for port, macs := range portMACs {
+			for mac := range macs {
+				if targetID, isSwitch := switchMACs[mac]; isSwitch && targetID != srcID {
+					if portSwitches[port] == nil {
+						portSwitches[port] = make(map[string]bool)
+					}
+					portSwitches[port][targetID] = true
 				}
-				portSwitches[port][targetID] = true
 			}
 		}
 
@@ -3588,7 +3653,7 @@ func macRefFarPort(allDevices map[string]*DeviceData, deviceIPs []string, srcID,
 	}
 	var ports []int
 	for _, port := range slices.Sorted(maps.Keys(toSource)) {
-		if name := getFDBPortName(target, port); !isNullInterface(name) && !isNullInterface(normalizePortName(name)) {
+		if !isNullInterface(getFDBPortName(target, port)) {
 			ports = append(ports, port)
 		}
 	}

@@ -143,6 +143,43 @@ func TestShadowITOneRule(t *testing.T) {
 	}
 }
 
+// TestShadowITIgnored: a Shadow-IT hub whose alert the owner ignores
+// (Telegram's Ignore, IsIssueIgnored) is still drawn, and its node says so
+// (GraphNode.Ignored, by its syntheticNode.Issue); the alerts, the audit
+// report's Shadow-IT section and the UI's Shadow-IT modal all leave it out.
+func TestShadowITIgnored(t *testing.T) {
+	resetState(t)
+	devices := shadowRuleNetwork()
+	collectedDataMutex.Lock()
+	collectedData = map[string]*DeviceData{devices[0].IP: devices[0]}
+	collectedDataMutex.Unlock()
+	ConfirmedESXiMACs.Store("00:1b:21:80:06:02", true)
+	const ignored = "hub-4c:ae:a3:80:00:80-p5"
+	ignoredIssuesMutex.Lock()
+	ignoredIssuesData[shadowITIssueID("10.0.9.80", 5)] = true
+	ignoredIssuesMutex.Unlock()
+
+	g, graphHubs, alerts, reportHubs, _, uiHubs, uiOK := shadowRuleViews(t, devices)
+	if want := []string{"hub-4c:ae:a3:80:00:80-p3", ignored, "hub-4c:ae:a3:80:00:80-p7"}; !slices.Equal(shadowHubIDs(graphHubs), want) {
+		t.Errorf("graph hubs = %v, want %v (an ignored hub is still drawn)", graphHubs, want)
+	}
+	want := []string{"hub-4c:ae:a3:80:00:80-p3", "hub-4c:ae:a3:80:00:80-p7"}
+	if !slices.Equal(shadowHubIDs(alerts), want) {
+		t.Errorf("alerts = %v, want %v", alerts, want)
+	}
+	if !slices.Equal(reportHubs, want) {
+		t.Errorf("report section = %v, want %v", reportHubs, want)
+	}
+	if uiOK && !slices.Equal(uiHubs, want) {
+		t.Errorf("UI modal = %v, want %v", uiHubs, want)
+	}
+	for _, n := range g.GetGraphData().Nodes {
+		if n.Group == "hub" && n.Ignored != (n.ID == ignored) {
+			t.Errorf("%s: ignored = %v", n.ID, n.Ignored)
+		}
+	}
+}
+
 // shadowVMHubNetwork is a switch with three hubs. Port 5 holds two VMware VM
 // NICs and three PCs: the VMs are no majority, so the port is a hub, and
 // detectHypervisors puts a hyp- node (group hypervisor, label "[HYPERVISOR]

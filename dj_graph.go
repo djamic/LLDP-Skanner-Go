@@ -213,6 +213,10 @@ type GraphNode struct {
 	ESXi bool `json:"esxi,omitempty"`
 	// Synthetic: the build made the node (a hub, a hypervisor), and where
 	Synthetic *syntheticNode `json:"synthetic,omitempty"`
+	// Ignored: the node is a Shadow-IT hub whose alert the owner ignores
+	// (its Synthetic.Issue, IsIssueIgnored, when the data is made): the
+	// alerts, the audit report and the UI's Shadow-IT list leave it out
+	Ignored bool `json:"ignored,omitempty"`
 }
 
 // GraphLink represents a link in D3.js format
@@ -288,6 +292,7 @@ func (g *DJGraph) GetGraphData() GraphData {
 
 		if syn, ok := g.graphSynthetic[node]; ok {
 			graphNode.Synthetic = &syn
+			graphNode.Ignored = syn.Issue != "" && IsIssueIgnored(syn.Issue)
 		}
 
 		// Phase 8: Check if node is unreachable

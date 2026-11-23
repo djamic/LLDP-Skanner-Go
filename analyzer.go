@@ -370,8 +370,8 @@ func botPostAccepted(payload []byte, what string) bool {
 // summary first); an issue whose post fails is sent again by the next
 // analysis.
 func (na *NetworkAnalyzer) notifyTelegramIfCritical(report *Report) {
-	if report.HealthScore >= 90 && len(report.Suggestions) == 0 {
-		return // Network is healthy
+	if healthTierOf(report.HealthScore) == healthTiers[0] && len(report.Suggestions) == 0 {
+		return // Network is healthy (its best health tier, no finding)
 	}
 
 	// Send a brief health summary (max once per hour)
@@ -759,15 +759,7 @@ func (r *Report) GenerateHTMLReport() string {
 	sb.WriteString(fmt.Sprintf("<strong>Generated Date:</strong> %s</p>", r.GeneratedAt.Format("Monday, 02 Jan 2006 15:04:05")))
 
 	// Health Score Box
-	healthColor := "#4CAF50" // Green
-	if r.HealthScore < 50 {
-		healthColor = "#D32F2F" // Red
-	} else if r.HealthScore < 70 {
-		healthColor = "#EF6C00" // Orange
-	} else if r.HealthScore < 90 {
-		healthColor = "#FFC107" // Yellow
-	}
-	sb.WriteString(fmt.Sprintf("<div style='background-color: %s; color: white; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;'>", healthColor))
+	sb.WriteString(fmt.Sprintf("<div style='background-color: %s; color: white; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;'>", healthTierOf(r.HealthScore).Color))
 	sb.WriteString(fmt.Sprintf("<h2 style='margin: 0; font-size: 24pt;'>Network Health Score: %d / 100</h2>", r.HealthScore))
 	sb.WriteString(fmt.Sprintf("<p style='margin: 5px 0 0 0; font-size: 14pt;'>%s</p>", GetHealthLabel(r.HealthScore)))
 	sb.WriteString("</div>")
@@ -837,9 +829,16 @@ type ShadowITDevice struct {
 	MACAddresses []string `json:"mac_addresses"`
 }
 
+// shadowITIssueID is the issue id of the Shadow-IT hub on a switch's FDB
+// port (fdbPorts' Port): the alert's id, the one the owner ignores it by
+// (IsIssueIgnored), and the hub node's (syntheticNode.Issue).
+func shadowITIssueID(switchIP string, port int) string {
+	return fmt.Sprintf("shadow_%s_%d", strings.ReplaceAll(switchIP, ".", "_"), port)
+}
+
 // analyzeShadowIT reports every port that the graph draws as an unmanaged
 // hub (fdbPorts, the one per-port rule, Q14) as one shadow_<ip>_<port>
-// issue, in device and port order.
+// issue (shadowITIssueID), in device and port order.
 func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 	suggestions := []OptimizationSuggestion{}
 	ix := na.idx()
@@ -850,7 +849,7 @@ func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 			if p.Kind != fdbHub {
 				continue
 			}
-			issueID := fmt.Sprintf("shadow_%s_%d", strings.ReplaceAll(device.IP, ".", "_"), p.Port)
+			issueID := shadowITIssueID(device.IP, p.Port)
 
 			// Skip if this issue is ignored
 			if IsIssueIgnored(issueID) {
@@ -1101,16 +1100,36 @@ func (na *NetworkAnalyzer) CalculateHealthScore(report *Report) int {
 	return score
 }
 
+// healthTier is a band of the network health score: its name and colour
+// wherever a score is shown (the console, Telegram, the analysis and audit
+// reports, the UI's health widget: app.js uiHealthTiers is generated from
+// healthTiers by TestGroupTables).
+type healthTier struct {
+	Min   int // the lowest score of the band
+	Label string
+	Color string
+}
+
+// healthTiers are the bands of the health score, best first.
+var healthTiers = []healthTier{
+	{90, "Excellent", "#4CAF50"},
+	{70, "Good", "#FF9800"},
+	{50, "Fair", "#F44336"},
+	{30, "Poor", "#D32F2F"},
+	{0, "Critical", "#B71C1C"},
+}
+
+// healthTierOf is the band of a health score (healthTiers).
+func healthTierOf(score int) healthTier {
+	for _, t := range healthTiers {
+		if score >= t.Min {
+			return t
+		}
+	}
+	return healthTiers[len(healthTiers)-1]
+}
+
 // GetHealthLabel returns a human-readable label for health score
 func GetHealthLabel(score int) string {
-	if score >= 90 {
-		return "Excellent"
-	} else if score >= 70 {
-		return "Good"
-	} else if score >= 50 {
-		return "Fair"
-	} else if score >= 30 {
-		return "Poor"
-	}
-	return "Critical"
+	return healthTierOf(score).Label
 }

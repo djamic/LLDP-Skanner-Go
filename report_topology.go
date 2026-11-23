@@ -476,16 +476,7 @@ func reportFullHandler(w http.ResponseWriter, r *http.Request) {
 		topologyImg = GenerateTopologyPNG(graph)
 	}
 
-	// Health label
-	healthLabel := "Critical"
-	healthColor := "#F44336"
-	if healthScore >= 90 {
-		healthLabel = "Excellent"
-		healthColor = "#4CAF50"
-	} else if healthScore >= 70 {
-		healthLabel = "Good"
-		healthColor = "#FF9800"
-	}
+	health := healthTierOf(healthScore)
 
 	// Anomaly penalty summary
 	var penaltyRows strings.Builder
@@ -554,8 +545,8 @@ tr:nth-child(even) { background: #f5f5f5; }
 <!-- Section 7: Recommendations -->
 <h2>6. Tavsiyalar</h2>
 <ul>`,
-		healthColor, now, now, totalSwitches, totalMACs,
-		healthScore, healthLabel,
+		health.Color, now, now, totalSwitches, totalMACs,
+		healthScore, health.Label,
 		penaltyRows.String(),
 		topologyImg,
 		deviceRows.String(),
@@ -907,9 +898,15 @@ func GenerateShadowDiagrams(graph *DJGraph) string {
 // to the polled switch's FDB with the current ESXi hosts: a hub whose port
 // carries an ESXi host's NIC (graphIsESXiHostNIC) is left out even when the
 // host was confirmed after the graph was built (Q14). For a hub whose switch
-// is not in collectedData, only its member nodes can be checked.
+// is not in collectedData, only its member nodes can be checked. A hub
+// whose alert the owner ignores (syntheticNode.Issue) is left out, as the
+// alerts leave it out.
 func reportHubIsShadowIT(g *DJGraph, hubID string, members []string) bool {
-	if hub := g.graphSynthetic[hubID]; hub.Kind == syntheticHub {
+	hub := g.graphSynthetic[hubID]
+	if hub.Issue != "" && IsIssueIgnored(hub.Issue) {
+		return false
+	}
+	if hub.Kind == syntheticHub {
 		switchID, port := hub.Switch, hub.BridgePort
 		collectedDataMutex.RLock()
 		defer collectedDataMutex.RUnlock()
@@ -1189,13 +1186,6 @@ func generateAuditMD(groups []string) string {
 		penaltyRows.WriteString(fmt.Sprintf("| %s | %d |\n", aType, anomalyCounts[aType]))
 	}
 
-	healthLabel := "Critical"
-	if healthScore >= 90 {
-		healthLabel = "Excellent"
-	} else if healthScore >= 70 {
-		healthLabel = "Good"
-	}
-
 	mermaidCode := ""
 	if graph != nil {
 		mermaidCode = GenerateMermaidTopology(graph, groups)
@@ -1216,7 +1206,7 @@ func generateAuditMD(groups []string) string {
 	md.WriteString(fmt.Sprintf("| Noyob MAC manzillar | %d |\n\n", totalMACs))
 
 	md.WriteString("## 2. Tarmoq Sog'ligi\n\n")
-	md.WriteString(fmt.Sprintf("**%d/100** — %s\n\n", healthScore, healthLabel))
+	md.WriteString(fmt.Sprintf("**%d/100** — %s\n\n", healthScore, GetHealthLabel(healthScore)))
 	md.WriteString(penaltyRows.String())
 	md.WriteString("\n")
 

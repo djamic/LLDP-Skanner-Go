@@ -172,6 +172,10 @@ func groupTablesAppJS() string {
 		emoji := cmp.Or(d.ExportEmoji, d.Emoji)
 		fmt.Fprintf(&b, "    { id: %s, label: %s, checked: %t },\n", jsQuote(d.Key), jsQuote(emoji+" "+d.longName()), d.ExportOn)
 	}
+	b.WriteString("];\n// The health score's bands (analyzer.go healthTiers), best first\nconst uiHealthTiers = [\n")
+	for _, h := range healthTiers {
+		fmt.Fprintf(&b, "    { min: %d, label: %s, color: %s },\n", h.Min, jsQuote(h.Label), jsQuote(h.Color))
+	}
 	b.WriteString("];\n")
 	return b.String()
 }

@@ -370,6 +370,10 @@
                         <input type="checkbox" id="settingsClassify-lldpHubs">
                         <span>LLDP hubs: a port with several LLDP neighbors (no switch among them) gets a hub (Shadow IT), an AP hub when they are all access points, or the device behind the phone for a phone and one device</span>
                     </label>
+                    <label class="checkbox-label" title="Off: a port with an LLDP neighbor gets no FDB device, as before (the PC behind a phone is not drawn)">
+                        <input type="checkbox" id="settingsClassify-phonePCs">
+                        <span>Phone PCs: the one device a switch learns on a port whose only LLDP neighbor is an IP phone is drawn behind the phone (its PC port)</span>
+                    </label>
                     <label class="checkbox-label">
                         <input type="checkbox" id="settingsClassify-apHubAlert">
                         <span>AP hub alert: an AP hub is a Shadow-IT hub too (an alert)</span>

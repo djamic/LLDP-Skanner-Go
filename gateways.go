@@ -715,36 +715,21 @@ type gatewayLink struct {
 // buildSwitchOwnMACs, to their node ids and each gateway MAC to itself; a
 // device other than the switch itself counts once whatever number of its
 // MACs is learned there, and two or more make a transit port), NULL0 ports
-// left out. Of those the port with the fewest MACs wins, then the first
-// switch in IP order, then the lower port: the FortiGate's MAC is the only
-// MAC on 172.20.254.203 Ten-GigabitEthernet1/0/52.
+// left out (fdbLinkPorts). Of those the port with the fewest MACs wins,
+// then the first switch in IP order, then the lower port: the FortiGate's
+// MAC is the only MAC on 172.20.254.203 Ten-GigabitEthernet1/0/52.
 func gatewayPort(snapshot map[string]*DeviceData, mac string, infra map[string]string) (gatewayLink, bool) {
 	var best gatewayLink
 	found := false
 	for _, ip := range sortedDeviceIPs(snapshot) {
 		d := snapshot[ip]
-		ports := make(map[int]map[string]bool)
-		for _, e := range d.MACTable {
-			if usableMAC(e.MACAddress) == mac {
-				ports[e.PortNumber] = make(map[string]bool)
-			}
-		}
-		if len(ports) == 0 {
-			continue
-		}
-		for _, e := range d.MACTable {
-			if macs, ok := ports[e.PortNumber]; ok {
-				if m := usableMAC(e.MACAddress); m != "" {
-					macs[m] = true
-				}
-			}
-		}
+		ports := fdbLinkPorts(d, nil)
 		own := graphDeviceNodeID(d)
 		for _, port := range slices.Sorted(maps.Keys(ports)) {
-			if isNullInterface(getFDBPortName(d, port)) {
+			macs := ports[port]
+			if !macs[mac] {
 				continue
 			}
-			macs := ports[port]
 			devices := make(map[string]bool) // the infrastructure devices learned there
 			for m := range macs {
 				if id, ok := infra[m]; ok && id != own {

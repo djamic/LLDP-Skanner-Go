@@ -311,3 +311,74 @@ func TestFarPortsDeterministic(t *testing.T) {
 		t.Errorf("far ports %q, want %q", got, want)
 	}
 }
+
+// TestFDBLinkPorts: one NULL0 rule (isNullInterface, the name as it is and
+// normalized) and one reading of a switch's FDB for the link rules
+// (fdbLinkPorts): the distinct MACs of each port, NULL0 ports out, and with
+// the polled switches the ports LLDP names one on out too. managedFDBPort
+// counts a MAC learned in two VLANs once.
+func TestFDBLinkPorts(t *testing.T) {
+	for name, want := range map[string]bool{
+		"NULL0": true, `"NULL0"`: true, "4c:ae:a3:a2:06:2c:NULL0": true, "InLoopBack0": true, "Port 0": true, "": true,
+		"GigabitEthernet1/0/1": false, "4c:ae:a3:a2:06:2c:GE1/0/43": false,
+	} {
+		if got := isNullInterface(name); got != want {
+			t.Errorf("isNullInterface(%q) = %v, want %v", name, got, want)
+		}
+	}
+
+	resetState(t)
+	const ap, pc, pc2, peer = "24:5a:4c:0c:00:01", "00:1b:21:0c:00:01", "00:1b:21:0c:00:02", "4c:ae:a3:0c:00:02"
+	a := &DeviceData{IP: "10.9.99.1", SysName: "sw-a", ChassisID: "4c:ae:a3:0c:00:01",
+		Interfaces: gigabitPorts(4, map[int]string{2: "4c:ae:a3:0c:00:01:NULL0"}),
+		Neighbors: []LLDPNeighbor{{LocalPortNum: 3, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: peer,
+			RemPortIdSubtype: 5, RemPortId: "GigabitEthernet1/0/24", RemSysName: "sw-b"}},
+	}
+	a.MACTable = append(a.MACTable, MACEntry{MACAddress: ap, PortNumber: 1, VlanID: 10}, MACEntry{MACAddress: ap, PortNumber: 1, VlanID: 20},
+		MACEntry{MACAddress: pc, PortNumber: 1, VlanID: 10})
+	a.MACTable = append(a.MACTable, macEntries(2, ap)...)
+	a.MACTable = append(a.MACTable, macEntries(3, peer, ap)...)
+	a.MACTable = append(a.MACTable, macEntries(4, ap, pc2)...)
+	b := &DeviceData{IP: "10.9.99.2", SysName: "sw-b", ChassisID: peer, Interfaces: gigabitPorts(24, nil)}
+	snapshot := map[string]*DeviceData{a.IP: a, b.IP: b}
+
+	count := func(ports map[int]map[string]bool) map[int]int {
+		out := map[int]int{}
+		for port, macs := range ports {
+			out[port] = len(macs)
+		}
+		return out
+	}
+	if got, want := count(fdbLinkPorts(a, nil)), map[int]int{1: 2, 3: 2, 4: 2}; !maps.Equal(got, want) {
+		t.Errorf("fdbLinkPorts without polled switches = %v, want %v (no NULL0 port)", got, want)
+	}
+	if got, want := count(fdbLinkPorts(a, buildSwitchOwnMACs(snapshot))), map[int]int{1: 2, 4: 2}; !maps.Equal(got, want) {
+		t.Errorf("fdbLinkPorts = %v, want %v (no port LLDP names a polled switch on)", got, want)
+	}
+	if got := managedFDBPort(snapshot, graphDeviceNodeID(a), ap); got != "GE1/0/1" {
+		t.Errorf("managedFDBPort = %q, want GE1/0/1 (2 MACs, its MAC in two VLANs counted once)", got)
+	}
+}
+
+// TestRefreshEdgeLabelsKeepFarSide: the traffic label refresh keeps the "|"
+// of a link whose far side is empty ("GE1/0/5 [V10]|"), so a reader still
+// tells the near port from the far one.
+func TestRefreshEdgeLabelsKeepFarSide(t *testing.T) {
+	resetState(t)
+	sw := &DeviceData{IP: "10.9.99.5", SysName: "sw-e", ChassisID: "4c:ae:a3:0c:00:05", Interfaces: gigabitPorts(6, nil)}
+	reportSetDevices(sw)
+	const pc = "00:1b:21:0c:00:05"
+	g := NewDJGraph()
+	src := graphDeviceNodeID(sw)
+	g.AddNode(src)
+	g.AddNode(pc)
+	g.AddEdge(src, pc, "GE1/0/5 [V10]|")
+	SetGlobalGraph(g)
+	interfaceTrafficMapMutex.Lock()
+	interfaceTrafficMap[sw.IP] = map[int]*InterfaceTraffic{5: {InSpeed: 5_000_000, OutSpeed: 3_000_000}}
+	interfaceTrafficMapMutex.Unlock()
+	refreshGraphEdgeLabels()
+	if got := GetGlobalGraph().GetEdgeLabel(src, pc); got != "GE1/0/5 [V10] ↓5M ↑3M|" {
+		t.Errorf("refreshed label = %q, want %q", got, "GE1/0/5 [V10] ↓5M ↑3M|")
+	}
+}

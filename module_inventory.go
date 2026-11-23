@@ -286,28 +286,18 @@ func addManagedAPNodes(graph *DJGraph, snapshot map[string]*DeviceData, switchMA
 }
 
 // managedFDBPort is the port of the polled switch with node id switchID
-// whose FDB learns mac, the one with the fewest MACs (then the lower
-// port), normalized; "" when it learns mac on none.
+// whose FDB learns mac (fdbLinkPorts), the one with the fewest MACs (then
+// the lower port), normalized; "" when it learns mac on none.
 func managedFDBPort(snapshot map[string]*DeviceData, switchID, mac string) string {
 	for _, ip := range sortedDeviceIPs(snapshot) {
 		d := snapshot[ip]
 		if graphDeviceNodeID(d) != switchID {
 			continue
 		}
-		macs := map[int]int{} // port → the MACs learned there, for the ports that learn mac
-		for _, e := range d.MACTable {
-			if usableMAC(e.MACAddress) == mac {
-				macs[e.PortNumber] = 0
-			}
-		}
-		for _, e := range d.MACTable {
-			if n, ok := macs[e.PortNumber]; ok && usableMAC(e.MACAddress) != "" {
-				macs[e.PortNumber] = n + 1
-			}
-		}
+		ports := fdbLinkPorts(d, nil)
 		best := -1
-		for _, port := range slices.Sorted(maps.Keys(macs)) {
-			if !isNullInterface(getFDBPortName(d, port)) && (best < 0 || macs[port] < macs[best]) {
+		for _, port := range slices.Sorted(maps.Keys(ports)) {
+			if ports[port][mac] && (best < 0 || len(ports[port]) < len(ports[best])) {
 				best = port
 			}
 		}

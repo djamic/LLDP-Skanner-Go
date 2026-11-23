@@ -34,6 +34,12 @@ type ClassifySettings struct {
 	// an AP hub when they are all access points, or, for a phone and one
 	// device, the device behind the phone (its PC port).
 	LLDPHubs bool `json:"lldpHubs"`
+	// PhonePCs draws the one device a switch learns on a port whose only
+	// LLDP neighbor is an IP phone behind that phone (its PC port), like
+	// the device of a phone's daisy chain that LLDP shows. Off, a port with
+	// an LLDP neighbor gets no FDB device, as before: the PC behind a phone
+	// that sends no LLDP itself is not drawn.
+	PhonePCs bool `json:"phonePCs"`
 	// APHubAlert makes an AP hub a Shadow-IT hub (an alert) too.
 	APHubAlert bool `json:"apHubAlert"`
 	// WiFiClientsCountOnly counts the FDB MACs behind an AP hub (its access
@@ -66,7 +72,7 @@ type ClassifySettings struct {
 
 // DefaultClassifySettings are the recommended classification choices.
 func DefaultClassifySettings() ClassifySettings {
-	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, WiFiClientsCountOnly: true, MobileGroup: true, ControllerKindWins: true, PolledByMIB: true, HubHysteresis: true}
+	return ClassifySettings{LLDPCaps: true, LLDPHubs: true, PhonePCs: true, WiFiClientsCountOnly: true, MobileGroup: true, ControllerKindWins: true, PolledByMIB: true, HubHysteresis: true}
 }
 
 // SavedData holds all persistent data

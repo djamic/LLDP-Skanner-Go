@@ -112,12 +112,16 @@ second copy appears or a copy drifts.
 | How does a group look (name, icon, colour, report section, infrastructure)? | `deviceGroups` (`groups.go`) | Go reports; `app.js`, `tree.js`, `index.html`, `history.html`, `md2docx*.py` carry generated copies | `TestGroupTables` (`-update` rewrites the copies) |
 | What does the build say a node is? | `nodeTag` (`tags.go`), written where a label line is written | `classifyNode`, analyzer, UI (`node.tags`) | `TestGraphTagsMatchLabels`, `TestNoTagParsing` |
 | Did the build make this node (hub, hyp-)? | `syntheticNode`, `hubNodeID`, `hypNodeID` (`tags.go`) | hypervisor detection, reports, UI (`node.synthetic`) | `TestSyntheticNodeIDs` |
-| What is behind a switch port? | `fdbPorts` + `lldpPortPlans` (`example_usage.go`) | graph, Shadow-IT alerts, report section 7, experiment metrics, UI modal | `TestShadowITOneRule`, `TestShadowITVCenterHost` |
+| What is behind a switch port? | `fdbPorts` + `lldpPortPlans` (`example_usage.go`), the LLDP neighbors per port from `lldpPortTargets` | graph, Shadow-IT alerts, report section 7, experiment metrics, UI modal | `TestShadowITOneRule`, `TestShadowITVCenterHost`, `TestPhonePCs` |
+| Which alert is a Shadow-IT hub, is it ignored? | `shadowITIssueID` (`analyzer.go`), kept on the hub as `syntheticNode.Issue`; `IsIssueIgnored` (`ignored_issues.go`) | alerts, audit report (`reportHubIsShadowIT`), UI modal (`node.ignored`, `GraphNode.Ignored`) | `TestShadowITIgnored` |
+| Which port links a device another switch's FDB learns (a switch, a router node, a managed access point)? | `fdbLinkPorts` (`example_usage.go`): the MACs per port; the port with the fewest wins | `addMACCrossRefEdges`, `gatewayPort`, `managedFDBPort` | `TestFDBLinkPorts` |
+| Is a port a NULL0/loopback port? | `isNullInterface` (the name as it is and normalized) | every LLDP and FDB reader | `TestFDBLinkPorts` |
 | Is a MAC an ESXi host's NIC? | `graphIsESXiHostNIC` | `fdbPorts`, `lldpPortPlans`, report, `GraphNode.ESXi` (UI) | `TestShadowITVCenterHost` |
 | Who made this MAC, what kind is it? | `mac_identity.go` (`ouiRegistry`, `categorizeVendor`, `IdentifyMAC`) | classification, labels, subnet discovery | `TestOUI*`, `golden_predicates` |
 | What does a sysName/sysDescr say? | `sysTextWords` (`systext.go`) | report vendor, switch-platform guard, Zabbix templates | `TestSysTextWords` |
 | Is a phone a phone? | `modules/voip` (`Detect`, `Excluded`) | classification, LLDP hub plans | `modules/voip` tests |
 | Is a polled device a switch? | `checkSwitch`, `switchMIBs.isSwitch` (`switch_qualify.go`) | every path that adds a device | `switch_qualify_test.go` |
+| How is a health score named and coloured? | `healthTiers`, `healthTierOf`, `GetHealthLabel` (`analyzer.go`) | console, Telegram, analysis and audit reports; UI widget (`uiHealthTiers`, generated) | `TestHealthTiers`, `TestGroupTables` |
 | Shared module helpers (HTTP client, MACs, plurals, LLDP bits, kinds, states) | `modules/kit`, `modules/module.go` | every module | `modules/kit` tests |
 
 ## 5. Classification
@@ -138,6 +142,7 @@ before it:
 |---|---|---|
 | `lldpCaps` | on | an unpolled LLDP bridge/router is `lldp_switch`, an AP bit an access point |
 | `lldpHubs` | on | a port with several LLDP neighbors gets a hub, an AP hub or a phone's PC |
+| `phonePCs` | on | the one device learned on a port whose only LLDP neighbor is an IP phone is drawn behind the phone |
 | `apHubAlert` | off | an AP hub is a Shadow-IT alert too |
 | `wifiClientsCountOnly` | on | an AP hub's clients are counted, not drawn |
 | `mobileGroup` | on | smartphones (OUI category `mobile`) are not IP phones |
@@ -195,7 +200,8 @@ Settings, reports, Shadow-IT modal) + `tree.js` (Tree tab; also the shared
 helpers `treeEscapeHTML`, `treeIsIPv4`, `treeNodeIPs`, `treeNodeName`,
 `treeTagText`, loaded after `app.js`), `history.html` (per-port history, its
 own page), `modules.js`, `credentials.js`, `login.*`, `style.css`. Their
-group tables are generated from `groups.go`.
+group tables are generated from `groups.go`, and `app.js`'s health tiers from
+`analyzer.go` (`healthTiers`).
 
 ## 9. State on disk, tests, conventions
 
@@ -218,8 +224,8 @@ replaces every network and file side effect with fakes and fails a test
 that writes outside its temporary directories. Golden files
 (`testdata/golden/`) pin outputs; `go test -run NAME -update` rewrites them
 — review `git diff testdata/golden` before committing. Generated regions:
-`BEGIN groups.go … END groups.go` (`TestGroupTables`) and section 10 of this
-file (`TestStructureIndex`).
+`BEGIN groups.go … END groups.go` (`TestGroupTables`: `deviceGroups` and
+`healthTiers`) and section 10 of this file (`TestStructureIndex`).
 
 How to add:
 
@@ -281,13 +287,16 @@ use it. Generated — do not edit by hand.
 - **`GenerateTextReport`** method (Report) — GenerateTextReport creates a human-readable report ← reportGenerateHandler
 - **`GenerateHTMLReport`** method (Report) — GenerateHTMLReport creates an HTML report suitable for Word export ← reportDownloadHandler
 - **`ShadowITDevice`** type — ShadowITDevice represents a suspected unmanaged switch
-- **`analyzeShadowIT`** method (NetworkAnalyzer) — analyzeShadowIT reports every port that the graph draws as an unmanaged hub (fdbPorts, the one per-port rule, Q14) as one shadow_<ip>_<port> issue, in device and port order. ← NetworkAnalyzer.BuildReport
+- **`shadowITIssueID`** func — shadowITIssueID is the issue id of the Shadow-IT hub on a switch's FDB port (fdbPorts' Port): ← NetworkAnalyzer.analyzeShadowIT, buildGraphEdges
+- **`analyzeShadowIT`** method (NetworkAnalyzer) — analyzeShadowIT reports every port that the graph draws as an unmanaged hub (fdbPorts, the one per-port rule, Q14) as one shadow_<ip>_<port> issue (shadowITIssueID), in device and port order. ← NetworkAnalyzer.BuildReport
 - **`analyzerShadowStats`** type — analyzerShadowStats are the experiment report's Shadow-IT numbers, counted with the same per-port rule as the graph and the alerts. ← analyzerShadowCounts
 - **`analyzerShadowCounts`** func — analyzerShadowCounts applies the per-port rule (fdbPorts) to every device and counts its hub candidates. ← generateExperimentReport
 - **`analyzeLoopback`** method (NetworkAnalyzer) — analyzeLoopback detects network loops (ports looped back to the same switch) ← NetworkAnalyzer.BuildReport
 - **`analyzeSTP`** method (NetworkAnalyzer) — analyzeSTP checks Spanning Tree Protocol configuration: ← NetworkAnalyzer.BuildReport
 - **`CalculateHealthScore`** method (NetworkAnalyzer) — CalculateHealthScore computes a 0-100 network health score ← NetworkAnalyzer.BuildReport
-- **`GetHealthLabel`** func — GetHealthLabel returns a human-readable label for health score ← NetworkAnalyzer.notifyTelegramIfCritical, Report.GenerateHTMLReport, analyzeLiveGraph
+- **`healthTier`** type — healthTier is a band of the network health score:
+- **`healthTierOf`** func — healthTierOf is the band of a health score (healthTiers). ← GetHealthLabel, NetworkAnalyzer.notifyTelegramIfCritical, Report.GenerateHTMLReport, reportFullHandler
+- **`GetHealthLabel`** func — GetHealthLabel returns a human-readable label for health score ← NetworkAnalyzer.notifyTelegramIfCritical, Report.GenerateHTMLReport, analyzeLiveGraph, generateAuditMD
 
 #### `auth.go`
 
@@ -461,9 +470,10 @@ use it. Generated — do not edit by hand.
 - **`lldpPortID`** func — lldpPortID is the normalized port id resolveLLDPTarget checks for a port MAC, read with the port subtype table (graphNormalizePortID). ← resolveLLDPTarget
 - **`lldpKnownMACs`** func — lldpKnownMACs returns the MACs that buildGraphEdges treats as known from LLDP: ← fdbPorts
 - **`lldpPortPlan`** type — lldpPortPlan is what a port of a switch with several LLDP neighbors gets (lldpPortPlans). ← lldpPortPlans
+- **`lldpPortTargets`** func — lldpPortTargets are a switch's accepted LLDP neighbors (graphLLDPNeighborTarget) by local port (ifIndex) and node id: ← fdbPorts, lldpPortPlans
 - **`lldpPortPlans`** func — lldpPortPlans are the ports of a switch (by ifIndex, the LLDP local port) where several distinct LLDP neighbors are seen, with the Classification choice lldpHubs (none without it). ← buildGraphEdges, fdbPorts
 - **`buildGraphEdges`** func — buildGraphEdges builds graph edges using ChassisID as the primary key switchMACs maps the own MACs of the polled switches to their node ids (buildSwitchOwnMACs), so switch MACs get no endpoint nodes ← buildGraphFromSnapshot
-- **`graphLLDPNeighborTarget`** func — graphLLDPNeighborTarget resolves one LLDP neighbor of a switch to its node id and display name; ← addMACCrossRefEdges, buildGraphEdges, fdbPorts, gatewayLLDPLinks, gatewaySameDevice, graphHostnameIPs, lldpKnownMACs, lldpPortPlans
+- **`graphLLDPNeighborTarget`** func — graphLLDPNeighborTarget resolves one LLDP neighbor of a switch to its node id and display name; ← buildGraphEdges, fdbLinkPorts, fdbPorts, gatewayLLDPLinks, gatewaySameDevice, graphHostnameIPs, lldpKnownMACs, lldpPortTargets
 - **`graphAddLLDPEndpoint`** func — graphAddLLDPEndpoint adds the node of an LLDP neighbor that no polled device is (an "[LLDP-EP]" node, or "[BMC]" when its LLDP or DNS name or its MAC says so) with its label: ← buildGraphEdges, gatewayLLDPLinks
 - **`lldpRemotePortName`** func — lldpRemotePortName is the far end's port in an LLDP link label (before normalizePortName): ← buildGraphEdges, gatewayLLDPLinks, lldpPortPlans, lldpReverseFarPort
 - **`lldpPortIDName`** func — lldpPortIDName is the port id of an LLDP neighbor when it names a port, else "". ← lldpRemotePortName, lldpReverseFarPort
@@ -472,7 +482,7 @@ use it. Generated — do not edit by hand.
 - **`fdbPortKind`** type — fdbPortKind is what the per-port FDB rule (fdbPorts) makes of the MACs a switch learned on one port.
 - **`fdbPort`** type — fdbPort is one port of a switch's FDB under the per-port rule. ← fdbPorts
 - **`fdbPorts`** func — fdbPorts is the one per-port Shadow-IT rule (Q14): ← NetworkAnalyzer.analyzeShadowIT, analyzerShadowCounts, buildGraphEdges, graphHostnameIPs, reportHubIsShadowIT
-- **`lldpTargetRole`** func — lldpTargetRole is what an LLDP neighbor is to a port's hub plan (lldpPortPlans): ← lldpPortPlans
+- **`lldpTargetRole`** func — lldpTargetRole is what an LLDP neighbor is to a port's hub plan (lldpPortPlans): ← fdbPorts, lldpPortPlans
 - **`fdbBigVerdict`** type — fdbBigVerdict is the big-port verdict of one switch port (fdbBigPort): ← fdbBigPort
 - **`fdbBigPort`** func — fdbBigPort reports whether a non-trunk port with n MACs is a big port (more than fdbHubMax: ← fdbPorts
 - **`graphVCenterHostNIC`** func — graphVCenterHostNIC reports whether id is a NIC a vCenter lists as an ESXi host's (with ClassifySettings.ControllerKindWins): ← detectHypervisors, graphFDBEndpointLabel, graphIsESXiHostNIC
@@ -485,12 +495,13 @@ use it. Generated — do not edit by hand.
 - **`nodeIP`** func — nodeIP is a graph data node's IP: ← GenerateHypervisorDiagrams, addManaged, addVoIPProfiles, generateAuditMD, voipKnownTypesForIP
 - **`graphAddFDBEndpoint`** func — graphAddFDBEndpoint creates the node of an FDB MAC unless an earlier port or switch created it (first creator wins) and links it from parent (the switch or a hub node) with label. ← buildGraphEdges
 - **`getLocalPortName`** func — getLocalPortName resolves local port number to interface name ← buildGraphEdges, gatewayLLDPLinks, getFDBPortName, graphLLDPNeighborTarget, lldpReverseFarPort, macRefFarPort
-- **`getFDBPortName`** func — getFDBPortName names an FDB port. ← addGatewayNodes, addMACCrossRefEdges, addManagedAPNodes, buildGraphEdges, fdbPorts, gatewayPort, macRefFarPort, managedFDBPort
-- **`isNullInterface`** func — isNullInterface returns true if the interface name is NULL0 or similar virtual discard interface that should be excluded from the topology graph. ← addMACCrossRefEdges, fdbPorts, gatewayPort, graphLLDPNeighborTarget, macRefFarPort, managedFDBPort
+- **`getFDBPortName`** func — getFDBPortName names an FDB port. ← addGatewayNodes, addMACCrossRefEdges, addManagedAPNodes, buildGraphEdges, fdbLinkPorts, fdbPorts, macRefFarPort, managedFDBPort
+- **`isNullInterface`** func — isNullInterface returns true if the interface name is NULL0 or similar virtual discard interface that should be excluded from the topology graph. ← fdbLinkPorts, fdbPorts, graphLLDPNeighborTarget, macRefFarPort
+- **`nullInterfaceName`** func — nullInterfaceName is isNullInterface for one form of the name. ← isNullInterface
 - **`getPortVLANLabel`** func — getPortVLANLabel returns VLAN label for a port (e.g., "[V1616]" or "[TRUNK]") ← buildGraphEdges
 - **`formatSpeed`** func — formatSpeed formats interface speed in human readable format ← buildGraphEdges, getPortSpeed, refreshGraphEdgeLabels
 - **`getPortSpeed`** func — getPortSpeed returns formatted speed for a port ← buildGraphEdges
-- **`normalizePortName`** func — normalizePortName is the SINGLE source of truth for port name normalization. ← DJGraph.GetGraphData, addGatewayNodes, addMACCrossRefEdges, addManagedAPNodes, buildGraphEdges, findPortIndexByName, gatewayLLDPLinks, historyHandler (+5 more)
+- **`normalizePortName`** func — normalizePortName is the SINGLE source of truth for port name normalization. ← DJGraph.GetGraphData, addGatewayNodes, addMACCrossRefEdges, addManagedAPNodes, buildGraphEdges, findPortIndexByName, gatewayLLDPLinks, historyHandler (+6 more)
 - **`edgePortKey`** func — normalizePortForHypervisor returns a lowercase canonical port key for grouping. ← detectHypervisors, reportHypervisorHosts
 - **`normalizePortForHypervisor`** func ← detectHypervisors, edgePortKey
 - **`isPrintableString`** func — isPrintableString checks if a string contains only printable ASCII characters ← graphUsableTargetID, lldpPortIDName, normalizeID
@@ -538,6 +549,7 @@ use it. Generated — do not edit by hand.
 - **`graphIsSwitchNode`** func — graphIsSwitchNode reports whether a node is a switch: ← DJGraph.nodeEvidence, detectHypervisors, enrichGraphWithIPs
 - **`buildSwitchOwnMACs`** func — buildSwitchOwnMACs maps every own MAC of the polled switches to the node id of its switch (graphDeviceNodeID). ← NetworkAnalyzer.analyzeShadowIT, analyzerShadowCounts, buildGraphFromSnapshot, reportHubIsShadowIT
 - **`switchARPAliases`** func — switchARPAliases gives the ARP aliases of the polled switches, each with the node id of its switch: ← buildSwitchOwnMACs
+- **`fdbLinkPorts`** func — fdbLinkPorts is a polled switch's FDB as the link rules read it: ← addMACCrossRefEdges, gatewayPort, managedFDBPort
 - **`addMACCrossRefEdges`** func — addMACCrossRefEdges links the switches that LLDP does not link (LLDP off, or no LLDP between them) through the FDBs: ← buildGraphFromSnapshot
 - **`macRefFarPort`** func — macRefFarPort is the far port of the MAC cross-reference link srcID -> targetID: ← addMACCrossRefEdges
 - **`rebuildGraph`** func — rebuildGraph rebuilds the graph from collectedData and publishes it. ← buildStartupGraph, discoverFromLLDP, handleReactiveDevice, handleRescanRequests, rescueScan, startPeriodicRescan
@@ -639,7 +651,7 @@ use it. Generated — do not edit by hand.
 - **`SaveIgnoredIssues`** func — SaveIgnoredIssues saves the current ignore list to file ← IgnoreIssue, UnignoreIssue
 - **`IgnoreIssue`** func — IgnoreIssue adds an issue ID to the ignore list ← botActionHandler
 - **`UnignoreIssue`** func — UnignoreIssue removes an issue ID from the ignore list (e.g. ← botActionHandler
-- **`IsIssueIgnored`** func — IsIssueIgnored checks if an issue ID is currently ignored ← NetworkAnalyzer.analyzeLoopback, NetworkAnalyzer.analyzeShadowIT
+- **`IsIssueIgnored`** func — IsIssueIgnored checks if an issue ID is currently ignored ← DJGraph.GetGraphData, NetworkAnalyzer.analyzeLoopback, NetworkAnalyzer.analyzeShadowIT, reportHubIsShadowIT
 - **`init`** func
 
 #### `influx_client.go`
@@ -675,7 +687,7 @@ use it. Generated — do not edit by hand.
 - **`parseMACOctets`** func — parseMACOctets reads a 6-byte OCTET STRING that net-snmp printed as text (STRING: ← collectPhysAddress, graphLocalChassisID, normalizeID
 - **`macUnquote`** func — macUnquote removes the quotes net-snmp puts around a printable STRING and undoes its \" and \\ escapes; ← lldpCapabilities, parseMACOctets
 - **`canonicalMAC`** func — canonicalMAC gives "aa:bb:cc:dd:ee:ff" for any text parseMAC reads, or "". ← DJGraph.nodeEvidence, NetworkAnalyzer.analyzeLoopback, addGatewayWLAN, addManagedAPNodes, addManagedClients, addManagedVMNames, collectPhysAddress, collectSuggestionHosts (+19 more)
-- **`usableMAC`** func — usableMAC gives "aa:bb:cc:dd:ee:ff" for a station MAC, or "": ← SNMPObject.collectARPTable, SNMPObject.collectGatewayMACPorts, addGatewayWLAN, addMACCrossRefEdges, analyzerUniqueMACs, collectARPAddsNothing, collectESXiCandidate, collectMergeARPTables (+13 more)
+- **`usableMAC`** func — usableMAC gives "aa:bb:cc:dd:ee:ff" for a station MAC, or "": ← SNMPObject.collectARPTable, SNMPObject.collectGatewayMACPorts, addGatewayWLAN, analyzerUniqueMACs, collectARPAddsNothing, collectESXiCandidate, collectMergeARPTables, collectMergeMACIP (+11 more)
 - **`String`** method (macAddr) — String gives the canonical text "aa:bb:cc:dd:ee:ff". ← CaptureManager.StartCapture, GenerateHypervisorDiagrams, GenerateMermaidTopology, GenerateShadowDiagrams, GenerateTopologyLegend, GenerateTopologySVG, IdentifyMAC, Report.GenerateHTMLReport (+32 more)
 - **`OUI`** method (macAddr) — OUI gives the first three octets as "aa:bb:cc", the key of ouiRegistry. ← IdentifyMAC, isRandomMAC, macVendorOf, ouiKey
 - **`ouiKey`** func — ouiKey gives the OUI "aa:bb:cc" of a MAC in any form parseMAC reads, or "" for text that is no MAC. ← bmcTypeByOUI, hypervisorTypeOf, isHypervisorMAC, isServerNIC, vmOSFromOUI
@@ -796,7 +808,7 @@ use it. Generated — do not edit by hand.
 - **`managedViewByIP`** func — managedViewByIP returns the managed device known by ip only, or nil. ← addManaged
 - **`addManaged`** func — addManaged gives the graph data's nodes their managed devices: ← graphHandler
 - **`addManagedAPNodes`** func — addManagedAPNodes adds to the graph the access points the controllers manage that it has no node for, by MAC or IP (the build's step 3c): ← buildGraphFromSnapshot
-- **`managedFDBPort`** func — managedFDBPort is the port of the polled switch with node id switchID whose FDB learns mac, the one with the fewest MACs (then the lower port), normalized; ← addManagedAPNodes
+- **`managedFDBPort`** func — managedFDBPort is the port of the polled switch with node id switchID whose FDB learns mac (fdbLinkPorts), the one with the fewest MACs (then the lower port), normalized; ← addManagedAPNodes
 - **`inventoryNotice`** func — inventoryNotice prints a line once in a run. ← addManagedAPNodes
 - **`addManagedClients`** func — addManagedClients adds the clients of the managed devices to the graph data, for the canvas: ← graphHandler
 - **`addManagedVMNames`** func — addManagedVMNames gives the nodes of the virtual machines the vCenters list (clients of kind "vm" of their hosts) what vCenter tells of them (GraphNode.Client: ← graphHandler
@@ -853,7 +865,7 @@ use it. Generated — do not edit by hand.
 - **`SavedData`** type — SavedData holds all persistent data ← LoadSavedData, SaveData
 - **`DefaultSettings`** func — DefaultSettings returns default scan settings ← init
 - **`GetCurrentSettings`** func — GetCurrentSettings returns current settings Falls back to reading swich_ips file if IPRanges is empty ← handleRescanRequests, main, moduleRunHandler, runBenchmark, settingsHandler, statusHandler
-- **`currentClassify`** func — currentClassify is the classification choices of the current settings. ← DJGraph.GetGraphData, buildGraphEdges, fdbBigPort, graphVCenterHostNIC, lldpPortPlans
+- **`currentClassify`** func — currentClassify is the classification choices of the current settings. ← DJGraph.GetGraphData, buildGraphEdges, fdbBigPort, fdbPorts, graphVCenterHostNIC, lldpPortPlans
 - **`SetCurrentSettings`** func — SetCurrentSettings updates current settings and syncs swich_ips file ← settingsHandler
 - **`readSwitchIPsFile`** func — readSwitchIPsFile reads IP ranges from swich_ips file ← GetCurrentSettings, RunSubnetDiscovery, appendToSwitchIPs, runRescueScan
 - **`writeSwitchIPsFile`** func — writeSwitchIPsFile writes IP ranges to swich_ips file ← SetCurrentSettings
@@ -890,7 +902,7 @@ use it. Generated — do not edit by hand.
 #### `snmp_object.go`
 
 - **`InterfaceData`** type — InterfaceData holds interface statistics from IF-MIB ← SNMPObject.collectInterfaces, gatewayLLDP.device, historyPort, lldpReverseFarPort, macRefFarPort
-- **`LLDPNeighbor`** type — LLDPNeighbor holds LLDP remote neighbor information ← SNMPObject.collectGatewayLLDP, SNMPObject.collectLLDPNeighbors, lldpPortPlans
+- **`LLDPNeighbor`** type — LLDPNeighbor holds LLDP remote neighbor information ← SNMPObject.collectGatewayLLDP, SNMPObject.collectLLDPNeighbors, lldpPortTargets
 - **`MACEntry`** type — MACEntry holds MAC address table entry from BRIDGE-MIB ← SNMPObject.collectMACTable
 - **`ARPEntry`** type — ARPEntry holds ARP table entry (IP to MAC mapping) ← SNMPObject.collectARPTable, collectARPFromAllSwitches, collectGatewaysARP, collectMergeARPTables, walkGatewaysARP
 - **`PortVLAN`** type — PortVLAN holds VLAN information for a port ← SNMPObject.collectPortVLANs
@@ -899,7 +911,7 @@ use it. Generated — do not edit by hand.
 - **`VRRPData`** type — VRRPData holds VRRP operational state collected from VRRP-MIB (.1.3.6.1.2.1.68). ← SNMPObject.collectVRRPInfo
 - **`collectWalkFailed`** method (DeviceData) — collectWalkFailed reports whether the walk of part failed in the poll that produced d. ← storeCollectedDevice
 - **`collectKeepPrevious`** func — collectKeepPrevious fills the tables of data whose walk failed (a partial success) from prev, the stored data of the same switch, so one timed-out walk does not empty a table until the next poll (F57: ← storeCollectedDevice
-- **`collectFDBIfIndex`** func — collectFDBIfIndex returns the ifIndex of FDB bridge port bridgePort, for port names (getLocalPortName). ← CreateSnapshot, addMACCrossRefEdges, buildGraphEdges, deviceDetailHandler, fdbPorts, gatewaySameDevice, getFDBPortName, lldpPortPlans (+1 more)
+- **`collectFDBIfIndex`** func — collectFDBIfIndex returns the ifIndex of FDB bridge port bridgePort, for port names (getLocalPortName). ← CreateSnapshot, buildGraphEdges, deviceDetailHandler, fdbLinkPorts, fdbPorts, gatewaySameDevice, getFDBPortName, lldpPortPlans (+1 more)
 - **`collectBridgePort`** func — collectBridgePort returns the dot1d bridge port that maps to ifIndex in data.BridgePortIfIndex (lowest bridge port if more than one), or ifIndex when no mapping is present (for bridge-port indexed tables such as … ← buildGraphEdges, fdbPorts
 - **`collectBridgePortIfIndex`** method (SNMPObject) — collectBridgePortIfIndex walks dot1dBasePortIfIndex (bridge port → ifIndex). ← SNMPObject.CollectData
 - **`STPData`** type — STPData holds Spanning Tree Protocol information ← SNMPObject.collectSTPInfo

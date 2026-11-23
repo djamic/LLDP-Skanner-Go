@@ -1,7 +1,7 @@
 {
   "api_graph": {
     "health_score": 70,
-    "links": 1340,
+    "links": 1341,
     "node_anomalies": {
       "hub-4c:ae:a3:27:5f:aa-p1": ["shadow_it"],
       "hub-4c:ae:a3:27:5f:aa-p16": ["shadow_it"],
@@ -70,15 +70,15 @@
       "hub-f8:f0:82:d0:23:92-p48": ["shadow_it"],
       "hub-f8:f0:82:d8:7e:81-p3": ["shadow_it"]
     },
-    "nodes": 1343,
+    "nodes": 1344,
     "total_macs": 4566
   },
   "report_summary": {
     "health_score": 70,
     "total_switches": 75,
     "total_macs": 4566,
-    "total_nodes": 1343,
-    "total_edges": 1340,
+    "total_nodes": 1344,
+    "total_edges": 1341,
     "anomalies": {
       "shadow_it": 66,
       "stp": 1

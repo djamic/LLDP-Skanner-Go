@@ -634,6 +634,7 @@ button:active {
     align-items: center;
     padding: 8px 10px;
     background: #0d1b2a;
+    color: #e0e0e0;
     border-radius: 6px;
     margin-bottom: 6px;
     font-size: 12px;
@@ -1119,10 +1120,6 @@ button:active {
     color: #4CAF50;
     transition: color 0.5s;
 }
-
-.health-score.good    { color: #4CAF50; }
-.health-score.warning { color: #FF9800; }
-.health-score.danger  { color: #F44336; }
 
 .health-label {
     font-size: 9px;

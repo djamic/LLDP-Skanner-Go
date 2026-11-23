@@ -127,6 +127,14 @@ const uiExportGroups = [
     { id: 'server', label: '🖲️ Server', checked: false },
     { id: 'unknown', label: '❓ Unknown', checked: false },
 ];
+// The health score's bands (analyzer.go healthTiers), best first
+const uiHealthTiers = [
+    { min: 90, label: 'Excellent', color: '#4CAF50' },
+    { min: 70, label: 'Good', color: '#FF9800' },
+    { min: 50, label: 'Fair', color: '#F44336' },
+    { min: 30, label: 'Poor', color: '#D32F2F' },
+    { min: 0, label: 'Critical', color: '#B71C1C' },
+];
 // END groups.go
 
 // The helpers app.js shares with the Tree tab are static/tree.js's, which
@@ -935,11 +943,10 @@ function updateHealthWidget(score) {
     scoreEl.textContent = val;
     if (sbEl) sbEl.textContent = val + '/100';
 
-    // Color class
-    scoreEl.className = 'health-score';
-    if (val >= 90)      scoreEl.classList.add('good');
-    else if (val >= 70) scoreEl.classList.add('warning');
-    else                scoreEl.classList.add('danger');
+    // The band's colour (uiHealthTiers, from analyzer.go healthTiers)
+    const tier = uiHealthTiers.find(t => val >= t.min) || uiHealthTiers[uiHealthTiers.length - 1];
+    scoreEl.style.color = tier.color;
+    scoreEl.title = tier.label;
 
     // Progress bar: position maps score 0→100 to left edge→right edge
     if (barEl) {
@@ -953,7 +960,7 @@ function updateHealthWidget(score) {
     // Update sb-health color
     const sbSpan = document.querySelector('.sb-health span');
     if (sbSpan) {
-        sbSpan.style.color = val >= 90 ? '#4CAF50' : val >= 70 ? '#FF9800' : '#F44336';
+        sbSpan.style.color = tier.color;
     }
 }
 
@@ -1729,7 +1736,7 @@ uiOnNodeClick('infoNeighbors', id => highlightNodeFromPanel(id), true);
 
 // The classification choices (settings.go ClassifySettings): the settings
 // modal has a checkbox settingsClassify-<choice> for each.
-const uiClassifyChoices = ['lldpCaps', 'lldpHubs', 'apHubAlert', 'wifiClientsCountOnly', 'mobileGroup', 'controllerKindWins', 'polledByMIB', 'hubHysteresis'];
+const uiClassifyChoices = ['lldpCaps', 'lldpHubs', 'phonePCs', 'apHubAlert', 'wifiClientsCountOnly', 'mobileGroup', 'controllerKindWins', 'polledByMIB', 'hubHysteresis'];
 
 // Open settings modal
 function openSettings() {
@@ -2163,7 +2170,9 @@ function loadExperimentResults() {
 // are the graph's hubs, minus a hub with an ESXi host's NIC (node.esxi, the
 // backend's own test, graphIsESXiHostNIC, as the data was made: also a host
 // confirmed after the build) among the MACs of its port: its members, and
-// the VMs detectHypervisors moved below a hyp- member. Each entry carries its switch and port from the switch->hub link
+// the VMs detectHypervisors moved below a hyp- member, and minus a hub whose
+// alert the owner ignores (node.ignored, the backend's IsIssueIgnored, as the
+// alerts leave it out). Each entry carries its switch and port from the switch->hub link
 // ('<port>|Hub'), else from what the build tells of it (node.synthetic: its
 // switch and bridge port). Sorted by
 // switch and port, so the list does not depend on the backend's map order.
@@ -2172,7 +2181,7 @@ function uiShadowITEntries(data) {
     const linkEnds = l => [l.source.id || l.source, l.target.id || l.target];
     const entries = [];
     data.nodes.forEach(hub => {
-        if (hub.group !== 'hub') return;
+        if (hub.group !== 'hub' || hub.ignored) return;
         let uplink = null;
         const members = [];
         data.links.forEach(l => {
@@ -2219,13 +2228,16 @@ function showShadowIT() {
     });
 
     const list = document.getElementById('shadowITList');
+    // The hubs whose alert the owner ignores (Telegram's Ignore) are no entry
+    const ignored = rawData.nodes.filter(n => n.group === 'hub' && n.ignored).length;
+    const ignoredNote = ignored ? `<div style="color:#888; margin-top:12px;">🔕 ${ignored} ta hub e'tiborsiz qoldirilgan</div>` : '';
 
     if (entries.length === 0) {
         list.innerHTML = `<div style="text-align:center; padding:30px; color:#4CAF50;">
             <div style="font-size:48px; margin-bottom:12px;">✅</div>
             <strong>Shadow IT topilmadi!</strong><br>
             <span style="color:#888;">Barcha qurilmalar boshqariladigan switchlarga ulangan.</span>
-        </div>`;
+        </div>${ignoredNote}`;
     } else {
         let html = `<div style="color:#E24A4A; margin-bottom:12px; font-weight:bold;">
             ⚠️ ${entries.length} ta boshqarilmaydigan qurilma topildi:
@@ -2250,7 +2262,7 @@ function showShadowIT() {
 
             html += '</div>';
         }
-        list.innerHTML = html;
+        list.innerHTML = html + ignoredNote;
     }
 
     document.getElementById('shadowITModal').style.display = 'flex';

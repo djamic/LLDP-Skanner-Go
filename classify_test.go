@@ -319,6 +319,77 @@ func TestLLDPHubs(t *testing.T) {
 	}
 }
 
+// TestPhonePCs: with the Classification choice phonePCs, the one device a
+// switch learns on a port whose only LLDP neighbor is an IP phone is behind
+// the phone (its PC port): linked from the phone, not the switch, also when
+// the phone is known by its port MAC (a chassis id that is an address).
+// Two devices behind a phone, and a port whose LLDP neighbor is no phone,
+// keep the old rule (no FDB node on an LLDP port); off, the PC is not drawn.
+func TestPhonePCs(t *testing.T) {
+	resetState(t)
+	const (
+		phone1, pc1        = "c0:74:ad:90:02:01", "00:1b:21:0b:00:01"
+		phone2, pc2        = "ec:74:d7:64:cb:9f", "00:1b:21:0b:00:02"
+		phone3, pc3a, pc3b = "c0:74:ad:90:02:03", "00:1b:21:0b:00:03", "00:1b:21:0b:00:04"
+		host4, other4      = "00:1b:21:0b:00:05", "00:1b:21:0b:00:06"
+	)
+	sw := &DeviceData{IP: "10.9.98.1", SysName: "sw-phones", ChassisID: "18:56:44:00:03:01", Interfaces: gigabitPorts(4, nil)}
+	sw.Neighbors = []LLDPNeighbor{
+		{LocalPortNum: 1, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: phone1, RemPortIdSubtype: 5, RemPortId: `"eth0"`,
+			RemSysName: "GXP1610_" + phone1, RemSysDesc: "GXP1610 1.0.7.64", RemSysCapEnabled: 0x24},
+		{LocalPortNum: 2, RemIndex: 1, RemChassisIdSubtype: 5, RemChassisId: "01 AC 10 00 8A", RemPortIdSubtype: 3, RemPortId: "EC 74 D7 64 CB 9F",
+			RemSysName: "GXP1610_" + phone2, RemSysDesc: "GXP1610 1.0.7.64", RemSysCapEnabled: 0x24},
+		{LocalPortNum: 3, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: phone3, RemPortIdSubtype: 5, RemPortId: `"eth0"`,
+			RemSysName: "GXP1610_" + phone3, RemSysDesc: "GXP1610 1.0.7.64", RemSysCapEnabled: 0x24},
+		{LocalPortNum: 4, RemIndex: 1, RemChassisIdSubtype: 7, RemChassisId: `"desk"`, RemPortIdSubtype: 3, RemPortId: host4},
+	}
+	sw.MACTable = append(sw.MACTable, macEntries(1, phone1, pc1)...)
+	sw.MACTable = append(sw.MACTable, macEntries(2, phone2, pc2)...)
+	sw.MACTable = append(sw.MACTable, macEntries(3, phone3, pc3a, pc3b)...)
+	sw.MACTable = append(sw.MACTable, macEntries(4, host4, other4)...)
+	src := graphDeviceNodeID(sw)
+	snapshot := map[string]*DeviceData{sw.IP: sw}
+
+	build := func(on bool) (map[[2]string]bool, map[string]bool, map[int]string) {
+		currentSettingsMutex.Lock()
+		currentSettings.Classify = DefaultClassifySettings()
+		currentSettings.Classify.PhonePCs = on
+		currentSettingsMutex.Unlock()
+		g := buildGraphFromSnapshot(snapshot)
+		links := map[[2]string]bool{}
+		for from, tos := range g.Edges {
+			for to := range tos {
+				links[[2]string{from, to}] = true
+			}
+		}
+		phones := map[int]string{}
+		for _, p := range fdbPorts(sw, buildSwitchOwnMACs(snapshot)) {
+			phones[p.Port] = p.Phone
+		}
+		return links, g.Nodes, phones
+	}
+
+	links, nodes, phones := build(true)
+	for _, c := range []struct{ phone, pc string }{{phone1, pc1}, {phone2, pc2}} {
+		if !links[[2]string{src, c.phone}] || !links[[2]string{c.phone, c.pc}] || links[[2]string{src, c.pc}] {
+			t.Errorf("phonePCs: %s is not behind the phone %s only", c.pc, c.phone)
+		}
+	}
+	if phones[1] != phone1 || phones[2] != phone2 {
+		t.Errorf("phonePCs: fdbPorts phones %v", phones)
+	}
+	for _, m := range []string{pc3a, pc3b, other4} {
+		if nodes[m] {
+			t.Errorf("phonePCs: %s is drawn (two devices behind a phone, or no phone)", m)
+		}
+	}
+
+	_, nodes, phones = build(false)
+	if nodes[pc1] || nodes[pc2] || len(phones) != 0 {
+		t.Errorf("phonePCs off: PCs drawn %v %v, ports %v", nodes[pc1], nodes[pc2], phones)
+	}
+}
+
 // TestControllerKinds: with rules.ControllerKindWins, what a Credentials
 // login for the node's IP declares, else the kind a controller manages its
 // MAC as, comes after the gateways, the controller's access points and the

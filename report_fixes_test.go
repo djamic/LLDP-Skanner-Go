@@ -261,7 +261,8 @@ func TestReportShadowSectionSkipsESXiPorts(t *testing.T) {
 
 // TestSyntheticNodeIDs (D4): the hub and hypervisor node ids, and what the
 // build tells of such a node (graphSynthetic, GraphNode.Synthetic): a
-// reader asks that, not the id's form.
+// reader asks that, not the id's form. A Shadow-IT hub carries its alert's
+// issue id (shadowITIssueID).
 func TestSyntheticNodeIDs(t *testing.T) {
 	if got := hubNodeID("4c:ae:a3:72:00:02", 3); got != "hub-4c:ae:a3:72:00:02-p3" {
 		t.Errorf("hubNodeID = %q", got)
@@ -277,7 +278,7 @@ func TestSyntheticNodeIDs(t *testing.T) {
 	reportSetDevices(sw)
 	g := reportBuildGraph()
 	want := map[string]syntheticNode{
-		"hub-4c:ae:a3:73:00:02-p3":      {Kind: syntheticHub, Switch: "4c:ae:a3:73:00:02", BridgePort: 3},
+		"hub-4c:ae:a3:73:00:02-p3":      {Kind: syntheticHub, Switch: "4c:ae:a3:73:00:02", BridgePort: 3, Issue: "shadow_10_0_73_2_3"},
 		"hyp-4c:ae:a3:73:00:02-ge1_0_4": {Kind: syntheticHyp, Switch: "4c:ae:a3:73:00:02", Port: "ge1/0/4"},
 	}
 	if !maps.Equal(g.graphSynthetic, want) {

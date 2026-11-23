@@ -100,6 +100,9 @@ type syntheticNode struct {
 	// port key ("GE1/0/18")
 	BridgePort int    `json:"bridgePort,omitempty"`
 	Port       string `json:"port,omitempty"`
+	// Issue is a Shadow-IT hub's alert (shadowITIssueID), the id the owner
+	// ignores it by; "" for a mini hub, an AP hub and a hypervisor
+	Issue string `json:"issue,omitempty"`
 }
 
 // The kinds of synthetic nodes.
