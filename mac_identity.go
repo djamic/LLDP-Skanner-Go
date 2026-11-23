@@ -1153,14 +1153,6 @@ func isRandomMAC(mac string) bool {
 	return ok && m.IsRandom() && ouiRegistry[m.OUI()].VirtNIC == ""
 }
 
-// isSpecialMAC checks if MAC is broadcast, null, multicast or zero-OUI (should be
-// filtered everywhere, Q11). It reads the bits of the parsed address, so text that
-// is no MAC (a hostname, an IP) is never special (F38).
-func isSpecialMAC(mac string) bool {
-	m, ok := parseMAC(mac)
-	return ok && m.IsSpecial()
-}
-
 // isInvalidID checks if an ID is garbage/invalid (should be filtered).
 // A MAC is invalid when isSpecialMAC says so (null, broadcast, multicast,
 // zero OUI). Any other id (hostname, IP, port name) is invalid only when it is

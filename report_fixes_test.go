@@ -714,27 +714,6 @@ func TestDocxRootKeepsGroupColour(t *testing.T) {
 	}
 }
 
-// TestCalculateDepthsFollowsLinksBothWays (F19 in bfs_depths.json): an
-// edge's direction only says which switch reported the link, so the BFS
-// from the core follows edges both ways; before, it reached only what the
-// core and its successors reported.
-func TestCalculateDepthsFollowsLinksBothWays(t *testing.T) {
-	g := NewDJGraph()
-	for _, id := range []string{"core", "a", "b", "c", "lonely"} {
-		g.AddNode(id)
-	}
-	g.AddEdge("core", "a", "GE1/0/1|")
-	g.AddEdge("b", "a", "GE1/0/2|") // b reported its link to a
-	g.AddEdge("c", "b", "GE1/0/3|")
-	want := map[string]int{"core": 0, "a": 1, "b": 2, "c": 3}
-	if got := g.CalculateDepths("core"); fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("CalculateDepths = %v, want %v", got, want)
-	}
-	if got := g.CalculateDepths("missing"); len(got) != 0 {
-		t.Errorf("CalculateDepths of a missing root = %v", got)
-	}
-}
-
 // TestAuditPickerOffersEveryReportGroup (reports and UI handoffs, F74, F77):
 // the audit export dialog of static/app.js offers every node group the
 // report can draw and colour (reportGroupColors), so printers, servers and

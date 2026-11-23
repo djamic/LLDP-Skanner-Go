@@ -248,10 +248,6 @@ function treeCompareIds(a, b) {
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function treeCompareText(a, b) {
-    return treeCompareKeys(treeSortKey(a), treeSortKey(b)) || treeCompareIds(a, b);
-}
-
 // treeCompareInfo is the child order of the tree: rank, HA standby order
 // (active/standalone before passive), name, address, id.
 function treeCompareInfo(a, b) {
@@ -833,12 +829,6 @@ function treeProject(sp, shown, options) {
         });
     }
     return out;
-}
-
-// buildTopologyTree is the jsTree JSON of the graph data for a filter (see
-// treeSpanning and treeProject).
-function buildTopologyTree(data, shown, options) {
-    return treeProject(treeSpanning(data), shown, options);
 }
 
 // ==================== Part 2: the Tree tab (browser) ====================

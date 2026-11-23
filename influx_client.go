@@ -140,22 +140,6 @@ func WriteInterfaceMetric(deviceIP, ifName, ifDescr string,
 	influxWritePoint(p)
 }
 
-// WriteDeviceMetric writes device-level metric
-func WriteDeviceMetric(deviceIP, sysName string, interfaceCount, neighborCount int) {
-	if !influxReady() {
-		return
-	}
-
-	p := influxdb2.NewPointWithMeasurement("device_status").
-		AddTag("device_ip", deviceIP).
-		AddTag("sys_name", sysName).
-		AddField("interface_count", interfaceCount).
-		AddField("neighbor_count", neighborCount).
-		SetTime(time.Now())
-
-	influxWritePoint(p)
-}
-
 // ClearInfluxData deletes all data from the InfluxDB bucket
 func ClearInfluxData() error {
 	if !influxEnabled || influxClient == nil {
@@ -180,11 +164,6 @@ func ClearInfluxData() error {
 
 	fmt.Println("🗑️ InfluxDB data cleared")
 	return nil
-}
-
-// IsInfluxEnabled returns whether InfluxDB is connected
-func IsInfluxEnabled() bool {
-	return influxEnabled
 }
 
 // TrafficHistoryPoint represents a single traffic data point

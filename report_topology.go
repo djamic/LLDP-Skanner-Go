@@ -338,15 +338,6 @@ func abs(x int) int {
 	return x
 }
 
-// SVGToBase64Img kept for API compatibility (web SVG endpoint)
-func SVGToBase64Img(svg string) string {
-	if svg == "" {
-		return ""
-	}
-	b64 := base64.StdEncoding.EncodeToString([]byte(svg))
-	return fmt.Sprintf(`<img src="data:image/svg+xml;base64,%s" width="800" />`, b64)
-}
-
 // ============================================================
 // F.3 — Report API Endpoints
 // ============================================================

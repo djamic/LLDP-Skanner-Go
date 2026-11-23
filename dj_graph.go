@@ -75,41 +75,6 @@ func (g *DJGraph) AddNode(node string) {
 	g.Nodes[node] = true
 }
 
-// AddNodeCoords adds coordinates for a node
-func (g *DJGraph) AddNodeCoords(node string, x, y int) error {
-	if !g.Nodes[node] {
-		return fmt.Errorf("node must exist in the graph")
-	}
-	g.NodeCoords[node] = Coordinate{X: x, Y: y}
-	return nil
-}
-
-// AddNodeInfo adds info for a node
-func (g *DJGraph) AddNodeInfo(node string, info string) error {
-	if !g.Nodes[node] {
-		return fmt.Errorf("node must exist in the graph")
-	}
-	g.SwitchInfo[node] = info
-	return nil
-}
-
-// AddNodeID adds ID for a node
-func (g *DJGraph) AddNodeID(node string, id int) error {
-	if !g.Nodes[node] {
-		return fmt.Errorf("node must exist in the graph")
-	}
-	g.IDs[node] = id
-	return nil
-}
-
-// GetNodeID retrieves node ID
-func (g *DJGraph) GetNodeID(node string) (int, error) {
-	if !g.Nodes[node] {
-		return 0, fmt.Errorf("node must exist in the graph")
-	}
-	return g.IDs[node], nil
-}
-
 // GetNodeInfo retrieves node info
 func (g *DJGraph) GetNodeInfo(node string) (string, error) {
 	if !g.Nodes[node] {
@@ -207,73 +172,6 @@ func (g *DJGraph) FillTargetPort(source, target, port string) bool {
 func (g *DJGraph) GetEdge(a, b string) bool {
 	return (g.Edges[a] != nil && g.Edges[a][b] != "") ||
 		(g.Edges[b] != nil && g.Edges[b][a] != "")
-}
-
-// GetEdgeLabel returns the label of the edge
-func (g *DJGraph) GetEdgeLabel(a, b string) string {
-	if g.Edges[a] != nil && g.Edges[a][b] != "" {
-		return g.Edges[a][b]
-	} else if g.Edges[b] != nil && g.Edges[b][a] != "" {
-		return g.Edges[b][a]
-	}
-	return ""
-}
-
-// ExportDataJSON exports graph data in custom JSON format
-func (g *DJGraph) ExportDataJSON() map[string]interface{} {
-	nodes := []map[string]interface{}{}
-	for node := range g.Nodes {
-		nodes = append(nodes, map[string]interface{}{
-			"id":         node,
-			"labels":     []string{"Node"},
-			"properties": map[string]string{"nodeId": node},
-		})
-	}
-
-	edges := []map[string]interface{}{}
-	edgeID := 1
-	for source, targets := range g.Edges {
-		for target, label := range targets {
-			parts := strings.Split(label, ",")
-			displayLabel := label
-
-			if len(parts) > 1 {
-				if strings.Contains(parts[0], source) {
-					displayLabel = strings.TrimSpace(parts[1]) + " " + strings.TrimSpace(parts[0])
-				} else {
-					displayLabel = strings.TrimSpace(parts[0]) + " " + strings.TrimSpace(parts[1])
-				}
-			}
-
-			edges = append(edges, map[string]interface{}{
-				"id":        fmt.Sprintf("%d", edgeID),
-				"type":      displayLabel,
-				"startNode": source,
-				"endNode":   target,
-				"properties": map[string]string{
-					"label": displayLabel,
-				},
-			})
-			edgeID++
-		}
-	}
-
-	return map[string]interface{}{
-		"results": []map[string]interface{}{
-			{
-				"columns": []string{"user", "entity"},
-				"data": []map[string]interface{}{
-					{
-						"graph": map[string]interface{}{
-							"nodes":         nodes,
-							"relationships": edges,
-						},
-					},
-				},
-			},
-		},
-		"errors": []interface{}{},
-	}
 }
 
 // GraphNode represents a node in D3.js format
@@ -467,7 +365,6 @@ func (g *DJGraph) GetGraphData() GraphData {
 		Links: links,
 	}
 }
-
 
 // GenerateZabbixTemplate generates template list based on device info
 func (g *DJGraph) GenerateZabbixTemplate(node string) []map[string]string {
@@ -673,49 +570,3 @@ func (g *DJGraph) ExportToMap(filePath string) error {
 	return encoder.Encode(zabbixExport)
 }
 
-// CalculateDepths calculates hop count from a root node (BFS). A link is
-// followed both ways: an edge's direction only says which switch reported
-// it, so following outgoing edges alone missed every node reached through a
-// link its far side reported (the analyzer's path check does the same, F19).
-func (g *DJGraph) CalculateDepths(rootID string) map[string]int {
-	depths := make(map[string]int)
-	if !g.Nodes[rootID] {
-		return depths
-	}
-
-	neighbors := make(map[string][]string)
-	for src, targets := range g.Edges {
-		for tgt := range targets {
-			neighbors[src] = append(neighbors[src], tgt)
-			neighbors[tgt] = append(neighbors[tgt], src)
-		}
-	}
-
-	queue := []string{rootID}
-	depths[rootID] = 0
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		for _, next := range neighbors[current] {
-			if _, seen := depths[next]; !seen && g.Nodes[next] {
-				depths[next] = depths[current] + 1
-				queue = append(queue, next)
-			}
-		}
-	}
-
-	return depths
-}
-
-// GetLongPaths returns nodes that are further than threshold hops from root
-func (g *DJGraph) GetLongPaths(rootID string, threshold int) []string {
-	depths := g.CalculateDepths(rootID)
-	var longPaths []string
-
-	for node, depth := range depths {
-		if depth > threshold {
-			longPaths = append(longPaths, node)
-		}
-	}
-	return longPaths
-}

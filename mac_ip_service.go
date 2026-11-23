@@ -865,25 +865,6 @@ func writeFileReplacing(path string, data []byte, rename func(oldpath, newpath s
 
 // ─── ARP Collection from all switches ─────────────────────────────────────────
 
-// collectARPFromSwitch collects ARP table from a single switch IP and
-// merges results into globalMACtoIP. Returns number of new or changed entries.
-func collectARPFromSwitch(snmpObj *SNMPObject, ip string) int {
-	updated, _, _ := collectARPMerge(snmpObj, ip)
-	return updated
-}
-
-// collectARPMerge merges the ARP table of ip into globalMACtoIP and returns
-// the number of new or changed mappings and of ARP rows read, and the walk
-// error.
-func collectARPMerge(snmpObj *SNMPObject, ip string) (updated, rows int, err error) {
-	entries, err := snmpObj.collectARPTable(ip)
-	if err != nil {
-		return 0, 0, err
-	}
-	added, changed := collectMergeMACIP(entries, macIPClock())
-	return added + changed, len(entries), nil
-}
-
 // collectARPFromAllSwitches collects ARP from every gateway (and all their
 // SVI IPs) + all discovered switches + the ARP sources (SNMP devices of the
 // swich_ips ranges that are no switches, arpSourceIPs). Each IP is walked
@@ -1627,10 +1608,4 @@ func runMacIPCollector() {
 		fmt.Println("⏱️  [MacIPService] Periodic ARP collection started...")
 		collectARPFromAllSwitches()
 	}
-}
-
-// TriggerMacIPCollection can be called externally to force an immediate ARP sweep
-// (e.g. after a new switch is discovered)
-func TriggerMacIPCollection() {
-	go collectARPFromAllSwitches()
 }

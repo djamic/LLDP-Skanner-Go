@@ -95,13 +95,6 @@ func RegisterRule(r Rule) {
 	})
 }
 
-// Rules returns a snapshot of all registered VoIP detection rules in evaluation order.
-func Rules() []Rule {
-	rulesMu.RLock()
-	defer rulesMu.RUnlock()
-	return slices.Clone(rules)
-}
-
 // UnregisterRule removes a registered VoIP rule by ID (useful in tests or dynamic overrides).
 func UnregisterRule(id string) {
 	rulesMu.Lock()

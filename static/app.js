@@ -129,7 +129,6 @@ const uiExportGroups = [
 ];
 // END groups.go
 
-
 // The helpers app.js shares with the Tree tab are static/tree.js's, which
 // index.html loads after this file (they are called once the page runs):
 // treeEscapeHTML (every server-provided string in innerHTML), treeIsIPv4,
@@ -189,8 +188,6 @@ function uiNodeText(d) {
     if (d.client && d.client.kind === 'vm' && d.client.name) return [d.client.name, treeNodeIPs(d)[0] || d.client.ip].filter(Boolean).join('\n');
     return d.hostname || d.sysName || d.label || d.id;
 }
-
-
 
 // uiRenderNodeLabel (re)builds the tspans of one node label when its text
 // changed, so later IP/DNS/ESXi enrichment shows up on the canvas.
@@ -1405,7 +1402,6 @@ if (typeof ResizeObserver !== 'undefined') {
 // node is, tags.go).
 const uiVendorTags = ['ENDPOINT', 'LLDP-EP', 'WiFi'];
 
-
 // uiParseNodeInfo reads what the info panel shows of a node: vendor and
 // detail (BMC type, VM OS, hypervisor/hub text) from its tags (node.tags),
 // the DNS name and the first name line from its label lines (sysName, the
@@ -1492,7 +1488,6 @@ function uiTypeText(node) {
     const info = uiParseNodeInfo(node);
     return (uiTypeNames[type] || type) + (info.detail ? ` · ${info.detail}` : '');
 }
-
 
 function showInfoPanel(node) {
     const panel = document.getElementById('infoPanel');
@@ -2011,12 +2006,6 @@ function generateReportFromSelection() {
             btn.textContent = originalText;
             btn.disabled = false;
         });
-}
-
-// Simple Report Modal (Reuse Settings Modal structure or create new on fly)
-function showReportModal(text) {
-    // Legacy function support - redirect to new modal logic specific for quick view?
-    // Not needed if we use the main reportsModal
 }
 
 // Check for active capture on load
@@ -2623,39 +2612,3 @@ function doDownload(url, filePrefix, ext, btnColor) {
         });
 }
 
-function downloadAuditMD() {
-    const btn = event.target.closest('.menu-btn');
-    const original = btn.textContent;
-    btn.textContent = '⏳ MD...';
-    btn.disabled = true;
-
-    fetch('/api/report/audit-md')
-        .then(r => {
-            if (!r.ok) throw new Error('Server xatosi: ' + r.status);
-            return r.blob();
-        })
-        .then(blob => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            const date = new Date().toISOString().slice(0, 10);
-            a.download = `Network_Audit_${date}.md`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            btn.textContent = '✅ Yuklandi!';
-            btn.style.background = '#4CAF50';
-            setTimeout(() => {
-                btn.textContent = original;
-                btn.style.background = '#7B1FA2';
-                btn.disabled = false;
-            }, 2000);
-        })
-        .catch(err => {
-            alert('❌ MD hisobot yuklab olinmadi: ' + err.message);
-            btn.textContent = original;
-            btn.disabled = false;
-        });
-}

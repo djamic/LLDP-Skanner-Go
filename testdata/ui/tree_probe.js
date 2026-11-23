@@ -70,6 +70,11 @@ vm.runInContext(treeSrc, pure, { filename: 'tree.js' });
 const T = pure; // top-level function declarations of tree.js
 const treeConst = (name) => vm.runInContext(name, pure);
 
+// The tree of the graph data for a filter, as the Tree tab builds it
+// (treeSpanning, then treeProject), and tree.js's text order.
+const buildTopologyTree = (data, shown, options) => T.treeProject(T.treeSpanning(data), shown, options);
+const treeCompareText = (a, b) => T.treeCompareKeys(T.treeSortKey(a), T.treeSortKey(b)) || T.treeCompareIds(a, b);
+
 // labelTags are the tags a synthetic node's label shows (its tag lines), as
 // the graph build records them (tags.go): an [ENDPOINT], [LLDP-EP] or
 // [WiFi] line's text is the vendor; a [VM] line's the OS (an emoji and a
@@ -514,23 +519,23 @@ const shownBy = (groups) => T.treeGroupFilter(groups, filterable);
   check('synthetic: without routers the root is the switch with the most links', T.treeSpanning(noRouters).root === S3);
   const onlyEndpoints = { nodes: [node(E1, 'endpoint', ''), node(E2, 'endpoint', ''), node(E9, 'endpoint', '')], links: [link(E2, E9, '')] };
   check('synthetic: without switches the root is the node with the most links', T.treeSpanning(onlyEndpoints).root === E2);
-  check('synthetic: an empty graph is an empty tree', T.buildTopologyTree({ nodes: [], links: [] }, null, {}).length === 0 &&
-    T.buildTopologyTree(null, null, {}).length === 0);
+  check('synthetic: an empty graph is an empty tree', buildTopologyTree({ nodes: [], links: [] }, null, {}).length === 0 &&
+    buildTopologyTree(null, null, {}).length === 0);
 
   // Link ends resolved by d3, and the input order, change nothing.
   const resolved = synthetic();
   resolved.links.forEach(l => { l.source = { id: l.source, x: 1, y: 2 }; });
   check('synthetic: link ends that d3 resolved to node objects give the same tree',
-    JSON.stringify(T.buildTopologyTree(resolved, null, { colors: groupColors })) === JSON.stringify(all));
+    JSON.stringify(buildTopologyTree(resolved, null, { colors: groupColors })) === JSON.stringify(all));
   const shuffled = synthetic();
   shuffled.nodes.reverse();
   shuffled.links.reverse();
   check('synthetic: the tree does not depend on the order of nodes and links',
-    JSON.stringify(T.buildTopologyTree(shuffled, null, { colors: groupColors })) === JSON.stringify(all));
-  check('synthetic: natural, case-insensitive order', T.treeCompareText('GE1/0/2', 'GE1/0/10') < 0 &&
-    T.treeCompareText('sw-9', 'sw-10') < 0 && T.treeCompareText('abc', 'ABD') < 0 && T.treeCompareText('a', 'a') === 0);
+    JSON.stringify(buildTopologyTree(shuffled, null, { colors: groupColors })) === JSON.stringify(all));
+  check('synthetic: natural, case-insensitive order', treeCompareText('GE1/0/2', 'GE1/0/10') < 0 &&
+    treeCompareText('sw-9', 'sw-10') < 0 && treeCompareText('abc', 'ABD') < 0 && treeCompareText('a', 'a') === 0);
   check('synthetic: tree.js icons are the info panel\'s', JSON.stringify(treeConst('treeGroupIcons')) === JSON.stringify(groupIcons));
-  const odd = T.buildTopologyTree({ nodes: [node('aa:00:00:00:00:71', '__proto__', 'x'), node('aa:00:00:00:00:72', 'constructor', 'y')], links: [] }, null, { colors: groupColors });
+  const odd = buildTopologyTree({ nodes: [node('aa:00:00:00:00:71', '__proto__', 'x'), node('aa:00:00:00:00:72', 'constructor', 'y')], links: [] }, null, { colors: groupColors });
   check('synthetic: a group the tables do not name gets the unknown icon and the grey dot',
     rows(odd).filter(r => !r.row.folder).every(r => r.row.icon === groupIcons.unknown && r.row.dot === '#9E9E9E'), rows(odd).map(r => [r.row.icon, r.row.dot]));
 
@@ -628,7 +633,7 @@ function portGraph() {
   check('ports: a pair linked from both sides takes each port, its markers and its traffic from its own switch\'s label, in any order of the links',
     at(PF).row.port === 'GE1/0/45 [T] → Eth1/0/49' &&
     at(PF).row.portTitle === 'HPE (172.20.254.202) GE1/0/45 → sw-f (10.1.0.6) Eth1/0/49\nLLDP link\nGE1/0/45: 1G\nEth1/0/49: 1G ↓2M ↑3M' &&
-    JSON.stringify(T.buildTopologyTree(reversed, null, { colors: groupColors })) === JSON.stringify(tree), at(PF).row);
+    JSON.stringify(buildTopologyTree(reversed, null, { colors: groupColors })) === JSON.stringify(tree), at(PF).row);
 
   // Filters: a hidden device in between, a hidden parent.
   const noHub = rows(T.treeProject(sp, shownBy(filterable.filter(g => g !== 'hub')), {}));

@@ -1680,7 +1680,6 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 	return out
 }
 
-
 // lldpTargetRole is what an LLDP neighbor is to a port's hub plan
 // (lldpPortPlans): an access point when classifyNode groups it one (the
 // kind a controller manages it as, its OUI category, its access point bit
@@ -2044,7 +2043,6 @@ func edgePortKey(label string) string {
 func normalizePortForHypervisor(port string) string {
 	return strings.ToLower(normalizePortName(port))
 }
-
 
 // isPrintableString checks if a string contains only printable ASCII characters
 func isPrintableString(s string) bool {
@@ -2535,18 +2533,6 @@ var dnsClock = time.Now
 func reverseLookup(ctx context.Context, ip string) ([]string, error) {
 	resolver := &net.Resolver{}
 	return resolver.LookupAddr(ctx, ip)
-}
-
-// resolveHostname performs DNS reverse lookup with 2s timeout and caching
-// "PC-JAMIL.tuit.local." → "PC-JAMIL"; an IP being looked up already is
-// not looked up twice.
-func resolveHostname(ip string) string {
-	if name, ok := cachedHostname(ip); ok {
-		return name
-	}
-	<-dnsStartLookup(ip)
-	name, _ := cachedHostname(ip)
-	return name
 }
 
 // cachedHostname returns the cached name of ip; ok is false when the cache
