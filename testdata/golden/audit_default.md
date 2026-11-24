@@ -199,7 +199,7 @@ graph TD
   HPEbr172_20_253_11-- "TGE1/0/49 [T] 10G ↔ TGE1/0/49" -->br172_20_254_203
   HPEbr172_20_253_11-- "TGE1/0/51 [T] 1G ↔ GE1/0/28" -->HPbr172_20_254_204
   HPEbr172_20_253_11-- "GE1/0/25 [T] 1G ↔ GE1/0/28" -->HPbr172_20_254_223
-  HPEbr172_20_253_11-- "GE1/0/26 [T] 1G ↔ gi1/0/4" -->Jamicbr172_20_254_226
+  HPEbr172_20_253_11-- "GE1/0/26 [T] 1G ↔ GE1/0/4" -->Jamicbr172_20_254_226
   HPEbr172_20_253_11-- "GE1/0/27 ↔ Hub" -->HUB_Unmanagedbr3_devices_4
   HPEbr172_20_253_10-- "GE1/0/47 [T] 1G ↔ GE1/0/47" -->HPEbr172_20_253_11
   HPEbr172_20_253_10-- "GE1/0/39 ↔ Hub" -->HUB_Unmanagedbr5_devices_3

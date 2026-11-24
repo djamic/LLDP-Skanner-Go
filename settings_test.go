@@ -95,3 +95,25 @@ func TestClassifySettings(t *testing.T) {
 		}
 	}
 }
+
+// TestSaveDataAtomic: SaveData writes the whole file and renames it over
+// the old one (the periodic rescan saves every 5 minutes; a restart must
+// never read half a file), leaves no temporary file, and LoadSavedData
+// reads back what it saved, over a file that was there.
+func TestSaveDataAtomic(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile(savedDataFile, []byte(`{"hosts":{"10.0.0.9":{"IP":"10.0.0.9"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hosts := map[string]*DeviceData{"10.9.70.1": {IP: "10.9.70.1", SysName: "sw-70", ChassisID: "4c:ae:a3:70:00:01"}}
+	if err := SaveData(hosts, DefaultSettings()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(savedDataFile + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("the temporary file is left: %v", err)
+	}
+	got, err := LoadSavedData()
+	if err != nil || got == nil || len(got.Hosts) != 1 || got.Hosts["10.9.70.1"] == nil || got.Hosts["10.9.70.1"].SysName != "sw-70" {
+		t.Errorf("LoadSavedData after SaveData: %+v, %v", got, err)
+	}
+}

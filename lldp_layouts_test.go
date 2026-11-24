@@ -238,10 +238,10 @@ func TestGoldenPixieGraph(t *testing.T) {
 	report, _ := analyzeFixture(t, graph)
 
 	for _, c := range []struct{ a, b, label string }{
-		{pixieAMAC, pixieBMAC, "GigaEth0/25 [T] 1G|GigaEth0/27"}, // .40 port 25 - .44 Gig0/27
-		{pixieBMAC, snrMAC, "GigaEth0/28 [T] 1G|Eth1/0/24"},      // .44 port 28 - SNR Ethernet1/0/24 (its port description is "": the port id names it)
-		{pixieAMAC, "ac:8b:a9:70:a9:66", "GigaEth0/1 [V1500] 1G|eth0"},
-		{pixieBMAC, "f4:e2:c6:f7:23:81", "GigaEth0/2 [V1500] 1G|eth0"},
+		{pixieAMAC, pixieBMAC, "GE0/25 [T] 1G|GE0/27"}, // .40 port 25 - .44 Gig0/27
+		{pixieBMAC, snrMAC, "GE0/28 [T] 1G|Eth1/0/24"}, // .44 port 28 - SNR Ethernet1/0/24 (its port description is "": the port id names it)
+		{pixieAMAC, "ac:8b:a9:70:a9:66", "GE0/1 [V1500] 1G|eth0"},
+		{pixieBMAC, "f4:e2:c6:f7:23:81", "GE0/2 [V1500] 1G|eth0"},
 	} {
 		if got := graph.GetEdgeLabel(c.a, c.b); got != c.label {
 			t.Errorf("link %s - %s = %q, want %q", c.a, c.b, got, c.label)
@@ -459,8 +459,10 @@ func TestLLDPRemIndexLayouts(t *testing.T) {
 // say (an agent that reports them, as the FortiGate does, must not move a
 // neighbor to another port: never misread a standard agent). A 2-part
 // agent's own lldpRemLocalPortNum and lldpRemIndex are taken when it
-// reports them; without them its index is read in the PiXiETECH order
-// (remote index, then local port).
+// reports them; a row without them is read in the agent's order: remote
+// index first when its lldpRemLocalPortNum column says so (PiXiETECH),
+// else local port first, the LLDP-MIB order without the time mark (TP-Link
+// JetStream, whose management addresses leave the time mark out too).
 func TestLLDPIndexColumns(t *testing.T) {
 	resetState(t)
 	rem := oidLLDPRem
@@ -471,29 +473,47 @@ func TestLLDPIndexColumns(t *testing.T) {
 		rem + ".9.100.7.1 = STRING: \"std\"",
 	}})
 	fakeSNMP.set("10.9.61.2", map[string][]string{oidLLDPRem: {
+		rem + ".2.1.25 = INTEGER: 25", // PiXiETECH: the column says the second part is the local port
+		rem + ".5.1.25 = STRING: \"4CAE.A361.0001\"",
 		rem + ".2.4.12 = INTEGER: 13", // the agent's own local port wins over the index order
 		rem + ".3.4.12 = INTEGER: 4",
 		rem + ".5.4.12 = STRING: \"4CAE.A361.0002\"",
-		rem + ".5.2.30 = STRING: \"4CAE.A361.0003\"", // no index columns: remote index 2 on port 30
+		rem + ".5.2.30 = STRING: \"4CAE.A361.0003\"", // no index columns: the agent's order, remote index 2 on port 30
 		rem + ".9.2.30 = STRING: \"no-columns\"",
 		rem + ".2.2.31 = INTEGER: 0", // an index column of 0 is no port
 		rem + ".5.2.31 = STRING: \"4CAE.A361.0004\"",
 	}})
+	// TP-Link JetStream (172.20.240.209): no index columns, local port
+	// first; its management addresses leave the time mark out too
+	man := oidLLDPMan
+	fakeSNMP.set("10.9.61.3", map[string][]string{
+		oidLLDPRem: {
+			rem + ".5.1.1 = STRING: \"78:45:58:7C:87:4F\"",
+			rem + ".9.1.1 = STRING: \"ACPro\"",
+			rem + ".5.8.1 = STRING: \"4C:AE:A3:27:76:8A\"",
+			rem + ".9.8.1 = STRING: \"F-9\"",
+		},
+		oidLLDPMan: {
+			man + ".3.1.1.1.4.172.15.1.46 = INTEGER: 2",
+			man + ".3.8.1.1.4.172.20.240.12 = INTEGER: 2",
+		},
+	})
 	obj := &SNMPObject{Community: "public"}
 	got := map[string][]string{}
-	for _, ip := range []string{"10.9.61.1", "10.9.61.2"} {
+	for _, ip := range []string{"10.9.61.1", "10.9.61.2", "10.9.61.3"} {
 		neighbors, err := obj.collectLLDPNeighbors(ip)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, n := range neighbors {
-			got[ip] = append(got[ip], fmt.Sprintf("%d.%d %s %s", n.LocalPortNum, n.RemIndex, n.RemChassisId, n.RemSysName))
+			got[ip] = append(got[ip], strings.TrimSpace(fmt.Sprintf("%d.%d %s %s %s", n.LocalPortNum, n.RemIndex, n.RemChassisId, n.RemSysName, n.RemMgmtIP)))
 		}
 		slices.Sort(got[ip])
 	}
 	want := map[string][]string{
 		"10.9.61.1": {"7.1 4C AE A3 61 00 01 std"},
-		"10.9.61.2": {"13.4 \"4CAE.A361.0002\" ", "30.2 \"4CAE.A361.0003\" no-columns", "31.2 \"4CAE.A361.0004\" "},
+		"10.9.61.2": {"13.4 \"4CAE.A361.0002\"", "25.1 \"4CAE.A361.0001\"", "30.2 \"4CAE.A361.0003\" no-columns", "31.2 \"4CAE.A361.0004\""},
+		"10.9.61.3": {"1.1 \"78:45:58:7C:87:4F\" ACPro 172.15.1.46", "8.1 \"4C:AE:A3:27:76:8A\" F-9 172.20.240.12"},
 	}
 	if !maps.EqualFunc(got, want, slices.Equal) {
 		t.Errorf("neighbors %q, want %q", got, want)

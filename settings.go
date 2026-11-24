@@ -206,7 +206,9 @@ func LoadSavedData() (*SavedData, error) {
 	return &saved, nil
 }
 
-// SaveData saves hosts and settings to file
+// SaveData saves hosts and settings to file. The file is written whole
+// and then renamed over the old one, so a restart never reads half a file
+// (it is about 17 MB, and the periodic rescan saves it every 5 minutes).
 func SaveData(hosts map[string]*DeviceData, settings ScanSettings) error {
 	saved := SavedData{
 		Hosts:     hosts,
@@ -219,7 +221,12 @@ func SaveData(hosts map[string]*DeviceData, settings ScanSettings) error {
 		return err
 	}
 
-	return os.WriteFile(savedDataFile, data, 0644)
+	tmp := savedDataFile + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, savedDataFile)
 }
 
 // ClearSavedData removes saved data file

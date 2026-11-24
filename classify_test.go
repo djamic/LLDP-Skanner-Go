@@ -319,6 +319,184 @@ func TestLLDPHubs(t *testing.T) {
 	}
 }
 
+// TestLLDPHubLink: an unmanaged switch on the link between two polled
+// switches that passes LLDP on (172.20.230.254 Eth1/0/24 and 172.20.230.40
+// GigaEthernet0/25 with the four Sportzal U6 Pro access points, 2026-11-24).
+// Both switches see each other and the same access points on the port; the
+// controller has them ADOPTING with each other as uplinks (stale). The graph
+// draws one hub between the two switches (the same node from both sides),
+// the access points under it, and no direct link between the switches, the
+// switches and the access points; the port's FDB (everything behind the
+// other switch) is not drawn under the hub. A Windows PC on such a link
+// makes a Shadow-IT hub whose alerts (one per switch port) point at that
+// one node. ONLINE access points with uplinks to each other stay off the
+// hub, as before, and so does every neighbor of a port with two polled
+// switches.
+func TestLLDPHubLink(t *testing.T) {
+	resetState(t)
+	const (
+		coreMAC, accMAC, thirdMAC = "f8:f0:82:00:98:01", "58:94:80:00:98:40", "4c:ae:a3:00:98:50"
+		ap1, ap2, ap3, ap4        = "9c:05:d6:31:98:01", "f4:e2:c6:f7:98:02", "9c:05:d6:31:98:03", "f4:e2:c6:f7:98:04"
+		pcBehindAcc, pcOnAcc      = "00:1b:21:98:00:01", "00:1b:21:98:00:02"
+		winPC, apX                = "00:1b:21:98:00:03", "9c:05:d6:31:98:05"
+	)
+	ports := func(d *DeviceData, n int) {
+		for port := 1; port <= n; port++ {
+			d.Interfaces = append(d.Interfaces, InterfaceData{IfIndex: port, IfDescr: fmt.Sprintf("\"Ethernet1/0/%d\"", port), IfOperStatus: 1})
+		}
+	}
+	nb := func(port int, mac, name, desc, farPort string, caps uint8) LLDPNeighbor {
+		return LLDPNeighbor{LocalPortNum: port, RemIndex: 1, RemChassisIdSubtype: 4, RemChassisId: mac,
+			RemPortIdSubtype: 5, RemPortId: `"` + farPort + `"`, RemSysName: name, RemSysDesc: desc, RemSysCapEnabled: caps}
+	}
+	win := func(port int) LLDPNeighbor {
+		return LLDPNeighbor{LocalPortNum: port, RemIndex: 9, RemChassisIdSubtype: 7, RemChassisId: `"desktop-link"`,
+			RemPortIdSubtype: 3, RemPortId: winPC}
+	}
+	aps := func(port int) []LLDPNeighbor {
+		var out []LLDPNeighbor
+		for i, mac := range []string{ap1, ap2, ap3, ap4} {
+			out = append(out, nb(port, mac, fmt.Sprintf("Sportzal%d", i+1), "U6-Pro, 6.8.2.15592", "eth0", 0x38))
+		}
+		return out
+	}
+	fdb := func(d *DeviceData, port int, macs ...string) {
+		for _, m := range macs {
+			d.MACTable = append(d.MACTable, MACEntry{PortNumber: port, MACAddress: m})
+		}
+	}
+	// core: port 24 to acc (through the AP switch), port 10 to third
+	// (through a switch with a Windows PC)
+	core := &DeviceData{IP: "10.9.98.254", SysName: "core", ChassisID: coreMAC}
+	ports(core, 24)
+	core.Neighbors = append(aps(24), nb(24, accMAC, "Switch", "PiXiETECH", "Gig0/25", 0x04),
+		nb(10, thirdMAC, "third", "HPE Comware Platform Software", "GigabitEthernet1/0/1", 0x28), win(10))
+	fdb(core, 24, accMAC, ap1, ap2, ap3, ap4, pcBehindAcc, pcOnAcc)
+	fdb(core, 10, thirdMAC, winPC)
+	acc := &DeviceData{IP: "10.9.98.40", SysName: "Switch", ChassisID: accMAC}
+	ports(acc, 25)
+	acc.Neighbors = append(aps(25), nb(25, coreMAC, "", "", "Ethernet1/0/24", 0x04))
+	fdb(acc, 25, coreMAC, ap1, ap2, ap3, ap4)
+	fdb(acc, 3, pcOnAcc)
+	third := &DeviceData{IP: "10.9.98.50", SysName: "third", ChassisID: thirdMAC}
+	ports(third, 24)
+	third.Neighbors = []LLDPNeighbor{nb(1, coreMAC, "", "", "Ethernet1/0/10", 0x04), win(1)}
+	fdb(third, 1, coreMAC, winPC)
+	snapshot := map[string]*DeviceData{core.IP: core, acc.IP: acc, third.IP: third}
+	coreID, accID, thirdID := graphDeviceNodeID(core), graphDeviceNodeID(acc), graphDeviceNodeID(third)
+
+	setInventory := func(state string) {
+		var devs []modules.ManagedDevice
+		uplinks := map[string]string{ap1: ap4, ap2: ap1, ap3: ap1, ap4: ap1} // ap1 and ap4 each other's
+		for _, mac := range []string{ap1, ap2, ap3, ap4} {
+			devs = append(devs, modules.ManagedDevice{MAC: mac, Name: "Sportzal", Kind: "access_point", State: state,
+				Uplink: &modules.ManagedUplink{MAC: uplinks[mac], LocalPort: "1"}})
+		}
+		inventoryMu.Lock()
+		inventories = map[string]inventoryRecord{"unificontroller|10.9.98.2": {Module: "unificontroller", IP: "10.9.98.2", Time: time.Now(),
+			Inventory: modules.Inventory{Devices: devs}}}
+		inventoryIndex()
+		inventoryMu.Unlock()
+	}
+	t.Cleanup(func() {
+		inventoryMu.Lock()
+		inventories, managedByMAC, managedByIP = map[string]inventoryRecord{}, map[string]ManagedView{}, map[string]ManagedView{}
+		inventoryMu.Unlock()
+	})
+
+	type view struct {
+		groups, labels map[string]string
+		links          map[[2]string]bool
+	}
+	build := func() (view, *DJGraph) {
+		g := buildGraphFromSnapshot(snapshot)
+		data := g.GetGraphData()
+		v := view{map[string]string{}, map[string]string{}, map[[2]string]bool{}}
+		for _, n := range data.Nodes {
+			v.groups[n.ID], v.labels[n.ID] = n.Group, n.SysName
+		}
+		for _, l := range data.Links {
+			v.links[[2]string{l.Source, l.Target}] = true
+		}
+		return v, g
+	}
+	linked := func(v view, a, b string) bool { return v.links[[2]string{a, b}] || v.links[[2]string{b, a}] }
+	switchMACs := buildSwitchOwnMACs(snapshot)
+	portOf := func(d *DeviceData, port int) (fdbPort, bool) {
+		for _, p := range fdbPorts(d, switchMACs) {
+			if p.Port == port {
+				return p, true
+			}
+		}
+		return fdbPort{}, false
+	}
+
+	setInventory("ADOPTING")
+	v, g := build()
+	apHub, pcHub := hubLinkNodeID(coreID, accID), hubLinkNodeID(thirdID, coreID)
+	if apHub != hubLinkNodeID(accID, coreID) {
+		t.Fatalf("hubLinkNodeID depends on the order: %q %q", apHub, hubLinkNodeID(accID, coreID))
+	}
+	if v.groups[apHub] != "ap_hub" || v.labels[apHub] != "[APHUB] AP hub\n4 access points, 0 clients" {
+		t.Errorf("AP link hub: %q %q", v.groups[apHub], v.labels[apHub])
+	}
+	if !linked(v, coreID, apHub) || !linked(v, accID, apHub) || linked(v, coreID, accID) {
+		t.Errorf("AP link hub: core-hub %v, acc-hub %v, core-acc straight %v", linked(v, coreID, apHub), linked(v, accID, apHub), linked(v, coreID, accID))
+	}
+	for _, ap := range []string{ap1, ap2, ap3, ap4} {
+		if !linked(v, apHub, ap) || linked(v, coreID, ap) || linked(v, accID, ap) {
+			t.Errorf("AP link hub: %s is not under the hub only", ap)
+		}
+	}
+	if linked(v, apHub, pcBehindAcc) || linked(v, apHub, pcOnAcc) || linked(v, coreID, pcBehindAcc) || !linked(v, accID, pcOnAcc) {
+		t.Errorf("AP link hub: the FDB behind the peer is drawn under the hub or from the core")
+	}
+	for _, c := range []struct {
+		d    *DeviceData
+		port int
+		peer string
+	}{{core, 24, accID}, {acc, 25, coreID}, {core, 10, thirdID}, {third, 1, coreID}} {
+		p, ok := portOf(c.d, c.port)
+		want := fdbAPHub
+		if c.port != 24 && c.port != 25 {
+			want = fdbHub
+		}
+		if !ok || p.Kind != want || p.Peer != c.peer || len(p.MACs) != 0 {
+			t.Errorf("%s port %d: fdbPort %+v, want kind %v peer %s and no MACs", c.d.IP, c.port, p, want, c.peer)
+		}
+	}
+	if v.groups[pcHub] != "hub" || !linked(v, coreID, pcHub) || !linked(v, thirdID, pcHub) || !linked(v, pcHub, winPC) ||
+		linked(v, coreID, thirdID) || linked(v, coreID, winPC) || linked(v, thirdID, winPC) {
+		t.Errorf("PC link hub: group %q, the PC or the switches linked around it", v.groups[pcHub])
+	}
+	var alerts []string
+	for _, s := range NewAnalyzer(captureData("link", []*DeviceData{core, acc, third}, g)).analyzeShadowIT() {
+		alerts = append(alerts, s.IssueID+" "+s.nodeID)
+	}
+	slices.Sort(alerts)
+	want := []string{shadowITIssueID(core.IP, 10) + " " + pcHub, shadowITIssueID(third.IP, 1) + " " + pcHub}
+	if slices.Sort(want); !slices.Equal(alerts, want) {
+		t.Errorf("alerts = %v, want %v", alerts, want)
+	}
+
+	setInventory(modules.StateOnline)
+	if v, _ = build(); v.groups[apHub] != "" || !linked(v, coreID, ap1) || !linked(v, accID, ap1) || !linked(v, coreID, accID) {
+		t.Errorf("ONLINE access points with uplinks to each other: hub %q, links changed", v.groups[apHub])
+	}
+
+	// a port where two polled switches are neighbors gets no plan: its
+	// access point stays linked straight
+	setInventory("ADOPTING")
+	core.Neighbors = append(core.Neighbors, nb(20, accMAC, "Switch", "PiXiETECH", "Gig0/20", 0x04),
+		nb(20, thirdMAC, "third", "HPE Comware Platform Software", "GigabitEthernet1/0/20", 0x28), nb(20, apX, "X", "U6-Pro, 6.8.2.15592", "eth0", 0x38))
+	if v, _ = build(); !linked(v, coreID, apX) || linked(v, apHub, apX) || v.groups[apHub] != "ap_hub" {
+		t.Errorf("two polled switches on a port: the access point is not linked straight, or the AP link hub is gone")
+	}
+	if _, ok := lldpPortPlans(core, switchMACs)[20]; ok {
+		t.Errorf("two polled switches on a port: got a plan")
+	}
+}
+
 // TestPhonePCs: with the Classification choice phonePCs, the one device a
 // switch learns on a port whose only LLDP neighbor is an IP phone is behind
 // the phone (its PC port): linked from the phone, not the switch, also when

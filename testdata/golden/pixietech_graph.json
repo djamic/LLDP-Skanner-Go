@@ -1,14 +1,14 @@
 {
   "after_polls": {
     "links": [
-      {"source": "58:94:80:00:f7:a3", "target": "58:94:80:01:01:27", "label": "GigaEth0/25 [T] 1G|GigaEth0/27", "sourceLabel": "GigaEth0/25 [T] 1G", "targetLabel": "GigaEth0/27"},
-      {"source": "58:94:80:00:f7:a3", "target": "78:45:58:73:0f:69", "label": "GigaEth0/1 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/1 [V1500] 1G", "targetLabel": "eth0"},
-      {"source": "58:94:80:00:f7:a3", "target": "ac:8b:a9:70:a9:66", "label": "GigaEth0/1 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/1 [V1500] 1G", "targetLabel": "eth0"},
-      {"source": "58:94:80:01:01:27", "target": "9c:05:d6:31:6b:ad", "label": "GigaEth0/4 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/4 [V1500] 1G", "targetLabel": "eth0"},
-      {"source": "58:94:80:01:01:27", "target": "9c:05:d6:31:8d:59", "label": "GigaEth0/6 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/6 [V1500] 1G", "targetLabel": "eth0"},
-      {"source": "58:94:80:01:01:27", "target": "f4:e2:c6:f7:1f:c1", "label": "GigaEth0/3 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/3 [V1500] 1G", "targetLabel": "eth0"},
-      {"source": "58:94:80:01:01:27", "target": "f4:e2:c6:f7:23:81", "label": "GigaEth0/2 [V1500] 1G|eth0", "sourceLabel": "GigaEth0/2 [V1500] 1G", "targetLabel": "eth0"},
-      {"source": "58:94:80:01:01:27", "target": "f8:f0:82:d1:67:5e", "label": "GigaEth0/28 [T] 1G|Eth1/0/24", "sourceLabel": "GigaEth0/28 [T] 1G", "targetLabel": "Eth1/0/24"}
+      {"source": "58:94:80:00:f7:a3", "target": "58:94:80:01:01:27", "label": "GE0/25 [T] 1G|GE0/27", "sourceLabel": "GE0/25 [T] 1G", "targetLabel": "GE0/27"},
+      {"source": "58:94:80:00:f7:a3", "target": "78:45:58:73:0f:69", "label": "GE0/1 [V1500] 1G|eth0", "sourceLabel": "GE0/1 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:00:f7:a3", "target": "ac:8b:a9:70:a9:66", "label": "GE0/1 [V1500] 1G|eth0", "sourceLabel": "GE0/1 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "9c:05:d6:31:6b:ad", "label": "GE0/4 [V1500] 1G|eth0", "sourceLabel": "GE0/4 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "9c:05:d6:31:8d:59", "label": "GE0/6 [V1500] 1G|eth0", "sourceLabel": "GE0/6 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "f4:e2:c6:f7:1f:c1", "label": "GE0/3 [V1500] 1G|eth0", "sourceLabel": "GE0/3 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "f4:e2:c6:f7:23:81", "label": "GE0/2 [V1500] 1G|eth0", "sourceLabel": "GE0/2 [V1500] 1G", "targetLabel": "eth0"},
+      {"source": "58:94:80:01:01:27", "target": "f8:f0:82:d1:67:5e", "label": "GE0/28 [T] 1G|Eth1/0/24", "sourceLabel": "GE0/28 [T] 1G", "targetLabel": "Eth1/0/24"}
     ],
     "nodes": [
       {"id": "58:94:80:00:f7:a3", "group": "switch", "type": "switch", "label": "Switch\n172.20.230.40\n58:94:80:00:f7:a3", "sysName": "Switch\n172.20.230.40"},
@@ -37,14 +37,14 @@
   },
   "graph_changes": {
     "edges_added": [
-      "58:94:80:00:f7:a3 -> 58:94:80:01:01:27 : \"GigaEth0/25 [T] 1G|GigaEth0/27\"",
-      "58:94:80:00:f7:a3 -> 78:45:58:73:0f:69 : \"GigaEth0/1 [V1500] 1G|eth0\"",
-      "58:94:80:00:f7:a3 -> ac:8b:a9:70:a9:66 : \"GigaEth0/1 [V1500] 1G|eth0\"",
-      "58:94:80:01:01:27 -> 9c:05:d6:31:6b:ad : \"GigaEth0/4 [V1500] 1G|eth0\"",
-      "58:94:80:01:01:27 -> 9c:05:d6:31:8d:59 : \"GigaEth0/6 [V1500] 1G|eth0\"",
-      "58:94:80:01:01:27 -> f4:e2:c6:f7:1f:c1 : \"GigaEth0/3 [V1500] 1G|eth0\"",
-      "58:94:80:01:01:27 -> f4:e2:c6:f7:23:81 : \"GigaEth0/2 [V1500] 1G|eth0\"",
-      "58:94:80:01:01:27 -> f8:f0:82:d1:67:5e : \"GigaEth0/28 [T] 1G|Eth1/0/24\"",
+      "58:94:80:00:f7:a3 -> 58:94:80:01:01:27 : \"GE0/25 [T] 1G|GE0/27\"",
+      "58:94:80:00:f7:a3 -> 78:45:58:73:0f:69 : \"GE0/1 [V1500] 1G|eth0\"",
+      "58:94:80:00:f7:a3 -> ac:8b:a9:70:a9:66 : \"GE0/1 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> 9c:05:d6:31:6b:ad : \"GE0/4 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> 9c:05:d6:31:8d:59 : \"GE0/6 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> f4:e2:c6:f7:1f:c1 : \"GE0/3 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> f4:e2:c6:f7:23:81 : \"GE0/2 [V1500] 1G|eth0\"",
+      "58:94:80:01:01:27 -> f8:f0:82:d1:67:5e : \"GE0/28 [T] 1G|Eth1/0/24\"",
       "f8:f0:82:d1:67:5e -> 78:45:58:73:0f:69 : \"Eth1/0/24 [T] 1G|eth0\"",
       "f8:f0:82:d1:67:5e -> ac:8b:a9:70:a9:66 : \"Eth1/0/24 [T] 1G|eth0\""
     ],

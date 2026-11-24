@@ -91,10 +91,10 @@ func (ix *analyzerIndex) switchNode(ip string) string {
 }
 
 // hubNode returns the hub node the graph draws for a port of switch d
-// (hubNodeID), or the switch node when there is none.
-func (ix *analyzerIndex) hubNode(d *DeviceData, port int) string {
+// (fdbPortHubID), or the switch node when there is none.
+func (ix *analyzerIndex) hubNode(d *DeviceData, p fdbPort) string {
 	for _, id := range analyzerSwitchIDs(d) {
-		hub := hubNodeID(id, port)
+		hub := fdbPortHubID(id, p)
 		if _, ok := ix.nodes[hub]; ok {
 			return hub
 		}
@@ -863,7 +863,7 @@ func (na *NetworkAnalyzer) analyzeShadowIT() []OptimizationSuggestion {
 				Device:      device.IP,
 				Description: fmt.Sprintf("Port %d has %d MAC addresses. Likely UNMANAGED SWITCH connected (Shadow IT). Remove or replace with managed switch.", p.Port, len(p.MACs)+len(p.LLDP)),
 				Value:       fmt.Sprintf("%d MACs on single port", len(p.MACs)+len(p.LLDP)),
-				nodeID:      ix.hubNode(device, p.Port),
+				nodeID:      ix.hubNode(device, p),
 			})
 		}
 	}

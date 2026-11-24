@@ -111,13 +111,14 @@ second copy appears or a copy drifts.
 | What group is a node? | `classifyNode` (`classify.go`), evidence from `nodeEvidence` | graph data, reports, analyzer, Telegram, UI | `TestClassifyNode`, `TestControllerKinds`, `TestPolledGroup` |
 | How does a group look (name, icon, colour, report section, infrastructure)? | `deviceGroups` (`groups.go`) | Go reports; `app.js`, `tree.js`, `index.html`, `history.html`, `md2docx*.py` carry generated copies | `TestGroupTables` (`-update` rewrites the copies) |
 | What does the build say a node is? | `nodeTag` (`tags.go`), written where a label line is written | `classifyNode`, analyzer, UI (`node.tags`) | `TestGraphTagsMatchLabels`, `TestNoTagParsing` |
-| Did the build make this node (hub, hyp-)? | `syntheticNode`, `hubNodeID`, `hypNodeID` (`tags.go`) | hypervisor detection, reports, UI (`node.synthetic`) | `TestSyntheticNodeIDs` |
-| What is behind a switch port? | `fdbPorts` + `lldpPortPlans` (`example_usage.go`), the LLDP neighbors per port from `lldpPortTargets` | graph, Shadow-IT alerts, report section 7, experiment metrics, UI modal | `TestShadowITOneRule`, `TestShadowITVCenterHost`, `TestPhonePCs` |
+| Did the build make this node (hub, hyp-)? | `syntheticNode`, `hubNodeID`, `hubLinkNodeID`, `hypNodeID` (`tags.go`); a port's hub: `fdbPortHubID` | hypervisor detection, reports, UI (`node.synthetic`) | `TestSyntheticNodeIDs` |
+| What is behind a switch port? | `fdbPorts` + `lldpPortPlans` (`example_usage.go`), the LLDP neighbors per port from `lldpPortTargets` | graph, Shadow-IT alerts, report section 7, experiment metrics, UI modal | `TestShadowITOneRule`, `TestShadowITVCenterHost`, `TestPhonePCs`, `TestLLDPHubs`, `TestLLDPHubLink` |
 | Which alert is a Shadow-IT hub, is it ignored? | `shadowITIssueID` (`analyzer.go`), kept on the hub as `syntheticNode.Issue`; `IsIssueIgnored` (`ignored_issues.go`) | alerts, audit report (`reportHubIsShadowIT`), UI modal (`node.ignored`, `GraphNode.Ignored`) | `TestShadowITIgnored` |
 | Which port links a device another switch's FDB learns (a switch, a router node, a managed access point)? | `fdbLinkPorts` (`example_usage.go`): the MACs per port; the port with the fewest wins | `addMACCrossRefEdges`, `gatewayPort`, `managedFDBPort` | `TestFDBLinkPorts` |
-| How is a port named and matched across vendors? | `lldpRemotePortName`, `normalizePortName`, `lldpSamePort` (`example_usage.go`) | link labels, `GetGraphData`, hypervisor keys, traffic refresh, `/api/history` | `TestLLDPRemotePortName`, `TestFillTargetPort`, `TestLLDPReverseFarPort`, `TestGoldenScenarioTables` |
+| How is a port named and matched across vendors? | `lldpRemotePortName`, `normalizePortName` (long names in any case: TP-Link `gigabitEthernet`, PiXiE `GigaEthernet`/`TGigaEthernet`; short `gi`/`Gig`/`fa`), `lldpSamePort` (`example_usage.go`) | link labels, `GetGraphData`, hypervisor keys, traffic refresh, `/api/history` | `TestLLDPRemotePortName`, `TestNormalizePortNameVendors`, `TestFillTargetPort`, `TestLLDPReverseFarPort`, `TestGoldenScenarioTables` |
 | Is a port a NULL0/loopback/CPU port? | `isNullInterface` (the name as it is and normalized) | every LLDP and FDB reader | `TestFDBLinkPorts`, `TestCollectNullInterface` |
-| Where is a switch's FDB read from? | `collectMACTable` (`snmp_object.go`): `dot1dTpFdbPort`, else `dot1qTpFdbPort` deduplicated per `(MAC, port)` | `CollectData` | `TestCollectFDBIndex` |
+| Where is a switch's FDB read from? | `collectMACTable` (`snmp_object.go`): `dot1dTpFdbPort` (index: MAC, or VLAN + MAC on TP-Link), else `dot1qTpFdbPort` (also after a dot1d walk that repeats an OID), deduplicated per `(MAC, port)`; port numbers moved to bridge ports by `collectFDBPortNumbers` | `CollectData` | `TestCollectFDBIndex`, `TestCollectFDBPortNumbers` |
+| Which LLDP row is on which local port? | `collectLLDPRemIndex` + `collectLLDPRemFirst` (2-part index order: the agent's `lldpRemLocalPortNum` column, else local port first), `collectLLDPManAddr` (also without the time mark) (`snmp_object.go`) | `CollectData`, every LLDP reader | `TestLLDPRemIndexLayouts`, `TestLLDPIndexColumns`, `TestCollectLLDPManAddrIndex` |
 | Is a MAC an ESXi host's NIC? | `graphIsESXiHostNIC` | `fdbPorts`, `lldpPortPlans`, report, `GraphNode.ESXi` (UI) | `TestShadowITVCenterHost` |
 | Who made this MAC, what kind is it? | `mac_identity.go` (`ouiRegistry`, `categorizeVendor`, `IdentifyMAC`) | classification, labels, subnet discovery | `TestOUI*`, `golden_predicates` |
 | What does a sysName/sysDescr say? | `sysTextWords` (`systext.go`) | report vendor, switch-platform guard, Huawei far-port name, Zabbix templates | `TestSysTextWords`, `TestLLDPRemotePortName` |
@@ -160,8 +161,9 @@ names, IPs and `[DNS] name`. The build records the same tags structurally
 (`graphTags`, sent as `node.tags`); no reader parses a tag line back.
 `nodeHasTag` reads label lines only for captures written before tags
 existed. Nodes the build invents (hub-, hyp-) carry `syntheticNode`
-(`node.synthetic`: kind, switch, port); their ids are made by `hubNodeID`
-and `hypNodeID` only.
+(`node.synthetic`: kind, switch, port); their ids are made by `hubNodeID`,
+`hubLinkNodeID` (a hub between two switches, one node from both) and
+`hypNodeID` only.
 
 ## 7. Device modules (`modules/`)
 
@@ -264,7 +266,7 @@ use it. Generated — do not edit by hand.
 - **`analyzerSwitchIDs`** func — analyzerSwitchIDs lists the node ids the graph can give the polled switch d: ← analyzerIndex.hubNode, analyzerIndex.switchNode, topologyCore
 - **`analyzerUniqueMACs`** func — analyzerUniqueMACs returns the distinct station MACs (usableMAC) in the FDB tables of devices. ← NetworkAnalyzer.Analyze, generateExperimentReport
 - **`switchNode`** method (analyzerIndex) — switchNode returns the topology node of the polled switch with this IP, or the IP itself when the topology has no node for it. ← NetworkAnalyzer.anomalyMap, analyzerIndex.hubNode
-- **`hubNode`** method (analyzerIndex) — hubNode returns the hub node the graph draws for a port of switch d (hubNodeID), or the switch node when there is none. ← NetworkAnalyzer.analyzeShadowIT
+- **`hubNode`** method (analyzerIndex) — hubNode returns the hub node the graph draws for a port of switch d (fdbPortHubID), or the switch node when there is none. ← NetworkAnalyzer.analyzeShadowIT
 - **`anomalyMap`** method (NetworkAnalyzer) — anomalyMap groups the suggestion types by the graph node /api/graph shows them on (F11): ← NetworkAnalyzer.Analyze
 - **`NewAnalyzer`** func — NewAnalyzer creates a new analyzer instance ← ExportHealthScores, analyzeLiveGraph, main, monitorCycle, reportDownloadHandler, reportGenerateHandler, startPeriodicAnalysis
 - **`OptimizationSuggestion`** type — OptimizationSuggestion represents a suggested improvement ← NetworkAnalyzer.BuildReport, NetworkAnalyzer.analyzeCongestion, NetworkAnalyzer.analyzeLoopback, NetworkAnalyzer.analyzePaths, NetworkAnalyzer.analyzeSTP, NetworkAnalyzer.analyzeShadowIT, NetworkAnalyzer.analyzeStability, analyzerReportAnomalies
@@ -484,6 +486,7 @@ use it. Generated — do not edit by hand.
 - **`lldpSamePort`** func — lldpSamePort reports whether a switch's own port name and the name a neighbor reported for it (both normalizePortName'd) are one port: ← lldpReverseFarPort
 - **`fdbPortKind`** type — fdbPortKind is what the per-port FDB rule (fdbPorts) makes of the MACs a switch learned on one port.
 - **`fdbPort`** type — fdbPort is one port of a switch's FDB under the per-port rule. ← fdbPorts
+- **`fdbPortHubID`** func — fdbPortHubID is the node id of the hub the graph draws for port p of the switch switchID: ← analyzerIndex.hubNode, buildGraphEdges
 - **`fdbPorts`** func — fdbPorts is the one per-port Shadow-IT rule (Q14): ← NetworkAnalyzer.analyzeShadowIT, analyzerShadowCounts, buildGraphEdges, graphHostnameIPs, reportHubIsShadowIT
 - **`lldpTargetRole`** func — lldpTargetRole is what an LLDP neighbor is to a port's hub plan (lldpPortPlans): ← fdbPorts, lldpPortPlans
 - **`fdbBigVerdict`** type — fdbBigVerdict is the big-port verdict of one switch port (fdbBigPort): ← fdbBigPort
@@ -505,6 +508,7 @@ use it. Generated — do not edit by hand.
 - **`formatSpeed`** func — formatSpeed formats interface speed in human readable format ← buildGraphEdges, getPortSpeed, refreshGraphEdgeLabels
 - **`getPortSpeed`** func — getPortSpeed returns formatted speed for a port ← buildGraphEdges
 - **`normalizePortName`** func — normalizePortName is the SINGLE source of truth for port name normalization. ← DJGraph.GetGraphData, addGatewayNodes, addMACCrossRefEdges, addManagedAPNodes, buildGraphEdges, findPortIndexByName, gatewayLLDPLinks, historyHandler (+6 more)
+- **`portIndexFold`** func — portIndexFold is the byte index of the first match of the ASCII text long in name whatever the case, or -1: ← normalizePortName
 - **`edgePortKey`** func — normalizePortForHypervisor returns a lowercase canonical port key for grouping. ← detectHypervisors, reportHypervisorHosts
 - **`normalizePortForHypervisor`** func ← detectHypervisors, edgePortKey
 - **`isPrintableString`** func — isPrintableString checks if a string contains only printable ASCII characters ← graphUsableTargetID, lldpPortIDName, normalizeID
@@ -867,14 +871,14 @@ use it. Generated — do not edit by hand.
 - **`DefaultClassifySettings`** func — DefaultClassifySettings are the recommended classification choices. ← DefaultSettings, LoadSavedData
 - **`SavedData`** type — SavedData holds all persistent data ← LoadSavedData, SaveData
 - **`DefaultSettings`** func — DefaultSettings returns default scan settings ← init
-- **`GetCurrentSettings`** func — GetCurrentSettings returns current settings Falls back to reading swich_ips file if IPRanges is empty ← handleRescanRequests, main, moduleRunHandler, runBenchmark, settingsHandler, statusHandler
+- **`GetCurrentSettings`** func — GetCurrentSettings returns current settings Falls back to reading swich_ips file if IPRanges is empty ← handleRescanRequests, main, moduleRunHandler, runBenchmark, settingsHandler, startPeriodicRescan, statusHandler
 - **`currentClassify`** func — currentClassify is the classification choices of the current settings. ← DJGraph.GetGraphData, buildGraphEdges, fdbBigPort, fdbPorts, graphVCenterHostNIC, lldpPortPlans
 - **`SetCurrentSettings`** func — SetCurrentSettings updates current settings and syncs swich_ips file ← settingsHandler
 - **`readSwitchIPsFile`** func — readSwitchIPsFile reads IP ranges from swich_ips file ← GetCurrentSettings, RunSubnetDiscovery, appendToSwitchIPs, runRescueScan
 - **`writeSwitchIPsFile`** func — writeSwitchIPsFile writes IP ranges to swich_ips file ← SetCurrentSettings
 - **`appendToSwitchIPs`** func — appendToSwitchIPs adds a single IP to swich_ips file if not already present.
 - **`LoadSavedData`** func — LoadSavedData loads saved hosts and settings from file ← hostsHandler, init, main
-- **`SaveData`** func — SaveData saves hosts and settings to file ← handleRescanRequests, main, settingsHandler
+- **`SaveData`** func — SaveData saves hosts and settings to file. ← handleRescanRequests, main, settingsHandler, startPeriodicRescan
 - **`ClearSavedData`** func — ClearSavedData removes saved data file ← hostsHandler
 - **`HasSavedData`** func — HasSavedData checks if saved data exists ← statusHandler
 - **`init`** func
@@ -939,7 +943,8 @@ use it. Generated — do not edit by hand.
 - **`collectLocalChassisColumn`** method (SNMPObject) — collectLocalChassisColumn is the second lldpLocChassisId read: ← SNMPObject.collectLocalChassisID
 - **`collectInterfaces`** method (SNMPObject) — collectInterfaces walks IF-MIB with parallel OID groups for speed ← SNMPObject.CollectData, startTrafficPolling
 - **`collectLLDPNeighbors`** method (SNMPObject) — collectLLDPNeighbors walks LLDP Remote Table (lldpRemTable, then the management addresses of lldpRemManAddrTable), in the index layout of the LLDP-MIB or in the 2-part layout of the PiXiETECH switches … ← SNMPObject.CollectData, SNMPObject.collectGatewayLLDP
-- **`collectLLDPRemIndex`** func — collectLLDPRemIndex decodes one lldpRemTable OID into its column, the neighbor key ("localPort.remIndex", the key collectLLDPManAddr gives), the local port and the remote index. ← SNMPObject.collectLLDPNeighbors
+- **`collectLLDPRemIndex`** func — collectLLDPRemIndex decodes one lldpRemTable OID into its column, the neighbor key ("localPort.remIndex", the key collectLLDPManAddr gives), the local port and the remote index. ← SNMPObject.collectLLDPNeighbors, collectLLDPRemFirst
+- **`collectLLDPRemFirst`** func — collectLLDPRemFirst reports whether an agent's 2-part lldpRemTable index (no time mark) puts the remote index first, as the PiXiETECH switches do (collectLLDPRemIndex), from the agent's own lldpRemLocalPortNum column: ← SNMPObject.collectLLDPNeighbors
 - **`lldpCapabilities`** func — lldpCapabilities reads an lldpRemSysCapEnabled value as net-snmp prints it: ← SNMPObject.collectLLDPNeighbors
 - **`lldpDiscoverable`** func — lldpDiscoverable reports whether an LLDP neighbor with these enabled capabilities may be polled as a switch and added to swich_ips: ← classifyOwn, discoverFromLLDP, lldpTargetRole
 - **`enrichWithManagementIPs`** method (SNMPObject) — enrichWithManagementIPs collects Management IP addresses from lldpRemManAddrTable ← SNMPObject.collectLLDPNeighbors
@@ -948,8 +953,9 @@ use it. Generated — do not edit by hand.
 - **`collectSNMPValue`** func — collectSNMPValue splits one snmpbulkwalk -On line into the OID, the value type ("Hex-STRING", "STRING", "INTEGER"...; ← SNMPObject.collectARPTable, SNMPObject.collectBaseNumPorts, SNMPObject.collectGatewayMACPorts, SNMPObject.collectLLDPNeighbors, SNMPObject.collectLocalChassisColumn, SNMPObject.collectPortNames, SNMPObject.collectSysText, SNMPObject.enrichWithManagementIPs
 - **`collectPhysAddress`** func — collectPhysAddress decodes an ipNetToMediaPhysAddress value into canonical MAC text. ← SNMPObject.collectARPTable, SNMPObject.collectGatewayMACPorts
 - **`collectOIDIndex`** func — collectOIDIndex returns the index components after base in a numeric OID (snmpbulkwalk -On), or ok=false when the OID is not below base or one of the components is not a number. ← SNMPObject.collectARPTable, SNMPObject.collectBridgePortIfIndex, SNMPObject.collectGatewayMACPorts, SNMPObject.collectLLDPLocPortMap, SNMPObject.collectMACTable, SNMPObject.collectPortNames, SNMPObject.collectVRRPInfo, collectLLDPManAddr (+2 more)
-- **`parseSNMPLine`** func — parseSNMPLine parses specific snmpwalk output line .1.0.8802.1.1.2.1.4.1.1.5.0.48.1 = Hex-STRING: ← SNMPObject.collectBridgePortIfIndex, SNMPObject.collectInterfaces, SNMPObject.collectLLDPLocPortMap, SNMPObject.collectLLDPNeighbors, SNMPObject.collectMACTable, SNMPObject.collectSTPInfo, SNMPObject.collectVRRPInfo, collectChassisAnswer (+2 more)
+- **`parseSNMPLine`** func — parseSNMPLine parses specific snmpwalk output line .1.0.8802.1.1.2.1.4.1.1.5.0.48.1 = Hex-STRING: ← SNMPObject.collectBridgePortIfIndex, SNMPObject.collectInterfaces, SNMPObject.collectLLDPLocPortMap, SNMPObject.collectLLDPNeighbors, SNMPObject.collectMACTable, SNMPObject.collectSTPInfo, SNMPObject.collectVRRPInfo, collectChassisAnswer (+3 more)
 - **`collectMACTable`** method (SNMPObject) — collectMACTable collects MAC address table (FDB) from BRIDGE-MIB, falling back to Q-BRIDGE-MIB dot1qTpFdbPort when dot1dTpFdbPort has no rows (UniFi USW FASTPATH and H3C Comware 7 agents). ← SNMPObject.CollectData
+- **`collectFDBPortNumbers`** func — collectFDBPortNumbers puts the FDB on the bridge ports when the agent gave port numbers instead (fdb, the bridge ports of basePorts, dot1dBasePortIfIndex): ← SNMPObject.CollectData
 - **`collectARPTable`** method (SNMPObject) — collectARPTable collects ARP table (IP to MAC mapping) from IP-MIB ← SNMPObject.CollectData, collectARPFromAllSwitches, walkGatewaysARP
 - **`collectSTPInfo`** method (SNMPObject) — collectSTPInfo collects Spanning Tree Protocol details ← SNMPObject.CollectData
 - **`collectVRRPInfo`** method (SNMPObject) — collectVRRPInfo walks RFC 2787 VRRP-MIB (vrrpOperState and vrrpAssoIpAddrRowStatus). ← SNMPObject.CollectData
@@ -1015,7 +1021,8 @@ use it. Generated — do not edit by hand.
 - **`graphHasTag`** func — graphHasTag reports whether a node has a tag of kind tag. ← detectHypervisors, enrichGraphWithIPs
 - **`nodeHasTag`** func — nodeHasTag reports whether a graph data node has a tag of kind tag: ← topologyCore
 - **`syntheticNode`** type — syntheticNode is what the graph build tells of a node it makes for what no device shows: ← buildGraphEdges, detectHypervisors, graphSetSynthetic
-- **`hubNodeID`** func — hubNodeID is the id of the hub node of a switch node's FDB port. ← analyzerIndex.hubNode, buildGraphEdges
+- **`hubNodeID`** func — hubNodeID is the id of the hub node of a switch node's FDB port. ← fdbPortHubID
+- **`hubLinkNodeID`** func — hubLinkNodeID is the id of the hub node between two switch nodes (an unmanaged switch on the link between them, lldpPortPlan.Peer): ← fdbPortHubID
 - **`hypNodeID`** func — hypNodeID is the id of the hypervisor node of a port of a switch or hub node (port: ← detectHypervisors
 - **`graphSetSynthetic`** func — graphSetSynthetic records what the build tells of a synthetic node. ← buildGraphEdges, detectHypervisors
 - **`graphSyntheticKind`** func — graphSyntheticKind is the kind of a synthetic node, "" for a device's. ← GenerateShadowDiagrams, detectHypervisors

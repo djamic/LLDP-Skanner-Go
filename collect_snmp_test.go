@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"testing"
@@ -115,11 +117,13 @@ func TestCollectLLDPManAddrIndex(t *testing.T) {
 		{".1.0.8802.1.1.2.1.4.2.1.3.0.48.1.1.4.172.20.1.5", "48.1", "172.20.1.5", true},
 		{"1.0.8802.1.1.2.1.4.2.1.3.0.48.1.1.4.172.20.1.5", "48.1", "172.20.1.5", true}, // no leading dot
 		{".1.0.8802.1.1.2.1.4.2.1.4.123456.7.2.1.4.10.1.2.3", "7.2", "10.1.2.3", true},
-		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.1.10.1.2.3", "7.2", "10.1.2.3", true}, // no length octet
-		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.2.4.10.1.2.3", "", "", false},         // not IPv4
-		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.1.4.10.1.2", "", "", false},           // too short
-		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.1.4.10.1.2.3.4", "", "", false},       // too long
-		{".1.0.8802.1.1.2.1.4.1.1.3.0.7.2.1.4.10.1.2.3", "", "", false},         // lldpRemTable, not the address table
+		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.1.10.1.2.3", "7.2", "10.1.2.3", true},           // no length octet
+		{".1.0.8802.1.1.2.1.4.2.1.3.8.1.1.4.172.20.240.12", "8.1", "172.20.240.12", true}, // TP-Link: no time mark
+		{".1.0.8802.1.1.2.1.4.2.1.3.0.8.1.4.172.20.240", "", "", false},                   // no time mark, not IPv4
+		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.2.4.10.1.2.3", "", "", false},                   // not IPv4
+		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.1.4.10.1.2", "", "", false},                     // too short
+		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.1.4.10.1.2.3.4", "", "", false},                 // too long
+		{".1.0.8802.1.1.2.1.4.1.1.3.0.7.2.1.4.10.1.2.3", "", "", false},                   // lldpRemTable, not the address table
 		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.1.4.10.1.2.256", "", "", false},
 		{".1.0.8802.1.1.2.1.4.2.1.3.0.7.2.1.4.0.0.0.0", "", "", false},
 		{".1.0.8802.1.1.2.1.4.2.1", "", "", false},
@@ -187,6 +191,97 @@ func TestCollectFDBIndex(t *testing.T) {
 	}
 	if !slices.Equal(gotQ, wantQ) {
 		t.Errorf("collectMACTable (dot1q fallback) =\n%v\nwant\n%v", gotQ, wantQ)
+	}
+
+	// TP-Link JetStream (172.20.240.209, 2026-11-24): dot1dTpFdbPort.<VLAN>.<6
+	// MAC octets> = the dot1dBasePort; one row per (MAC, port) across VLANs.
+	// A seventh part that is no VLAN (0) is still no MAC.
+	fakeSNMP.set("10.9.1.31", map[string][]string{oidFDBPort: {
+		fdb + ".1.0.0.94.0.1.20 = INTEGER: 49160",
+		fdb + ".1500.0.0.94.0.1.20 = INTEGER: 49160", // the same MAC in VLAN 1500
+		fdb + ".1500.120.69.88.124.135.79 = INTEGER: 49153",
+		fdb + ".0.27.33.9.0.1.7 = INTEGER: 7",
+	}})
+	gotT, err := obj.collectMACTable("10.9.1.31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantT := []MACEntry{
+		{MACAddress: "00:00:5e:00:01:14", PortNumber: 49160, VlanID: 1, Status: "learned"},
+		{MACAddress: "78:45:58:7c:87:4f", PortNumber: 49153, VlanID: 1500, Status: "learned"},
+	}
+	if !slices.Equal(gotT, wantT) {
+		t.Errorf("collectMACTable (TP-Link VLAN index) =\n%v\nwant\n%v", gotT, wantT)
+	}
+
+	// An agent that repeats an OID in dot1dTpFdbPort (the TL-SG2428P
+	// 172.20.230.200) is read from dot1qTpFdbPort; with no rows there the
+	// walk's error stays. A dot1dTpFdbPort timeout is the error at once: no
+	// second walk to wait for.
+	before := snmpWalk
+	t.Cleanup(func() { snmpWalk = before })
+	snmpWalk = func(community, ip, oid string, timing walkTiming) ([]string, error) {
+		if oid == oidFDBPort && (ip == "10.9.1.32" || ip == "10.9.1.33") {
+			return nil, fmt.Errorf("walk %s: %w", ip, errWalkRepeats)
+		}
+		return before(community, ip, oid, timing)
+	}
+	fakeSNMP.set("10.9.1.32", map[string][]string{collectQFDBPortOID: {collectQFDBPortOID + ".1.0.187.193.118.44.60 = INTEGER: 6"}})
+	fakeSNMP.set("10.9.1.33", map[string][]string{collectQFDBPortOID: {collectQFDBPortOID + " = No Such Instance currently exists at this OID"}})
+	fakeSNMP.set("10.9.1.34", map[string][]string{collectQFDBPortOID: {collectQFDBPortOID + ".1.0.187.193.118.44.60 = INTEGER: 6"}})
+	if got, err := obj.collectMACTable("10.9.1.32"); err != nil || len(got) != 1 || got[0].PortNumber != 6 {
+		t.Errorf("dot1d repeats an OID: %v, %v; want the dot1q row", got, err)
+	}
+	if got, err := obj.collectMACTable("10.9.1.33"); !errors.Is(err, errWalkRepeats) || got != nil {
+		t.Errorf("dot1d repeats an OID, dot1q empty: %v, %v; want errWalkRepeats", got, err)
+	}
+	fakeSNMP.walkCounts()
+	got34, err := obj.collectMACTable("10.9.1.34")
+	if q := fakeSNMP.walkCounts()["10.9.1.34 "+collectQFDBPortOID]; err == nil || got34 != nil || q != 0 {
+		t.Errorf("dot1d timeout: %v, %v, %d dot1q walks; want the error and none", got34, err, q)
+	}
+}
+
+// TestCollectFDBPortNumbers: an FDB in port numbers (the TP-Link JetStream
+// dot1qTpFdbPort: 1-10, dot1dBasePort 49153-49162) is put on the bridge
+// ports, the k-th port on the k-th bridge port; an FDB with any entry on a
+// bridge port, an entry beyond the count, bridge ports numbered from 1 and
+// no bridge ports leave it as it is.
+func TestCollectFDBPortNumbers(t *testing.T) {
+	base := map[int]int{}
+	for p := 49153; p <= 49162; p++ {
+		base[p] = p
+	}
+	fdb := func(ports ...int) []MACEntry {
+		var out []MACEntry
+		for i, p := range ports {
+			out = append(out, MACEntry{MACAddress: fmt.Sprintf("00:1b:21:00:00:%02x", i), PortNumber: p})
+		}
+		return out
+	}
+	ports := func(es []MACEntry) []int {
+		var out []int
+		for _, e := range es {
+			out = append(out, e.PortNumber)
+		}
+		return out
+	}
+	for _, c := range []struct {
+		name string
+		fdb  []MACEntry
+		base map[int]int
+		want []int
+	}{
+		{"TP-Link port numbers", fdb(1, 8, 8, 10), base, []int{49153, 49160, 49160, 49162}},
+		{"an entry on a bridge port", fdb(1, 49160), base, []int{1, 49160}},
+		{"an entry beyond the count", fdb(1, 11), base, []int{1, 11}},
+		{"bridge ports from 1", fdb(1, 2), map[int]int{1: 6, 2: 7, 3: 8}, []int{1, 2}},
+		{"sparse low bridge ports", fdb(1, 3), map[int]int{2: 2, 4: 4, 6: 6}, []int{1, 3}},
+		{"no bridge ports", fdb(1, 2), nil, []int{1, 2}},
+	} {
+		if got := ports(collectFDBPortNumbers(c.fdb, c.base)); !slices.Equal(got, c.want) {
+			t.Errorf("%s: ports %v, want %v", c.name, got, c.want)
+		}
 	}
 }
 

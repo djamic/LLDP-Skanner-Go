@@ -60,6 +60,9 @@ var (
 	reSlotPortLevel = regexp.MustCompile(`(?i)^Slot:\s*(\d+)\s+Port:\s*(\d+)\b.*-\s*Level$`)
 	reLinkAggregate = regexp.MustCompile(`(?i)^Link\s+Aggregate\s+(\d+)$`)
 	rePortHash      = regexp.MustCompile(`(?i)^Port\s*#\s*(\d+)$`)
+	// the short port names of Eltex ("gi1/0/4", "fa1/0/7") and PiXiE LLDP
+	// ("Gig0/25"): a prefix and the port number, nothing else
+	rePortShort = regexp.MustCompile(`(?i)^(gig|gi|fa)([0-9][0-9/.:]*)$`)
 )
 
 // InterfaceTraffic tracks traffic counters for speed calculation
@@ -996,6 +999,10 @@ type lldpPortPlan struct {
 	APs     int               // how many of them are access points
 	Ports   map[string]string // a neighbor's own port (lldpRemotePortName)
 	Phone   string            // the daisy chain's phone, the other neighbor behind it
+	// Peer is the node id of the polled device on the far side of the
+	// unmanaged switch (a hub between two switches): its LLDP row on the
+	// port is the link through the hub, no direct link
+	Peer string
 }
 
 // lldpPortTargets are a switch's accepted LLDP neighbors
@@ -1020,13 +1027,24 @@ func lldpPortTargets(data *DeviceData) map[int]map[string]LLDPNeighbor {
 // choice lldpHubs (none without it). Neighbors on one port that are no
 // switch are behind an unmanaged switch that passes LLDP on (UniFi access
 // points, Windows' own LLDP driver): drawn straight from the port, the
-// switch is never seen. A port where a polled switch or router, or an
-// unpolled switch (a bridge or router by its LLDP capabilities whose vendor
-// makes no access points), is a neighbor gets no plan: the others are that
-// switch's. An access point its controller links to another device (the
-// pass-through port of a UAP-AC-Mesh-Pro, a mesh link, a UniFi switch) is
-// behind that device, not on the port's segment: it is no member and is
-// drawn as before. A port with an HTTP-confirmed ESXi host (a neighbor or
+// switch is never seen. A port where an unpolled switch (a bridge or router
+// by its LLDP capabilities whose vendor makes no access points), or two
+// polled devices, are neighbors gets no plan: the others are that switch's.
+// A port where one polled device (a switch, a router) is a neighbor with at
+// least one other is a link through an unmanaged switch that passes LLDP
+// on, with the others on it: one hub between the two (Peer, the polled
+// device; its LLDP row draws no direct link), with no FDB MACs (the port
+// learns everything behind the peer). 172.20.230.254 Eth1/0/24 and
+// 172.20.230.40 GigaEthernet0/25 each see the other and the same four U6 Pro
+// access points (Sportzal1-4, live SNMP, 2026-11-24): both used to link
+// every access point, and the two switches straight. An access point its
+// controller links to another device (the pass-through port of a
+// UAP-AC-Mesh-Pro, a mesh link, a UniFi switch) is behind that device, not
+// on the port's segment: it is no member and is drawn as before. Only an
+// online access point's uplink is the controller's live view: one that is
+// adopting, pending, offline or updating keeps its last one (the four
+// Sportzal access points, ADOPTING, give each other as uplinks), so it
+// counts only when the state is ONLINE or not given. A port with an HTTP-confirmed ESXi host (a neighbor or
 // an FDB MAC) gets no plan either: it is never a Shadow-IT hub (the ESXi
 // exemption). Of the other ports with at least two members, one where
 // most are access points is an AP hub (a Shadow-IT hub with the choice
@@ -1057,11 +1075,19 @@ func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldp
 		var phones, others []string
 		for target, n := range targets {
 			isAP, isSwitch, isPhone := lldpTargetRole(target, n, rules)
-			if _, polled := switchMACs[target]; polled || isSwitch {
+			if id, polled := switchMACs[target]; polled {
+				if id == selfID || (plan.Peer != "" && plan.Peer != id) {
+					switchBehind = true
+					break
+				}
+				plan.Peer = id
+				continue
+			}
+			if isSwitch {
 				switchBehind = true
 				break
 			}
-			if v := managedViewOf(target); isAP && v != nil && v.Uplink != nil {
+			if v := managedViewOf(target); isAP && v != nil && v.Uplink != nil && (v.State == "" || v.State == modules.StateOnline) {
 				if up := canonicalMAC(v.Uplink.MAC); up != "" && up != ownMAC && switchMACs[up] != selfID {
 					continue
 				}
@@ -1077,7 +1103,7 @@ func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldp
 			plan.Targets = append(plan.Targets, target)
 			plan.Ports[target] = lldpRemotePortName(n)
 		}
-		if switchBehind || len(plan.Targets) < 2 {
+		if switchBehind || len(plan.Targets) == 0 || (len(plan.Targets) < 2 && plan.Peer == "") {
 			continue
 		}
 		slices.Sort(plan.Targets)
@@ -1085,7 +1111,7 @@ func lldpPortPlans(data *DeviceData, switchMACs map[string]string) map[int]*lldp
 		switch {
 		case aps > len(plan.Targets)-aps && !rules.APHubAlert:
 			plan.Kind = fdbAPHub
-		case len(plan.Targets) == 2 && len(phones) == 1 && len(others) == 1:
+		case plan.Peer == "" && len(plan.Targets) == 2 && len(phones) == 1 && len(others) == 1:
 			plan.Kind, plan.Phone = fdbDirect, phones[0]
 		default:
 			plan.Kind = fdbHub
@@ -1166,6 +1192,11 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 			}
 			continue
 		}
+		// The polled device beyond a hub between two switches: linked
+		// through the hub (the FDB loop draws this side of it), not straight
+		if plan := plans[neighbor.LocalPortNum]; plan != nil && plan.Peer != "" && switchMACs[targetID] == plan.Peer {
+			continue
+		}
 
 		// Get VLAN info for local port (PortVLANs is dot1d bridge-port indexed)
 		vlanStr := getPortVLANLabel(data.PortVLANs, collectBridgePort(data, neighbor.LocalPortNum))
@@ -1240,7 +1271,7 @@ func buildGraphEdges(graph *DJGraph, data *DeviceData, switchMACs map[string]str
 			// Classification choice wifiClientsCountOnly the access points'
 			// clients are counted, not drawn: an AP hub's MACs, and the
 			// randomised MACs of a hub with access points
-			nodeID := hubNodeID(srcID, p.Port)
+			nodeID := fdbPortHubID(srcID, p)
 			tag := nodeTag{Tag: tagHub, Detail: "Unmanaged"}
 			count := fmt.Sprintf("%d devices", len(p.MACs)+len(p.LLDP))
 			macs := p.MACs
@@ -1523,6 +1554,20 @@ type fdbPort struct {
 	// neighbor and is no trunk or uplink, so a hub unless it is a VM or
 	// ESXi port (the experiment's shadow_it_raw counts these)
 	Candidate bool
+	// Peer is the polled device on the far side of a hub between two
+	// switches (lldpPortPlan.Peer): both switches link to the one hub node
+	// (fdbPortHubID)
+	Peer string
+}
+
+// fdbPortHubID is the node id of the hub the graph draws for port p of the
+// switch switchID: hubNodeID, or for a hub between two switches
+// (fdbPort.Peer) hubLinkNodeID, the same id from both of them.
+func fdbPortHubID(switchID string, p fdbPort) string {
+	if p.Peer != "" {
+		return hubLinkNodeID(switchID, p.Peer)
+	}
+	return hubNodeID(switchID, p.Port)
 }
 
 // fdbPorts is the one per-port Shadow-IT rule (Q14): the graph's hub nodes,
@@ -1658,12 +1703,15 @@ func fdbPorts(data *DeviceData, switchMACs map[string]string) []fdbPort {
 			if plan.Kind == fdbDirect {
 				continue
 			}
+			if plan.Peer != "" {
+				macs = nil // a hub between two switches: the port learns what is behind the peer
+			}
 			if i, ok := planned[ifIdx]; ok {
 				out[i].MACs = append(out[i].MACs, macs...)
 				continue
 			}
 			planned[ifIdx] = len(out)
-			out = append(out, fdbPort{Port: portNum, MACs: macs, LLDP: plan.Targets, APs: plan.APs, Kind: plan.Kind, Candidate: plan.Kind == fdbHub})
+			out = append(out, fdbPort{Port: portNum, MACs: macs, LLDP: plan.Targets, APs: plan.APs, Kind: plan.Kind, Candidate: plan.Kind == fdbHub, Peer: plan.Peer})
 			continue
 		}
 
@@ -2036,12 +2084,23 @@ func getPortSpeed(interfaces []InterfaceData, portIndex int) string {
 // Steps: 1) strip quotes, 2) remove MAC prefix, 3) remove noise suffixes,
 //         4) apply abbreviations in priority order (longest match first).
 //
+// The long names match whatever their case: the TP-Link JetStream switches
+// name their ports "gigabitEthernet 1/0/8" (ifDescr and LLDP), the PiXiE
+// switches "GigaEthernet0/6" and "TGigaEthernet0/4" (172.20.230.40 and .44,
+// 2026-11-24). A short name that is only a prefix and the port number
+// (rePortShort: Eltex "gi1/0/4" and "fa1/0/7", PiXiE's LLDP port id
+// "Gig0/25") gets the same short form.
+//
 // Examples:
 //   "GigabitEthernet1/0/26"  → "GE1/0/26"
 //   "GigabitF1/0/26"         → "GE1/0/26"
 //   "Ten-GigabitEthernet1/0/49" → "TGE1/0/49"
 //   "4c:ae:a3:xx:GE1/0/1"   → "GE1/0/1"
 //   "fastethernet 0/1"       → "FE0/1"
+//   "gigabitEthernet 1/0/8"  → "GE1/0/8"
+//   "GigaEthernet0/6"        → "GE0/6"
+//   "TGigaEthernet0/4"       → "TGE0/4"
+//   "Gig0/25", "gi1/0/4"     → "GE0/25", "GE1/0/4"
 func normalizePortName(name string) string {
 	// 1. Remove surrounding quotes and whitespace
 	name = strings.Trim(name, "\" \t\r\n")
@@ -2093,26 +2152,50 @@ func normalizePortName(name string) string {
 		{"Ten-GigabitEthernet", "TGE"},
 		{"TenGigE", "TGE"},
 		{"Ten-GE", "TGE"},
+		{"TGigaEthernet", "TGE"}, // PiXiE (before GigaEthernet)
 		// 1G — Gigabit variants (GigabitF must come before Gigabit)
 		{"GigabitEthernet", "GE"},
-		{"GigabitF", "GE"}, // HPE/SNR shorthand
+		{"GigaEthernet", "GE"}, // PiXiE
+		{"GigabitF", "GE"},     // HPE/SNR shorthand
 		{"Gigabit", "GE"},
 		// 100M
 		{"FastEthernet", "FE"},
 		// Generic
 		{"Ethernet", "Eth"},
 	}
+	abbreviated := false
 	for _, ab := range abbreviations {
-		if strings.Contains(name, ab.long) {
-			name = strings.Replace(name, ab.long, ab.short, 1)
+		if i := portIndexFold(name, ab.long); i >= 0 {
+			name = name[:i] + ab.short + name[i+len(ab.long):]
+			abbreviated = true
 			break
 		}
+	}
+	if m := rePortShort.FindStringSubmatch(name); !abbreviated && m != nil {
+		short := "GE"
+		if strings.EqualFold(m[1], "fa") {
+			short = "FE"
+		}
+		name = short + m[2]
 	}
 
 	// 5. Collapse multiple spaces
 	name = strings.Join(strings.Fields(name), "")
 
 	return name
+}
+
+// portIndexFold is the byte index of the first match of the ASCII text
+// long in name whatever the case, or -1: normalizePortName's long port
+// names. name keeps its bytes (no lower-cased copy whose indexes could
+// differ).
+func portIndexFold(name, long string) int {
+	for i := 0; i+len(long) <= len(name); i++ {
+		if strings.EqualFold(name[i:i+len(long)], long) {
+			return i
+		}
+	}
+	return -1
 }
 
 // normalizePortForHypervisor returns a lowercase canonical port key for grouping.
@@ -3147,6 +3230,17 @@ func startPeriodicRescan(snmpObject *SNMPObject) {
 
 			// Rebuild graph with fresh data
 			rebuildGraph()
+
+			// Save the fresh data: a restart (the 05:00 cron, a deploy)
+			// starts from the saved hosts, and the startup graph showed the
+			// network of the last full scan or settings save (2026-10-27
+			// on 2026-11-24: 172.20.230.44 with access points it no longer has)
+			settings := GetCurrentSettings()
+			collectedDataMutex.RLock()
+			if err := SaveData(collectedData, settings); err != nil {
+				fmt.Printf("⚠️ [Periodic] Saving %s failed: %v\n", savedDataFile, err)
+			}
+			collectedDataMutex.RUnlock()
 
 			currentGraph := GetGlobalGraph()
 			if currentGraph != nil {

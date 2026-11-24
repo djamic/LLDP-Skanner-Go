@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/netip"
 	"os/exec"
 	"slices"
@@ -422,7 +423,7 @@ func (s *SNMPObject) CollectData(ip, sysName string) {
 			// Optional: without it the bridge port is used as the ifIndex.
 			bridgePorts, bpErr := s.collectBridgePortIfIndex(ip)
 			mu.Lock()
-			data.MACTable = macTable
+			data.MACTable = collectFDBPortNumbers(macTable, bridgePorts)
 			data.BridgePortIfIndex = bridgePorts
 			if bpErr != nil {
 				data.failedWalks = append(data.failedWalks, collectWalkBridgePorts)
@@ -954,6 +955,7 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 	}
 
 	neighborMap := make(map[string]*LLDPNeighbor)
+	remFirst := collectLLDPRemFirst(lines)
 
 	for _, line := range lines {
 		oid, val, err := parseSNMPLine(line)
@@ -962,10 +964,15 @@ func (s *SNMPObject) collectLLDPNeighbors(ip string) ([]LLDPNeighbor, error) {
 		}
 
 		// OID: .1.0.8802.1.1.2.1.4.1.1.COLUMN.TimeMark.LocalPort.RemIndex,
-		// or the PiXiETECH form without the time mark (collectLLDPRemIndex)
+		// or a form without the time mark (collectLLDPRemIndex), in the
+		// order of this agent (collectLLDPRemFirst)
 		col, key, lp, ri, twoPart, ok := collectLLDPRemIndex(oid)
 		if !ok {
 			continue
+		}
+		if twoPart && !remFirst {
+			lp, ri = ri, lp
+			key = fmt.Sprintf("%d.%d", lp, ri)
 		}
 
 		if _, exists := neighborMap[key]; !exists {
@@ -1045,7 +1052,9 @@ const collectLLDPRemOID = ".1.0.8802.1.1.2.1.4.1.1"
 // (172.20.230.44 sees 172.20.230.40 on its port 27, and .40 sees .44's
 // Gig0/27 on port 25). twoPart marks that layout: collectLLDPNeighbors
 // then takes lldpRemLocalPortNum and lldpRemIndex from those columns when
-// the agent reports them. Any other index length gives ok=false.
+// the agent reports them. Any other index length gives ok=false. The
+// 2-part index is given in the PiXiETECH order; collectLLDPNeighbors swaps
+// it for an agent whose order is the other one (collectLLDPRemFirst).
 func collectLLDPRemIndex(oid string) (col int, key string, localPort, remIndex int, twoPart, ok bool) {
 	idx, ok := collectOIDIndex(oid, collectLLDPRemOID)
 	if !ok {
@@ -1060,6 +1069,37 @@ func collectLLDPRemIndex(oid string) (col int, key string, localPort, remIndex i
 		return 0, "", 0, 0, false, false
 	}
 	return col, fmt.Sprintf("%d.%d", localPort, remIndex), localPort, remIndex, twoPart, true
+}
+
+// collectLLDPRemFirst reports whether an agent's 2-part lldpRemTable index
+// (no time mark) puts the remote index first, as the PiXiETECH switches do
+// (collectLLDPRemIndex), from the agent's own lldpRemLocalPortNum column:
+// the first row whose value is one part of its index and not the other
+// tells (PiXiETECH: lldpRemLocalPortNum.1.25 = 25). An agent that reports
+// no index column, or none that tells, has the LLDP-MIB order without the
+// time mark, local port first: the TP-Link JetStream switches (172.20.240.209,
+// 2026-11-24) give lldpRemSysName.8.1 = "F-9", remote index 1 on their
+// uplink port 8 (lldpLocPortNum 8, gigabitEthernet 1/0/8), and read
+// remote index first every neighbor was on port 1.
+func collectLLDPRemFirst(lines []string) bool {
+	for _, line := range lines {
+		oid, val, err := parseSNMPLine(line)
+		if err != nil {
+			continue
+		}
+		col, _, lp, ri, twoPart, ok := collectLLDPRemIndex(oid)
+		if !ok || !twoPart || col != 2 {
+			continue
+		}
+		switch n, err := strconv.Atoi(val); {
+		case err != nil || lp == ri:
+		case n == lp:
+			return true
+		case n == ri:
+			return false
+		}
+	}
+	return false
 }
 
 // LLDP system capabilities (LldpSystemCapabilitiesMap, a BITS value whose
@@ -1154,6 +1194,14 @@ const collectLLDPManAddrOID = ".1.0.8802.1.1.2.1.4.2.1"
 // address); other address families give ok=false.
 func collectLLDPManAddr(oid string) (key, ip string, ok bool) {
 	idx, ok := collectOIDIndex(oid, collectLLDPManAddrOID)
+	// The TP-Link JetStream switches leave the time mark out, as in their
+	// lldpRemTable (collectLLDPRemFirst): <column>.<local port>.<remote
+	// index>.1.4.a.b.c.d (lldpRemManAddrIfSubtype.8.1.1.4.172.20.240.12 on
+	// 172.20.240.209). With a time mark the fourth part is the family (1),
+	// never the length 4, so the two forms do not meet.
+	if ok && len(idx) == 9 && idx[3] == 1 && idx[4] == 4 {
+		idx = slices.Insert(idx, 1, 0)
+	}
 	// column, time mark, local port, remote index, address family, address
 	if !ok || len(idx) < 6 || idx[4] != 1 { // IANA address family 1 = IPv4
 		return "", "", false
@@ -1318,11 +1366,19 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 	// where M1-M6 are the 6 bytes of MAC address
 
 	lines, err := s.runSNMPWalkUnordered(ip, collectFDBPortOID)
-	if err != nil {
-		return nil, err
+	switch {
+	case errors.Is(err, errWalkRepeats):
+		lines = nil // the agent answers, but not this table: dot1q below
+	case err != nil:
+		return nil, err // no answer (a timeout): no second walk to wait for
 	}
 
 	result := []MACEntry{}
+	type macPort struct {
+		mac  string
+		port int
+	}
+	seenD := make(map[macPort]bool)
 
 	for _, line := range lines {
 		oid, val, err := parseSNMPLine(line)
@@ -1332,8 +1388,14 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 
 		// Extract MAC address from OID
 		// OID: .1.3.6.1.2.1.17.4.3.1.2.76.174.163.142.66.17
-		// The index is exactly the six MAC octets.
+		// The index is the six MAC octets, or on the TP-Link JetStream
+		// switches the VLAN and the six octets (dot1dTpFdbPort.1.0.0.94.0.1.20
+		// = 49160 on 172.20.240.209: VLAN 1, port 49160, a dot1dBasePort).
 		octets, ok := collectOIDIndex(oid, collectFDBPortOID)
+		vlan := 0
+		if ok && len(octets) == 7 && octets[0] >= 1 && octets[0] <= 4094 {
+			vlan, octets = octets[0], octets[1:]
+		}
 		if !ok || len(octets) != 6 || slices.ContainsFunc(octets, func(b int) bool { return b > 255 }) {
 			continue
 		}
@@ -1349,10 +1411,16 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 			continue
 		}
 
+		// one row per (MAC, port): the TP-Link table has one per VLAN
+		if key := (macPort{macAddr, portNum}); seenD[key] {
+			continue
+		} else {
+			seenD[key] = true
+		}
 		entry := MACEntry{
 			MACAddress: macAddr,
 			PortNumber: portNum,
-			VlanID:     0,         // Will be populated if Q-BRIDGE is available
+			VlanID:     vlan,      // the TP-Link index's VLAN, else 0 (Q-BRIDGE gives it)
 			Status:     "learned", // Default
 		}
 
@@ -1360,13 +1428,12 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 	}
 
 	// Fallback to Q-BRIDGE-MIB dot1qTpFdbPort.<fdbId>.<6 MAC octets> = port
-	// when dot1dTpFdbPort answered with no rows (e.g. UniFi USW, H3C Comware 7).
+	// when dot1dTpFdbPort answered with no rows (e.g. UniFi USW, H3C Comware 7)
+	// or its agent repeated an OID in it (the TL-SG2428P 172.20.230.200,
+	// 2026-11-23); that walk with no fallback rows is the walk's error.
 	if len(result) == 0 {
-		if qLines, qErr := s.runSNMPWalkUnordered(ip, collectQFDBPortOID); qErr == nil {
-			type macPort struct {
-				mac  string
-				port int
-			}
+		qLines, qErr := s.runSNMPWalkUnordered(ip, collectQFDBPortOID)
+		if qErr == nil {
 			seen := make(map[macPort]bool)
 			for _, line := range qLines {
 				oid, val, err := parseSNMPLine(line)
@@ -1397,9 +1464,42 @@ func (s *SNMPObject) collectMACTable(ip string) ([]MACEntry, error) {
 				})
 			}
 		}
+		if len(result) == 0 && err != nil {
+			if qErr != nil {
+				return nil, fmt.Errorf("%w; dot1qTpFdbPort: %v", err, qErr)
+			}
+			return nil, err
+		}
 	}
 
 	return result, nil
+}
+
+// collectFDBPortNumbers puts the FDB on the bridge ports when the agent
+// gave port numbers instead (fdb, the bridge ports of basePorts,
+// dot1dBasePortIfIndex): the TP-Link JetStream switches answer
+// dot1qTpFdbPort with 1-10 while their dot1dBasePort numbers are 49153-49162
+// (the ifIndexes of gigabitEthernet 1/0/1-10; 172.20.240.209, 2026-11-24),
+// so port 1 was read as ifIndex 1, "Vlan-interface1". Only when the bridge
+// ports are all numbered above their count (n), no entry is on a bridge
+// port and every one is a position among them (1..n) is the FDB moved, the
+// k-th port to the k-th bridge port in number order; any other FDB is
+// returned as it is.
+func collectFDBPortNumbers(fdb []MACEntry, basePorts map[int]int) []MACEntry {
+	if len(fdb) == 0 || len(basePorts) == 0 || slices.Min(slices.Collect(maps.Keys(basePorts))) <= len(basePorts) {
+		return fdb
+	}
+	for _, e := range fdb {
+		if _, isBase := basePorts[e.PortNumber]; isBase || e.PortNumber < 1 || e.PortNumber > len(basePorts) {
+			return fdb
+		}
+	}
+	ports := slices.Sorted(maps.Keys(basePorts))
+	out := slices.Clone(fdb)
+	for i := range out {
+		out[i].PortNumber = ports[out[i].PortNumber-1]
+	}
+	return out
 }
 
 // collectARPTable collects ARP table (IP to MAC mapping) from IP-MIB

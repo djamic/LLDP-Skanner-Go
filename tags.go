@@ -116,6 +116,16 @@ func hubNodeID(switchID string, bridgePort int) string {
 	return fmt.Sprintf("hub-%s-p%d", switchID, bridgePort)
 }
 
+// hubLinkNodeID is the id of the hub node between two switch nodes (an
+// unmanaged switch on the link between them, lldpPortPlan.Peer): the same
+// whichever of the two draws it, "hub-<lower id>-<higher id>".
+func hubLinkNodeID(a, b string) string {
+	if b < a {
+		a, b = b, a
+	}
+	return "hub-" + a + "-" + b
+}
+
 // hypNodeID is the id of the hypervisor node of a port of a switch or hub
 // node (port: its key, "/", " " and ":" as "_").
 func hypNodeID(switchID, port string) string {

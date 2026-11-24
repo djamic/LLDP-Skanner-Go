@@ -64,7 +64,7 @@
     {"hypervisorKey": "tge1/0/49", "in": "TenGigabitEthernet1/0/49", "normalizePortName": "TGE1/0/49"},
     {"hypervisorKey": "ge1/0/47", "in": "\"GigabitEthernet1/0/47\"", "normalizePortName": "GE1/0/47"},
     {"hypervisorKey": "ge1/0/43", "in": "4c:ae:a3:a2:06:2c:GE1/0/43", "normalizePortName": "GE1/0/43"},
-    {"hypervisorKey": "fastethernet0/1", "in": "fastethernet 0/1", "normalizePortName": "fastethernet0/1"},
+    {"hypervisorKey": "fe0/1", "in": "fastethernet 0/1", "normalizePortName": "FE0/1"},
     {"hypervisorKey": "fe0/1", "in": "FastEthernet0/1", "normalizePortName": "FE0/1"},
     {"hypervisorKey": "hu1/0/1", "in": "HundredGigE1/0/1", "normalizePortName": "HU1/0/1"},
     {"hypervisorKey": "eth1/1", "in": "Ethernet1/1", "normalizePortName": "Eth1/1"},

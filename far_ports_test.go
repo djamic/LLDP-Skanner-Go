@@ -33,11 +33,11 @@ func TestLLDPRemotePortName(t *testing.T) {
 		{"interfaceName, no description column", 5, `"Ten-GigabitEthernet1/0/49"`, "", "", "Ten-GigabitEthernet1/0/49", "TGE1/0/49"},
 		{"HPE interfaceName, default description", 5, `"GigabitEthernet1/0/48"`, `"GigabitEthernet1/0/48 Interface"`, "HPE", "GigabitEthernet1/0/48 Interface", "GE1/0/48"},
 		{"HPE interfaceName, the admin's description", 5, `"GigabitEthernet1/0/47"`, `"B-318/3"`, "B-318/1", "B-318/3", "B-318/3"},
-		{"Eltex interfaceName, empty description", 5, `"gi1/0/4"`, `""`, "", "gi1/0/4", "gi1/0/4"},
+		{"Eltex interfaceName, empty description", 5, `"gi1/0/4"`, `""`, "", "gi1/0/4", "GE1/0/4"},
 		{"Aruba interfaceName = description", 5, `"1/1/28"`, `"1/1/28"`, "6300", "1/1/28", "1/1/28"},
 		{"FortiGate interfaceAlias, empty description", 1, `"LAN"`, `""`, "FortiGate-600F", "LAN", "LAN"},
 		{"SNR S2985G-24TC local port number", 7, `"28"`, `""`, "", "28", "28"},
-		{"PiXiETECH local id with a description", 7, `"Gig0/27"`, `"GigaEthernet0/27"`, "Switch", "GigaEthernet0/27", "GigaEth0/27"},
+		{"PiXiETECH local id with a description", 7, `"Gig0/27"`, `"GigaEthernet0/27"`, "Switch", "GigaEthernet0/27", "GE0/27"},
 		{"UniFi FASTPATH gigabit port description", 5, `"Port 24"`, `"Slot: 0 Port: 24 Gigabit - Level"`, "USW", "Slot: 0 Port: 24 Gigabit - Level", "Port24"},
 		{"UniFi FASTPATH 10G SFP+ port description", 5, `"Port 26"`, `"Slot: 0 Port: 26 10G - Level"`, "USW", "Slot: 0 Port: 26 10G - Level", "Port26"},
 		{"FASTPATH non-zero slot port description", 5, `"1/5"`, `"Slot: 1 Port: 5 Gigabit - Level"`, "SW", "Slot: 1 Port: 5 Gigabit - Level", "Port1/5"},
@@ -56,7 +56,7 @@ func TestLLDPRemotePortName(t *testing.T) {
 		{"networkAddress port id", 4, "01 AC 10 01 0F", `""`, "", "", ""},
 		{"no subtype, no port id", 0, "", "", "", "", ""},
 		{"no subtype, quoted empty description", 0, "", `""`, "", "", ""},
-		{"description is the sysName: the port id", 5, `"Gi0/1"`, `"sw-x"`, "sw-x", "Gi0/1", "Gi0/1"},
+		{"description is the sysName: the port id", 5, `"Gi0/1"`, `"sw-x"`, "sw-x", "Gi0/1", "GE0/1"},
 		{"description is the sysName, MAC port id (was the MAC)", 3, "10 7C 61 C0 9E AA", `"DESKTOP-V380CHD"`, "DESKTOP-V380CHD", "", ""},
 		{"port id is the sysName, empty description (was Uplink)", 7, `"sw-x"`, `""`, "sw-x", "", ""},
 	}
@@ -82,6 +82,31 @@ func TestLLDPRemotePortName(t *testing.T) {
 		if got := normalizePortName(lldpRemotePortName(c.n)); got != c.wantLabel {
 			t.Errorf("Huawei/HPE RemSysDesc (%q): label = %q, want %q", c.n.RemSysDesc, got, c.wantLabel)
 		}
+	}
+}
+
+// TestNormalizePortNameVendors: the vendors' own port names get the one
+// short form whatever their case: TP-Link JetStream "gigabitEthernet 1/0/8",
+// PiXiE "GigaEthernet0/6" and "TGigaEthernet0/4", the short names of Eltex
+// ("gi1/0/4", "fa1/0/7") and of PiXiE's LLDP port id ("Gig0/25"), so a
+// PiXiE switch's own port and the name its neighbor reports for it are one
+// port (lldpSamePort). A name that only starts like a short one, a
+// hypervisor key and the other names keep their form.
+func TestNormalizePortNameVendors(t *testing.T) {
+	for in, want := range map[string]string{
+		`"gigabitEthernet 1/0/8"`: "GE1/0/8", "gigabitEthernet 1/0/8 : copper": "GE1/0/8:copper",
+		"GigaEthernet0/6": "GE0/6", "TGigaEthernet0/4": "TGE0/4", `"GigaEthernet0/25"`: "GE0/25",
+		"fastethernet 0/1": "FE0/1", "FASTETHERNET0/2": "FE0/2", "ten-gigabitEthernet 1/0/9": "TGE1/0/9",
+		"Gig0/25": "GE0/25", "gi1/0/4": "GE1/0/4", "fa1/0/7": "FE1/0/7", "GI1/0/1": "GE1/0/1",
+		"GigabitEthernet1/0/26": "GE1/0/26", "Ethernet1/0/24": "Eth1/0/24", "ge1/0/4": "ge1/0/4", "eth0": "eth0",
+		"gift": "gift", "fa": "fa", "Gi": "Gi", "gi1/0/4-uplink": "gi1/0/4-uplink", "Port 12": "Port12", "B-318/1": "B-318/1",
+	} {
+		if got := normalizePortName(in); got != want {
+			t.Errorf("normalizePortName(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if own, reported := normalizePortName(`"GigaEthernet0/25"`), normalizePortName(`"Gig0/25"`); !lldpSamePort(own, reported) {
+		t.Errorf("PiXiE port %q and its LLDP name %q are not one port", own, reported)
 	}
 }
 

@@ -267,6 +267,9 @@ func TestSyntheticNodeIDs(t *testing.T) {
 	if got := hubNodeID("4c:ae:a3:72:00:02", 3); got != "hub-4c:ae:a3:72:00:02-p3" {
 		t.Errorf("hubNodeID = %q", got)
 	}
+	if a, b := hubLinkNodeID("f8:f0:82:d1:67:5e", "58:94:80:00:f7:a3"), hubLinkNodeID("58:94:80:00:f7:a3", "f8:f0:82:d1:67:5e"); a != b || a != "hub-58:94:80:00:f7:a3-f8:f0:82:d1:67:5e" {
+		t.Errorf("hubLinkNodeID = %q and %q", a, b)
+	}
 	if got := hypNodeID("4c:ae:a3:72:00:02", "GE1/0/3 x:y"); got != "hyp-4c:ae:a3:72:00:02-GE1_0_3_x_y" {
 		t.Errorf("hypNodeID = %q", got)
 	}
